@@ -1,0 +1,5 @@
+*.bak
+*.pre-polish-*.bak
+CLAUDE.md
+CODEX_CHANGELOG.md
+.claude/
