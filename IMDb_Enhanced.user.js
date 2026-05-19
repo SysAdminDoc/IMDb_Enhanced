@@ -1,7 +1,7 @@
 // ==UserScript==
 // @name         IMDb Enhanced
 // @namespace    https://github.com/SysAdminDoc
-// @version      2.3.0
+// @version      2.3.1
 // @description  Premium IMDb overhaul: cleaner pages, modern themes, refined score widgets, section controls, spoiler protection, quick navigation, richer external links, TV tools, search shortcuts, and polished settings import/export
 // @author       SysAdminDoc
 // @match        https://www.imdb.com/title/*
@@ -35,7 +35,7 @@
     // =========================================================================
     //  CONSTANTS & CONFIG
     // =========================================================================
-    const VERSION = '2.3.0';
+    const VERSION = '2.3.1';
     const PREFIX  = 'imdb_enh_';
     const CACHE_TTL = 7 * 24 * 60 * 60 * 1000; // 7 days
 
@@ -114,11 +114,37 @@
         return new Promise((resolve, reject) => {
             const el = document.querySelector(sel);
             if (el) return resolve(el);
+            const root = document.body || document.documentElement;
+            if (!root) return reject();
             const obs = new MutationObserver(() => {
                 const el = document.querySelector(sel);
                 if (el) { obs.disconnect(); resolve(el); }
             });
-            obs.observe(document.body, { childList: true, subtree: true });
+            obs.observe(root, { childList: true, subtree: true });
+            setTimeout(() => { obs.disconnect(); reject(); }, timeout);
+        });
+    }
+
+    function getTitleSurface() {
+        const explicit = document.querySelector('[data-testid="hero__pageTitle"]');
+        if (explicit) return explicit;
+        const primary = document.querySelector('[data-testid="hero__primary-text"]');
+        if (primary) return primary.closest('[data-testid="hero__pageTitle"]') || primary.parentElement || primary;
+        const mainHeading = document.querySelector('main h1, h1');
+        return mainHeading?.parentElement || mainHeading || null;
+    }
+
+    function waitForTitleSurface(timeout = 20000) {
+        return new Promise((resolve, reject) => {
+            const found = getTitleSurface();
+            if (found) return resolve(found);
+            const root = document.body || document.documentElement;
+            if (!root) return reject();
+            const obs = new MutationObserver(() => {
+                const next = getTitleSurface();
+                if (next) { obs.disconnect(); resolve(next); }
+            });
+            obs.observe(root, { childList: true, subtree: true });
             setTimeout(() => { obs.disconnect(); reject(); }, timeout);
         });
     }
@@ -1221,7 +1247,8 @@ h3.ipc-title__text.ipc-title__text--reduced { padding: 0 !important; margin: 0 !
         key: 'searchButtons', name: 'Watch search buttons', group: 'Features',
         init() {
             if (!window.location.hostname.includes('imdb.com')) return;
-            waitFor('[data-testid="hero__pageTitle"]').then(tc => {
+            waitForTitleSurface().then(tc => {
+                if (document.getElementById('enh-search-buttons')) return;
                 const title = getTitleText();
                 if (!title) return;
                 const h = title.replace(/\s+/g,'-'), e = encodeURIComponent(title);
@@ -1257,7 +1284,8 @@ h3.ipc-title__text.ipc-title__text--reduced { padding: 0 !important; margin: 0 !
     reg({
         key: 'externalLinks', name: 'External links bar', group: 'Features',
         init() {
-            waitFor('[data-testid="hero__pageTitle"]').then(() => {
+            waitForTitleSurface().then(() => {
+                if (document.getElementById('enh-external-links')) return;
                 const title = getTitleText(), year = getTitleYear(), imdbId = getIMDbID();
                 if (!title || !imdbId) return;
                 const enc = encodeURIComponent(title);
@@ -1274,7 +1302,7 @@ h3.ipc-title__text.ipc-title__text--reduced { padding: 0 !important; margin: 0 !
                 bar.innerHTML = links.map(l =>
                     `<a href="${l.url}" target="_blank" rel="noopener" class="enh-ext-link" style="--link-color:${l.color}">${l.name}</a>`
                 ).join('');
-                const insertAfter = document.getElementById('enh-search-buttons') || document.querySelector('[data-testid="hero__pageTitle"]');
+                const insertAfter = document.getElementById('enh-search-buttons') || getTitleSurface();
                 insertAfter?.parentElement?.insertBefore(bar, insertAfter.nextSibling);
             }).catch(() => {});
         },
@@ -1384,7 +1412,8 @@ h3.ipc-title__text.ipc-title__text--reduced { padding: 0 !important; margin: 0 !
                 .enh-tv-chip:hover{background:rgba(167,139,250,0.18);color:#c4b5fd;border-color:rgba(167,139,250,0.3)}
             `, 'enh-tvShow');
 
-            waitFor('[data-testid="hero__pageTitle"]').then(() => {
+            waitForTitleSurface().then(() => {
+                if (document.getElementById('enh-tv-bar')) return;
                 const imdbId = getIMDbID(), title = getTitleText();
                 if (!imdbId) return;
                 const bar = makeEl('div', { id: 'enh-tv-bar' });
@@ -1396,7 +1425,7 @@ h3.ipc-title__text.ipc-title__text--reduced { padding: 0 !important; margin: 0 !
                     { l:'Ep Calendar', u:`https://episodecalendar.com/en/shows?q%5Bname_cont%5D=${encodeURIComponent(title)}` },
                 ].forEach(c => bar.appendChild(makeEl('a', { href:c.u, target:'_blank', rel:'noopener', className:'enh-tv-chip' }, c.l)));
 
-                const insertPoint = document.getElementById('enh-external-links') || document.getElementById('enh-search-buttons') || document.querySelector('[data-testid="hero__pageTitle"]');
+                const insertPoint = document.getElementById('enh-external-links') || document.getElementById('enh-search-buttons') || getTitleSurface();
                 insertPoint?.parentElement?.insertBefore(bar, insertPoint.nextSibling);
             }).catch(() => {});
         },
@@ -1435,7 +1464,8 @@ h3.ipc-title__text.ipc-title__text--reduced { padding: 0 !important; margin: 0 !
     reg({
         key: 'quickCopyID', name: 'Quick copy IMDb ID', group: 'Utility',
         init() {
-            waitFor('[data-testid="hero__pageTitle"]').then(titleEl => {
+            waitForTitleSurface().then(titleEl => {
+                if (document.getElementById('enh-copy-id')) return;
                 const imdbId = getIMDbID();
                 if (!imdbId) return;
                 const btn = makeEl('button', {
