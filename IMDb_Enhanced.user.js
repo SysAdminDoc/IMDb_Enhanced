@@ -129,9 +129,24 @@
         const explicit = document.querySelector('[data-testid="hero__pageTitle"]');
         if (explicit) return explicit;
         const primary = document.querySelector('[data-testid="hero__primary-text"]');
-        if (primary) return primary.closest('[data-testid="hero__pageTitle"]') || primary.parentElement || primary;
+        if (primary) return primary.closest('[data-testid="hero__pageTitle"]') || primary.closest('h1') || primary.parentElement || primary;
         const mainHeading = document.querySelector('main h1, h1');
-        return mainHeading?.parentElement || mainHeading || null;
+        return mainHeading || null;
+    }
+
+    function getTitleActionAnchor() {
+        const title = getTitleSurface();
+        if (!title) return null;
+        const heading = title.matches?.('[data-testid="hero__pageTitle"], h1')
+            ? title
+            : title.closest?.('[data-testid="hero__pageTitle"], h1');
+        return heading?.parentElement || title.parentElement || title;
+    }
+
+    function insertAfter(anchor, node) {
+        if (!anchor?.parentElement || !node) return false;
+        anchor.parentElement.insertBefore(node, anchor.nextSibling);
+        return true;
     }
 
     function waitForTitleSurface(timeout = 20000) {
@@ -1269,7 +1284,7 @@ h3.ipc-title__text.ipc-title__text--reduced { padding: 0 !important; margin: 0 !
                         sites.map(s => `<button type="button" class="enh-search-btn" data-url="${s.url||''}" data-action="${s.action||''}" style="--btn-color:${s.color}" aria-label="Search ${s.name} for ${title}"><span>${s.name}</span></button>`).join('')
                     }</div>
                 `;
-                tc.parentElement?.insertBefore(wrap, tc.nextSibling);
+                insertAfter(getTitleActionAnchor() || tc, wrap);
                 wrap.querySelectorAll('.enh-search-btn').forEach(btn => {
                     btn.addEventListener('click', () => {
                         if (btn.dataset.action === 'cineby') { GM_setValue('movieTitle',title); window.open('https://www.cineby.sc/search','_blank'); }
@@ -1302,8 +1317,8 @@ h3.ipc-title__text.ipc-title__text--reduced { padding: 0 !important; margin: 0 !
                 bar.innerHTML = links.map(l =>
                     `<a href="${l.url}" target="_blank" rel="noopener" class="enh-ext-link" style="--link-color:${l.color}">${l.name}</a>`
                 ).join('');
-                const insertAfter = document.getElementById('enh-search-buttons') || getTitleSurface();
-                insertAfter?.parentElement?.insertBefore(bar, insertAfter.nextSibling);
+                const insertAfterEl = document.getElementById('enh-search-buttons') || getTitleActionAnchor();
+                insertAfter(insertAfterEl, bar);
             }).catch(() => {});
         },
         destroy() { document.getElementById('enh-external-links')?.remove(); }
@@ -1425,8 +1440,8 @@ h3.ipc-title__text.ipc-title__text--reduced { padding: 0 !important; margin: 0 !
                     { l:'Ep Calendar', u:`https://episodecalendar.com/en/shows?q%5Bname_cont%5D=${encodeURIComponent(title)}` },
                 ].forEach(c => bar.appendChild(makeEl('a', { href:c.u, target:'_blank', rel:'noopener', className:'enh-tv-chip' }, c.l)));
 
-                const insertPoint = document.getElementById('enh-external-links') || document.getElementById('enh-search-buttons') || getTitleSurface();
-                insertPoint?.parentElement?.insertBefore(bar, insertPoint.nextSibling);
+                const insertPoint = document.getElementById('enh-external-links') || document.getElementById('enh-search-buttons') || getTitleActionAnchor();
+                insertAfter(insertPoint, bar);
             }).catch(() => {});
         },
         destroy() { removeCSS('enh-tvShow'); document.getElementById('enh-tv-bar')?.remove(); }
