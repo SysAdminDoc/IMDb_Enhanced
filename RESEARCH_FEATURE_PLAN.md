@@ -11,6 +11,7 @@
 - 2026-05-24 — Completed the Phase 1 title-stack consolidation: title-area actions now render into a single ordered `enh-title-stack`, with deterministic order for copy ID, watch search, external links, and TV shortcuts.
 - 2026-05-24 — Added film-only inline Letterboxd scores using `letterboxd.com/imdb/{ttid}/`, parsing `twitter:data2` / JSON-LD ratings, caching unavailable lookups, and adding `letterboxd.com` to the explicit userscript connect whitelist.
 - 2026-05-24 — Added configurable watch-search and external-link site lists. Defaults preserve the previous built-in sites, settings now provide add/remove/reset editors, exported settings include the lists, and user-provided labels/URLs render through DOM APIs instead of HTML strings.
+- 2026-05-24 — Added `tvEpisodeTools`: episode-card plot blur/reveal and a Top rated episodes panel when at least 10 rated episodes are present. Static selectors were checked against the saved Black Mirror fixture; live IMDb episodes HTML returned bot verification and still needs manual browser validation.
 
 ---
 
@@ -643,12 +644,12 @@ Same item, listed here for completeness — it is both an existing-feature relia
   - Acceptance: Add a custom site → button renders → click launches; remove → button gone.
   - Verify: `node --check IMDb_Enhanced.user.js`; settings editor supports add/remove/reset for both stored lists; renderers consume sanitized `watchSites` / `externalSites`.
 
-- [ ] **P1** — TV episode tools: spoiler-blur + best-episodes panel (NF-4)
+- [x] **P1** — TV episode tools: spoiler-blur + best-episodes panel (NF-4)
   - Why: Anthologies (Black Mirror is literally the saved fixture) demand it.
   - Evidence: `spoilerBlur` is title-only ([IMDb_Enhanced.user.js:1195-1202](IMDb_Enhanced.user.js#L1195-L1202)).
   - Touches: New `@match` for `/title/*/episodes*`; new `tvEpisodeTools` feature.
   - Acceptance: Episode synopses blurred; "Top 10" panel renders for >= 10 rated episodes.
-  - Verify: Black Mirror /episodes; manual compare with public best-episodes lists.
+  - Verify: `node --check IMDb_Enhanced.user.js`; saved Black Mirror fixture contains `EpisodeRatingCard_*` title/rating/plot markup targeted by the selectors. Manual live `/episodes/` validation is still recommended because IMDb returned bot verification to non-browser fetches.
 
 - [ ] **P1** — Replace hashed `.sc-XXXXXXXX` selectors (IM-5)
   - Why: Next IMDb deploy will silently invalidate big chunks of the theme.

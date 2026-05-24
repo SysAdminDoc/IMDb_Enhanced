@@ -80,7 +80,7 @@
         searchButtons: true, externalLinks: true, expandedLinkMenu: true,
         watchSites: DEFAULT_WATCH_SITES, externalSites: DEFAULT_EXTERNAL_SITES,
         // TV
-        tvShowEnhancements: true, subtitleLinks: true,
+        tvEpisodeTools: true, tvShowEnhancements: true, subtitleLinks: true,
         // Utility
         quickCopyID: true, keyboardShortcuts: false,
     };
@@ -107,6 +107,7 @@
         searchButtons: 'Adds compact watch-search launch buttons near the title.',
         externalLinks: 'Adds trusted research and trailer links near the title.',
         expandedLinkMenu: 'Groups additional movie, review, subtitle, and TV lookup links.',
+        tvEpisodeTools: 'Blurs episode synopses and surfaces the highest-rated episodes where episode data is present.',
         tvShowEnhancements: 'Adds TV-specific lookup shortcuts on series pages.',
         subtitleLinks: 'Adds subtitle lookup links in the details section.',
         quickCopyID: 'Adds a visible IMDb ID copy button beside the title.',
@@ -1656,6 +1657,176 @@ h3.ipc-title__text.ipc-title__text--reduced { padding: 0 !important; margin: 0 !
     //  TV SHOW FEATURES
     //
     // #########################################################################
+
+    reg({
+        key: 'tvEpisodeTools', name: 'TV episode tools', group: 'TV',
+        _clickHandler: null,
+        init() {
+            if (getMediaType() !== 'tv' && !/\/title\/tt\d+\/episodes/i.test(location.pathname)) return;
+            addCSS(`
+                .enh-episode-spoiler {
+                    filter: blur(5px);
+                    cursor: pointer;
+                    transition: filter .18s ease, opacity .18s ease;
+                }
+                .enh-episode-spoiler:hover { opacity: .9; }
+                .enh-episode-spoiler.enh-revealed { filter: none; cursor: text; }
+                #enh-best-episodes {
+                    margin: 14px 0 18px;
+                    padding: 14px;
+                    border-radius: 10px;
+                    border: 1px solid rgba(250,204,21,.2);
+                    background: rgba(250,204,21,.07);
+                    color: inherit;
+                }
+                #enh-best-episodes h3 {
+                    margin: 0 0 10px;
+                    font: 700 14px/1.3 -apple-system,BlinkMacSystemFont,'Segoe UI',sans-serif;
+                    color: #fde68a;
+                }
+                .enh-best-episodes-list {
+                    display: grid;
+                    grid-template-columns: repeat(auto-fit, minmax(220px, 1fr));
+                    gap: 6px;
+                    margin: 0;
+                    padding: 0;
+                    list-style: none;
+                }
+                .enh-best-episode {
+                    display: grid;
+                    grid-template-columns: auto 1fr auto;
+                    gap: 8px;
+                    align-items: center;
+                    padding: 7px 9px;
+                    border-radius: 8px;
+                    background: rgba(255,255,255,.045);
+                    border: 1px solid rgba(255,255,255,.07);
+                }
+                .enh-best-episode__rank,
+                .enh-best-episode__rating {
+                    color: #facc15;
+                    font: 800 12px/1 -apple-system,BlinkMacSystemFont,'Segoe UI',sans-serif;
+                }
+                .enh-best-episode__title {
+                    min-width: 0;
+                    overflow: hidden;
+                    text-overflow: ellipsis;
+                    white-space: nowrap;
+                    color: inherit;
+                    text-decoration: none;
+                    font: 600 12px/1.25 -apple-system,BlinkMacSystemFont,'Segoe UI',sans-serif;
+                }
+                .enh-best-episode__title:hover { color: #fde68a; }
+            `, 'enh-tvEpisodeTools');
+
+            const run = () => {
+                const episodes = this._collectEpisodes();
+                this._blurPlots(episodes);
+                this._renderBestEpisodes(episodes);
+            };
+            waitFor('main, body').then(run).catch(run);
+
+            this._clickHandler = (e) => {
+                const spoiler = e.target.closest?.('.enh-episode-spoiler');
+                if (!spoiler) return;
+                spoiler.classList.add('enh-revealed');
+            };
+            document.addEventListener('click', this._clickHandler);
+        },
+        _collectEpisodes() {
+            const seriesId = getIMDbID();
+            const seen = new Set();
+            const episodes = [];
+            const anchors = Array.from(document.querySelectorAll('a[href*="/title/tt"]'));
+
+            anchors.forEach(anchor => {
+                const match = anchor.href.match(/\/title\/(tt\d+)\//);
+                const id = match?.[1];
+                if (!id || id === seriesId || seen.has(id)) return;
+                const card = this._findEpisodeCard(anchor);
+                if (!card) return;
+
+                const rating = this._parseRating(card);
+                const episodeCode = card.textContent.match(/\bS(\d+)\s*\.\s*E(\d+)\b/i)?.[0] || '';
+                const title = (anchor.querySelector('.ipc-title__text') || anchor).textContent.trim();
+                const plot = this._findPlot(card);
+
+                seen.add(id);
+                episodes.push({ id, title, href:anchor.href, rating, episodeCode, plot });
+            });
+
+            return episodes;
+        },
+        _findEpisodeCard(anchor) {
+            let node = anchor;
+            for (let i = 0; i < 9 && node && node !== document.body; i++) {
+                const text = node.textContent || '';
+                const hasEpisodeCode = /\bS\d+\s*\.\s*E\d+\b/i.test(text);
+                const hasRating = Boolean(node.querySelector?.('.ipc-rating-star--rating, [class*="rating"]'));
+                const hasPlot = Boolean(this._findPlot(node));
+                if (hasEpisodeCode && (hasRating || hasPlot)) return node;
+                node = node.parentElement;
+            }
+            return anchor.closest('[data-testid*="episode" i], article, li');
+        },
+        _findPlot(card) {
+            return card.querySelector?.('[class*="plot" i] p, [data-testid*="plot" i], .ipc-html-content-inner-div, .ipc-metadata-list-summary-item__plot') || null;
+        },
+        _parseRating(card) {
+            const ratingText = card.querySelector?.('.ipc-rating-star--rating')?.textContent;
+            const fromNode = parseFloat(ratingText);
+            if (Number.isFinite(fromNode)) return fromNode;
+            const text = card.textContent || '';
+            const match = text.match(/\b(10(?:\.0)?|[1-9](?:\.\d)?)\s*\/\s*10\b/);
+            return match ? parseFloat(match[1]) : null;
+        },
+        _blurPlots(episodes) {
+            const plots = new Set(episodes.map(ep => ep.plot).filter(Boolean));
+            if (/\/title\/tt\d+\/episodes/i.test(location.pathname)) {
+                document.querySelectorAll('[class*="plot" i] p, [data-testid*="plot" i], .ipc-html-content-inner-div, .ipc-metadata-list-summary-item__plot')
+                    .forEach(plot => plots.add(plot));
+            }
+            plots.forEach(plot => {
+                if (!plot.classList.contains('enh-revealed')) {
+                    plot.classList.add('enh-episode-spoiler');
+                    plot.title = 'Click to reveal episode synopsis';
+                }
+            });
+        },
+        _renderBestEpisodes(episodes) {
+            document.getElementById('enh-best-episodes')?.remove();
+            const ranked = episodes
+                .filter(ep => Number.isFinite(ep.rating))
+                .sort((a, b) => b.rating - a.rating)
+                .slice(0, 10);
+            if (ranked.length < 10) return;
+
+            const panel = makeEl('section', { id:'enh-best-episodes', 'aria-label':'Top rated episodes' });
+            panel.appendChild(makeEl('h3', {}, 'Top rated episodes'));
+            const list = makeEl('ol', { className:'enh-best-episodes-list' });
+            ranked.forEach((ep, idx) => {
+                list.appendChild(makeEl('li', { className:'enh-best-episode' },
+                    makeEl('span', { className:'enh-best-episode__rank' }, String(idx + 1)),
+                    makeEl('a', { className:'enh-best-episode__title', href:ep.href }, `${ep.episodeCode ? ep.episodeCode + ' ' : ''}${ep.title}`),
+                    makeEl('span', { className:'enh-best-episode__rating' }, ep.rating.toFixed(1))
+                ));
+            });
+            panel.appendChild(list);
+
+            const anchor = getTitleActionAnchor() || document.querySelector('main h1')?.parentElement || document.querySelector('main');
+            if (anchor) insertAfter(anchor, panel);
+        },
+        destroy() {
+            removeCSS('enh-tvEpisodeTools');
+            if (this._clickHandler) document.removeEventListener('click', this._clickHandler);
+            this._clickHandler = null;
+            document.querySelectorAll('.enh-episode-spoiler, .enh-revealed').forEach(el => {
+                el.classList.remove('enh-episode-spoiler', 'enh-revealed');
+                if (el.title === 'Click to reveal episode synopsis') el.removeAttribute('title');
+            });
+            document.getElementById('enh-best-episodes')?.remove();
+        }
+    });
 
     reg({
         key: 'tvShowEnhancements', name: 'TV show quick links', group: 'TV',
