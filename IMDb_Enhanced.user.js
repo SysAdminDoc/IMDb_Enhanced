@@ -22,6 +22,7 @@
 // @connect      www.rottentomatoes.com
 // @connect      backend.metacritic.com
 // @connect      letterboxd.com
+// @connect      www.justwatch.com
 // @connect      www.opensubtitles.org
 // @run-at       document-start
 // @noframes
@@ -76,6 +77,7 @@
         collapsibleSections: true, spoilerBlur: true, quickNav: true,
         // Scores
         inlineRTScore: true, inlineLetterboxdScore: true, inlineMetacriticScore: true,
+        streamAvailability: true,
         // Links
         searchButtons: true, externalLinks: true, expandedLinkMenu: true,
         watchSites: DEFAULT_WATCH_SITES, externalSites: DEFAULT_EXTERNAL_SITES,
@@ -104,6 +106,7 @@
         inlineRTScore: 'Shows Rotten Tomatoes score feedback inline when available.',
         inlineLetterboxdScore: 'Shows Letterboxd average ratings inline for films when available.',
         inlineMetacriticScore: 'Shows Metacritic score feedback inline when available.',
+        streamAvailability: 'Shows one-glance JustWatch streaming providers when available.',
         searchButtons: 'Adds compact watch-search launch buttons near the title.',
         externalLinks: 'Adds trusted research and trailer links near the title.',
         expandedLinkMenu: 'Groups additional movie, review, subtitle, and TV lookup links.',
@@ -1057,6 +1060,46 @@ section[id*="quote" i] .ipc-list-card { padding: 4px 0 !important; margin: 2px 0
         if (count >= 1000) return `${Math.round(count / 1000)}K`;
         return String(count);
     }
+    function decodeHTML(text) {
+        const ta = document.createElement('textarea');
+        ta.innerHTML = String(text || '');
+        return ta.value;
+    }
+    function getJustWatchSlug(title = getTitleText()) {
+        return String(title || '')
+            .normalize('NFKD')
+            .replace(/[\u0300-\u036f]/g, '')
+            .replace(/&/g, ' and ')
+            .toLowerCase()
+            .replace(/[^a-z0-9\s-]/g, '')
+            .trim()
+            .replace(/\s+/g, '-')
+            .replace(/-+/g, '-');
+    }
+    function getJustWatchTypePath() {
+        return getMediaType() === 'tv' ? 'tv-show' : 'movie';
+    }
+    function getJustWatchSearchUrl(title = getTitleText()) {
+        return `https://www.justwatch.com/us/search?q=${encodeURIComponent(title || '')}`;
+    }
+    function getJustWatchDetailUrl(title = getTitleText()) {
+        const slug = getJustWatchSlug(title);
+        return slug ? `https://www.justwatch.com/us/${getJustWatchTypePath()}/${slug}` : getJustWatchSearchUrl(title);
+    }
+    function compactProviders(providers, limit = 2) {
+        const clean = [];
+        providers.forEach(provider => {
+            const name = String(provider || '').trim().replace(/\s+/g, ' ');
+            if (name && !clean.some(existing => existing.toLowerCase() === name.toLowerCase())) clean.push(name);
+        });
+        if (clean.length <= limit + 1) return { providers: clean, extra: 0 };
+        return { providers: clean.slice(0, limit), extra: clean.length - limit };
+    }
+    function formatProviderSummary(providers) {
+        const { providers: shown, extra } = compactProviders(providers);
+        const summary = shown.join(', ');
+        return extra > 0 ? `${summary} +${extra}` : summary;
+    }
 
     reg({
         key: 'ratingColorCoding', name: 'Rating quality labels', group: 'Appearance',
@@ -1393,6 +1436,163 @@ section[id*="quote" i] .ipc-list-card { padding: 4px 0 !important; margin: 2px 0
             bar.appendChild(w);
         },
         destroy() { document.getElementById('enh-mc-widget')?.remove(); }
+    });
+
+    reg({
+        key: 'streamAvailability', name: 'Streaming availability', group: 'Scores',
+        async init() {
+            const imdbId = getIMDbID(), title = getTitleText();
+            if (!imdbId || !title) return;
+
+            const cacheKey = 'jw_' + imdbId;
+            const cached = cacheGet(cacheKey);
+            if (cached) {
+                if (cached.unavailable) this._renderUnavailable();
+                else this._render(cached);
+                return;
+            }
+            this._renderLoading();
+
+            const headers = { Accept: 'text/html,application/xhtml+xml' };
+            const directUrl = getJustWatchDetailUrl(title);
+            try {
+                const res = await httpGet(directUrl, { headers, timeout: 12000 });
+                const data = this._parse(res.responseText, directUrl);
+                if (data) {
+                    cacheSet(cacheKey, data);
+                    this._render(data);
+                    return;
+                }
+            } catch { /* fall back to search below */ }
+
+            try {
+                const searchUrl = getJustWatchSearchUrl(title);
+                const searchRes = await httpGet(searchUrl, { headers, timeout: 12000 });
+                const path = this._firstDetailPath(searchRes.responseText);
+                if (path) {
+                    const detailUrl = new URL(path, 'https://www.justwatch.com').href;
+                    const detailRes = await httpGet(detailUrl, { headers, timeout: 12000 });
+                    const data = this._parse(detailRes.responseText, detailUrl);
+                    if (data) {
+                        cacheSet(cacheKey, data);
+                        this._render(data);
+                        return;
+                    }
+                }
+            } catch { /* handled below */ }
+
+            cacheSetUnavailable(cacheKey);
+            this._renderUnavailable();
+        },
+        _parse(html, url) {
+            if (!html) return null;
+            const providers = [];
+
+            const metaTag = html.match(/<meta[^>]+name=["']description["'][^>]*>/i)?.[0] || '';
+            const content = metaTag.match(/\scontent=["']([^"']+)["']/i)?.[1] || '';
+            const desc = decodeHTML(content);
+            const availability = desc.match(/\bonline on (.+?) today\b/i)?.[1];
+            if (availability) {
+                availability
+                    .replace(/\s+[–-]\s+including.*$/i, '')
+                    .replace(/\bincluding.*$/i, '')
+                    .replace(/\s*,?\s+and\s+/gi, ',')
+                    .split(',')
+                    .map(name => name.trim())
+                    .filter(Boolean)
+                    .forEach(name => providers.push(name));
+            }
+
+            const ldScripts = html.matchAll(/<script[^>]+type=["']application\/ld\+json["'][^>]*>\s*([\s\S]*?)<\/script>/gi);
+            for (const script of ldScripts) {
+                try {
+                    this._collectProviderNames(JSON.parse(script[1]), providers);
+                } catch { /* ignore malformed structured data */ }
+            }
+
+            const unique = compactProviders(providers, 12).providers;
+            return unique.length ? { providers: unique, url } : null;
+        },
+        _collectProviderNames(node, providers) {
+            if (!node) return;
+            if (Array.isArray(node)) {
+                node.forEach(item => this._collectProviderNames(item, providers));
+                return;
+            }
+            if (typeof node !== 'object') return;
+
+            const offeredBy = node.offeredBy;
+            if (Array.isArray(offeredBy)) {
+                offeredBy.forEach(item => {
+                    if (item?.name) providers.push(item.name);
+                });
+            } else if (offeredBy?.name) {
+                providers.push(offeredBy.name);
+            }
+            Object.values(node).forEach(value => this._collectProviderNames(value, providers));
+        },
+        _firstDetailPath(html) {
+            const typePath = getJustWatchTypePath();
+            const re = new RegExp(`/us/${typePath}/[a-z0-9][a-z0-9-]*`, 'gi');
+            const match = re.exec(html || '');
+            return match ? decodeHTML(match[0]) : '';
+        },
+        _render(data) {
+            document.getElementById('enh-jw-widget')?.remove();
+            const bar = findRatingBar();
+            if (!bar) return;
+            const providers = Array.isArray(data.providers) ? data.providers : [];
+            const summary = formatProviderSummary(providers);
+            if (!summary) { this._renderUnavailable(); return; }
+
+            const w = makeEl('div', { id: 'enh-jw-widget', className: 'enh-score-widget enh-score-widget--availability' },
+                makeEl('div', { className: 'enh-score-widget__label' }, 'STREAMING'),
+                makeEl('a', {
+                    href: data.url || getJustWatchSearchUrl(),
+                    target: '_blank',
+                    rel: 'noopener',
+                    className: 'enh-score-widget__score enh-score-widget__score--availability',
+                    style: { '--score-color': '#fbc500' },
+                },
+                    makeEl('span', { className: 'enh-score-widget__badge enh-score-widget__badge--outline' }, 'JW'),
+                    makeEl('span', { className: 'enh-score-widget__value enh-score-widget__value--availability' }, `On ${summary}`)
+                ),
+                makeEl('div', { className: 'enh-score-widget__sub' }, 'Via JustWatch')
+            );
+            bar.appendChild(w);
+        },
+        _renderLoading() {
+            if (document.getElementById('enh-jw-widget')) return;
+            const bar = findRatingBar();
+            if (!bar) return;
+            const w = makeEl('div', { id: 'enh-jw-widget', className: 'enh-score-widget enh-score-widget--loading enh-score-widget--availability' });
+            w.innerHTML = `
+                <div class="enh-score-widget__label">STREAMING</div>
+                <div class="enh-score-widget__skeleton" aria-label="Loading streaming availability"></div>
+            `;
+            bar.appendChild(w);
+        },
+        _renderUnavailable() {
+            document.getElementById('enh-jw-widget')?.remove();
+            const bar = findRatingBar();
+            if (!bar) return;
+            const w = makeEl('div', { id: 'enh-jw-widget', className: 'enh-score-widget enh-score-widget--muted enh-score-widget--availability' },
+                makeEl('div', { className: 'enh-score-widget__label' }, 'STREAMING'),
+                makeEl('a', {
+                    href: getJustWatchSearchUrl(),
+                    target: '_blank',
+                    rel: 'noopener',
+                    className: 'enh-score-widget__score enh-score-widget__score--availability',
+                    style: { '--score-color': '#8888a0' },
+                },
+                    makeEl('span', { className: 'enh-score-widget__badge enh-score-widget__badge--outline' }, 'JW'),
+                    makeEl('span', { className: 'enh-score-widget__value' }, 'Open')
+                ),
+                makeEl('div', { className: 'enh-score-widget__sub' }, 'Availability unavailable')
+            );
+            bar.appendChild(w);
+        },
+        destroy() { document.getElementById('enh-jw-widget')?.remove(); }
     });
 
     // #########################################################################
@@ -2128,6 +2328,9 @@ section[id*="quote" i] .ipc-list-card { padding: 4px 0 !important; margin: 2px 0
     display: inline-flex; flex-direction: column; align-items: center;
     padding: 8px 16px; min-width: 80px;
 }
+.enh-score-widget--availability {
+    min-width: 132px; max-width: 220px;
+}
 .enh-score-widget__label {
     font-size: 10px; font-weight: 600; letter-spacing: .05em;
     color: ${t.tx2}; margin-bottom: 4px; text-transform: uppercase;
@@ -2138,8 +2341,15 @@ section[id*="quote" i] .ipc-list-card { padding: 4px 0 !important; margin: 2px 0
     transition: transform .15s cubic-bezier(.4,0,.2,1), opacity .15s ease;
 }
 .enh-score-widget__score:hover { transform: translateY(-1px); }
+.enh-score-widget__score--availability {
+    justify-content: center; max-width: 100%;
+}
 .enh-score-widget__icon { font-size: 18px; }
 .enh-score-widget__value { color: var(--score-color); }
+.enh-score-widget__value--availability {
+    max-width: 150px; white-space: normal; text-align: left;
+    font-size: 12px; line-height: 1.25;
+}
 .enh-score-widget__badge {
     display: inline-block; padding: 2px 10px; border-radius: 6px;
     font-size: 18px; font-weight: 800; min-width: 36px; text-align: center;

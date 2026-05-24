@@ -14,6 +14,7 @@
 - 2026-05-24 — Added `tvEpisodeTools`: episode-card plot blur/reveal and a Top rated episodes panel when at least 10 rated episodes are present. Static selectors were checked against the saved Black Mirror fixture; live IMDb episodes HTML returned bot verification and still needs manual browser validation.
 - 2026-05-24 — Removed remaining `.sc-*` styled-components hash selectors from the userscript. Replacements use `data-testid`, IPC component classes, and broader stable section selectors; `getTitleYear` no longer depends on a hashed class fallback.
 - 2026-05-24 — Hardened `getTitleYear()` with JSON-LD release candidates (`datePublished`, release/start dates, release events) plus stable DOM, Open Graph, heading, and document-title regex fallbacks.
+- 2026-05-24 — Added inline JustWatch streaming availability. The old unauthenticated JustWatch API endpoints now return 401/404, so the feature fetches public `www.justwatch.com` SSR title/search pages, parses provider names from metadata/JSON-LD, caches misses, and renders a compact provider widget in the rating bar.
 
 ---
 
@@ -58,7 +59,7 @@ Top opportunities, priority order:
 - `@updateURL` / `@downloadURL` were removed on 2026-05-24 because `SysAdminDoc/IMDb-Enhanced` does not exist and this checkout has no remote. **Verified**: no dead update URL remains in the userscript.
 - `@match` covers `imdb.com/title/*`, `imdb.com/name/*`, `imdb.com/*/title/*` (locale prefix), `imdb.com/*/name/*`, `m.imdb.com/*`, and three `cineby.*` search hosts.
 - `@grant` set: `GM_getValue`, `GM_setValue`, `GM_addStyle`, `GM_setClipboard`, `GM_xmlhttpRequest`, `GM_listValues`, `GM_deleteValue`.
-- `@connect` set: `www.rottentomatoes.com`, `backend.metacritic.com`, `www.opensubtitles.org`. Wildcard access was removed on 2026-05-24.
+- `@connect` set: `www.rottentomatoes.com`, `backend.metacritic.com`, `letterboxd.com`, `www.justwatch.com`, `www.opensubtitles.org`. Wildcard access was removed on 2026-05-24.
 
 ### DOM verification (against saved MHTML)
 Grepped the saved Black Mirror page for `data-testid=` values; found 166 occurrences. **Verified present in 2026 IMDb DOM**:
@@ -110,8 +111,10 @@ Grouped exactly as in the source: Cleanup (7), Appearance (5), Layout (3), Score
 ### Important integrations / network destinations
 - `www.rottentomatoes.com` (GET HTML or search page, scraped).
 - `backend.metacritic.com/finder/metacritic/search/…` (GET JSON).
+- `letterboxd.com/imdb/{ttid}/` (GET HTML, scraped for film ratings).
+- `www.justwatch.com/us/{movie|tv-show}/{slug}` + search fallback (GET HTML, scraped for provider names).
 - `www.opensubtitles.org` (link target only).
-- Explicit `@connect` whitelist for Rotten Tomatoes, Metacritic, and OpenSubtitles.
+- Explicit `@connect` whitelist for Rotten Tomatoes, Metacritic, Letterboxd, JustWatch, and OpenSubtitles.
 - 7 streaming-search URLs + 6 reference URLs hard-coded in JS, opened via `window.open` (no fetch).
 
 ### Storage
@@ -261,11 +264,11 @@ Grouped exactly as in the source: Cleanup (7), Appearance (5), Layout (3), Score
 
 ### NF-6 — Streaming availability inline (JustWatch text)
 - **User problem**: The external "JustWatch" link requires a click and a new tab. Most users only want "Where can I stream this?" in one glance.
-- **Evidence**: `externalLinks` already includes JustWatch. JustWatch has an unofficial endpoint `https://apis.justwatch.com/content/titles/en_US/{slug}` and a per-country graph API used by `tmdb-helper`. TMDb also exposes `/movie/{id}/watch/providers` (TMDb API, free key).
-- **Proposed behaviour**: One `enh-stream-availability` row next to scores: "▶ Netflix, Prime, Apple TV — rent on Vudu". Fetch best-effort from JustWatch (no API key); cache.
-- **Implementation areas**: New `streamAvailability` feature in Scores group; pipe through `httpGet`; add `apis.justwatch.com` to `@connect`.
-- **Risk / edge cases**: JustWatch occasionally CAPTCHAs; fall back to silent fail. Country detection (default `en_US`, but should respect `navigator.language` or an opt-in setting).
-- **Verification**: For 5 sample titles, the rendered string matches the JustWatch page for the same country.
+- **Evidence**: `externalLinks` already includes JustWatch. Live checks on 2026-05-24 showed old unauthenticated JustWatch API endpoints returning 401/404, while public SSR title pages expose provider names in `meta[name="description"]` and JSON-LD.
+- **Implemented behaviour**: One compact `STREAMING` score-bar widget: "On Netflix, Prime Video +1". Fetches best-effort from JustWatch title pages with search-page fallback; caches successes and misses.
+- **Implementation areas**: New `streamAvailability` feature in Scores group; pipe through `httpGet`; added `www.justwatch.com` to `@connect`.
+- **Risk / edge cases**: JustWatch can change SSR metadata or challenge traffic; the widget falls back to an `Open` JustWatch search link. Country remains fixed to `/us/`.
+- **Verification**: Live metadata for Inception, Black Mirror, and The Matrix returned Netflix / Prime Video / Disney+ provider strings.
 - **Complexity**: M
 - **Priority**: P2
 
@@ -334,7 +337,7 @@ Grouped exactly as in the source: Cleanup (7), Appearance (5), Layout (3), Score
 
 ### IM-3 — Lock `@connect *` to a whitelist
 - **Status**: Complete as of 2026-05-24.
-- **Current**: Header declares only `www.rottentomatoes.com`, `backend.metacritic.com`, and `www.opensubtitles.org`.
+- **Current**: Header declares only required third-party fetch/link domains: Rotten Tomatoes, Metacritic, Letterboxd, JustWatch, and OpenSubtitles.
 - **Problem**: Resolved for current code; new fetch features must add explicit domains.
 - **Fix**: Removed wildcard `@connect *`.
 - **Touches**: Userscript header.
@@ -672,10 +675,11 @@ Same item, listed here for completeness — it is both an existing-feature relia
 
 ### Phase 2 — Depth + reach (next month)
 
-- [ ] **P2** — Streaming availability inline (NF-6)
+- [x] **P2** — Streaming availability inline (NF-6)
   - Why: One-glance "Where can I stream this?" is the killer feature.
-  - Touches: New `streamAvailability` feature; `@connect apis.justwatch.com`.
-  - Acceptance: For 5 sample titles, rendered string matches JustWatch page.
+  - Touches: New `streamAvailability` feature; `@connect www.justwatch.com`.
+  - Acceptance: Provider text is parsed from public JustWatch title/search pages and rendered inline; unavailable lookups are cached.
+  - Verify: `node --check IMDb_Enhanced.user.js`; live sample metadata for Inception, Black Mirror, and The Matrix returned Netflix / Prime Video / Disney+ provider strings.
 
 - [ ] **P2** — Light + high-contrast themes (NF-9)
   - Why: `prefers-color-scheme` users; WCAG.
@@ -742,7 +746,7 @@ These are <= 1-hour changes with clear value:
 1. **Done 2026-05-24** — Replace dead Subscene URL in `_DB.Subtitles` and `subtitleLinks` (IM-1).
 2. **Done 2026-05-24** — Add `@noframes` to the userscript header (IM-13).
 3. **Done 2026-05-24** — Fix `@updateURL` to a working location or remove it (IM-2).
-4. **Done 2026-05-24** — Lock `@connect *` to a whitelist of 3 domains (IM-3).
+4. **Done 2026-05-24** — Lock `@connect *` to an explicit service whitelist (IM-3).
 5. **Done 2026-05-24** — `cacheSet` unavailable results so we stop hammering RT/MC (IM-6).
 6. **Namespace `GM_setValue('movieTitle', …)` to `imdb_enh_cineby_query`** (IM-11 part).
 7. **Reset-to-defaults button** in settings (recovery gap).
