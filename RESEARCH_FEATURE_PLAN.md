@@ -10,6 +10,7 @@
 - 2026-05-24 — Completed the Phase 0 stability batch in `IMDb_Enhanced.user.js`: removed the dead GitHub update/download metadata while no remote exists, dropped wildcard `@connect`, added `@noframes`, replaced Subscene with active SubDL/YIFY subtitle destinations, cached unavailable RT/MC score results, and added IMDb SPA route re-initialization with a console init counter.
 - 2026-05-24 — Completed the Phase 1 title-stack consolidation: title-area actions now render into a single ordered `enh-title-stack`, with deterministic order for copy ID, watch search, external links, and TV shortcuts.
 - 2026-05-24 — Added film-only inline Letterboxd scores using `letterboxd.com/imdb/{ttid}/`, parsing `twitter:data2` / JSON-LD ratings, caching unavailable lookups, and adding `letterboxd.com` to the explicit userscript connect whitelist.
+- 2026-05-24 — Added configurable watch-search and external-link site lists. Defaults preserve the previous built-in sites, settings now provide add/remove/reset editors, exported settings include the lists, and user-provided labels/URLs render through DOM APIs instead of HTML strings.
 
 ---
 
@@ -25,7 +26,7 @@ Top opportunities, priority order:
 3. **P0 — Replace dead Subscene link**. Completed locally with SubDL title search and movie-only YIFY subtitle links.
 4. **P0 — Lock `@connect *` to a whitelist**. Completed locally; only explicit documented domains remain in metadata.
 5. **P1 — Add Letterboxd & Trakt inline scores** alongside RT/MC. Letterboxd has a stable `letterboxd.com/imdb/{ttid}/` redirect; competitor scripts (`cvzi/Letterboxd-userscript`, MoreMovieRatings 72k installs) prove the demand.
-6. **P1 — Reify "watch search" as user-configurable sites** and split it from the bundled grey-market list. Today the dropdown ships 7 hard-coded streaming sites ([IMDb_Enhanced.user.js:1271-1279](IMDb_Enhanced.user.js#L1271-L1279)) that go stale or get DMCA'd; users should add/remove their own.
+6. **P1 — Reify "watch search" as user-configurable sites**. Completed locally with `watchSites` / `externalSites` settings and settings-panel editors.
 7. **P1 — Stop guessing IMDb's hashed `.sc-XXXXXXXX` classes**; build a Sass-style selector helper that prefers `data-testid` and falls back to attribute-contains. The current theme CSS hard-codes ~30 hashed classes that will break on the next IMDb deploy.
 8. **P1 — Episode list spoiler-blur and "best episodes" sort** for TV. Currently `spoilerBlur` ([IMDb_Enhanced.user.js:1183-1208](IMDb_Enhanced.user.js#L1183-L1208)) only blurs the hero plot; episode synopses and Black-Mirror-style anthology pages still spoil.
 9. **P2 — Light/system theme**. CSS hard-codes `color-scheme: dark` ([IMDb_Enhanced.user.js:433](IMDb_Enhanced.user.js#L433)); macOS auto-switch and `prefers-color-scheme` users are ignored.
@@ -139,8 +140,8 @@ Grouped exactly as in the source: Cleanup (7), Appearance (5), Layout (3), Score
 | 15 | Collapsible sections | Per-section collapse button, persists | Auto on imdb.com | [IMDb_Enhanced.user.js:1136-1180](IMDb_Enhanced.user.js#L1136-L1180) | Complete | None | CSS exception `[class*="title"]` is too broad — `tm-box-addtolist-button` and other classes match. Use explicit allow-list. |
 | 16 | Spoiler blur on plot | Blurs `plot-l`/`plot-xl` until click | Auto | [IMDb_Enhanced.user.js:1182-1208](IMDb_Enhanced.user.js#L1182-L1208) | Partial — only one plot field; episode titles / synopses still spoil | None | Extend to per-episode rows, MoreLikeThis poster titles, sub-section editorial |
 | 17 | Section navigator | Right-rail dot nav | Auto ≥ 1200 px | [IMDb_Enhanced.user.js:1210-1253](IMDb_Enhanced.user.js#L1210-L1253) | Complete | None | No active-section highlighting; no keyboard navigation; single-letter icons are not screen-reader friendly even with `aria-label` |
-| 18 | Watch search buttons | Hard-coded 7-button row of streaming sites | Auto | [IMDb_Enhanced.user.js:1261-1297](IMDb_Enhanced.user.js#L1261-L1297) | **Brittle** — domains rotate (Cineby has 3 hosts already); some are grey-market | None | Make sites user-configurable; bundle a curated default list with a "reset to defaults" |
-| 19 | External links bar | RT, Letterboxd, TMDB, YouTube, Wikipedia, JustWatch, Trakt | Auto | [IMDb_Enhanced.user.js:1299-1325](IMDb_Enhanced.user.js#L1299-L1325) | Complete | None | Same configurability issue; Letterboxd link uses `/imdb/{id}/` which is the most stable shape (good) |
+| 18 | Watch search buttons | Configurable row of watch-search sites | Auto | [IMDb_Enhanced.user.js:1261-1297](IMDb_Enhanced.user.js#L1261-L1297) | Complete | None | Defaults preserve the old list; settings allow add/remove/reset |
+| 19 | External links bar | Configurable RT, Letterboxd, TMDB, YouTube, Wikipedia, JustWatch, Trakt-style links | Auto | [IMDb_Enhanced.user.js:1299-1325](IMDb_Enhanced.user.js#L1299-L1325) | Complete | None | Settings allow add/remove/reset; Letterboxd link uses `/imdb/{id}/` |
 | 20 | Expanded link menu | "More links" dropdown grouping 7 categories | Auto, depends on #19 | [IMDb_Enhanced.user.js:1328-1408](IMDb_Enhanced.user.js#L1328-L1408) | Complete | None | Subtitles now use SubDL + movie-only YIFY; `Torrents` group surfaces only on `expandedLinkMenu = true` — should also gate behind explicit user opt-in |
 | 21 | TV show quick links | Chip row of TV-DB / TVMaze / Trakt / Ep Calendar | Auto on TV | [IMDb_Enhanced.user.js:1416-1448](IMDb_Enhanced.user.js#L1416-L1448) | Complete | None | Could add Sonarr/Radarr quick-add (compare with "Universal Servarr Add Tool" on Greasy Fork) |
 | 22 | Subtitle links | OpenSubtitles + OpenSubs.com + SubDL + YIFY-Subs + Addic7ed | Auto | [IMDb_Enhanced.user.js:1450-1471](IMDb_Enhanced.user.js#L1450-L1471) | Complete | None | YIFY is movie-only and hidden on TV pages |
@@ -635,12 +636,12 @@ Same item, listed here for completeness — it is both an existing-feature relia
   - Acceptance: Letterboxd rating appears on films, suppressed on TV (Letterboxd is films-only).
   - Verify: `node --check IMDb_Enhanced.user.js`; `Invoke-WebRequest https://letterboxd.com/imdb/tt1375666/` exposes `twitter:data2`; `tt2085059` returns Letterboxd's not-found marker and the feature is gated by IMDb media type.
 
-- [ ] **P1** — User-configurable watch-search + external-links lists (NF-2)
+- [x] **P1** — User-configurable watch-search + external-links lists (NF-2)
   - Why: Hard-coded grey-market streaming sites are the single biggest rot vector.
   - Evidence: 7 sites at [IMDb_Enhanced.user.js:1271-1279](IMDb_Enhanced.user.js#L1271-L1279); `IMDb: Link 'em all!` (3.7k installs) shows demand.
   - Touches: DEFAULTS, both features, settings panel adds editable table rows.
   - Acceptance: Add a custom site → button renders → click launches; remove → button gone.
-  - Verify: Manual.
+  - Verify: `node --check IMDb_Enhanced.user.js`; settings editor supports add/remove/reset for both stored lists; renderers consume sanitized `watchSites` / `externalSites`.
 
 - [ ] **P1** — TV episode tools: spoiler-blur + best-episodes panel (NF-4)
   - Why: Anthologies (Black Mirror is literally the saved fixture) demand it.

@@ -43,6 +43,24 @@
         externalLinks: 30,
         tvShowEnhancements: 40,
     };
+    const DEFAULT_WATCH_SITES = [
+        { name:'Cineby', color:'#6366f1', url:'https://www.cineby.sc/search', storeQuery:true },
+        { name:'Popcorn', color:'#10b981', url:'https://popcornmovies.org/search/{{TITLE_DASH}}' },
+        { name:'XPrime', color:'#f59e0b', url:'https://xprime.su/search/{{TITLE_DASH}}' },
+        { name:'Aether', color:'#8b5cf6', url:'https://aether.mom/browse/{{TITLE}}' },
+        { name:'Fmovies+', color:'#ef4444', url:'https://fmovies.gd/search/{{TITLE_DASH}}' },
+        { name:'Rive', color:'#ec4899', url:'https://rivestream.app/search?q={{TITLE}}' },
+        { name:'67Movies', color:'#06b6d4', url:'https://67movies.net/search/{{TITLE_DASH}}' },
+    ];
+    const DEFAULT_EXTERNAL_SITES = [
+        { name:'Rotten Tomatoes', color:'#fa320a', url:'https://www.rottentomatoes.com/search?search={{TITLE}}' },
+        { name:'Letterboxd', color:'#00d735', url:'https://letterboxd.com/imdb/{{IMDB_ID}}/' },
+        { name:'TMDB', color:'#01b4e4', url:'https://www.themoviedb.org/search/movie?query={{TITLE}}' },
+        { name:'YouTube', color:'#ff0000', url:'https://www.youtube.com/results?search_query={{TITLE}}%20trailer' },
+        { name:'Wikipedia', color:'#636466', url:'https://en.wikipedia.org/w/index.php?search={{TITLE}}+film' },
+        { name:'JustWatch', color:'#fbc500', url:'https://www.justwatch.com/us/search?q={{TITLE}}' },
+        { name:'Trakt', color:'#ed1c24', url:'https://trakt.tv/search/imdb?query={{IMDB_ID}}' },
+    ];
 
     const DEFAULTS = {
         // Cleanup
@@ -60,6 +78,7 @@
         inlineRTScore: true, inlineLetterboxdScore: true, inlineMetacriticScore: true,
         // Links
         searchButtons: true, externalLinks: true, expandedLinkMenu: true,
+        watchSites: DEFAULT_WATCH_SITES, externalSites: DEFAULT_EXTERNAL_SITES,
         // TV
         tvShowEnhancements: true, subtitleLinks: true,
         // Utility
@@ -230,6 +249,56 @@
             else if (c) e.appendChild(c);
         }
         return e;
+    }
+
+    function normalizeColor(color, fallback = '#6366f1') {
+        const value = String(color || '').trim();
+        return /^#[0-9a-f]{6}$/i.test(value) ? value : fallback;
+    }
+
+    function normalizeUrlTemplate(url) {
+        const value = String(url || '').trim();
+        return /^https?:\/\//i.test(value) ? value : '';
+    }
+
+    function normalizeSite(site, fallbackColor = '#6366f1') {
+        const name = String(site?.name || '').trim().slice(0, 40);
+        const url = normalizeUrlTemplate(site?.url);
+        if (!name || !url) return null;
+        return {
+            name,
+            url,
+            color: normalizeColor(site?.color, fallbackColor),
+            ...(site?.storeQuery ? { storeQuery:true } : {}),
+        };
+    }
+
+    function getSiteList(key, defaults) {
+        const value = get(key);
+        if (Array.isArray(value)) return value.map(site => normalizeSite(site)).filter(Boolean);
+        return defaults.map(site => normalizeSite(site)).filter(Boolean);
+    }
+
+    function setSiteList(key, sites) {
+        const normalized = sites.map(site => normalizeSite(site)).filter(Boolean);
+        set(key, normalized);
+    }
+
+    function getLinkContext(title = getTitleText(), imdbId = getIMDbID(), year = getTitleYear()) {
+        const rawTitle = title || '';
+        return {
+            TITLE: encodeURIComponent(rawTitle),
+            TITLE_RAW: rawTitle,
+            TITLE_DASH: encodeURIComponent(rawTitle.replace(/\s+/g, '-')),
+            TITLE_SLUG: rawTitle.toLowerCase().replace(/[^a-z0-9\s]/g, '').trim().replace(/\s+/g, '-'),
+            IMDB_ID: imdbId || '',
+            IMDB_NUM: (imdbId || '').replace(/^tt/, ''),
+            YEAR: year || '',
+        };
+    }
+
+    function applyLinkTemplate(template, ctx) {
+        return String(template || '').replace(/\{\{([A-Z_]+)\}\}/g, (_, key) => ctx[key] ?? '');
     }
 
     // =========================================================================
@@ -1434,29 +1503,32 @@ h3.ipc-title__text.ipc-title__text--reduced { padding: 0 !important; margin: 0 !
                 if (document.getElementById('enh-search-buttons')) return;
                 const title = getTitleText();
                 if (!title) return;
-                const h = title.replace(/\s+/g,'-'), e = encodeURIComponent(title);
-                const ch = title.toLowerCase().replace(/[^a-z0-9\s]/g,'').replace(/\s+/g,'-');
-                const sites = [
-                    { name:'Cineby', color:'#6366f1', action:'cineby' },
-                    { name:'Popcorn', color:'#10b981', url:`https://popcornmovies.org/search/${h}` },
-                    { name:'XPrime', color:'#f59e0b', url:`https://xprime.su/search/${h}` },
-                    { name:'Aether', color:'#8b5cf6', url:`https://aether.mom/browse/${e}` },
-                    { name:'Fmovies+', color:'#ef4444', url:`https://fmovies.gd/search/${h}` },
-                    { name:'Rive', color:'#ec4899', url:`https://rivestream.app/search?q=${e}` },
-                    { name:'67Movies', color:'#06b6d4', url:`https://67movies.net/search/${h}` },
-                ];
+                const ctx = getLinkContext(title);
+                const sites = getSiteList('watchSites', DEFAULT_WATCH_SITES);
                 const wrap = makeEl('div', { id:'enh-search-buttons' });
-                wrap.innerHTML = `
-                    <div class="enh-stream-label"><span class="enh-stream-label__dot"></span>WATCH SEARCH</div>
-                    <div class="enh-search-row">${
-                        sites.map(s => `<button type="button" class="enh-search-btn" data-url="${s.url||''}" data-action="${s.action||''}" style="--btn-color:${s.color}" aria-label="Search ${s.name} for ${title}"><span>${s.name}</span></button>`).join('')
-                    }</div>
-                `;
+                const label = makeEl('div', { className:'enh-stream-label' },
+                    makeEl('span', { className:'enh-stream-label__dot' }),
+                    'WATCH SEARCH'
+                );
+                const row = makeEl('div', { className:'enh-search-row' });
+                sites.forEach(site => {
+                    const url = applyLinkTemplate(site.url, ctx);
+                    const btn = makeEl('button', {
+                        type:'button',
+                        className:'enh-search-btn',
+                        dataset:{ url, storeQuery:String(Boolean(site.storeQuery)) },
+                        style:{ '--btn-color':site.color },
+                        'aria-label': `Search ${site.name} for ${title}`,
+                    }, makeEl('span', {}, site.name));
+                    row.appendChild(btn);
+                });
+                wrap.appendChild(label);
+                wrap.appendChild(row);
                 appendTitleStackItem(wrap, TITLE_STACK_ORDER.searchButtons);
                 wrap.querySelectorAll('.enh-search-btn').forEach(btn => {
                     btn.addEventListener('click', () => {
-                        if (btn.dataset.action === 'cineby') { GM_setValue('movieTitle',title); window.open('https://www.cineby.sc/search','_blank'); }
-                        else window.open(btn.dataset.url,'_blank');
+                        if (btn.dataset.storeQuery === 'true') GM_setValue('movieTitle', title);
+                        window.open(btn.dataset.url, '_blank');
                     });
                 });
             }).catch(() => {});
@@ -1471,20 +1543,18 @@ h3.ipc-title__text.ipc-title__text--reduced { padding: 0 !important; margin: 0 !
                 if (document.getElementById('enh-external-links')) return;
                 const title = getTitleText(), year = getTitleYear(), imdbId = getIMDbID();
                 if (!title || !imdbId) return;
-                const enc = encodeURIComponent(title);
-                const links = [
-                    { name:'Rotten Tomatoes', url:`https://www.rottentomatoes.com/search?search=${enc}`, color:'#fa320a' },
-                    { name:'Letterboxd', url:`https://letterboxd.com/imdb/${imdbId}/`, color:'#00d735' },
-                    { name:'TMDB', url:`https://www.themoviedb.org/search/movie?query=${enc}`, color:'#01b4e4' },
-                    { name:'YouTube', url:`https://www.youtube.com/results?search_query=${enc}%20trailer`, color:'#ff0000' },
-                    { name:'Wikipedia', url:`https://en.wikipedia.org/w/index.php?search=${enc}+film`, color:'#636466' },
-                    { name:'JustWatch', url:`https://www.justwatch.com/us/search?q=${enc}`, color:'#fbc500' },
-                    { name:'Trakt', url:`https://trakt.tv/search/imdb?query=${imdbId}`, color:'#ed1c24' },
-                ];
+                const ctx = getLinkContext(title, imdbId, year);
+                const links = getSiteList('externalSites', DEFAULT_EXTERNAL_SITES);
                 const bar = makeEl('div', { id:'enh-external-links' });
-                bar.innerHTML = links.map(l =>
-                    `<a href="${l.url}" target="_blank" rel="noopener" class="enh-ext-link" style="--link-color:${l.color}">${l.name}</a>`
-                ).join('');
+                links.forEach(link => {
+                    bar.appendChild(makeEl('a', {
+                        href: applyLinkTemplate(link.url, ctx),
+                        target:'_blank',
+                        rel:'noopener',
+                        className:'enh-ext-link',
+                        style:{ '--link-color':link.color },
+                    }, link.name));
+                });
                 appendTitleStackItem(bar, TITLE_STACK_ORDER.externalLinks);
             }).catch(() => {});
         },
@@ -2049,6 +2119,70 @@ h3.ipc-title__text.ipc-title__text--reduced { padding: 0 !important; margin: 0 !
 .enh-import-textarea:focus { border-color: ${t.accentBorder}; box-shadow: 0 0 0 2px ${t.accentMuted}; }
 .enh-import-actions { display: flex; justify-content: flex-end; gap: 8px; margin-top: 10px; }
 
+/* ════ Site Editors ════ */
+.enh-site-editor {
+    margin: 14px 0 4px;
+    padding: 12px;
+    border: 1px solid ${t.bd1};
+    border-radius: 10px;
+    background: ${t.sf1};
+}
+.enh-site-editor__header {
+    display: flex;
+    justify-content: space-between;
+    align-items: center;
+    gap: 10px;
+    margin-bottom: 10px;
+}
+.enh-site-editor__title {
+    color: ${t.tx1};
+    font: 700 12px/1.3 -apple-system, BlinkMacSystemFont, 'Segoe UI', sans-serif;
+}
+.enh-site-editor__actions { display: flex; gap: 6px; flex-shrink: 0; }
+.enh-site-editor__rows { display: flex; flex-direction: column; gap: 7px; }
+.enh-site-row {
+    display: grid;
+    grid-template-columns: minmax(88px, .7fr) minmax(160px, 1.4fr) 34px 30px;
+    gap: 6px;
+    align-items: center;
+}
+.enh-site-input {
+    min-width: 0;
+    height: 30px;
+    border-radius: 7px;
+    border: 1px solid ${t.bd1};
+    background: ${t.bg};
+    color: ${t.tx1};
+    padding: 0 8px;
+    font: 500 11px/1.3 -apple-system, BlinkMacSystemFont, 'Segoe UI', sans-serif;
+    outline: none;
+}
+.enh-site-color {
+    width: 34px;
+    height: 30px;
+    border: 1px solid ${t.bd1};
+    border-radius: 7px;
+    background: ${t.bg};
+    padding: 2px;
+    cursor: pointer;
+}
+.enh-site-remove {
+    width: 30px;
+    height: 30px;
+    border-radius: 7px;
+    border: 1px solid ${t.bd1};
+    background: ${t.sf0};
+    color: ${t.tx2};
+    cursor: pointer;
+    font: 700 15px/1 -apple-system, BlinkMacSystemFont, 'Segoe UI', sans-serif;
+}
+.enh-site-remove:hover { background: ${t.sf2}; color: ${t.tx0}; }
+.enh-site-input:focus,
+.enh-site-color:focus {
+    border-color: ${t.accentBorder};
+    box-shadow: 0 0 0 2px ${t.accentMuted};
+}
+
 /* ════ FAB ════ */
 #enh-settings-fab {
     position: fixed; bottom: 20px; left: 20px;
@@ -2070,6 +2204,7 @@ h3.ipc-title__text.ipc-title__text--reduced { padding: 0 !important; margin: 0 !
 #enh-link-menu-trigger:focus-visible,
 .enh-link-dropdown__item:focus-visible,
 #enh-copy-id:focus-visible,
+.enh-site-remove:focus-visible,
 .enh-settings-footer-btn:focus-visible,
 .enh-settings-close:focus-visible,
 .enh-theme-swatch:focus-visible,
@@ -2098,6 +2233,7 @@ h3.ipc-title__text.ipc-title__text--reduced { padding: 0 !important; margin: 0 !
     .enh-settings-body { padding-left: 16px; padding-right: 16px; }
     .enh-settings-footer { align-items: flex-start; flex-direction: column; }
     .enh-settings-footer-note { text-align: left; max-width: none; }
+    .enh-site-row { grid-template-columns: 1fr 1fr 34px 30px; }
 }
         `, 'enh-global');
     }
@@ -2109,6 +2245,109 @@ h3.ipc-title__text.ipc-title__text--reduced { padding: 0 !important; margin: 0 !
     // #########################################################################
     let settingsOpen = false;
     let lastFocusedElement = null;
+
+    function refreshFeature(key) {
+        const feature = features.find(f => f.key === key);
+        if (!feature || !get(key)) return;
+
+        const linkMenu = key === 'externalLinks' ? features.find(f => f.key === 'expandedLinkMenu') : null;
+        if (linkMenu && get('expandedLinkMenu')) linkMenu.destroy?.();
+
+        try {
+            feature.destroy?.();
+            feature.init();
+            if (linkMenu && get('expandedLinkMenu')) linkMenu.init();
+        } catch (e) {
+            console.warn(`[IMDb Enhanced] refresh ${key}:`, e);
+        }
+    }
+
+    function createSiteEditor({ title, key, defaults, featureKey }) {
+        const editor = makeEl('div', { className:'enh-site-editor' });
+        const rows = makeEl('div', { className:'enh-site-editor__rows' });
+
+        const readRows = () => Array.from(rows.querySelectorAll('.enh-site-row')).map(row => ({
+            name: row.querySelector('[data-field="name"]')?.value || '',
+            url: row.querySelector('[data-field="url"]')?.value || '',
+            color: row.querySelector('[data-field="color"]')?.value || '#6366f1',
+            storeQuery: row.dataset.storeQuery === 'true',
+        }));
+
+        const save = () => {
+            setSiteList(key, readRows());
+            refreshFeature(featureKey);
+        };
+
+        const addRow = (site = {}) => {
+            const row = makeEl('div', {
+                className:'enh-site-row',
+                dataset:{ storeQuery:String(Boolean(site.storeQuery)) },
+            });
+            const nameInput = makeEl('input', {
+                type:'text',
+                className:'enh-site-input',
+                dataset:{ field:'name' },
+                'aria-label': `${title} site name`,
+            });
+            nameInput.value = site.name || 'New site';
+
+            const urlInput = makeEl('input', {
+                type:'url',
+                className:'enh-site-input',
+                dataset:{ field:'url' },
+                'aria-label': `${title} URL template`,
+            });
+            urlInput.value = site.url || 'https://example.com/search?q={{TITLE}}';
+
+            const colorInput = makeEl('input', {
+                type:'color',
+                className:'enh-site-color',
+                dataset:{ field:'color' },
+                'aria-label': `${title} color`,
+            });
+            colorInput.value = normalizeColor(site.color);
+
+            const remove = makeEl('button', {
+                type:'button',
+                className:'enh-site-remove',
+                title:'Remove site',
+                'aria-label':'Remove site',
+                onClick: () => { row.remove(); save(); },
+            }, 'x');
+
+            [nameInput, urlInput, colorInput].forEach(input => input.addEventListener('change', save));
+            row.appendChild(nameInput);
+            row.appendChild(urlInput);
+            row.appendChild(colorInput);
+            row.appendChild(remove);
+            rows.appendChild(row);
+        };
+
+        const add = makeEl('button', {
+            type:'button',
+            className:'enh-settings-footer-btn',
+            onClick: () => { addRow(); save(); },
+        }, 'Add');
+        const reset = makeEl('button', {
+            type:'button',
+            className:'enh-settings-footer-btn',
+            onClick: () => {
+                if (!confirm(`Reset ${title.toLowerCase()} to defaults?`)) return;
+                rows.replaceChildren();
+                defaults.forEach(site => addRow(site));
+                save();
+            },
+        }, 'Reset');
+
+        editor.appendChild(makeEl('div', { className:'enh-site-editor__header' },
+            makeEl('div', { className:'enh-site-editor__title' }, title),
+            makeEl('div', { className:'enh-site-editor__actions' }, add, reset)
+        ));
+
+        getSiteList(key, defaults).forEach(site => addRow(site));
+        editor.appendChild(rows);
+        return editor;
+    }
 
     function createSettingsPanel() {
         if (document.getElementById('enh-settings-overlay')) return;
@@ -2206,6 +2445,20 @@ h3.ipc-title__text.ipc-title__text--reduced { padding: 0 !important; margin: 0 !
                 row.appendChild(toggle); body.appendChild(row);
             });
         }
+
+        body.appendChild(makeEl('div', { className:'enh-settings-group-label' }, 'Link sites'));
+        body.appendChild(createSiteEditor({
+            title:'Watch search sites',
+            key:'watchSites',
+            defaults:DEFAULT_WATCH_SITES,
+            featureKey:'searchButtons',
+        }));
+        body.appendChild(createSiteEditor({
+            title:'External link sites',
+            key:'externalSites',
+            defaults:DEFAULT_EXTERNAL_SITES,
+            featureKey:'externalLinks',
+        }));
 
         const importPanel = makeEl('div', { className:'enh-import-panel', hidden:'hidden' },
             makeEl('label', { className:'enh-import-label', for:'enh-import-textarea' }, 'Paste exported settings JSON'),
