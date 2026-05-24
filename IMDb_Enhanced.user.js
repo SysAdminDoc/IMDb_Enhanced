@@ -321,11 +321,38 @@
         return _ldData || {};
     }
 
+    function yearFromText(text) {
+        return String(text || '').match(/\b(18|19|20)\d{2}\b/)?.[0] || '';
+    }
+
     function getTitleYear() {
         const ld = getLDData();
-        if (ld.datePublished) return ld.datePublished.substring(0, 4);
+        const releaseEvents = Array.isArray(ld.releasedEvent) ? ld.releasedEvent : [ld.releasedEvent].filter(Boolean);
+        const structuredCandidates = [
+            ld.datePublished,
+            ld.releaseDate,
+            ld.startDate,
+            ld.dateCreated,
+            ...releaseEvents.flatMap(ev => [ev?.startDate, ev?.endDate]),
+        ];
+        for (const candidate of structuredCandidates) {
+            const year = yearFromText(candidate);
+            if (year) return year;
+        }
+
         const inlines = document.querySelectorAll('[data-testid="hero-subnav-bar-left-block"] a, section[data-testid="hero-parent"] a[href*="releaseinfo"], main h1 ~ ul a');
         for (const a of inlines) { const m = a.textContent.match(/\b(19|20)\d{2}\b/); if (m) return m[0]; }
+        const metaTitle = document.querySelector('meta[property="og:title"], meta[name="title"]')?.content;
+        const fallbackSources = [
+            metaTitle,
+            document.querySelector('[data-testid="hero__pageTitle"]')?.textContent,
+            document.querySelector('h1')?.parentElement?.textContent,
+            document.title,
+        ];
+        for (const source of fallbackSources) {
+            const year = yearFromText(source);
+            if (year) return year;
+        }
         return '';
     }
 

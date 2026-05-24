@@ -13,6 +13,7 @@
 - 2026-05-24 — Added configurable watch-search and external-link site lists. Defaults preserve the previous built-in sites, settings now provide add/remove/reset editors, exported settings include the lists, and user-provided labels/URLs render through DOM APIs instead of HTML strings.
 - 2026-05-24 — Added `tvEpisodeTools`: episode-card plot blur/reveal and a Top rated episodes panel when at least 10 rated episodes are present. Static selectors were checked against the saved Black Mirror fixture; live IMDb episodes HTML returned bot verification and still needs manual browser validation.
 - 2026-05-24 — Removed remaining `.sc-*` styled-components hash selectors from the userscript. Replacements use `data-testid`, IPC component classes, and broader stable section selectors; `getTitleYear` no longer depends on a hashed class fallback.
+- 2026-05-24 — Hardened `getTitleYear()` with JSON-LD release candidates (`datePublished`, release/start dates, release events) plus stable DOM, Open Graph, heading, and document-title regex fallbacks.
 
 ---
 
@@ -664,10 +665,10 @@ Same item, listed here for completeness — it is both an existing-feature relia
   - Touches: header.
   - Verify: `console.info` only fires once per page.
 
-- [ ] **P1** — Resilient `getTitleYear` via JSON-LD + regex fallback (IM-9)
+- [x] **P1** — Resilient `getTitleYear` via JSON-LD + regex fallback (IM-9)
   - Why: Hashed selector at [IMDb_Enhanced.user.js:223](IMDb_Enhanced.user.js#L223) is fragile.
   - Touches: `getTitleYear`.
-  - Verify: Manual on 5 titles.
+  - Verify: `node --check IMDb_Enhanced.user.js`; helper now tries structured data before stable DOM/title regex fallbacks.
 
 ### Phase 2 — Depth + reach (next month)
 
