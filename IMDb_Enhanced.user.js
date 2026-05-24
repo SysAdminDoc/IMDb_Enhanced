@@ -22,11 +22,9 @@
 // @connect      www.rottentomatoes.com
 // @connect      backend.metacritic.com
 // @connect      www.opensubtitles.org
-// @connect      *
 // @run-at       document-start
+// @noframes
 // @license      MIT
-// @downloadURL  https://github.com/SysAdminDoc/IMDb-Enhanced/raw/main/IMDb_Enhanced.user.js
-// @updateURL    https://github.com/SysAdminDoc/IMDb-Enhanced/raw/main/IMDb_Enhanced.user.js
 // ==/UserScript==
 
 (function () {
@@ -105,6 +103,9 @@
     }
     function cacheSet(key, data) {
         GM_setValue('cache_' + key, JSON.stringify({ data, ts: Date.now() }));
+    }
+    function cacheSetUnavailable(key) {
+        cacheSet(key, { unavailable: true });
     }
 
     // =========================================================================
@@ -960,8 +961,13 @@ h3.ipc-title__text.ipc-title__text--reduced { padding: 0 !important; margin: 0 !
             const imdbId = getIMDbID(), title = getTitleText();
             if (!imdbId || !title) return;
 
-            const cached = cacheGet('rt_' + imdbId);
-            if (cached) { this._render(cached); return; }
+            const cacheKey = 'rt_' + imdbId;
+            const cached = cacheGet(cacheKey);
+            if (cached) {
+                if (cached.unavailable) this._renderUnavailable();
+                else this._render(cached);
+                return;
+            }
             this._renderLoading();
 
             const type = getMediaType();
@@ -971,7 +977,7 @@ h3.ipc-title__text.ipc-title__text--reduced { padding: 0 !important; margin: 0 !
             try {
                 const res = await httpGet('https://www.rottentomatoes.com' + path);
                 const data = this._parse(res.responseText);
-                if (data) { cacheSet('rt_' + imdbId, data); this._render(data); return; }
+                if (data) { cacheSet(cacheKey, data); this._render(data); return; }
             } catch { /* fallback below */ }
 
             // Fallback: search page
@@ -981,10 +987,11 @@ h3.ipc-title__text.ipc-title__text--reduced { padding: 0 !important; margin: 0 !
                 const au = res2.responseText.match(/"audienceScore"\s*:\s*(\d+)/);
                 if (tm) {
                     const d = { tomatometer: parseInt(tm[1]), audience: au ? parseInt(au[1]) : null };
-                    cacheSet('rt_' + imdbId, d); this._render(d);
+                    cacheSet(cacheKey, d); this._render(d);
                     return;
                 }
             } catch { /* handled below */ }
+            cacheSetUnavailable(cacheKey);
             this._renderUnavailable();
         },
         _parse(html) {
@@ -1056,8 +1063,13 @@ h3.ipc-title__text.ipc-title__text--reduced { padding: 0 !important; margin: 0 !
             const imdbId = getIMDbID(), title = getTitleText();
             if (!imdbId || !title) return;
 
-            const cached = cacheGet('mc_' + imdbId);
-            if (cached) { this._render(cached); return; }
+            const cacheKey = 'mc_' + imdbId;
+            const cached = cacheGet(cacheKey);
+            if (cached) {
+                if (cached.unavailable) this._renderUnavailable();
+                else this._render(cached);
+                return;
+            }
             this._renderLoading();
 
             const type = getMediaType() === 'tv' ? '1' : '2';
@@ -1075,10 +1087,11 @@ h3.ipc-title__text.ipc-title__text--reduced { padding: 0 !important; margin: 0 !
                         ? 'https://www.metacritic.com' + best.criticScoreSummary.url.replace('/critic-reviews/', '/')
                         : `https://www.metacritic.com/search/${encodeURIComponent(title)}/`;
                     const d = { score, userScore, url: metaUrl, title: best.title };
-                    cacheSet('mc_' + imdbId, d); this._render(d);
+                    cacheSet(cacheKey, d); this._render(d);
                     return;
                 }
             } catch { /* handled below */ }
+            cacheSetUnavailable(cacheKey);
             this._renderUnavailable();
         },
         _render(data) {
@@ -1349,7 +1362,8 @@ h3.ipc-title__text.ipc-title__text--reduced { padding: 0 !important; margin: 0 !
             'Subtitles': [
                 { n:'OpenSubtitles', u:'https://www.opensubtitles.org/en/search/imdbid-{{ID}}' },
                 { n:'OpenSubs.com', u:'https://www.opensubtitles.com/en/en/search-all/q-tt{{ID}}' },
-                { n:'Subscene', u:'https://subscene.com/subtitles/searchbytitle?query={{T}}' },
+                { n:'SubDL', u:'https://subdl.com/search/{{T}}' },
+                { n:'YIFY-Subs', u:'https://yifysubtitles.ch/movie-imdb/{{ID}}', movieOnly:true },
             ],
             'TV': [
                 { n:'TheTVDB', u:'https://www.thetvdb.com/search?query=tt{{ID}}' },
@@ -1361,6 +1375,7 @@ h3.ipc-title__text.ipc-title__text--reduced { padding: 0 !important; margin: 0 !
                 { n:'1337x', u:'https://1337x.to/search/{{T}}+{{Y}}/1/' },
             ],
         },
+        _closeHandler: null,
         init() {
             waitFor('#enh-external-links').then(extBar => {
                 const title = getTitleText(), year = getTitleYear(), imdbId = getIMDbID();
@@ -1386,7 +1401,7 @@ h3.ipc-title__text.ipc-title__text--reduced { padding: 0 !important; margin: 0 !
                     if (cat === 'TV' && getMediaType() !== 'tv') continue;
                     dropdown.appendChild(makeEl('div', { className:'enh-link-dropdown__cat' }, cat));
                     const row = makeEl('div', { className:'enh-link-dropdown__row' });
-                    links.forEach(l => row.appendChild(makeEl('a', {
+                    links.filter(l => !(l.movieOnly && getMediaType() === 'tv')).forEach(l => row.appendChild(makeEl('a', {
                         href: buildUrl(l.u), target:'_blank', rel:'noopener', className:'enh-link-dropdown__item', role:'menuitem'
                     }, l.n)));
                     dropdown.appendChild(row);
@@ -1396,15 +1411,20 @@ h3.ipc-title__text.ipc-title__text--reduced { padding: 0 !important; margin: 0 !
                 container.appendChild(dropdown);
                 extBar.appendChild(container);
 
-                document.addEventListener('click', (e) => {
+                this._closeHandler = (e) => {
                     if (!e.target.closest('#enh-link-menu-trigger') && !e.target.closest('#enh-link-menu-dropdown')) {
                         dropdown.classList.remove('enh-visible');
                         trigger.setAttribute('aria-expanded', 'false');
                     }
-                });
+                };
+                document.addEventListener('click', this._closeHandler);
             }).catch(() => {});
         },
-        destroy() { document.getElementById('enh-link-menu-wrap')?.remove(); }
+        destroy() {
+            if (this._closeHandler) document.removeEventListener('click', this._closeHandler);
+            this._closeHandler = null;
+            document.getElementById('enh-link-menu-wrap')?.remove();
+        }
     });
 
     // #########################################################################
@@ -1459,9 +1479,10 @@ h3.ipc-title__text.ipc-title__text--reduced { padding: 0 !important; margin: 0 !
                 [
                     { n:'OpenSubtitles', u:`https://www.opensubtitles.org/en/search/imdbid-${imdbId}` },
                     { n:'OpenSubs.com', u:`https://www.opensubtitles.com/en/en/search-all/q-tt${imdbId}` },
-                    { n:'Subscene', u:`https://subscene.com/subtitles/searchbytitle?query=${encodeURIComponent(title)}` },
+                    { n:'SubDL', u:`https://subdl.com/search/${encodeURIComponent(title)}` },
+                    { n:'YIFY-Subs', u:`https://yifysubtitles.ch/movie-imdb/${imdbId}`, movieOnly:true },
                     { n:'Addic7ed', u:`https://www.addic7ed.com/search.php?search=${encodeURIComponent(title)}&Submit=Search` },
-                ].forEach(s => row.appendChild(makeEl('a', {
+                ].filter(s => !(s.movieOnly && getMediaType() === 'tv')).forEach(s => row.appendChild(makeEl('a', {
                     href:s.u, target:'_blank', rel:'noopener', className:'enh-ext-link', style:{ '--link-color':'#22d3ee' }
                 }, s.n)));
                 sec.appendChild(row);
@@ -1918,6 +1939,7 @@ h3.ipc-title__text.ipc-title__text--reduced { padding: 0 !important; margin: 0 !
     let lastFocusedElement = null;
 
     function createSettingsPanel() {
+        if (document.getElementById('enh-settings-overlay')) return;
         const overlay = makeEl('div', { id: 'enh-settings-overlay', 'aria-hidden':'true' });
         overlay.innerHTML = `<div id="enh-settings-panel">
             <div class="enh-settings-header">
@@ -2098,6 +2120,7 @@ h3.ipc-title__text.ipc-title__text--reduced { padding: 0 !important; margin: 0 !
     }
 
     function createFAB() {
+        if (document.getElementById('enh-settings-fab')) return;
         const fab = makeEl('button', {
             id:'enh-settings-fab', type:'button',
             title:'IMDb Enhanced settings', 'aria-label':'Open IMDb Enhanced settings',
@@ -2140,18 +2163,75 @@ h3.ipc-title__text.ipc-title__text--reduced { padding: 0 !important; margin: 0 !
     // =========================================================================
     //  INIT
     // =========================================================================
+    let activeRouteKey = null;
+    let routeInitCount = 0;
+    let routerInstalled = false;
+    let routeTimer = null;
+
+    function isIMDbHost() {
+        return window.location.hostname.includes('imdb.com');
+    }
+
+    function getRouteKey() {
+        return `${window.location.hostname}${window.location.pathname}${window.location.search}`;
+    }
+
+    function destroyRouteFeatures() {
+        features.forEach(f => {
+            try { f.destroy?.(); }
+            catch (e) { console.warn(`[IMDb Enhanced] destroy ${f.key}:`, e); }
+        });
+        document.getElementById('enh-toast')?.remove();
+    }
+
+    function scheduleRouteInit() {
+        clearTimeout(routeTimer);
+        routeTimer = setTimeout(() => {
+            if (activeRouteKey !== getRouteKey()) init();
+        }, 120);
+    }
+
+    function installSPARouter() {
+        if (routerInstalled || !isIMDbHost()) return;
+        routerInstalled = true;
+
+        ['pushState', 'replaceState'].forEach(method => {
+            const original = history[method];
+            if (original.__imdbEnhancedWrapped) return;
+            const wrapped = function (...args) {
+                const result = original.apply(this, args);
+                scheduleRouteInit();
+                return result;
+            };
+            wrapped.__imdbEnhancedWrapped = true;
+            history[method] = wrapped;
+        });
+
+        window.addEventListener('popstate', scheduleRouteInit);
+    }
+
     function init() {
         if (window.location.hostname.includes('cineby')) { handleCineby(); return; }
-        if (!window.location.hostname.includes('imdb.com')) return;
+        if (!isIMDbHost()) return;
+
+        const routeKey = getRouteKey();
+        if (activeRouteKey === routeKey) return;
+        if (activeRouteKey) destroyRouteFeatures();
+        activeRouteKey = routeKey;
+        _ldData = null;
 
         injectGlobalStyles();
-        features.forEach(f => {
+        const enabledFeatures = features.filter(f => get(f.key));
+        enabledFeatures.forEach(f => {
             if (get(f.key)) { try { f.init(); } catch (e) { console.warn(`[IMDb Enhanced] ${f.key}:`, e); } }
         });
         createSettingsPanel();
         createFAB();
+        routeInitCount += 1;
+        console.info(`[IMDb Enhanced] v${VERSION} — init #${routeInitCount}; ${enabledFeatures.length} features enabled`);
     }
 
+    if (isIMDbHost()) installSPARouter();
     if (document.readyState === 'complete' || document.readyState === 'interactive') init();
     else document.addEventListener('DOMContentLoaded', init);
 
