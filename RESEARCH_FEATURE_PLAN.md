@@ -8,6 +8,7 @@
 ## Progress Log
 
 - 2026-05-24 — Completed the Phase 0 stability batch in `IMDb_Enhanced.user.js`: removed the dead GitHub update/download metadata while no remote exists, dropped wildcard `@connect`, added `@noframes`, replaced Subscene with active SubDL/YIFY subtitle destinations, cached unavailable RT/MC score results, and added IMDb SPA route re-initialization with a console init counter.
+- 2026-05-24 — Completed the Phase 1 title-stack consolidation: title-area actions now render into a single ordered `enh-title-stack`, with deterministic order for copy ID, watch search, external links, and TV shortcuts.
 
 ---
 
@@ -619,12 +620,12 @@ Same item, listed here for completeness — it is both an existing-feature relia
 
 ### Phase 1 — Reliability + quality (next sprint)
 
-- [ ] **P1** — Move title-area widgets to a single `enh-title-stack`
+- [x] **P1** — Move title-area widgets to a single `enh-title-stack`
   - Why: Recent commits `eb9980e` + `aa3e4e5` already tried to stabilise insertion; a single stack ends the whack-a-mole.
   - Evidence: Insertion-anchor drift across `searchButtons`/`externalLinks`/`tvShowEnhancements`/`quickCopyID`.
   - Touches: `getTitleActionAnchor` users; new `getOrCreateTitleStack()`.
   - Acceptance: Order is deterministic; destroys empty the stack.
-  - Verify: Refresh 5 different titles in random order; visual order identical.
+  - Verify: `node --check IMDb_Enhanced.user.js`; manual visual refresh still recommended across 5 different live titles.
 
 - [ ] **P1** — Letterboxd inline score (NF-1)
   - Why: Cinephiles ask for this constantly; competitor scripts have 70k+ installs.

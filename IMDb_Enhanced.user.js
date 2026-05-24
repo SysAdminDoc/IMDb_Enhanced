@@ -36,6 +36,12 @@
     const VERSION = '2.3.1';
     const PREFIX  = 'imdb_enh_';
     const CACHE_TTL = 7 * 24 * 60 * 60 * 1000; // 7 days
+    const TITLE_STACK_ORDER = {
+        quickCopyID: 10,
+        searchButtons: 20,
+        externalLinks: 30,
+        tvShowEnhancements: 40,
+    };
 
     const DEFAULTS = {
         // Cleanup
@@ -148,6 +154,31 @@
         if (!anchor?.parentElement || !node) return false;
         anchor.parentElement.insertBefore(node, anchor.nextSibling);
         return true;
+    }
+
+    function getOrCreateTitleStack() {
+        const existing = document.getElementById('enh-title-stack');
+        if (existing) return existing;
+        const anchor = getTitleActionAnchor();
+        if (!anchor) return null;
+        const stack = makeEl('div', { id:'enh-title-stack' });
+        return insertAfter(anchor, stack) ? stack : null;
+    }
+
+    function appendTitleStackItem(node, order) {
+        const stack = getOrCreateTitleStack();
+        if (!stack || !node) return false;
+        node.dataset.titleStackOrder = String(order);
+        const next = Array.from(stack.children).find(child =>
+            Number(child.dataset.titleStackOrder || Number.MAX_SAFE_INTEGER) > order
+        );
+        stack.insertBefore(node, next || null);
+        return true;
+    }
+
+    function pruneTitleStack() {
+        const stack = document.getElementById('enh-title-stack');
+        if (stack && !stack.children.length) stack.remove();
     }
 
     function waitForTitleSurface(timeout = 20000) {
@@ -1297,7 +1328,7 @@ h3.ipc-title__text.ipc-title__text--reduced { padding: 0 !important; margin: 0 !
                         sites.map(s => `<button type="button" class="enh-search-btn" data-url="${s.url||''}" data-action="${s.action||''}" style="--btn-color:${s.color}" aria-label="Search ${s.name} for ${title}"><span>${s.name}</span></button>`).join('')
                     }</div>
                 `;
-                insertAfter(getTitleActionAnchor() || tc, wrap);
+                appendTitleStackItem(wrap, TITLE_STACK_ORDER.searchButtons);
                 wrap.querySelectorAll('.enh-search-btn').forEach(btn => {
                     btn.addEventListener('click', () => {
                         if (btn.dataset.action === 'cineby') { GM_setValue('movieTitle',title); window.open('https://www.cineby.sc/search','_blank'); }
@@ -1306,7 +1337,7 @@ h3.ipc-title__text.ipc-title__text--reduced { padding: 0 !important; margin: 0 !
                 });
             }).catch(() => {});
         },
-        destroy() { document.getElementById('enh-search-buttons')?.remove(); }
+        destroy() { document.getElementById('enh-search-buttons')?.remove(); pruneTitleStack(); }
     });
 
     reg({
@@ -1330,11 +1361,10 @@ h3.ipc-title__text.ipc-title__text--reduced { padding: 0 !important; margin: 0 !
                 bar.innerHTML = links.map(l =>
                     `<a href="${l.url}" target="_blank" rel="noopener" class="enh-ext-link" style="--link-color:${l.color}">${l.name}</a>`
                 ).join('');
-                const insertAfterEl = document.getElementById('enh-search-buttons') || getTitleActionAnchor();
-                insertAfter(insertAfterEl, bar);
+                appendTitleStackItem(bar, TITLE_STACK_ORDER.externalLinks);
             }).catch(() => {});
         },
-        destroy() { document.getElementById('enh-external-links')?.remove(); }
+        destroy() { document.getElementById('enh-external-links')?.remove(); pruneTitleStack(); }
     });
 
     // ===================== EXPANDED LINK MENU =====================
@@ -1460,11 +1490,10 @@ h3.ipc-title__text.ipc-title__text--reduced { padding: 0 !important; margin: 0 !
                     { l:'Ep Calendar', u:`https://episodecalendar.com/en/shows?q%5Bname_cont%5D=${encodeURIComponent(title)}` },
                 ].forEach(c => bar.appendChild(makeEl('a', { href:c.u, target:'_blank', rel:'noopener', className:'enh-tv-chip' }, c.l)));
 
-                const insertPoint = document.getElementById('enh-external-links') || document.getElementById('enh-search-buttons') || getTitleActionAnchor();
-                insertAfter(insertPoint, bar);
+                appendTitleStackItem(bar, TITLE_STACK_ORDER.tvShowEnhancements);
             }).catch(() => {});
         },
-        destroy() { removeCSS('enh-tvShow'); document.getElementById('enh-tv-bar')?.remove(); }
+        destroy() { removeCSS('enh-tvShow'); document.getElementById('enh-tv-bar')?.remove(); pruneTitleStack(); }
     });
 
     reg({
@@ -1510,10 +1539,10 @@ h3.ipc-title__text.ipc-title__text--reduced { padding: 0 !important; margin: 0 !
                     innerHTML: `<svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.5" stroke-linecap="round" stroke-linejoin="round"><rect x="9" y="9" width="13" height="13" rx="2"/><path d="M5 15H4a2 2 0 0 1-2-2V4a2 2 0 0 1 2-2h9a2 2 0 0 1 2 2v1"/></svg><span>${imdbId}</span>`,
                     onClick: () => { GM_setClipboard(imdbId); showToast(`Copied ${imdbId}`); }
                 });
-                titleEl.parentElement?.appendChild(btn);
+                appendTitleStackItem(btn, TITLE_STACK_ORDER.quickCopyID);
             }).catch(() => {});
         },
-        destroy() { document.getElementById('enh-copy-id')?.remove(); }
+        destroy() { document.getElementById('enh-copy-id')?.remove(); pruneTitleStack(); }
     });
 
     reg({
@@ -1556,6 +1585,25 @@ h3.ipc-title__text.ipc-title__text--reduced { padding: 0 !important; margin: 0 !
 #enh-toast.visible { transform: translateY(0); opacity: 1; }
 
 /* ════ Stream Panel ════ */
+#enh-title-stack {
+    display: flex;
+    flex-direction: column;
+    align-items: flex-start;
+    gap: 8px;
+    margin: 12px 0 14px;
+    max-width: min(100%, 920px);
+}
+#enh-title-stack > * { width: 100%; }
+#enh-title-stack #enh-copy-id {
+    width: auto;
+    margin: 0;
+}
+#enh-title-stack #enh-search-buttons,
+#enh-title-stack #enh-external-links,
+#enh-title-stack #enh-tv-bar {
+    margin: 0;
+}
+
 #enh-search-buttons {
     margin: 12px 0 8px;
     padding: 10px 12px 11px;
