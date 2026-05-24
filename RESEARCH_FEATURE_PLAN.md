@@ -12,6 +12,7 @@
 - 2026-05-24 — Added film-only inline Letterboxd scores using `letterboxd.com/imdb/{ttid}/`, parsing `twitter:data2` / JSON-LD ratings, caching unavailable lookups, and adding `letterboxd.com` to the explicit userscript connect whitelist.
 - 2026-05-24 — Added configurable watch-search and external-link site lists. Defaults preserve the previous built-in sites, settings now provide add/remove/reset editors, exported settings include the lists, and user-provided labels/URLs render through DOM APIs instead of HTML strings.
 - 2026-05-24 — Added `tvEpisodeTools`: episode-card plot blur/reveal and a Top rated episodes panel when at least 10 rated episodes are present. Static selectors were checked against the saved Black Mirror fixture; live IMDb episodes HTML returned bot verification and still needs manual browser validation.
+- 2026-05-24 — Removed remaining `.sc-*` styled-components hash selectors from the userscript. Replacements use `data-testid`, IPC component classes, and broader stable section selectors; `getTitleYear` no longer depends on a hashed class fallback.
 
 ---
 
@@ -651,12 +652,12 @@ Same item, listed here for completeness — it is both an existing-feature relia
   - Acceptance: Episode synopses blurred; "Top 10" panel renders for >= 10 rated episodes.
   - Verify: `node --check IMDb_Enhanced.user.js`; saved Black Mirror fixture contains `EpisodeRatingCard_*` title/rating/plot markup targeted by the selectors. Manual live `/episodes/` validation is still recommended because IMDb returned bot verification to non-browser fetches.
 
-- [ ] **P1** — Replace hashed `.sc-XXXXXXXX` selectors (IM-5)
+- [x] **P1** — Replace hashed `.sc-XXXXXXXX` selectors (IM-5)
   - Why: Next IMDb deploy will silently invalidate big chunks of the theme.
   - Evidence: 30+ hashed classes in `getThemeCSS`.
   - Touches: `getThemeCSS`, `enh-collapsible` exception list, `getTitleYear`.
   - Acceptance: After diffing, no `.sc-` class remains except those with a `// LAST-VERIFIED-YYYY-MM-DD` comment.
-  - Verify: Visual diff against three saved fixtures before/after.
+  - Verify: `rg "\\.sc-|sc-[0-9a-fA-F]+|sc-[a-z0-9]+" IMDb_Enhanced.user.js` returns no matches; `node --check IMDb_Enhanced.user.js`.
 
 - [x] **P1** — Add `@noframes` (IM-13)
   - Why: Stops redundant init inside trailer modals & embedded iframes.

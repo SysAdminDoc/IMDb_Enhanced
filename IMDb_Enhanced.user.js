@@ -324,7 +324,7 @@
     function getTitleYear() {
         const ld = getLDData();
         if (ld.datePublished) return ld.datePublished.substring(0, 4);
-        const inlines = document.querySelectorAll('.sc-af040695-0 ul a, [data-testid="hero-subnav-bar-left-block"] a');
+        const inlines = document.querySelectorAll('[data-testid="hero-subnav-bar-left-block"] a, section[data-testid="hero-parent"] a[href*="releaseinfo"], main h1 ~ ul a');
         for (const a of inlines) { const m = a.textContent.match(/\b(19|20)\d{2}\b/); if (m) return m[0]; }
         return '';
     }
@@ -569,10 +569,10 @@ a.ipc-metadata-list-item__label--link:hover { color: ${t.blueHi} !important; }
 .ipc-metadata-list-item__list-content-item a:hover { color: ${t.blueHi} !important; }
 
 /* Muted / secondary text */
-span.sc-8eb6700a-4, .sc-2df17e0-0 { color: ${t.tx3} !important; }
-span.sc-8eb6700a-9 { color: ${t.red} !important; }
-a.sc-8eb6700a-1 { color: ${t.tx0} !important; }
-div.sc-734856d5-2 { color: ${t.blue} !important; }
+[data-testid="title-cast-item"] .ipc-inline-list__item,
+.ipc-metadata-list-item__content-container,
+.ipc-rating-star--voteCount { color: ${t.tx3} !important; }
+[data-testid="hero-rating-bar__popularity"] { color: ${t.blue} !important; }
 
 /* Links — global */
 .ipc-link, .ipc-link--base { color: ${t.blue} !important; transition: color .15s ease !important; }
@@ -738,12 +738,13 @@ img[class*="avatar"], img[class*="Avatar"],
 }
 .ipc-list-card__content { padding: 8px 0 !important; }
 /* Review rating stars inline */
-.sc-fa7e37dc-4, .sc-fa7e37dc-5 { color: ${t.tx2} !important; }
+.ipc-rating-star--voteCount, [data-testid="review-card-parent"] .ipc-rating-star--voteCount { color: ${t.tx2} !important; }
 
 /* ════════════════════════════════════════════
    QUOTES PAGE — blockquote style with accent bar
    ════════════════════════════════════════════ */
-.sc-a25cb019-0, [class*="sc-a25cb019"] > .ipc-list-card {
+[data-testid="sub-section-Quotes"] .ipc-list-card,
+section[id*="quote" i] .ipc-list-card {
     background: ${t.sf0} !important;
     border: 1px solid ${t.bd1} !important;
     border-left: 3px solid ${t.quoteBar} !important;
@@ -752,11 +753,13 @@ img[class*="avatar"], img[class*="Avatar"],
     margin: 0 0 8px 0 !important;
     box-shadow: ${t.sh1} !important;
 }
-.sc-a25cb019-5, .sc-a25cb019-8, .sc-a25cb019-10, .sc-a25cb019-11 {
+[data-testid="sub-section-Quotes"] .ipc-list-card,
+section[id*="quote" i] .ipc-list-card {
     padding: 4px 0 !important;
     margin: 0 !important;
 }
-.sc-a25cb019-11 .ipc-html-content-inner-div {
+[data-testid="sub-section-Quotes"] .ipc-html-content-inner-div,
+section[id*="quote" i] .ipc-html-content-inner-div {
     color: ${t.tx1} !important;
     line-height: 1.6 !important;
     font-style: italic !important;
@@ -767,8 +770,7 @@ img[class*="avatar"], img[class*="Avatar"],
    ════════════════════════════════════════════ */
 /* Hero photo → squircle with shadow */
 [data-testid="name-overview-widget"] img,
-.name-overview-widget img,
-.sc-b8154748-0 .ipc-media img {
+.name-overview-widget img {
     border-radius: 12px !important;
     box-shadow: ${t.sh2} !important;
 }
@@ -801,15 +803,17 @@ img[class*="avatar"], img[class*="Avatar"],
     overflow: hidden !important;
     box-shadow: ${t.sh1} !important;
 }
-.sc-3a3777a6-2 {
+[data-testid="sidebar-sticky-block"] .ipc-list-card,
+[data-testid="sidebar-sticky-block"] .ipc-slate-card {
     background: ${t.sf0} !important;
     border-color: ${t.bd0} !important;
     border-radius: 8px !important;
     transition: background .15s ease !important;
 }
-.sc-3a3777a6-2:hover { background: ${t.sf1} !important; }
-.sc-3a3777a6-5.listName { color: ${t.tx0} !important; }
-.sc-2df17e0-0 { color: ${t.tx3} !important; }
+[data-testid="sidebar-sticky-block"] .ipc-list-card:hover,
+[data-testid="sidebar-sticky-block"] .ipc-slate-card:hover { background: ${t.sf1} !important; }
+[data-testid="sidebar-sticky-block"] .ipc-title__text { color: ${t.tx0} !important; }
+[data-testid="sidebar-sticky-block"] .ipc-inline-list__item { color: ${t.tx3} !important; }
 
 /* ════════════════════════════════════════════
    SCROLLBAR
@@ -824,8 +828,8 @@ img[class*="avatar"], img[class*="Avatar"],
    ════════════════════════════════════════════ */
 footer.imdb-footer { display: none !important; }
 button.FavoritePeopleCTA_favPeopleCTAOnAvatar__ZQ2LQ { display: none !important; }
-div.sc-9194d746-1 { display: none !important; }
-div.sc-5df4a22b-1 { display: none !important; }
+[data-testid="hero-proupsell"],
+[data-testid="tm-box-addtolist-button"] { display: none !important; }
 div.nav__userMenu { display: none !important; }
 
 /* ════════════════════════════════════════════
@@ -972,7 +976,7 @@ li.ipc-metadata-list__item.ipc-metadata-list__item--align-end.ipc-metadata-list-
     padding: 0 !important; margin: 0 !important;
 }
 h3.ipc-title__text.ipc-title__text--reduced { padding: 0 !important; margin: 0 !important; }
-.sc-14a487d5-7 { padding: 0 !important; margin: 0 !important; }
+.ipc-title__wrapper { padding: 0 !important; margin: 0 !important; }
 
 /* ── Accordion (filmography) ── */
 .ipc-accordion__item__content_inner { padding: 4px 0 !important; }
@@ -980,13 +984,12 @@ h3.ipc-title__text.ipc-title__text--reduced { padding: 0 !important; margin: 0 !
 
 /* ── Review / quote specific ── */
 [data-testid="review-overflow"] { margin: 4px 0 !important; }
-.sc-a25cb019-5 { padding: 4px 0 !important; margin: 2px 0 !important; }
-.sc-a25cb019-8 { padding: 2px 0 !important; }
-.sc-a25cb019-10 { margin: 2px 0 !important; }
+[data-testid="sub-section-Quotes"] .ipc-list-card,
+section[id*="quote" i] .ipc-list-card { padding: 4px 0 !important; margin: 2px 0 !important; }
 .ipc-chip-list__scroller { padding: 4px 0 !important; }
 
 /* ── Sidebar compression ── */
-.sc-2f4a6fec-3, .sc-2f4a6fec-4 { gap: 0 !important; }
+[data-testid="sidebar-sticky-block"] { gap: 0 !important; }
 .ipc-page-section--none { margin: 0 !important; padding: 4px 0 !important; }
 
 /* ── Name page ── */
