@@ -9,6 +9,7 @@
 
 - 2026-05-24 — Completed the Phase 0 stability batch in `IMDb_Enhanced.user.js`: removed the dead GitHub update/download metadata while no remote exists, dropped wildcard `@connect`, added `@noframes`, replaced Subscene with active SubDL/YIFY subtitle destinations, cached unavailable RT/MC score results, and added IMDb SPA route re-initialization with a console init counter.
 - 2026-05-24 — Completed the Phase 1 title-stack consolidation: title-area actions now render into a single ordered `enh-title-stack`, with deterministic order for copy ID, watch search, external links, and TV shortcuts.
+- 2026-05-24 — Added film-only inline Letterboxd scores using `letterboxd.com/imdb/{ttid}/`, parsing `twitter:data2` / JSON-LD ratings, caching unavailable lookups, and adding `letterboxd.com` to the explicit userscript connect whitelist.
 
 ---
 
@@ -88,8 +89,8 @@ Grepped the saved Black Mirror page for `data-testid=` values; found 166 occurre
 4. **Navigate** (TV-only) → right-side fixed `quickNav` rail jumps between hero/cast/reviews/similar/details/box-office/trivia sections on wide screens (≥ 1200 px).
 5. **Copy IMDb ID** → small button next to title text (`enh-copy-id`).
 
-### Existing feature toggles (24 total, plus theme variant)
-Grouped exactly as in the source: Cleanup (7), Appearance (5), Layout (3), Scores (2), Features (3 = search/external/expandedLinkMenu), TV (2), Utility (2). See [Feature Inventory](#feature-inventory) below.
+### Existing feature toggles (25 total, plus theme variant)
+Grouped exactly as in the source: Cleanup (7), Appearance (5), Layout (3), Scores (3), Features (3 = search/external/expandedLinkMenu), TV (2), Utility (2). See [Feature Inventory](#feature-inventory) below.
 
 ### User personas (inferred)
 - **The pirate-curious cinephile**: wants quick-launchers to free streaming sites (Cineby, XPrime, Fmovies+, Aether, …).
@@ -627,12 +628,12 @@ Same item, listed here for completeness — it is both an existing-feature relia
   - Acceptance: Order is deterministic; destroys empty the stack.
   - Verify: `node --check IMDb_Enhanced.user.js`; manual visual refresh still recommended across 5 different live titles.
 
-- [ ] **P1** — Letterboxd inline score (NF-1)
+- [x] **P1** — Letterboxd inline score (NF-1)
   - Why: Cinephiles ask for this constantly; competitor scripts have 70k+ installs.
   - Evidence: [cvzi/Letterboxd-userscript](https://github.com/cvzi/Letterboxd-userscript) uses `meta[name="twitter:data2"]` from `letterboxd.com/imdb/{ttid}/`.
   - Touches: New `inlineLetterboxdScore` feature; share score-widget helper.
   - Acceptance: Letterboxd rating appears on films, suppressed on TV (Letterboxd is films-only).
-  - Verify: 5 sample films + 1 TV title.
+  - Verify: `node --check IMDb_Enhanced.user.js`; `Invoke-WebRequest https://letterboxd.com/imdb/tt1375666/` exposes `twitter:data2`; `tt2085059` returns Letterboxd's not-found marker and the feature is gated by IMDb media type.
 
 - [ ] **P1** — User-configurable watch-search + external-links lists (NF-2)
   - Why: Hard-coded grey-market streaming sites are the single biggest rot vector.

@@ -21,6 +21,7 @@
 // @grant        GM_deleteValue
 // @connect      www.rottentomatoes.com
 // @connect      backend.metacritic.com
+// @connect      letterboxd.com
 // @connect      www.opensubtitles.org
 // @run-at       document-start
 // @noframes
@@ -56,7 +57,7 @@
         // Sections
         collapsibleSections: true, spoilerBlur: true, quickNav: true,
         // Scores
-        inlineRTScore: true, inlineMetacriticScore: true,
+        inlineRTScore: true, inlineLetterboxdScore: true, inlineMetacriticScore: true,
         // Links
         searchButtons: true, externalLinks: true, expandedLinkMenu: true,
         // TV
@@ -82,6 +83,7 @@
         spoilerBlur: 'Softens long plot text until you intentionally reveal it.',
         quickNav: 'Adds a right-side section navigator on wide screens.',
         inlineRTScore: 'Shows Rotten Tomatoes score feedback inline when available.',
+        inlineLetterboxdScore: 'Shows Letterboxd average ratings inline for films when available.',
         inlineMetacriticScore: 'Shows Metacritic score feedback inline when available.',
         searchButtons: 'Adds compact watch-search launch buttons near the title.',
         externalLinks: 'Adds trusted research and trailer links near the title.',
@@ -944,6 +946,17 @@ h3.ipc-title__text.ipc-title__text--reduced { padding: 0 !important; margin: 0 !
     }
     function mcColor(s) { return s >= 75 ? '#6c3' : s >= 50 ? '#ffbd3f' : s >= 25 ? '#ff6874' : '#f00'; }
     function rtColorFn(s) { return s >= 60 ? '#fa320a' : '#6b7280'; }
+    function lbColor(s) { return s >= 4 ? '#00e054' : s >= 3 ? '#40bcf4' : s >= 2 ? '#ff8000' : '#ff6874'; }
+    function formatScore(n) {
+        return Number(n).toFixed(2).replace(/0+$/, '').replace(/\.$/, '');
+    }
+    function formatCount(n) {
+        const count = Number(n);
+        if (!Number.isFinite(count) || count <= 0) return '';
+        if (count >= 1000000) return `${(count / 1000000).toFixed(count >= 10000000 ? 0 : 1)}M`;
+        if (count >= 1000) return `${Math.round(count / 1000)}K`;
+        return String(count);
+    }
 
     reg({
         key: 'ratingColorCoding', name: 'Rating quality labels', group: 'Appearance',
@@ -1086,6 +1099,117 @@ h3.ipc-title__text.ipc-title__text--reduced { padding: 0 !important; margin: 0 !
             bar.appendChild(w);
         },
         destroy() { document.getElementById('enh-rt-widget')?.remove(); }
+    });
+
+    reg({
+        key: 'inlineLetterboxdScore', name: 'Letterboxd scores', group: 'Scores',
+        async init() {
+            if (getMediaType() === 'tv') return;
+            const imdbId = getIMDbID();
+            if (!imdbId) return;
+
+            const cacheKey = 'lb_' + imdbId;
+            const cached = cacheGet(cacheKey);
+            if (cached) {
+                if (cached.unavailable) this._renderUnavailable();
+                else this._render(cached);
+                return;
+            }
+            this._renderLoading();
+
+            const lookupUrl = `https://letterboxd.com/imdb/${imdbId}/`;
+            try {
+                const res = await httpGet(lookupUrl);
+                const data = this._parse(res.responseText, lookupUrl);
+                if (data) {
+                    cacheSet(cacheKey, data);
+                    this._render(data);
+                    return;
+                }
+            } catch { /* handled below */ }
+
+            cacheSetUnavailable(cacheKey);
+            this._renderUnavailable();
+        },
+        _parse(html, fallbackUrl) {
+            if (!html || /IMDb ID Not found/i.test(html)) return null;
+
+            let score = null;
+            let ratingCount = null;
+            let url = fallbackUrl;
+
+            const meta = html.match(/<meta[^>]+name=["']twitter:data2["'][^>]+content=["']([^"']+)["']/i);
+            if (meta) score = parseFloat(meta[1]);
+
+            const ldMatch = html.match(/<script[^>]+type=["']application\/ld\+json["'][^>]*>\s*([\s\S]*?)<\/script>/i);
+            if (ldMatch) {
+                try {
+                    const ld = JSON.parse(ldMatch[1]);
+                    const aggregate = ld.aggregateRating || {};
+                    if (aggregate.ratingValue !== undefined) score = parseFloat(aggregate.ratingValue);
+                    if (aggregate.ratingCount !== undefined) ratingCount = parseInt(aggregate.ratingCount, 10);
+                    if (ld.url) url = new URL(ld.url, 'https://letterboxd.com').href;
+                } catch { /* fall through to regex fallback */ }
+            }
+
+            if (!ratingCount) {
+                const count = html.match(/"ratingCount"\s*:\s*(\d+)/);
+                if (count) ratingCount = parseInt(count[1], 10);
+            }
+            if (url === fallbackUrl) {
+                const idUrl = html.match(/"@id"\s*:\s*"([^"]+)"/);
+                if (idUrl) url = new URL(idUrl[1], 'https://letterboxd.com').href;
+            }
+
+            return Number.isFinite(score) ? { score, ratingCount, url } : null;
+        },
+        _render(data) {
+            document.getElementById('enh-lb-widget')?.remove();
+            const bar = findRatingBar();
+            if (!bar) return;
+            const score = Number(data.score);
+            const color = lbColor(score);
+            const count = formatCount(data.ratingCount);
+            const w = makeEl('div', { id: 'enh-lb-widget', className: 'enh-score-widget' });
+            w.innerHTML = `
+                <div class="enh-score-widget__label">LETTERBOXD</div>
+                <a href="${data.url || `https://letterboxd.com/imdb/${getIMDbID()}/`}"
+                   target="_blank" rel="noopener" class="enh-score-widget__score" style="--score-color:${color}">
+                    <span class="enh-score-widget__badge enh-score-widget__badge--outline">LB</span>
+                    <span class="enh-score-widget__value">${formatScore(score)}</span>
+                </a>
+                <div class="enh-score-widget__sub">${count ? `${count} ratings` : 'Average rating'}</div>
+            `;
+            bar.appendChild(w);
+        },
+        _renderLoading() {
+            if (document.getElementById('enh-lb-widget')) return;
+            const bar = findRatingBar();
+            if (!bar) return;
+            const w = makeEl('div', { id: 'enh-lb-widget', className: 'enh-score-widget enh-score-widget--loading' });
+            w.innerHTML = `
+                <div class="enh-score-widget__label">LETTERBOXD</div>
+                <div class="enh-score-widget__skeleton" aria-label="Loading Letterboxd score"></div>
+            `;
+            bar.appendChild(w);
+        },
+        _renderUnavailable() {
+            document.getElementById('enh-lb-widget')?.remove();
+            const bar = findRatingBar();
+            if (!bar) return;
+            const w = makeEl('div', { id: 'enh-lb-widget', className: 'enh-score-widget enh-score-widget--muted' });
+            w.innerHTML = `
+                <div class="enh-score-widget__label">LETTERBOXD</div>
+                <a href="https://letterboxd.com/imdb/${getIMDbID()}/"
+                   target="_blank" rel="noopener" class="enh-score-widget__score" style="--score-color:#8888a0">
+                    <span class="enh-score-widget__badge enh-score-widget__badge--outline">LB</span>
+                    <span class="enh-score-widget__value">Open</span>
+                </a>
+                <div class="enh-score-widget__sub">Score unavailable</div>
+            `;
+            bar.appendChild(w);
+        },
+        destroy() { document.getElementById('enh-lb-widget')?.remove(); }
     });
 
     reg({
