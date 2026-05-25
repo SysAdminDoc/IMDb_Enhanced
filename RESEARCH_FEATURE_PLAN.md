@@ -21,6 +21,7 @@
 - 2026-05-24 — Added cache TTL metadata and startup garbage collection. Existing cache entries keep the 7-day default, unavailable sentinels now expire after 24 hours, expired/corrupt keys are removed, and live cache entries are capped at 120 newest records.
 - 2026-05-24 — Consolidated IMDb rating color state. `enhancedRatingDisplay` now owns the rating pill/sizing only, while `ratingColorCoding` owns score color, score shadow, badge variables, and complete cleanup on disable.
 - 2026-05-24 — Fixed settings dialog initial focus. Opening settings now focuses the first visible interactive control using the same focusable-element lookup as the dialog trap, with the panel container retained only as a fallback.
+- 2026-05-24 — Added Cineby host preference and namespaced query handoff. Settings can switch between the three matched Cineby hosts, search buttons use `imdb_enh_cineby_query`, and the Cineby-side autofill clears both the new key and legacy `movieTitle` key after consumption.
 
 ---
 
@@ -96,7 +97,7 @@ Grepped the saved Black Mirror page for `data-testid=` values; found 166 occurre
 ### Core workflows
 1. **Browse a title or name page** → script removes IMDb's noise (ads, upsells, news, contribution CTAs), reskins everything dark, injects a watch-search bar + external-links bar + score widgets near the title.
 2. **Configure** → bottom-left FAB opens a modal with toggles for every feature, theme picker, and Export / Import / Clear-cache buttons.
-3. **Launch a watch search** → click a streaming-site button; opens the site's search URL in a new tab. The Cineby variant uses `GM_setValue('movieTitle', …)` and opens `cineby.sc/search`, where a second instance of the script (via `cineby.*` `@match`) auto-fills the search box.
+3. **Launch a watch search** → click a streaming-site button; opens the site's search URL in a new tab. The Cineby variant uses `GM_setValue('imdb_enh_cineby_query', …)` and opens the configured Cineby host, where a second instance of the script (via `cineby.*` `@match`) auto-fills the search box.
 4. **Navigate** (TV-only) → right-side fixed `quickNav` rail jumps between hero/cast/reviews/similar/details/box-office/trivia sections on wide screens (≥ 1200 px).
 5. **Copy IMDb ID** → small button next to title text (`enh-copy-id`).
 
@@ -128,7 +129,7 @@ Grouped exactly as in the source: Cleanup (7), Appearance (5), Layout (3), Score
 - `GM_*` namespaced with prefix `imdb_enh_` for booleans / theme.
 - `cache_<service>_<ttid>` for RT and Metacritic responses (JSON, 7-day TTL — [IMDb_Enhanced.user.js:40](IMDb_Enhanced.user.js#L40)).
 - `enh_coll_<sectionId>` for collapsed-section memory.
-- `movieTitle` (unprefixed, global) — used to ship the search term to the cineby.* tab.
+- `imdb_enh_cineby_query` — used to ship the search term to the cineby.* tab, with one-time legacy `movieTitle` cleanup.
 
 ---
 
@@ -164,7 +165,7 @@ Grouped exactly as in the source: Cleanup (7), Appearance (5), Layout (3), Score
 
 ### Hidden / undocumented / non-toggleable behaviour
 - **Footer & user-menu blanket hide** ([IMDb_Enhanced.user.js:721-725](IMDb_Enhanced.user.js#L721-L725)) is baked into `modernUI`, not a toggle. A user who enjoys the theme but wants their user-menu visible has no escape hatch.
-- **Cineby auto-fill** ([IMDb_Enhanced.user.js:2130-2138](IMDb_Enhanced.user.js#L2130-L2138)) runs only when the user actually clicks the "Cineby" search button; otherwise the `GM_setValue('movieTitle')` value lingers until overwritten. There's no settings UI for this and no way to disable it independently of `searchButtons`.
+- **Cineby auto-fill** now uses `imdb_enh_cineby_query`, clears the handoff after consumption, and has a preferred-host setting for the three matched Cineby domains.
 - **`#imdbHeader` early shell** ([IMDb_Enhanced.user.js:763-780](IMDb_Enhanced.user.js#L763-L780)) is injected at `document-start` to avoid a white flash — even if `modernUI` is OFF, the user gets the dark shell. Document this or gate it.
 - **Cache namespace `cache_*`** is global across all titles; the "Clear cache" button wipes RT and MC for every cached title. No per-title invalidation.
 
@@ -405,9 +406,10 @@ Same item, listed here for completeness — it is both an existing-feature relia
 - **Complexity**: S — **P2**
 
 ### IM-11 — Cineby integration: pick host + namespace storage key
-- **Current**: Always opens `cineby.sc` ([IMDb_Enhanced.user.js:1290](IMDb_Enhanced.user.js#L1290)). Uses unprefixed `GM_setValue('movieTitle', …)` — collides with any other userscript using the same key.
-- **Problem**: User can't pick `cineby.app` / `cineby.gd`; global namespace pollution.
-- **Fix**: Add a settings dropdown for preferred Cineby host (default `sc`). Rename storage key to `imdb_enh_cineby_query` and clear it after consumption on the cineby side.
+- **Status**: Complete as of 2026-05-24.
+- **Current**: The Cineby watch-search button opens the configured host and stores the handoff query under `imdb_enh_cineby_query`.
+- **Problem**: Resolved; users can pick `cineby.app` / `cineby.gd` / `cineby.sc`, and the unprefixed legacy key is only read/cleared for migration.
+- **Fix**: Added a settings dropdown for preferred Cineby host (default `sc`). Renamed storage key to `imdb_enh_cineby_query` and clear it after consumption on the cineby side.
 - **Touches**: `searchButtons`, `handleCineby`, settings panel.
 - **Verify**: Switch host → search opens chosen host; key cleared after auto-fill.
 - **Complexity**: S — **P2**
@@ -492,7 +494,7 @@ Same item, listed here for completeness — it is both an existing-feature relia
    - **Resolution**: Dead metadata removed on 2026-05-24.
    - **Remaining risk**: Security fixes still require manual redistribution until the script is published to a stable host.
 
-3. **MEDIUM — Sticks `GM_setValue('movieTitle', …)` (unprefixed global key)** ([IMDb_Enhanced.user.js:1290](IMDb_Enhanced.user.js#L1290)).
+3. **RESOLVED — Cineby handoff no longer writes unprefixed `movieTitle`; the legacy key is only read/cleared for migration.**
    - **Risk**: Collides with any other userscript using the same key (likely several). Not a security issue per se, but a correctness one.
    - **Recommendation**: Prefix with `imdb_enh_`.
 
@@ -725,9 +727,10 @@ Same item, listed here for completeness — it is both an existing-feature relia
   - Acceptance: Open settings → initial focus lands on the first visible dialog control; Tab proceeds through the normal focus order.
   - Verify: `node --check IMDb_Enhanced.user.js`; focus trap and open handler share `getSettingsFocusables()`.
 
-- [ ] **P2** — Cineby host preference + namespaced storage key (IM-11)
+- [x] **P2** — Cineby host preference + namespaced storage key (IM-11)
   - Why: User choice + no key collision.
-  - Acceptance: Switch host → search lands on chosen host.
+  - Acceptance: Switch host → search lands on chosen host; query handoff uses `imdb_enh_cineby_query` and clears after auto-fill.
+  - Verify: `node --check IMDb_Enhanced.user.js`; `rg "GM_setValue\\('movieTitle'" IMDb_Enhanced.user.js` returns no matches.
 
 - [ ] **P2** — Tighten `m.imdb.com` match scope (IM-12)
   - Why: Avoid running on irrelevant mobile pages.
@@ -763,7 +766,7 @@ These are <= 1-hour changes with clear value:
 3. **Done 2026-05-24** — Fix `@updateURL` to a working location or remove it (IM-2).
 4. **Done 2026-05-24** — Lock `@connect *` to an explicit service whitelist (IM-3).
 5. **Done 2026-05-24** — `cacheSet` unavailable results so we stop hammering RT/MC (IM-6).
-6. **Namespace `GM_setValue('movieTitle', …)` to `imdb_enh_cineby_query`** (IM-11 part).
+6. **Done 2026-05-24** — Namespace `GM_setValue('movieTitle', …)` to `imdb_enh_cineby_query` (IM-11 part).
 7. **Reset-to-defaults button** in settings (recovery gap).
 8. **Console info stamp** at init: `[IMDb Enhanced] v2.3.1 — N features enabled`.
 9. **Done 2026-05-24** — Settings panel: focus the close button on open (IM-10).

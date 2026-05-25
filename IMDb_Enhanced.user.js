@@ -39,6 +39,7 @@
     // =========================================================================
     const VERSION = '2.3.1';
     const PREFIX  = 'imdb_enh_';
+    const CINEBY_QUERY_KEY = PREFIX + 'cineby_query';
     const CACHE_TTL = 7 * 24 * 60 * 60 * 1000; // 7 days
     const CACHE_UNAVAILABLE_TTL = 24 * 60 * 60 * 1000; // 24 hours
     const CACHE_MAX_ENTRIES = 120;
@@ -49,8 +50,13 @@
         servarrIntegration: 35,
         tvShowEnhancements: 40,
     };
+    const CINEBY_HOSTS = [
+        { label:'Cineby SC', url:'https://www.cineby.sc/search' },
+        { label:'Cineby GD', url:'https://www.cineby.gd/search' },
+        { label:'Cineby App', url:'https://www.cineby.app/search' },
+    ];
     const DEFAULT_WATCH_SITES = [
-        { name:'Cineby', color:'#6366f1', url:'https://www.cineby.sc/search', storeQuery:true },
+        { name:'Cineby', color:'#6366f1', url:CINEBY_HOSTS[0].url, storeQuery:true },
         { name:'Popcorn', color:'#10b981', url:'https://popcornmovies.org/search/{{TITLE_DASH}}' },
         { name:'XPrime', color:'#f59e0b', url:'https://xprime.su/search/{{TITLE_DASH}}' },
         { name:'Aether', color:'#8b5cf6', url:'https://aether.mom/browse/{{TITLE}}' },
@@ -87,6 +93,7 @@
         // Links
         searchButtons: true, externalLinks: true, expandedLinkMenu: true,
         watchSites: DEFAULT_WATCH_SITES, externalSites: DEFAULT_EXTERNAL_SITES,
+        cinebyHost: CINEBY_HOSTS[0].url,
         watchedMarking: true, userMarks: {},
         servarrIntegration: false,
         radarrUrl: 'http://localhost:7878', radarrApiKey: '',
@@ -352,6 +359,11 @@
     function normalizeUrlTemplate(url) {
         const value = String(url || '').trim();
         return /^https?:\/\//i.test(value) ? value : '';
+    }
+
+    function getCinebyHost() {
+        const saved = normalizeUrlTemplate(get('cinebyHost'));
+        return CINEBY_HOSTS.some(host => host.url === saved) ? saved : CINEBY_HOSTS[0].url;
     }
 
     function normalizeSite(site, fallbackColor = '#6366f1') {
@@ -2052,7 +2064,7 @@ section[id*="quote" i] .ipc-list-card { padding: 4px 0 !important; margin: 2px 0
                 );
                 const row = makeEl('div', { className:'enh-search-row' });
                 sites.forEach(site => {
-                    const url = applyLinkTemplate(site.url, ctx);
+                    const url = site.storeQuery ? getCinebyHost() : applyLinkTemplate(site.url, ctx);
                     const btn = makeEl('button', {
                         type:'button',
                         className:'enh-search-btn',
@@ -2067,7 +2079,7 @@ section[id*="quote" i] .ipc-list-card { padding: 4px 0 !important; margin: 2px 0
                 appendTitleStackItem(wrap, TITLE_STACK_ORDER.searchButtons);
                 wrap.querySelectorAll('.enh-search-btn').forEach(btn => {
                     btn.addEventListener('click', () => {
-                        if (btn.dataset.storeQuery === 'true') GM_setValue('movieTitle', title);
+                        if (btn.dataset.storeQuery === 'true') GM_setValue(CINEBY_QUERY_KEY, title);
                         window.open(btn.dataset.url, '_blank');
                     });
                 });
@@ -3462,6 +3474,35 @@ section[id*="quote" i] .ipc-list-card { padding: 4px 0 !important; margin: 2px 0
         );
     }
 
+    function createCinebySettingsPanel() {
+        const select = makeEl('select', {
+            id:'enh-cineby-host',
+            className:'enh-servarr-input',
+            'aria-label':'Preferred Cineby host',
+            onChange: () => {
+                set('cinebyHost', select.value);
+                refreshFeature('searchButtons');
+            },
+        });
+        CINEBY_HOSTS.forEach(host => {
+            const option = makeEl('option', { value:host.url }, host.label);
+            option.selected = host.url === getCinebyHost();
+            select.appendChild(option);
+        });
+        return makeEl('div', { className:'enh-servarr-panel' },
+            makeEl('div', { className:'enh-servarr-section' },
+                makeEl('div', { className:'enh-servarr-title' }, 'Cineby'),
+                makeEl('div', { className:'enh-servarr-field enh-servarr-field--wide' },
+                    makeEl('label', { for:'enh-cineby-host' }, 'Preferred host'),
+                    select
+                ),
+                makeEl('div', { className:'enh-servarr-note' },
+                    `Search handoff uses the local ${CINEBY_QUERY_KEY} storage key and clears it after auto-fill.`
+                )
+            )
+        );
+    }
+
     function createServarrSettingsPanel() {
         const section = ({ title, fields }) => {
             const grid = makeEl('div', { className:'enh-servarr-grid' }, ...fields.map(createSettingsInput));
@@ -3676,6 +3717,7 @@ section[id*="quote" i] .ipc-list-card { padding: 4px 0 !important; margin: 2px 0
         }
 
         body.appendChild(makeEl('div', { className:'enh-settings-group-label' }, 'Link sites'));
+        body.appendChild(createCinebySettingsPanel());
         body.appendChild(createSiteEditor({
             title:'Watch search sites',
             key:'watchSites',
@@ -3809,11 +3851,17 @@ section[id*="quote" i] .ipc-list-card { padding: 4px 0 !important; margin: 2px 0
     // =========================================================================
     function handleCineby() {
         if (!window.location.hostname.includes('cineby')) return;
-        const t = GM_getValue('movieTitle', '');
+        const legacyKey = 'movieTitle';
+        const t = GM_getValue(CINEBY_QUERY_KEY, '') || GM_getValue(legacyKey, '');
         if (!t) return;
         setTimeout(() => {
             const input = document.querySelector('input[type="search"],input[type="text"],input[placeholder*="search" i]');
-            if (input) { input.value = t; input.dispatchEvent(new Event('input', { bubbles: true })); GM_setValue('movieTitle', ''); }
+            if (input) {
+                input.value = t;
+                input.dispatchEvent(new Event('input', { bubbles: true }));
+                GM_setValue(CINEBY_QUERY_KEY, '');
+                GM_setValue(legacyKey, '');
+            }
         }, 600);
     }
 
