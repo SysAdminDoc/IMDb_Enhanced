@@ -24,6 +24,7 @@
 - 2026-05-24 — Added Cineby host preference and namespaced query handoff. Settings can switch between the three matched Cineby hosts, search buttons use `imdb_enh_cineby_query`, and the Cineby-side autofill clears both the new key and legacy `movieTitle` key after consumption.
 - 2026-05-24 — Tightened mobile IMDb match scope from all `m.imdb.com/*` pages to only mobile title and name pages.
 - 2026-05-24 — Expanded Rotten Tomatoes direct slug probing. RT lookups now try underscore, hyphen, compact, and leading-article-stripped variants before falling back to the search page.
+- 2026-05-24 — Added a no-dependency Node smoke-test harness at `tests/run.js`. It checks userscript syntax, metadata guardrails, selector regressions, core P2 feature registration, and that no P0-P2 roadmap checklist items remain open.
 
 ---
 
@@ -479,9 +480,10 @@ Same item, listed here for completeness — it is both an existing-feature relia
 - **Complexity**: S — **P3**
 
 ### IM-20 — Bundle a `tests/fixtures/` directory of saved IMDb pages
-- **Current**: Only one `Black Mirror …mhtml` in the repo root, untracked.
-- **Problem**: When the next refactor breaks selectors, there is no way to validate.
-- **Fix**: Create `tests/fixtures/` with: a top-grossing movie title, a TV series, an episode page, a name page, an episodes-list page; commit as `.mhtml`. Add a smoke `tests/run.js` that loads each fixture into a jsdom environment, runs the script's pure helpers (`getIMDbID`, `getTitleText`, `getTitleYear`, `getMediaType`, `findRatingBar`), and asserts.
+- **Status**: Initial harness complete as of 2026-05-24.
+- **Current**: `tests/run.js` provides no-dependency smoke coverage for userscript syntax, metadata guardrails, hashed-selector regressions, Cineby storage regression, core P2 feature registration, and roadmap P0-P2 checklist status.
+- **Problem**: Reduced; full DOM fixture coverage still requires committing sanitized IMDb fixtures and adding a DOM runner later.
+- **Fix**: Added the smoke harness first because the repo has no package/dependency setup.
 - **Verify**: `node tests/run.js` exits 0.
 - **Complexity**: M — **P2**
 
@@ -746,9 +748,10 @@ Same item, listed here for completeness — it is both an existing-feature relia
   - Acceptance: RT direct lookup tries multiple slug delimiters/variants before search fallback.
   - Verify: `node --check IMDb_Enhanced.user.js`; `getRTSlugCandidates()` emits underscore, hyphen, compact, and article-stripped variants.
 
-- [ ] **P2** — Test fixture harness (IM-20)
+- [x] **P2** — Test fixture harness (IM-20)
   - Why: Lock in the design contract; catch selector regressions.
   - Acceptance: `node tests/run.js` exits 0.
+  - Verify: `node tests/run.js`.
 
 ### Phase 3 — Polish + reach (when convenient)
 
