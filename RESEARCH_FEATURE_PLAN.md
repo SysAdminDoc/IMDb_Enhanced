@@ -25,6 +25,7 @@
 - 2026-05-24 — Tightened mobile IMDb match scope from all `m.imdb.com/*` pages to only mobile title and name pages.
 - 2026-05-24 — Expanded Rotten Tomatoes direct slug probing. RT lookups now try underscore, hyphen, compact, and leading-article-stripped variants before falling back to the search page.
 - 2026-05-24 — Added a no-dependency Node smoke-test harness at `tests/run.js`. It checks userscript syntax, metadata guardrails, selector regressions, core P2 feature registration, and that no P0-P2 roadmap checklist items remain open.
+- 2026-05-24 — Added an in-page Trailer popover. The feature appends a Trailer control, fetches YouTube search results on click, caches the first parsed video ID, and embeds it through `youtube-nocookie.com` with a YouTube search fallback.
 
 ---
 
@@ -69,7 +70,7 @@ Top opportunities, priority order:
 - `@updateURL` / `@downloadURL` were removed on 2026-05-24 because `SysAdminDoc/IMDb-Enhanced` does not exist and this checkout has no remote. **Verified**: no dead update URL remains in the userscript.
 - `@match` covers `imdb.com/title/*`, `imdb.com/name/*`, `imdb.com/*/title/*` (locale prefix), `imdb.com/*/name/*`, `m.imdb.com/title/*`, `m.imdb.com/name/*`, and three `cineby.*` search hosts.
 - `@grant` set: `GM_getValue`, `GM_setValue`, `GM_addStyle`, `GM_setClipboard`, `GM_xmlhttpRequest`, `GM_listValues`, `GM_deleteValue`.
-- `@connect` set: `www.rottentomatoes.com`, `backend.metacritic.com`, `letterboxd.com`, `www.justwatch.com`, `www.opensubtitles.org`, `localhost`, and `127.0.0.1`. Wildcard access was removed on 2026-05-24.
+- `@connect` set: `www.rottentomatoes.com`, `backend.metacritic.com`, `letterboxd.com`, `www.justwatch.com`, `www.opensubtitles.org`, `www.youtube.com`, `localhost`, and `127.0.0.1`. Wildcard access was removed on 2026-05-24.
 
 ### DOM verification (against saved MHTML)
 Grepped the saved Black Mirror page for `data-testid=` values; found 166 occurrences. **Verified present in 2026 IMDb DOM**:
@@ -123,9 +124,10 @@ Grouped exactly as in the source: Cleanup (7), Appearance (5), Layout (3), Score
 - `backend.metacritic.com/finder/metacritic/search/…` (GET JSON).
 - `letterboxd.com/imdb/{ttid}/` (GET HTML, scraped for film ratings).
 - `www.justwatch.com/us/{movie|tv-show}/{slug}` + search fallback (GET HTML, scraped for provider names).
+- `www.youtube.com/results` (GET HTML on trailer click, parsed for the first embeddable-looking video ID).
 - `www.opensubtitles.org` (link target only).
 - `localhost` / `127.0.0.1` Servarr instances (Radarr/Sonarr API lookup + add requests).
-- Explicit `@connect` whitelist for Rotten Tomatoes, Metacritic, Letterboxd, JustWatch, OpenSubtitles, and local Servarr.
+- Explicit `@connect` whitelist for Rotten Tomatoes, Metacritic, Letterboxd, JustWatch, YouTube, OpenSubtitles, and local Servarr.
 - 7 streaming-search URLs + 6 reference URLs hard-coded in JS, opened via `window.open` (no fetch).
 
 ### Storage
@@ -296,10 +298,10 @@ Grouped exactly as in the source: Cleanup (7), Appearance (5), Layout (3), Score
 ### NF-8 — Trailer popover (no new tab)
 - **User problem**: External "YouTube … trailer" link opens a new tab; users want to peek at the trailer without losing the IMDb context.
 - **Evidence**: IMDb's own trailer player ([data-testid="hero__video-link"](IMDb_Enhanced.user.js#L3145) in saved MHTML) opens in a modal but auto-plays a Featurette / ad. A YouTube IFRAME embed is faster.
-- **Proposed behaviour**: Add a "▶ Trailer" affordance in the external-links bar that opens an in-page modal with `iframe src="https://www.youtube-nocookie.com/embed?search=<title>+<year>+trailer"`. Embed-via-search trick: use the YouTube `videoseries` list with the search term.
-- **Implementation areas**: New `inlineTrailer` feature; new `enh-modal-video` element; reuse settings-overlay focus-trap pattern.
-- **Risk / edge cases**: YouTube embed-via-search is fragile — better is a one-time `fetch` to YouTube's search results page to extract the top video ID. That requires `@connect youtube.com`.
-- **Verification**: For "Inception" / "Dune Part Two", the trailer plays inline.
+- **Implemented behaviour**: Adds a Trailer affordance that opens an in-page modal, fetches YouTube search results on click, parses the first `videoId`, and embeds `youtube-nocookie.com/embed/{videoId}`.
+- **Implementation areas**: New `trailerPopover` feature; modal element; `www.youtube.com` connect permission; 7-day video-ID cache with unavailable fallback.
+- **Risk / edge cases**: YouTube search HTML can change; failure falls back to opening the YouTube trailer search.
+- **Verification**: For "Inception" / "Dune Part Two", the trailer modal should load the first parsed YouTube result inline.
 - **Complexity**: M
 - **Priority**: P3
 
@@ -348,7 +350,7 @@ Grouped exactly as in the source: Cleanup (7), Appearance (5), Layout (3), Score
 
 ### IM-3 — Lock `@connect *` to a whitelist
 - **Status**: Complete as of 2026-05-24.
-- **Current**: Header declares only required third-party fetch/link domains plus local Servarr hosts: Rotten Tomatoes, Metacritic, Letterboxd, JustWatch, OpenSubtitles, localhost, and 127.0.0.1.
+- **Current**: Header declares only required third-party fetch/link domains plus local Servarr hosts: Rotten Tomatoes, Metacritic, Letterboxd, JustWatch, YouTube, OpenSubtitles, localhost, and 127.0.0.1.
 - **Problem**: Resolved for current code; new fetch features must add explicit domains.
 - **Fix**: Removed wildcard `@connect *`.
 - **Touches**: Userscript header.
@@ -755,7 +757,7 @@ Same item, listed here for completeness — it is both an existing-feature relia
 
 ### Phase 3 — Polish + reach (when convenient)
 
-- [ ] **P3** — Trailer popover (NF-8)
+- [x] **P3** — Trailer popover (NF-8)
 - [ ] **P3** — Watchlist batch IMDb-ID copy (NF-10)
 - [ ] **P3** — `getMediaType` returns granular kinds (IM-19)
 - [ ] **P3** — Direct Trakt redirect URL (IM-17)

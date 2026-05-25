@@ -25,6 +25,7 @@
 // @connect      letterboxd.com
 // @connect      www.justwatch.com
 // @connect      www.opensubtitles.org
+// @connect      www.youtube.com
 // @connect      localhost
 // @connect      127.0.0.1
 // @run-at       document-start
@@ -48,6 +49,7 @@
         quickCopyID: 10,
         searchButtons: 20,
         externalLinks: 30,
+        trailerPopover: 32,
         servarrIntegration: 35,
         tvShowEnhancements: 40,
     };
@@ -93,6 +95,7 @@
         streamAvailability: true,
         // Links
         searchButtons: true, externalLinks: true, expandedLinkMenu: true,
+        trailerPopover: true,
         watchSites: DEFAULT_WATCH_SITES, externalSites: DEFAULT_EXTERNAL_SITES,
         cinebyHost: CINEBY_HOSTS[0].url,
         watchedMarking: true, userMarks: {},
@@ -130,6 +133,7 @@
         searchButtons: 'Adds compact watch-search launch buttons near the title.',
         externalLinks: 'Adds trusted research and trailer links near the title.',
         expandedLinkMenu: 'Groups additional movie, review, subtitle, and TV lookup links.',
+        trailerPopover: 'Adds an in-page trailer modal backed by a click-to-fetch YouTube lookup.',
         watchedMarking: 'Adds local Watched and Skip marks to title posters and recommendation cards.',
         servarrIntegration: 'Adds optional local Radarr/Sonarr quick-add buttons when API settings are configured.',
         tvEpisodeTools: 'Blurs episode synopses and surfaces the highest-rated episodes where episode data is present.',
@@ -1399,6 +1403,10 @@ section[id*="quote" i] .ipc-list-card { padding: 4px 0 !important; margin: 2px 0
         const slug = getJustWatchSlug(title);
         return slug ? `https://www.justwatch.com/us/${getJustWatchTypePath()}/${slug}` : getJustWatchSearchUrl(title);
     }
+    function getTrailerSearchUrl(title = getTitleText(), year = getTitleYear()) {
+        const query = [title, year, 'official trailer'].filter(Boolean).join(' ');
+        return `https://www.youtube.com/results?search_query=${encodeURIComponent(query)}`;
+    }
     function compactProviders(providers, limit = 2) {
         const clean = [];
         providers.forEach(provider => {
@@ -2131,6 +2139,157 @@ section[id*="quote" i] .ipc-list-card { padding: 4px 0 !important; margin: 2px 0
             }).catch(() => {});
         },
         destroy() { document.getElementById('enh-external-links')?.remove(); pruneTitleStack(); }
+    });
+
+    reg({
+        key: 'trailerPopover', name: 'Trailer popover', group: 'Features',
+        _keydown: null,
+        init() {
+            if (!window.location.hostname.includes('imdb.com')) return;
+            const t = getTheme();
+            addCSS(`
+                #enh-trailer-btn {
+                    border: 1px solid ${t.bd1};
+                    background: ${t.sf1};
+                    color: ${t.tx1};
+                    border-radius: 7px;
+                    padding: 6px 12px;
+                    cursor: pointer;
+                    font: 700 12px/1 -apple-system, BlinkMacSystemFont, 'Segoe UI', sans-serif;
+                    transition: background .15s ease, border-color .15s ease, color .15s ease, transform .15s ease;
+                }
+                #enh-trailer-btn:hover { background:${t.sf2}; border-color:${t.accentBorder}; color:${t.accent}; transform:translateY(-1px); }
+                #enh-trailer-overlay {
+                    position: fixed; inset: 0; z-index: 2147483642;
+                    display: flex; align-items: center; justify-content: center;
+                    padding: 24px; background: rgba(0,0,0,.82);
+                }
+                #enh-trailer-dialog {
+                    width: min(960px, calc(100vw - 32px));
+                    background: ${t.sf0}; color: ${t.tx1};
+                    border: 1px solid ${t.bd1}; border-radius: 12px;
+                    box-shadow: ${t.sh3}; overflow: hidden;
+                }
+                .enh-trailer-header {
+                    display: flex; justify-content: space-between; align-items: center; gap: 12px;
+                    padding: 12px 14px; border-bottom: 1px solid ${t.bd0};
+                }
+                .enh-trailer-title { color: ${t.tx0}; font: 800 13px/1.2 -apple-system, BlinkMacSystemFont, 'Segoe UI', sans-serif; }
+                .enh-trailer-close {
+                    width: 30px; height: 30px; border-radius: 8px; cursor: pointer;
+                    border: 1px solid ${t.bd1}; background: ${t.sf1}; color: ${t.tx2};
+                    font: 800 16px/1 -apple-system, BlinkMacSystemFont, 'Segoe UI', sans-serif;
+                }
+                .enh-trailer-close:hover { color:${t.tx0}; background:${t.sf2}; }
+                .enh-trailer-body {
+                    aspect-ratio: 16 / 9; background: ${t.bg};
+                    display: flex; align-items: center; justify-content: center;
+                    color: ${t.tx2}; font: 600 13px/1.4 -apple-system, BlinkMacSystemFont, 'Segoe UI', sans-serif;
+                }
+                .enh-trailer-body iframe { width: 100%; height: 100%; border: 0; display: block; }
+                .enh-trailer-fallback { color:${t.blue}!important; }
+            `, 'enh-trailerPopover');
+
+            waitForTitleSurface().then(() => {
+                if (document.getElementById('enh-trailer-btn')) return;
+                const btn = makeEl('button', {
+                    id:'enh-trailer-btn',
+                    type:'button',
+                    'aria-haspopup':'dialog',
+                    onClick: () => this._open(),
+                }, 'Trailer');
+                const extBar = document.getElementById('enh-external-links');
+                if (extBar) extBar.appendChild(btn);
+                else appendTitleStackItem(btn, TITLE_STACK_ORDER.trailerPopover);
+            }).catch(() => {});
+        },
+        async _open() {
+            const overlay = this._renderModal('Loading trailer...');
+            const body = overlay.querySelector('.enh-trailer-body');
+            try {
+                const videoId = await this._getVideoId();
+                body.replaceChildren(makeEl('iframe', {
+                    src:`https://www.youtube-nocookie.com/embed/${videoId}?autoplay=1&rel=0`,
+                    title:`${getTitleText()} trailer`,
+                    allow:'accelerometer; autoplay; clipboard-write; encrypted-media; gyroscope; picture-in-picture; web-share',
+                    allowfullscreen:'allowfullscreen',
+                }));
+            } catch {
+                const url = getTrailerSearchUrl();
+                body.replaceChildren(makeEl('a', {
+                    href:url,
+                    target:'_blank',
+                    rel:'noopener',
+                    className:'enh-trailer-fallback',
+                }, 'Open trailer search on YouTube'));
+            }
+        },
+        _renderModal(message) {
+            document.getElementById('enh-trailer-overlay')?.remove();
+            const close = () => {
+                document.removeEventListener('keydown', this._keydown);
+                document.getElementById('enh-trailer-overlay')?.remove();
+            };
+            this._keydown = (e) => { if (e.key === 'Escape') close(); };
+            document.addEventListener('keydown', this._keydown);
+
+            const overlay = makeEl('div', {
+                id:'enh-trailer-overlay',
+                role:'presentation',
+                onClick: e => { if (e.target.id === 'enh-trailer-overlay') close(); },
+            }, makeEl('div', {
+                id:'enh-trailer-dialog',
+                role:'dialog',
+                'aria-modal':'true',
+                'aria-label':'Trailer',
+            },
+                makeEl('div', { className:'enh-trailer-header' },
+                    makeEl('div', { className:'enh-trailer-title' }, `${getTitleText()} trailer`),
+                    makeEl('button', { type:'button', className:'enh-trailer-close', 'aria-label':'Close trailer', onClick:close }, 'x')
+                ),
+                makeEl('div', { className:'enh-trailer-body' }, message)
+            ));
+            document.body.appendChild(overlay);
+            setTimeout(() => overlay.querySelector('.enh-trailer-close')?.focus(), 20);
+            return overlay;
+        },
+        async _getVideoId() {
+            const imdbId = getIMDbID();
+            const cacheKey = imdbId ? `yt_${imdbId}` : '';
+            const cached = cacheKey ? cacheGet(cacheKey) : null;
+            if (cached?.videoId) return cached.videoId;
+            if (cached?.unavailable) throw new Error('Trailer unavailable');
+
+            const res = await httpGet(getTrailerSearchUrl(), {
+                timeout: 12000,
+                headers: { Accept:'text/html,application/xhtml+xml' },
+            });
+            const videoId = this._parseVideoId(res.responseText);
+            if (!videoId) {
+                if (cacheKey) cacheSetUnavailable(cacheKey);
+                throw new Error('Trailer unavailable');
+            }
+            if (cacheKey) cacheSet(cacheKey, { videoId });
+            return videoId;
+        },
+        _parseVideoId(html) {
+            const seen = new Set();
+            const matches = String(html || '').matchAll(/"videoId":"([a-zA-Z0-9_-]{11})"/g);
+            for (const match of matches) {
+                if (seen.has(match[1])) continue;
+                seen.add(match[1]);
+                return match[1];
+            }
+            return '';
+        },
+        destroy() {
+            removeCSS('enh-trailerPopover');
+            document.removeEventListener('keydown', this._keydown);
+            this._keydown = null;
+            document.getElementById('enh-trailer-btn')?.remove();
+            document.getElementById('enh-trailer-overlay')?.remove();
+            pruneTitleStack();
+        }
     });
 
     // ===================== EXPANDED LINK MENU =====================
@@ -3312,6 +3471,8 @@ section[id*="quote" i] .ipc-list-card { padding: 4px 0 !important; margin: 2px 0
 }
 .enh-search-btn:focus-visible,
 .enh-ext-link:focus-visible,
+#enh-trailer-btn:focus-visible,
+.enh-trailer-close:focus-visible,
 #enh-link-menu-trigger:focus-visible,
 .enh-link-dropdown__item:focus-visible,
 #enh-copy-id:focus-visible,
