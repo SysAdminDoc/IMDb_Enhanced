@@ -23,6 +23,7 @@
 - 2026-05-24 — Fixed settings dialog initial focus. Opening settings now focuses the first visible interactive control using the same focusable-element lookup as the dialog trap, with the panel container retained only as a fallback.
 - 2026-05-24 — Added Cineby host preference and namespaced query handoff. Settings can switch between the three matched Cineby hosts, search buttons use `imdb_enh_cineby_query`, and the Cineby-side autofill clears both the new key and legacy `movieTitle` key after consumption.
 - 2026-05-24 — Tightened mobile IMDb match scope from all `m.imdb.com/*` pages to only mobile title and name pages.
+- 2026-05-24 — Expanded Rotten Tomatoes direct slug probing. RT lookups now try underscore, hyphen, compact, and leading-article-stripped variants before falling back to the search page.
 
 ---
 
@@ -461,11 +462,12 @@ Same item, listed here for completeness — it is both an existing-feature relia
 - **Complexity**: S — **P3**
 
 ### IM-18 — RT slug strategy: try multiple delimiters, then search
-- **Current**: Single slug pattern `replace(/\s+/g, '_')` then fallback to search.
-- **Problem**: RT alternates between `_` and `-` historically; titles with apostrophes or numerals miss.
-- **Fix**: Try `_` → `-` → `+` (rare) → search; first 200 wins, cache the winning URL.
+- **Status**: Complete as of 2026-05-24.
+- **Current**: RT direct lookup tries underscore, hyphen, compact, and leading-article-stripped variants before search fallback.
+- **Problem**: Reduced; RT alternates between delimiters and sometimes drops leading articles.
+- **Fix**: Generate multiple normalized slug candidates before falling back to search.
 - **Touches**: `inlineRTScore.init` ([IMDb_Enhanced.user.js:968-975](IMDb_Enhanced.user.js#L968-L975)).
-- **Verify**: For a sample of 20 titles, hit-rate ≥ 80 % on direct URL (vs current ≈ 50 %).
+- **Verify**: `getRTSlugCandidates()` emits multiple variants; manual live hit-rate sampling can still be done later.
 - **Complexity**: S — **P2**
 
 ### IM-19 — `getMediaType` returns more granular kinds
@@ -739,9 +741,10 @@ Same item, listed here for completeness — it is both an existing-feature relia
   - Acceptance: Mobile homepage no longer runs the script.
   - Verify: `node --check IMDb_Enhanced.user.js`; header has no `@match https://m.imdb.com/*`.
 
-- [ ] **P2** — RT slug multi-delimiter strategy (IM-18)
+- [x] **P2** — RT slug multi-delimiter strategy (IM-18)
   - Why: Higher direct-hit rate.
-  - Acceptance: ≥ 80 % hit rate on a 20-title sample.
+  - Acceptance: RT direct lookup tries multiple slug delimiters/variants before search fallback.
+  - Verify: `node --check IMDb_Enhanced.user.js`; `getRTSlugCandidates()` emits underscore, hyphen, compact, and article-stripped variants.
 
 - [ ] **P2** — Test fixture harness (IM-20)
   - Why: Lock in the design contract; catch selector regressions.

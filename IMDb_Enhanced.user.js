@@ -1344,6 +1344,25 @@ section[id*="quote" i] .ipc-list-card { padding: 4px 0 !important; margin: 2px 0
     function mcColor(s) { return s >= 75 ? '#6c3' : s >= 50 ? '#ffbd3f' : s >= 25 ? '#ff6874' : '#f00'; }
     function rtColorFn(s) { return s >= 60 ? '#fa320a' : '#6b7280'; }
     function lbColor(s) { return s >= 4 ? '#00e054' : s >= 3 ? '#40bcf4' : s >= 2 ? '#ff8000' : '#ff6874'; }
+    function getRTSlugCandidates(title) {
+        const normalized = String(title || '')
+            .normalize('NFKD')
+            .replace(/[\u0300-\u036f]/g, '')
+            .replace(/&/g, ' and ')
+            .toLowerCase()
+            .replace(/[^a-z0-9\s-]/g, ' ')
+            .trim()
+            .replace(/\s+/g, ' ');
+        if (!normalized) return [];
+        const tokens = normalized.split(' ').filter(Boolean);
+        const withoutArticle = tokens[0] === 'the' && tokens.length > 1 ? tokens.slice(1) : tokens;
+        const variants = [tokens, withoutArticle];
+        return [...new Set(variants.flatMap(parts => [
+            parts.join('_'),
+            parts.join('-'),
+            parts.join(''),
+        ]).filter(Boolean))];
+    }
     function formatScore(n) {
         return Number(n).toFixed(2).replace(/0+$/, '').replace(/\.$/, '');
     }
@@ -1480,14 +1499,14 @@ section[id*="quote" i] .ipc-list-card { padding: 4px 0 !important; margin: 2px 0
             this._renderLoading();
 
             const type = getMediaType();
-            const slug = title.toLowerCase().replace(/[^a-z0-9\s]/g, '').replace(/\s+/g, '_');
-            const path = type === 'tv' ? `/tv/${slug}` : `/m/${slug}`;
-
-            try {
-                const res = await httpGet('https://www.rottentomatoes.com' + path);
-                const data = this._parse(res.responseText);
-                if (data) { cacheSet(cacheKey, data); this._render(data); return; }
-            } catch { /* fallback below */ }
+            const prefix = type === 'tv' ? '/tv/' : '/m/';
+            for (const slug of getRTSlugCandidates(title)) {
+                try {
+                    const res = await httpGet('https://www.rottentomatoes.com' + prefix + slug);
+                    const data = this._parse(res.responseText);
+                    if (data) { cacheSet(cacheKey, data); this._render(data); return; }
+                } catch { /* try next slug */ }
+            }
 
             // Fallback: search page
             try {
