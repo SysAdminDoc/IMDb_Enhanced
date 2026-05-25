@@ -15,6 +15,7 @@
 - 2026-05-24 — Removed remaining `.sc-*` styled-components hash selectors from the userscript. Replacements use `data-testid`, IPC component classes, and broader stable section selectors; `getTitleYear` no longer depends on a hashed class fallback.
 - 2026-05-24 — Hardened `getTitleYear()` with JSON-LD release candidates (`datePublished`, release/start dates, release events) plus stable DOM, Open Graph, heading, and document-title regex fallbacks.
 - 2026-05-24 — Added inline JustWatch streaming availability. The old unauthenticated JustWatch API endpoints now return 401/404, so the feature fetches public `www.justwatch.com` SSR title/search pages, parses provider names from metadata/JSON-LD, caches misses, and renders a compact provider widget in the rating bar.
+- 2026-05-24 — Added Light and High contrast theme variants plus opt-in `themeAuto` system-theme following. Theme CSS now emits the correct `color-scheme`, refreshes dependent header/rating styles on theme changes, and keeps the existing Dark default for current users.
 
 ---
 
@@ -681,10 +682,11 @@ Same item, listed here for completeness — it is both an existing-feature relia
   - Acceptance: Provider text is parsed from public JustWatch title/search pages and rendered inline; unavailable lookups are cached.
   - Verify: `node --check IMDb_Enhanced.user.js`; live sample metadata for Inception, Black Mirror, and The Matrix returned Netflix / Prime Video / Disney+ provider strings.
 
-- [ ] **P2** — Light + high-contrast themes (NF-9)
+- [x] **P2** — Light + high-contrast themes (NF-9)
   - Why: `prefers-color-scheme` users; WCAG.
   - Touches: `THEMES`, `injectEarlyThemeShell`, settings selector.
-  - Acceptance: OS light/dark toggle flips swatch when `themeAuto = true`.
+  - Acceptance: Light and High contrast swatches are available; OS light/dark changes resolve to Light/Dark and update active swatches when `themeAuto = true`.
+  - Verify: `node --check IMDb_Enhanced.user.js`; `rg "color-scheme: dark" IMDb_Enhanced.user.js` returns no hard-coded theme shell.
 
 - [ ] **P2** — Personal Watched / Skip marks (NF-5)
   - Why: Power-user retention; doesn't require IMDb login.

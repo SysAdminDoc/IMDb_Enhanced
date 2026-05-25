@@ -72,7 +72,8 @@
         modernUI: true, compactHeader: true, enhancedRatingDisplay: true,
         widerLayout: true, ratingColorCoding: true,
         // Theme
-        themeVariant: 'dark', // dark | oled | midnight
+        themeVariant: 'dark', // dark | oled | midnight | light | highContrast
+        themeAuto: false,
         // Sections
         collapsibleSections: true, spoilerBlur: true, quickNav: true,
         // Scores
@@ -459,6 +460,7 @@
     // 4px grid, 3-tier elevation, semantic color roles, consistent radius scale
     const THEMES = {
         dark: {
+            scheme: 'dark',
             // Surfaces (elevation layers)
             bg:     '#101014',  // base canvas
             sf0:    '#18181c',  // card level 0
@@ -496,6 +498,7 @@
             quoteBar: '#4da8f0',
         },
         oled: {
+            scheme: 'dark',
             bg:     '#000000',
             sf0:    '#0c0c0e',
             sf1:    '#141418',
@@ -525,6 +528,7 @@
             quoteBar: '#3d98e0',
         },
         midnight: {
+            scheme: 'dark',
             bg:     '#0a0e1c',
             sf0:    '#10152a',
             sf1:    '#161c34',
@@ -553,10 +557,118 @@
             sT:     '#1c2444', sH: '#283460',
             quoteBar: '#5eaaff',
         },
+        light: {
+            scheme: 'light',
+            bg:     '#f6f7f9',
+            sf0:    '#ffffff',
+            sf1:    '#eef1f5',
+            sf2:    '#e2e7ef',
+            bd0:    'rgba(15,23,42,0.08)',
+            bd1:    'rgba(15,23,42,0.12)',
+            bd2:    'rgba(15,23,42,0.18)',
+            sh1:    '0 1px 3px rgba(15,23,42,0.10), 0 1px 2px rgba(15,23,42,0.06)',
+            sh2:    '0 8px 22px rgba(15,23,42,0.12), 0 2px 8px rgba(15,23,42,0.08)',
+            sh3:    '0 16px 46px rgba(15,23,42,0.16), 0 4px 14px rgba(15,23,42,0.10)',
+            tx0:    '#101827',
+            tx1:    '#334155',
+            tx2:    '#64748b',
+            tx3:    '#94a3b8',
+            accent: '#a76500',
+            accentMuted: 'rgba(167,101,0,0.12)',
+            accentBorder: 'rgba(167,101,0,0.28)',
+            blue:   '#0f6fbf',
+            blueHi: '#07599c',
+            blueMuted: 'rgba(15,111,191,0.10)',
+            red:    '#b91c1c',
+            redMuted: 'rgba(185,28,28,0.10)',
+            green:  '#047857',
+            hdr:    'rgba(255,255,255,0.92)',
+            hdrBorder: 'rgba(15,23,42,0.10)',
+            sT:     '#c7ced8', sH: '#98a2b3',
+            quoteBar: '#0f6fbf',
+        },
+        highContrast: {
+            scheme: 'dark',
+            bg:     '#000000',
+            sf0:    '#050505',
+            sf1:    '#111111',
+            sf2:    '#1f1f1f',
+            bd0:    '#ffffff',
+            bd1:    '#ffffff',
+            bd2:    '#ffd400',
+            sh1:    'none',
+            sh2:    '0 0 0 2px #ffffff',
+            sh3:    '0 0 0 3px #ffd400',
+            tx0:    '#ffffff',
+            tx1:    '#ffffff',
+            tx2:    '#eeeeee',
+            tx3:    '#cfcfcf',
+            accent: '#ffd400',
+            accentMuted: 'rgba(255,212,0,0.22)',
+            accentBorder: '#ffd400',
+            blue:   '#6bd5ff',
+            blueHi: '#ffffff',
+            blueMuted: 'rgba(107,213,255,0.20)',
+            red:    '#ff5a66',
+            redMuted: 'rgba(255,90,102,0.20)',
+            green:  '#00ff87',
+            hdr:    'rgba(0,0,0,0.98)',
+            hdrBorder: '#ffffff',
+            sT:     '#ffffff', sH: '#ffd400',
+            quoteBar: '#ffd400',
+        },
     };
 
+    function getStoredThemeId() {
+        const id = get('themeVariant');
+        return THEMES[id] ? id : 'dark';
+    }
+    function prefersLightTheme() {
+        return typeof window.matchMedia === 'function' &&
+            window.matchMedia('(prefers-color-scheme: light)').matches;
+    }
+    function getActiveThemeId() {
+        return get('themeAuto') ? (prefersLightTheme() ? 'light' : 'dark') : getStoredThemeId();
+    }
+    function getTheme(id = getActiveThemeId()) {
+        return THEMES[id] || THEMES.dark;
+    }
+    function updateThemeControls(activeId = getActiveThemeId()) {
+        const selector = document.querySelector('.enh-theme-selector');
+        if (selector) {
+            selector.querySelectorAll('.enh-theme-swatch').forEach(swatch => {
+                const isActive = swatch.dataset.theme === activeId;
+                swatch.classList.toggle('active', isActive);
+                swatch.setAttribute('aria-pressed', String(isActive));
+            });
+        }
+        const autoInput = document.getElementById('enh-theme-auto');
+        if (autoInput) autoInput.checked = !!get('themeAuto');
+    }
+    function refreshThemeDependentFeatures() {
+        ['compactHeader', 'enhancedRatingDisplay'].forEach(refreshFeature);
+    }
+    function applyThemeStyles(options = {}) {
+        const activeId = getActiveThemeId();
+        if (get('modernUI')) addCSS(getThemeCSS(activeId), 'enh-modernUI');
+        injectGlobalStyles();
+        injectEarlyThemeShell();
+        if (options.refreshDependent !== false) refreshThemeDependentFeatures();
+        updateThemeControls(activeId);
+    }
+    function setupThemeAutoSync() {
+        if (setupThemeAutoSync._done || typeof window.matchMedia !== 'function') return;
+        setupThemeAutoSync._done = true;
+        const media = window.matchMedia('(prefers-color-scheme: light)');
+        const onChange = () => {
+            if (get('themeAuto')) applyThemeStyles();
+        };
+        if (typeof media.addEventListener === 'function') media.addEventListener('change', onChange);
+        else if (typeof media.addListener === 'function') media.addListener(onChange);
+    }
+
     function getThemeCSS(id) {
-        const t = THEMES[id] || THEMES.dark;
+        const t = getTheme(id);
         return `
 /* ════════════════════════════════════════════
    BASE CANVAS & TYPOGRAPHY
@@ -564,7 +676,7 @@
 body, .ipc-page-background, .ipc-page-background--base,
 .ipc-page-background--baseAlt { background: ${t.bg} !important; }
 
-html { color-scheme: dark; scroll-behavior: smooth; }
+html { color-scheme: ${t.scheme}; scroll-behavior: smooth; }
 body {
     color: ${t.tx1} !important;
     -webkit-font-smoothing: antialiased;
@@ -900,10 +1012,10 @@ a:focus-visible, button:focus-visible, .ipc-chip:focus-visible {
 
     function injectEarlyThemeShell() {
         if (!window.location.hostname.includes('imdb.com')) return;
-        const t = THEMES[get('themeVariant')] || THEMES.dark;
+        const t = getTheme();
         document.documentElement.dataset.imdbEnhanced = 'active';
         addCSS(`
-html[data-imdb-enhanced="active"] { color-scheme: dark; background: ${t.bg}; }
+html[data-imdb-enhanced="active"] { color-scheme: ${t.scheme}; background: ${t.bg}; }
 html[data-imdb-enhanced="active"] body,
 html[data-imdb-enhanced="active"] .ipc-page-background {
     background: ${t.bg} !important;
@@ -916,17 +1028,18 @@ html[data-imdb-enhanced="active"] .ipc-page-background {
     }
 
     injectEarlyThemeShell();
+    setupThemeAutoSync();
 
     reg({
         key: 'modernUI', name: 'Modern IMDb skin', group: 'Appearance',
-        init() { addCSS(getThemeCSS(get('themeVariant')), 'enh-modernUI'); },
+        init() { applyThemeStyles({ refreshDependent: false }); },
         destroy() { removeCSS('enh-modernUI'); }
     });
 
     reg({
         key: 'compactHeader', name: 'Compact header', group: 'Appearance',
         init() {
-            const t = THEMES[get('themeVariant')] || THEMES.dark;
+            const t = getTheme();
             addCSS(`
                 #imdbHeader {
                     padding: 4px 0 !important;
@@ -944,7 +1057,7 @@ html[data-imdb-enhanced="active"] .ipc-page-background {
     reg({
         key: 'enhancedRatingDisplay', name: 'Refined rating display', group: 'Appearance',
         init() {
-            const t = THEMES[get('themeVariant')] || THEMES.dark;
+            const t = getTheme();
             addCSS(`
                 [data-testid="hero-rating-bar__aggregate-rating"] {
                     background: ${t.accentMuted} !important;
@@ -2163,7 +2276,7 @@ section[id*="quote" i] .ipc-list-card { padding: 4px 0 !important; margin: 2px 0
     //
     // #########################################################################
     function injectGlobalStyles() {
-        const t = THEMES[get('themeVariant')] || THEMES.dark;
+        const t = getTheme();
         addCSS(`
 /* ════ Toast ════ */
 #enh-toast {
@@ -2800,11 +2913,13 @@ section[id*="quote" i] .ipc-list-card { padding: 4px 0 !important; margin: 2px 0
         );
         themeRow.appendChild(themeCopy);
         const themeSelector = makeEl('div', { className:'enh-theme-selector' });
-        const curTheme = get('themeVariant');
+        const curTheme = getActiveThemeId();
         [
             { id:'dark', color:'#101014', label:'Dark' },
             { id:'oled', color:'#000000', label:'OLED' },
             { id:'midnight', color:'#0a0e1c', label:'Midnight' },
+            { id:'light', color:'#f6f7f9', label:'Light' },
+            { id:'highContrast', color:'linear-gradient(135deg,#000 0 42%,#ffd400 42% 62%,#fff 62%)', label:'High contrast' },
         ].forEach(th => {
             const sw = makeEl('button', {
                 type:'button',
@@ -2815,22 +2930,32 @@ section[id*="quote" i] .ipc-list-card { padding: 4px 0 !important; margin: 2px 0
                 'aria-label': `Use ${th.label} theme`,
                 'aria-pressed': String(curTheme === th.id),
                 onClick: () => {
+                    set('themeAuto', false);
                     set('themeVariant', th.id);
-                    themeSelector.querySelectorAll('.enh-theme-swatch').forEach(s => {
-                        s.classList.remove('active');
-                        s.setAttribute('aria-pressed', 'false');
-                    });
-                    sw.classList.add('active');
-                    sw.setAttribute('aria-pressed', 'true');
-                    if (get('modernUI')) addCSS(getThemeCSS(th.id), 'enh-modernUI');
-                    injectGlobalStyles();
-                    injectEarlyThemeShell();
+                    applyThemeStyles();
                 }
             });
             themeSelector.appendChild(sw);
         });
         themeRow.appendChild(themeSelector);
         body.appendChild(themeRow);
+
+        const autoThemeRow = makeEl('div', { className:'enh-settings-row' });
+        autoThemeRow.appendChild(makeEl('div', { className:'enh-settings-row-copy' },
+            makeEl('span', { className:'enh-settings-label' }, 'Follow system theme'),
+            makeEl('span', { className:'enh-settings-help' }, 'Uses Light for OS light mode and Dark for OS dark mode.')
+        ));
+        const autoThemeToggle = makeEl('label', { className:'enh-toggle' });
+        const autoThemeInput = makeEl('input', { id:'enh-theme-auto', type:'checkbox', 'aria-label':'Follow system theme' });
+        autoThemeInput.checked = get('themeAuto');
+        autoThemeInput.addEventListener('change', () => {
+            set('themeAuto', autoThemeInput.checked);
+            applyThemeStyles();
+        });
+        autoThemeToggle.appendChild(autoThemeInput);
+        autoThemeToggle.appendChild(makeEl('div', { className:'enh-toggle-track' }));
+        autoThemeRow.appendChild(autoThemeToggle);
+        body.appendChild(autoThemeRow);
 
         // Feature Toggles
         const groups = {};
