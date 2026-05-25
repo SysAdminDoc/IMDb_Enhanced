@@ -27,6 +27,7 @@
 - 2026-05-24 — Added a no-dependency Node smoke-test harness at `tests/run.js`. It checks userscript syntax, metadata guardrails, selector regressions, core P2 feature registration, and that no P0-P2 roadmap checklist items remain open.
 - 2026-05-24 — Added an in-page Trailer popover. The feature appends a Trailer control, fetches YouTube search results on click, caches the first parsed video ID, and embeds it through `youtube-nocookie.com` with a YouTube search fallback.
 - 2026-05-24 — Added watchlist batch IMDb-ID copy. The userscript now matches `/user/*/watchlist*`, initializes only watchlist-safe features on that route, and renders a sticky button that copies deduped visible `tt…` IDs.
+- 2026-05-24 — Made `getMediaType()` granular. It now returns `series`, `episode`, `miniseries`, `short`, or `movie`, with `isTVType()` preserving existing TV gating call sites.
 
 ---
 
@@ -475,9 +476,10 @@ Same item, listed here for completeness — it is both an existing-feature relia
 - **Complexity**: S — **P2**
 
 ### IM-19 — `getMediaType` returns more granular kinds
-- **Current**: `'tv'` if `TVSeries`/`TVEpisode`, else `'movie'`. Episode pages (`/title/tt…/episodes`) get treated as full series.
-- **Problem**: A future feature that targets episodes specifically can't tell.
-- **Fix**: Return `'series' | 'episode' | 'miniseries' | 'movie' | 'short'` based on `ld['@type']` and `ld.episode` presence.
+- **Status**: Complete as of 2026-05-24.
+- **Current**: Returns `'series' | 'episode' | 'miniseries' | 'movie' | 'short'`; existing TV-only call sites use `isTVType()`.
+- **Problem**: Resolved; episode-specific features can tell episodes from series.
+- **Fix**: Return granular kinds based on JSON-LD type, series/season hints, miniseries text hints, and Short genre.
 - **Touches**: `getMediaType` and 4 call sites.
 - **Verify**: `console.log(getMediaType())` on each type returns the right string.
 - **Complexity**: S — **P3**
@@ -760,7 +762,7 @@ Same item, listed here for completeness — it is both an existing-feature relia
 
 - [x] **P3** — Trailer popover (NF-8)
 - [x] **P3** — Watchlist batch IMDb-ID copy (NF-10)
-- [ ] **P3** — `getMediaType` returns granular kinds (IM-19)
+- [x] **P3** — `getMediaType` returns granular kinds (IM-19)
 - [ ] **P3** — Direct Trakt redirect URL (IM-17)
 - [ ] **P3** — Keyboard-shortcut collision audit (IM-15)
 - [ ] **P3** — Publish to Greasy Fork (precondition: P0 connect-whitelist + P0 update-URL fixed; consider removing grey-market default sites first)

@@ -469,8 +469,19 @@
 
     function getMediaType() {
         const ld = getLDData();
-        if (ld['@type'] === 'TVSeries' || ld['@type'] === 'TVEpisode') return 'tv';
+        const types = Array.isArray(ld['@type']) ? ld['@type'] : [ld['@type']];
+        if (types.includes('TVEpisode') || ld.partOfSeries || ld.partOfSeason) return 'episode';
+        if (types.includes('TVSeries')) {
+            const text = [ld.name, ld.description, ld.keywords].filter(Boolean).join(' ');
+            return /mini[-\s]?series/i.test(text) ? 'miniseries' : 'series';
+        }
+        const genres = Array.isArray(ld.genre) ? ld.genre : [ld.genre].filter(Boolean);
+        if (genres.some(genre => /short/i.test(String(genre)))) return 'short';
         return 'movie';
+    }
+
+    function isTVType(type = getMediaType()) {
+        return type === 'series' || type === 'episode' || type === 'miniseries';
     }
 
     function getIMDbRating() {
@@ -1396,7 +1407,7 @@ section[id*="quote" i] .ipc-list-card { padding: 4px 0 !important; margin: 2px 0
             .replace(/-+/g, '-');
     }
     function getJustWatchTypePath() {
-        return getMediaType() === 'tv' ? 'tv-show' : 'movie';
+        return isTVType() ? 'tv-show' : 'movie';
     }
     function getJustWatchSearchUrl(title = getTitleText()) {
         return `https://www.justwatch.com/us/search?q=${encodeURIComponent(title || '')}`;
@@ -1508,7 +1519,7 @@ section[id*="quote" i] .ipc-list-card { padding: 4px 0 !important; margin: 2px 0
             }
             this._renderLoading();
 
-            const type = getMediaType();
+            const type = isTVType() ? 'tv' : 'movie';
             const prefix = type === 'tv' ? '/tv/' : '/m/';
             for (const slug of getRTSlugCandidates(title)) {
                 try {
@@ -1598,7 +1609,7 @@ section[id*="quote" i] .ipc-list-card { padding: 4px 0 !important; margin: 2px 0
     reg({
         key: 'inlineLetterboxdScore', name: 'Letterboxd scores', group: 'Scores',
         async init() {
-            if (getMediaType() === 'tv') return;
+            if (isTVType()) return;
             const imdbId = getIMDbID();
             if (!imdbId) return;
 
@@ -1721,7 +1732,7 @@ section[id*="quote" i] .ipc-list-card { padding: 4px 0 !important; margin: 2px 0
             }
             this._renderLoading();
 
-            const type = getMediaType() === 'tv' ? '1' : '2';
+            const type = isTVType() ? '1' : '2';
             const url = `https://backend.metacritic.com/finder/metacritic/search/${encodeURIComponent(title)}/web?componentName=search-tabs&componentDisplayName=Search+Page+Tab+Filters&componentType=FilterConfig&mcoTypeId=${type}&offset=0&limit=5`;
 
             try {
@@ -2355,10 +2366,10 @@ section[id*="quote" i] .ipc-list-card { padding: 4px 0 !important; margin: 2px 0
 
                 const dropdown = makeEl('div', { id:'enh-link-menu-dropdown', className:'enh-link-dropdown', role:'menu' });
                 for (const [cat, links] of Object.entries(this._DB)) {
-                    if (cat === 'TV' && getMediaType() !== 'tv') continue;
+                    if (cat === 'TV' && !isTVType()) continue;
                     dropdown.appendChild(makeEl('div', { className:'enh-link-dropdown__cat' }, cat));
                     const row = makeEl('div', { className:'enh-link-dropdown__row' });
-                    links.filter(l => !(l.movieOnly && getMediaType() === 'tv')).forEach(l => row.appendChild(makeEl('a', {
+                    links.filter(l => !(l.movieOnly && isTVType())).forEach(l => row.appendChild(makeEl('a', {
                         href: buildUrl(l.u), target:'_blank', rel:'noopener', className:'enh-link-dropdown__item', role:'menuitem'
                     }, l.n)));
                     dropdown.appendChild(row);
@@ -2572,8 +2583,8 @@ section[id*="quote" i] .ipc-list-card { padding: 4px 0 !important; margin: 2px 0
 
                 const type = getMediaType();
                 const actions = [];
-                if (type !== 'tv' && isServarrConfigured('radarr')) actions.push({ kind:'radarr', label:'Add Radarr' });
-                if (type === 'tv' && isServarrConfigured('sonarr')) actions.push({ kind:'sonarr', label:'Add Sonarr' });
+                if (!isTVType(type) && isServarrConfigured('radarr')) actions.push({ kind:'radarr', label:'Add Radarr' });
+                if (isTVType(type) && isServarrConfigured('sonarr')) actions.push({ kind:'sonarr', label:'Add Sonarr' });
                 if (!actions.length) return;
 
                 const t = getTheme();
@@ -2688,7 +2699,7 @@ section[id*="quote" i] .ipc-list-card { padding: 4px 0 !important; margin: 2px 0
         key: 'tvEpisodeTools', name: 'TV episode tools', group: 'TV',
         _clickHandler: null,
         init() {
-            if (getMediaType() !== 'tv' && !/\/title\/tt\d+\/episodes/i.test(location.pathname)) return;
+            if (!isTVType() && !/\/title\/tt\d+\/episodes/i.test(location.pathname)) return;
             addCSS(`
                 .enh-episode-spoiler {
                     filter: blur(5px);
@@ -2857,7 +2868,7 @@ section[id*="quote" i] .ipc-list-card { padding: 4px 0 !important; margin: 2px 0
     reg({
         key: 'tvShowEnhancements', name: 'TV show quick links', group: 'TV',
         init() {
-            if (getMediaType() !== 'tv') return;
+            if (!isTVType()) return;
             addCSS(`
                 #enh-tv-bar{display:flex;flex-wrap:wrap;gap:6px;margin:8px 0}
                 .enh-tv-chip{padding:4px 12px;border-radius:8px;
@@ -2902,7 +2913,7 @@ section[id*="quote" i] .ipc-list-card { padding: 4px 0 !important; margin: 2px 0
                     { n:'SubDL', u:`https://subdl.com/search/${encodeURIComponent(title)}` },
                     { n:'YIFY-Subs', u:`https://yifysubtitles.ch/movie-imdb/${imdbId}`, movieOnly:true },
                     { n:'Addic7ed', u:`https://www.addic7ed.com/search.php?search=${encodeURIComponent(title)}&Submit=Search` },
-                ].filter(s => !(s.movieOnly && getMediaType() === 'tv')).forEach(s => row.appendChild(makeEl('a', {
+                ].filter(s => !(s.movieOnly && isTVType())).forEach(s => row.appendChild(makeEl('a', {
                     href:s.u, target:'_blank', rel:'noopener', className:'enh-ext-link', style:{ '--link-color':'#22d3ee' }
                 }, s.n)));
                 sec.appendChild(row);
