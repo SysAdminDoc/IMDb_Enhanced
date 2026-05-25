@@ -17,6 +17,7 @@
 - 2026-05-24 — Added inline JustWatch streaming availability. The old unauthenticated JustWatch API endpoints now return 401/404, so the feature fetches public `www.justwatch.com` SSR title/search pages, parses provider names from metadata/JSON-LD, caches misses, and renders a compact provider widget in the rating bar.
 - 2026-05-24 — Added Light and High contrast theme variants plus opt-in `themeAuto` system-theme following. Theme CSS now emits the correct `color-scheme`, refreshes dependent header/rating styles on theme changes, and keeps the existing Dark default for current users.
 - 2026-05-24 — Added local Watched / Skip marking. Poster cards and the hero poster get hover controls, saved marks render with badges/dimmed cards wherever the same IMDb ID appears, and the settings panel now includes a local marks review/clear section backed by exported `userMarks` data.
+- 2026-05-24 — Added opt-in local Servarr quick-add. Settings now capture localhost Radarr/Sonarr URLs, API keys, root folders, and profile IDs; title pages render the matching Add Radarr/Add Sonarr action when configured, using lookup then POST add requests through `GM_xmlhttpRequest`.
 
 ---
 
@@ -61,7 +62,7 @@ Top opportunities, priority order:
 - `@updateURL` / `@downloadURL` were removed on 2026-05-24 because `SysAdminDoc/IMDb-Enhanced` does not exist and this checkout has no remote. **Verified**: no dead update URL remains in the userscript.
 - `@match` covers `imdb.com/title/*`, `imdb.com/name/*`, `imdb.com/*/title/*` (locale prefix), `imdb.com/*/name/*`, `m.imdb.com/*`, and three `cineby.*` search hosts.
 - `@grant` set: `GM_getValue`, `GM_setValue`, `GM_addStyle`, `GM_setClipboard`, `GM_xmlhttpRequest`, `GM_listValues`, `GM_deleteValue`.
-- `@connect` set: `www.rottentomatoes.com`, `backend.metacritic.com`, `letterboxd.com`, `www.justwatch.com`, `www.opensubtitles.org`. Wildcard access was removed on 2026-05-24.
+- `@connect` set: `www.rottentomatoes.com`, `backend.metacritic.com`, `letterboxd.com`, `www.justwatch.com`, `www.opensubtitles.org`, `localhost`, and `127.0.0.1`. Wildcard access was removed on 2026-05-24.
 
 ### DOM verification (against saved MHTML)
 Grepped the saved Black Mirror page for `data-testid=` values; found 166 occurrences. **Verified present in 2026 IMDb DOM**:
@@ -116,7 +117,8 @@ Grouped exactly as in the source: Cleanup (7), Appearance (5), Layout (3), Score
 - `letterboxd.com/imdb/{ttid}/` (GET HTML, scraped for film ratings).
 - `www.justwatch.com/us/{movie|tv-show}/{slug}` + search fallback (GET HTML, scraped for provider names).
 - `www.opensubtitles.org` (link target only).
-- Explicit `@connect` whitelist for Rotten Tomatoes, Metacritic, Letterboxd, JustWatch, and OpenSubtitles.
+- `localhost` / `127.0.0.1` Servarr instances (Radarr/Sonarr API lookup + add requests).
+- Explicit `@connect` whitelist for Rotten Tomatoes, Metacritic, Letterboxd, JustWatch, OpenSubtitles, and local Servarr.
 - 7 streaming-search URLs + 6 reference URLs hard-coded in JS, opened via `window.open` (no fetch).
 
 ### Storage
@@ -277,10 +279,10 @@ Grouped exactly as in the source: Cleanup (7), Appearance (5), Layout (3), Score
 ### NF-7 — Sonarr / Radarr quick-add buttons
 - **User problem**: Self-hosters open Sonarr/Radarr in a new tab and re-search the title manually.
 - **Evidence**: "Universal Servarr Add Tool" (Greasy Fork) does this; Sonarr/Radarr both expose REST APIs (`POST /api/v3/movie?apikey=…`).
-- **Proposed behaviour**: New optional settings (off by default): Sonarr URL + key, Radarr URL + key. When set, render "+ Radarr" button next to the watch-search bar. Click → POSTs the IMDb-ID-based lookup.
-- **Implementation areas**: New `servarrIntegration` feature group; settings rows with text inputs + masked API keys; `httpGet` extended to `httpRequest` supporting POST; add user-supplied origins to `@connect` (Tampermonkey supports runtime `@connect` for `localhost` if user grants).
-- **Risk / edge cases**: Stored API keys are in `GM_setValue` (plain text). Warn the user. Cross-origin POST to a user-LAN URL may need a CORS workaround (`GM_xmlhttpRequest` ignores CORS — works).
-- **Verification**: Configure a test Radarr; click button; movie appears in Radarr; failure surfaces in toast.
+- **Implemented behaviour**: New optional settings (off by default): localhost Sonarr/Radarr URL, API key, root folder, and profile IDs. When configured, movies render Add Radarr and series render Add Sonarr; click performs an IMDb-ID lookup and POST add.
+- **Implementation areas**: New `servarrIntegration` feature group; settings rows with masked API keys; `httpGet` extended to `httpRequest` supporting POST; explicit local-only `@connect localhost` and `@connect 127.0.0.1`.
+- **Risk / edge cases**: Stored API keys are in `GM_setValue` plain text. Remote/LAN Servarr hosts are intentionally blocked in this build to avoid restoring wildcard `@connect`; users can fork and add their own host if needed.
+- **Verification**: Configure a local test Radarr/Sonarr; click button; title appears in Servarr; failure surfaces in toast.
 - **Complexity**: L
 - **Priority**: P2
 
@@ -339,7 +341,7 @@ Grouped exactly as in the source: Cleanup (7), Appearance (5), Layout (3), Score
 
 ### IM-3 — Lock `@connect *` to a whitelist
 - **Status**: Complete as of 2026-05-24.
-- **Current**: Header declares only required third-party fetch/link domains: Rotten Tomatoes, Metacritic, Letterboxd, JustWatch, and OpenSubtitles.
+- **Current**: Header declares only required third-party fetch/link domains plus local Servarr hosts: Rotten Tomatoes, Metacritic, Letterboxd, JustWatch, OpenSubtitles, localhost, and 127.0.0.1.
 - **Problem**: Resolved for current code; new fetch features must add explicit domains.
 - **Fix**: Removed wildcard `@connect *`.
 - **Touches**: Userscript header.
@@ -695,10 +697,11 @@ Same item, listed here for completeness — it is both an existing-feature relia
   - Acceptance: Watched / Skip marks persist in `userMarks`, render on hero and poster cards, and can be reviewed or cleared from settings.
   - Verify: `node --check IMDb_Enhanced.user.js`; delegated controls write local mark state and resync visible marked cards.
 
-- [ ] **P2** — Sonarr / Radarr quick-add (NF-7)
+- [x] **P2** — Sonarr / Radarr quick-add (NF-7)
   - Why: Self-hosters demand it; precedent in Greasy Fork.
-  - Touches: New `servarrIntegration`; settings fields with API keys; runtime `@connect`.
-  - Acceptance: Click button → title appears in Sonarr/Radarr.
+  - Touches: New `servarrIntegration`; settings fields with API keys/root/profile IDs; `httpRequest` POST support; local Servarr `@connect` entries.
+  - Acceptance: Configured movie pages show Add Radarr; configured series pages show Add Sonarr; each performs Servarr lookup then POST add and surfaces failures in a toast.
+  - Verify: `node --check IMDb_Enhanced.user.js`; local-only request permissions are explicit (`localhost`, `127.0.0.1`) without restoring wildcard `@connect`.
 
 - [ ] **P2** — Cache GC + per-key TTL (IM-14, IM-6)
   - Why: Storage cap; faster loads.

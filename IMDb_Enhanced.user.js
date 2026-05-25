@@ -24,6 +24,8 @@
 // @connect      letterboxd.com
 // @connect      www.justwatch.com
 // @connect      www.opensubtitles.org
+// @connect      localhost
+// @connect      127.0.0.1
 // @run-at       document-start
 // @noframes
 // @license      MIT
@@ -42,6 +44,7 @@
         quickCopyID: 10,
         searchButtons: 20,
         externalLinks: 30,
+        servarrIntegration: 35,
         tvShowEnhancements: 40,
     };
     const DEFAULT_WATCH_SITES = [
@@ -83,6 +86,11 @@
         searchButtons: true, externalLinks: true, expandedLinkMenu: true,
         watchSites: DEFAULT_WATCH_SITES, externalSites: DEFAULT_EXTERNAL_SITES,
         watchedMarking: true, userMarks: {},
+        servarrIntegration: false,
+        radarrUrl: 'http://localhost:7878', radarrApiKey: '',
+        radarrRootFolderPath: '', radarrQualityProfileId: '1',
+        sonarrUrl: 'http://localhost:8989', sonarrApiKey: '',
+        sonarrRootFolderPath: '', sonarrQualityProfileId: '1', sonarrLanguageProfileId: '1',
         // TV
         tvEpisodeTools: true, tvShowEnhancements: true, subtitleLinks: true,
         // Utility
@@ -113,6 +121,7 @@
         externalLinks: 'Adds trusted research and trailer links near the title.',
         expandedLinkMenu: 'Groups additional movie, review, subtitle, and TV lookup links.',
         watchedMarking: 'Adds local Watched and Skip marks to title posters and recommendation cards.',
+        servarrIntegration: 'Adds optional local Radarr/Sonarr quick-add buttons when API settings are configured.',
         tvEpisodeTools: 'Blurs episode synopses and surfaces the highest-rated episodes where episode data is present.',
         tvShowEnhancements: 'Adds TV-specific lookup shortcuts on series pages.',
         subtitleLinks: 'Adds subtitle lookup links in the details section.',
@@ -428,15 +437,97 @@
     // =========================================================================
     //  ASYNC HTTP
     // =========================================================================
-    function httpGet(url, opts = {}) {
+    function httpRequest(url, opts = {}) {
         return new Promise((resolve, reject) => {
+            const hasBody = opts.body !== undefined;
+            const headers = {
+                ...(hasBody ? { 'Content-Type': 'application/json' } : {}),
+                ...(opts.headers || {}),
+            };
             GM_xmlhttpRequest({
-                method: 'GET', url,
-                timeout: opts.timeout || 10000,
                 ...opts,
+                method: opts.method || 'GET',
+                url,
+                timeout: opts.timeout || 10000,
+                headers,
+                data: hasBody ? JSON.stringify(opts.body) : opts.data,
                 onload: (r) => r.status >= 400 ? reject(r) : resolve(r),
                 onerror: reject, ontimeout: reject,
             });
+        });
+    }
+    function httpGet(url, opts = {}) {
+        return httpRequest(url, { ...opts, method: 'GET' });
+    }
+    function parseJSONResponse(response) {
+        try { return JSON.parse(response.responseText || 'null'); }
+        catch { throw new Error('Response was not valid JSON'); }
+    }
+    function getRequestErrorMessage(error) {
+        if (error?.responseText) {
+            try {
+                const body = JSON.parse(error.responseText);
+                if (Array.isArray(body) && body[0]?.errorMessage) return body[0].errorMessage;
+                if (body.message) return body.message;
+                if (body.errorMessage) return body.errorMessage;
+                if (body.error) return body.error;
+            } catch { /* use status fallback */ }
+        }
+        if (error?.status) return `HTTP ${error.status}`;
+        return error?.message || 'Request failed';
+    }
+    function normalizeServarrBaseUrl(value) {
+        const raw = String(value || '').trim().replace(/\/+$/, '');
+        if (!raw) return '';
+        try {
+            const url = new URL(raw);
+            if (!/^https?:$/i.test(url.protocol)) return '';
+            return url.href.replace(/\/+$/, '');
+        } catch { return ''; }
+    }
+    function isLocalServarrUrl(baseUrl) {
+        try {
+            const host = new URL(baseUrl).hostname.toLowerCase();
+            return host === 'localhost' || host === '127.0.0.1';
+        } catch { return false; }
+    }
+    function getServarrConfig(kind) {
+        const prefix = kind === 'sonarr' ? 'sonarr' : 'radarr';
+        const baseUrl = normalizeServarrBaseUrl(get(`${prefix}Url`));
+        return {
+            kind: prefix,
+            baseUrl,
+            apiKey: String(get(`${prefix}ApiKey`) || '').trim(),
+            rootFolderPath: String(get(`${prefix}RootFolderPath`) || '').trim(),
+            qualityProfileId: parseInt(get(`${prefix}QualityProfileId`), 10) || 1,
+            languageProfileId: parseInt(get('sonarrLanguageProfileId'), 10) || 1,
+        };
+    }
+    function isServarrConfigured(kind) {
+        const cfg = getServarrConfig(kind);
+        return Boolean(cfg.baseUrl && cfg.apiKey && cfg.rootFolderPath && cfg.qualityProfileId);
+    }
+    function buildServarrUrl(cfg, path, query = {}) {
+        const url = new URL(`${cfg.baseUrl}/api/v3/${path.replace(/^\/+/, '')}`);
+        Object.entries(query).forEach(([key, value]) => {
+            if (value !== undefined && value !== null && value !== '') url.searchParams.set(key, value);
+        });
+        return url.href;
+    }
+    async function servarrRequest(kind, path, opts = {}) {
+        const cfg = getServarrConfig(kind);
+        if (!isLocalServarrUrl(cfg.baseUrl)) {
+            throw new Error('Only localhost and 127.0.0.1 Servarr URLs are allowed by this userscript build.');
+        }
+        return httpRequest(buildServarrUrl(cfg, path, opts.query), {
+            method: opts.method || 'GET',
+            body: opts.body,
+            timeout: opts.timeout || 15000,
+            headers: {
+                Accept: 'application/json',
+                'X-Api-Key': cfg.apiKey,
+                ...(opts.headers || {}),
+            },
         });
     }
 
@@ -689,7 +780,7 @@
         if (autoInput) autoInput.checked = !!get('themeAuto');
     }
     function refreshThemeDependentFeatures() {
-        ['compactHeader', 'enhancedRatingDisplay', 'watchedMarking'].forEach(refreshFeature);
+        ['compactHeader', 'enhancedRatingDisplay', 'watchedMarking', 'servarrIntegration'].forEach(refreshFeature);
     }
     function applyThemeStyles(options = {}) {
         const activeId = getActiveThemeId();
@@ -2215,6 +2306,123 @@ section[id*="quote" i] .ipc-list-card { padding: 4px 0 !important; margin: 2px 0
         }
     });
 
+    reg({
+        key: 'servarrIntegration', name: 'Servarr quick-add', group: 'Features',
+        init() {
+            if (!window.location.hostname.includes('imdb.com')) return;
+            waitForTitleSurface().then(() => {
+                if (document.getElementById('enh-servarr-actions')) return;
+                const imdbId = getIMDbID(), title = getTitleText();
+                if (!imdbId || !title) return;
+
+                const type = getMediaType();
+                const actions = [];
+                if (type !== 'tv' && isServarrConfigured('radarr')) actions.push({ kind:'radarr', label:'Add Radarr' });
+                if (type === 'tv' && isServarrConfigured('sonarr')) actions.push({ kind:'sonarr', label:'Add Sonarr' });
+                if (!actions.length) return;
+
+                const t = getTheme();
+                addCSS(`
+                    #enh-servarr-actions {
+                        margin-top: 8px; display: flex; align-items: center; gap: 8px; flex-wrap: wrap;
+                    }
+                    .enh-servarr-label {
+                        font: 700 10px/1 -apple-system, BlinkMacSystemFont, 'Segoe UI', sans-serif;
+                        letter-spacing: .08em; color: ${t.tx3};
+                    }
+                    .enh-servarr-btn {
+                        display: inline-flex; align-items: center; justify-content: center;
+                        min-height: 28px; padding: 0 11px; border-radius: 7px;
+                        border: 1px solid ${t.bd1}; background: ${t.sf1}; color: ${t.tx1};
+                        cursor: pointer; font: 700 11px/1 -apple-system, BlinkMacSystemFont, 'Segoe UI', sans-serif;
+                        transition: background .15s ease, border-color .15s ease, color .15s ease, transform .15s ease;
+                    }
+                    .enh-servarr-btn:hover { background: ${t.sf2}; border-color: ${t.accentBorder}; color: ${t.accent}; transform: translateY(-1px); }
+                    .enh-servarr-btn:disabled { cursor: progress; opacity: .62; transform: none; }
+                `, 'enh-servarrIntegration');
+
+                const bar = makeEl('div', { id:'enh-servarr-actions' },
+                    makeEl('div', { className:'enh-servarr-label' }, 'SERVARR')
+                );
+                actions.forEach(action => {
+                    const btn = makeEl('button', {
+                        type:'button',
+                        className:'enh-servarr-btn',
+                        dataset:{ kind:action.kind },
+                        'aria-label': `${action.label} for ${title}`,
+                        onClick: async () => {
+                            const original = btn.textContent;
+                            btn.disabled = true;
+                            btn.textContent = 'Adding...';
+                            try {
+                                await this._add(action.kind, imdbId, title);
+                                showToast(`${title} sent to ${action.kind === 'radarr' ? 'Radarr' : 'Sonarr'}`);
+                                btn.textContent = 'Added';
+                            } catch (error) {
+                                console.warn('[IMDb Enhanced] Servarr add failed:', error);
+                                showToast(`${action.kind === 'radarr' ? 'Radarr' : 'Sonarr'} add failed: ${getRequestErrorMessage(error)}`, 4500);
+                                btn.disabled = false;
+                                btn.textContent = original;
+                            }
+                        },
+                    }, action.label);
+                    bar.appendChild(btn);
+                });
+                appendTitleStackItem(bar, TITLE_STACK_ORDER.servarrIntegration);
+            }).catch(() => {});
+        },
+        async _lookup(kind, imdbId, title) {
+            const path = kind === 'radarr' ? 'movie/lookup' : 'series/lookup';
+            const terms = [`imdb:${imdbId}`, `https://www.imdb.com/title/${imdbId}/`, title].filter(Boolean);
+            for (const term of terms) {
+                const response = await servarrRequest(kind, path, { query:{ term } });
+                const items = parseJSONResponse(response);
+                if (Array.isArray(items) && items.length) return items[0];
+            }
+            throw new Error('No matching title found');
+        },
+        async _add(kind, imdbId, title) {
+            const cfg = getServarrConfig(kind);
+            const item = await this._lookup(kind, imdbId, title);
+            if (kind === 'radarr') {
+                const body = {
+                    ...item,
+                    monitored: true,
+                    qualityProfileId: cfg.qualityProfileId,
+                    rootFolderPath: cfg.rootFolderPath,
+                    minimumAvailability: item.minimumAvailability || 'released',
+                    addOptions: { ...(item.addOptions || {}), searchForMovie: true },
+                };
+                await servarrRequest('radarr', 'movie', { method:'POST', body });
+                return;
+            }
+
+            const seasons = Array.isArray(item.seasons)
+                ? item.seasons.map(season => ({ ...season, monitored: true }))
+                : [];
+            const body = {
+                ...item,
+                monitored: true,
+                seasonFolder: true,
+                qualityProfileId: cfg.qualityProfileId,
+                languageProfileId: cfg.languageProfileId,
+                rootFolderPath: cfg.rootFolderPath,
+                seasons,
+                addOptions: {
+                    ...(item.addOptions || {}),
+                    monitor: 'all',
+                    searchForMissingEpisodes: true,
+                },
+            };
+            await servarrRequest('sonarr', 'series', { method:'POST', body });
+        },
+        destroy() {
+            removeCSS('enh-servarrIntegration');
+            document.getElementById('enh-servarr-actions')?.remove();
+            pruneTitleStack();
+        }
+    });
+
     // #########################################################################
     //
     //  TV SHOW FEATURES
@@ -2969,6 +3177,29 @@ section[id*="quote" i] .ipc-list-card { padding: 4px 0 !important; margin: 2px 0
 .enh-mark-row__clear:hover { border-color: ${t.red}; color: ${t.red}; }
 .enh-marks-empty { color: ${t.tx3}; font: 500 11px/1.4 -apple-system, BlinkMacSystemFont, 'Segoe UI', sans-serif; }
 
+/* ════ Servarr Settings ════ */
+.enh-servarr-panel {
+    margin: 14px 0 4px;
+    padding: 12px;
+    border: 1px solid ${t.bd1};
+    border-radius: 10px;
+    background: ${t.sf1};
+}
+.enh-servarr-section + .enh-servarr-section { margin-top: 14px; padding-top: 14px; border-top: 1px solid ${t.bd0}; }
+.enh-servarr-title { color: ${t.tx1}; font: 700 12px/1.3 -apple-system, BlinkMacSystemFont, 'Segoe UI', sans-serif; margin-bottom: 8px; }
+.enh-servarr-grid { display: grid; grid-template-columns: repeat(2, minmax(0, 1fr)); gap: 8px; }
+.enh-servarr-field { display: flex; flex-direction: column; gap: 4px; min-width: 0; }
+.enh-servarr-field--wide { grid-column: 1 / -1; }
+.enh-servarr-field label { color: ${t.tx2}; font: 700 10px/1.2 -apple-system, BlinkMacSystemFont, 'Segoe UI', sans-serif; text-transform: uppercase; letter-spacing: .04em; }
+.enh-servarr-input {
+    min-width: 0; height: 30px; border-radius: 7px;
+    border: 1px solid ${t.bd1}; background: ${t.bg}; color: ${t.tx1};
+    padding: 0 8px; font: 500 11px/1.3 -apple-system, BlinkMacSystemFont, 'Segoe UI', sans-serif;
+    outline: none;
+}
+.enh-servarr-input:focus { border-color: ${t.accentBorder}; box-shadow: 0 0 0 2px ${t.accentMuted}; }
+.enh-servarr-note { margin-top: 10px; color: ${t.tx3}; font: 500 11px/1.4 -apple-system, BlinkMacSystemFont, 'Segoe UI', sans-serif; }
+
 /* ════ FAB ════ */
 #enh-settings-fab {
     position: fixed; bottom: 20px; left: 20px;
@@ -2993,6 +3224,7 @@ section[id*="quote" i] .ipc-list-card { padding: 4px 0 !important; margin: 2px 0
 .enh-mark-btn:focus-visible,
 .enh-mark-row__clear:focus-visible,
 .enh-site-remove:focus-visible,
+.enh-servarr-input:focus-visible,
 .enh-settings-footer-btn:focus-visible,
 .enh-settings-close:focus-visible,
 .enh-theme-swatch:focus-visible,
@@ -3024,6 +3256,8 @@ section[id*="quote" i] .ipc-list-card { padding: 4px 0 !important; margin: 2px 0
     .enh-site-row { grid-template-columns: 1fr 1fr 34px 30px; }
     .enh-mark-row { grid-template-columns: minmax(0, 1fr) auto auto; }
     .enh-mark-row__link { display: none; }
+    .enh-servarr-grid { grid-template-columns: 1fr; }
+    .enh-servarr-field--wide { grid-column: auto; }
 }
         `, 'enh-global');
     }
@@ -3137,6 +3371,62 @@ section[id*="quote" i] .ipc-list-card { padding: 4px 0 !important; margin: 2px 0
         getSiteList(key, defaults).forEach(site => addRow(site));
         editor.appendChild(rows);
         return editor;
+    }
+
+    function createSettingsInput({ key, label, type = 'text', wide = false, placeholder = '' }) {
+        const id = `enh-setting-${key}`;
+        const input = makeEl('input', {
+            id,
+            type,
+            className:'enh-servarr-input',
+            placeholder,
+            autocomplete:'off',
+            spellcheck:'false',
+        });
+        input.value = get(key) || '';
+        input.addEventListener('change', () => {
+            set(key, input.value.trim());
+            refreshFeature('servarrIntegration');
+        });
+        return makeEl('div', { className:'enh-servarr-field' + (wide ? ' enh-servarr-field--wide' : '') },
+            makeEl('label', { for:id }, label),
+            input
+        );
+    }
+
+    function createServarrSettingsPanel() {
+        const section = ({ title, fields }) => {
+            const grid = makeEl('div', { className:'enh-servarr-grid' }, ...fields.map(createSettingsInput));
+            return makeEl('div', { className:'enh-servarr-section' },
+                makeEl('div', { className:'enh-servarr-title' }, title),
+                grid
+            );
+        };
+
+        return makeEl('div', { className:'enh-servarr-panel' },
+            section({
+                title:'Radarr',
+                fields:[
+                    { key:'radarrUrl', label:'URL', wide:true, placeholder:'http://localhost:7878' },
+                    { key:'radarrApiKey', label:'API key', type:'password', wide:true },
+                    { key:'radarrRootFolderPath', label:'Root folder', wide:true, placeholder:'/movies' },
+                    { key:'radarrQualityProfileId', label:'Quality profile ID', type:'number' },
+                ],
+            }),
+            section({
+                title:'Sonarr',
+                fields:[
+                    { key:'sonarrUrl', label:'URL', wide:true, placeholder:'http://localhost:8989' },
+                    { key:'sonarrApiKey', label:'API key', type:'password', wide:true },
+                    { key:'sonarrRootFolderPath', label:'Root folder', wide:true, placeholder:'/tv' },
+                    { key:'sonarrQualityProfileId', label:'Quality profile ID', type:'number' },
+                    { key:'sonarrLanguageProfileId', label:'Language profile ID', type:'number' },
+                ],
+            }),
+            makeEl('div', { className:'enh-servarr-note' },
+                'API keys are stored locally in plain text. This build allows userscript requests only to localhost and 127.0.0.1.'
+            )
+        );
     }
 
     function createMarksPanel() {
@@ -3330,6 +3620,8 @@ section[id*="quote" i] .ipc-list-card { padding: 4px 0 !important; margin: 2px 0
             defaults:DEFAULT_EXTERNAL_SITES,
             featureKey:'externalLinks',
         }));
+        body.appendChild(makeEl('div', { className:'enh-settings-group-label' }, 'Servarr'));
+        body.appendChild(createServarrSettingsPanel());
         body.appendChild(makeEl('div', { className:'enh-settings-group-label' }, 'Local marks'));
         body.appendChild(createMarksPanel());
 
