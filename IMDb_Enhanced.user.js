@@ -1243,8 +1243,6 @@ html[data-imdb-enhanced="active"] .ipc-page-background {
                 }
                 [data-testid="hero-rating-bar__aggregate-rating__score"] span:first-child {
                     font-size: 1.6em !important; font-weight: 800 !important;
-                    color: ${t.accent} !important;
-                    text-shadow: 0 0 24px ${t.accentMuted} !important;
                 }
                 [data-testid="hero-rating-bar__popularity"] {
                     background: ${t.blueMuted} !important;
@@ -1387,24 +1385,52 @@ section[id*="quote" i] .ipc-list-card { padding: 4px 0 !important; margin: 2px 0
     reg({
         key: 'ratingColorCoding', name: 'Rating quality labels', group: 'Appearance',
         init() {
+            addCSS(`
+                [data-testid="hero-rating-bar__aggregate-rating"].enh-rating-colorized
+                [data-testid="hero-rating-bar__aggregate-rating__score"] span:first-child {
+                    color: var(--enh-rating-score-color) !important;
+                    text-shadow: var(--enh-rating-score-shadow) !important;
+                }
+                #enh-rating-badge {
+                    display: inline-block;
+                    font-size: 10px;
+                    font-weight: 700;
+                    padding: 2px 8px;
+                    border-radius: 4px;
+                    margin-left: 6px;
+                    vertical-align: middle;
+                    background: var(--enh-rating-badge-bg);
+                    color: var(--enh-rating-badge-text);
+                    letter-spacing: .03em;
+                }
+            `, 'enh-ratingColor');
             waitFor('[data-testid="hero-rating-bar__aggregate-rating__score"]').then(el => {
                 const rating = getIMDbRating();
                 if (!rating) return;
                 const c = ratingColor(rating);
-                const scoreEl = el.querySelector('span:first-child');
-                if (scoreEl) { scoreEl.style.color = c.bg; scoreEl.style.textShadow = `0 0 20px ${c.bg}44`; }
+                const container = el.closest('[data-testid="hero-rating-bar__aggregate-rating"]') || el;
+                container.classList.add('enh-rating-colorized');
+                container.style.setProperty('--enh-rating-score-color', c.bg);
+                container.style.setProperty('--enh-rating-score-shadow', `0 0 20px ${c.bg}44`);
+                container.style.setProperty('--enh-rating-badge-bg', c.bg);
+                container.style.setProperty('--enh-rating-badge-text', c.text);
                 if (!document.getElementById('enh-rating-badge')) {
                     const badge = document.createElement('span');
                     badge.id = 'enh-rating-badge';
                     badge.textContent = c.label;
-                    badge.style.cssText = `display:inline-block;font-size:10px;font-weight:700;padding:2px 8px;
-                        border-radius:4px;margin-left:6px;vertical-align:middle;
-                        background:${c.bg};color:${c.text};letter-spacing:.03em;`;
                     el.appendChild(badge);
                 }
             }).catch(() => {});
         },
-        destroy() { document.getElementById('enh-rating-badge')?.remove(); }
+        destroy() {
+            removeCSS('enh-ratingColor');
+            document.getElementById('enh-rating-badge')?.remove();
+            document.querySelectorAll('.enh-rating-colorized').forEach(el => {
+                el.classList.remove('enh-rating-colorized');
+                ['--enh-rating-score-color', '--enh-rating-score-shadow', '--enh-rating-badge-bg', '--enh-rating-badge-text']
+                    .forEach(prop => el.style.removeProperty(prop));
+            });
+        }
     });
 
     // #########################################################################

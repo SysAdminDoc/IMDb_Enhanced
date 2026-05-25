@@ -19,6 +19,7 @@
 - 2026-05-24 — Added local Watched / Skip marking. Poster cards and the hero poster get hover controls, saved marks render with badges/dimmed cards wherever the same IMDb ID appears, and the settings panel now includes a local marks review/clear section backed by exported `userMarks` data.
 - 2026-05-24 — Added opt-in local Servarr quick-add. Settings now capture localhost Radarr/Sonarr URLs, API keys, root folders, and profile IDs; title pages render the matching Add Radarr/Add Sonarr action when configured, using lookup then POST add requests through `GM_xmlhttpRequest`.
 - 2026-05-24 — Added cache TTL metadata and startup garbage collection. Existing cache entries keep the 7-day default, unavailable sentinels now expire after 24 hours, expired/corrupt keys are removed, and live cache entries are capped at 120 newest records.
+- 2026-05-24 — Consolidated IMDb rating color state. `enhancedRatingDisplay` now owns the rating pill/sizing only, while `ratingColorCoding` owns score color, score shadow, badge variables, and complete cleanup on disable.
 
 ---
 
@@ -143,9 +144,9 @@ Grouped exactly as in the source: Cleanup (7), Appearance (5), Layout (3), Score
 | 7 | Hide app banners | Footer + announcement bar | Auto | [IMDb_Enhanced.user.js:314-316](IMDb_Enhanced.user.js#L314-L316) | Complete | None | `#announcement-text` is reused for non-app announcements too |
 | 8 | Modern IMDb skin | Full dark/OLED/midnight theme | Auto | [IMDb_Enhanced.user.js:782-786](IMDb_Enhanced.user.js#L782-L786) + theme CSS [424-761](IMDb_Enhanced.user.js#L424-L761) | Complete but **fragile** (≈30 hashed `.sc-*` selectors) | None | Replace hashed classes with role/testid selectors; add `prefers-color-scheme: light` path |
 | 9 | Compact header | Slims `#imdbHeader` | Auto | [IMDb_Enhanced.user.js:788-804](IMDb_Enhanced.user.js#L788-L804) | Complete | None | Logo SVG `height: 24px` may clip on retina-Hi-DPI Edge |
-| 10 | Refined rating display | Halo + bigger score around hero rating | Auto | [IMDb_Enhanced.user.js:806-836](IMDb_Enhanced.user.js#L806-L836) | Complete | None | Conflicts with rating-color-coding `text-shadow` ([IMDb_Enhanced.user.js:924](IMDb_Enhanced.user.js#L924)) — both write `text-shadow` to the same span |
+| 10 | Refined rating display | Halo + bigger score around hero rating | Auto | [IMDb_Enhanced.user.js:806-836](IMDb_Enhanced.user.js#L806-L836) | Complete | None | Inner score colour/shadow now belongs to `ratingColorCoding`; this feature owns pill layout and sizing |
 | 11 | Wider responsive layout | Forces page-container to 100 % | Auto | [IMDb_Enhanced.user.js:838-901](IMDb_Enhanced.user.js#L838-L901) | Complete | None | Causes horizontal scroll on some IMDb sub-pages (lists, ratings); add per-page guard |
-| 12 | Rating quality labels | "Great / Good / Average / Below Avg / Poor" chip | Auto, waits for testid | [IMDb_Enhanced.user.js:916-937](IMDb_Enhanced.user.js#L916-L937) | Complete | None | The colour overrides the `enhancedRatingDisplay` halo colour with sometimes-clashing tones; consolidate |
+| 12 | Rating quality labels | "Great / Good / Average / Below Avg / Poor" chip | Auto, waits for testid | [IMDb_Enhanced.user.js:916-937](IMDb_Enhanced.user.js#L916-L937) | Complete | None | Uses CSS variables and cleans them up on disable |
 | 13 | Rotten Tomatoes scores | Inline Tomatometer + Audience widget | Auto, fetches RT | [IMDb_Enhanced.user.js:957-1051](IMDb_Enhanced.user.js#L957-L1051) | **Partial** — scraping HTML; slug guess is hit-or-miss for re-titled / non-US releases | None | Use Letterboxd-style ID-based URL OR drop scraping and use an OMDb-style proxy; cache "unavailable" so re-fetches don't spam every load |
 | 14 | Metacritic scores | Inline Metascore + user score | Auto, fetches MC | [IMDb_Enhanced.user.js:1053-1128](IMDb_Enhanced.user.js#L1053-L1128) | Partial — relies on undocumented `backend.metacritic.com` endpoint | None | Same caching gap; also `mcoTypeId` 1=TV, 2=movie magic numbers need a comment |
 | 15 | Collapsible sections | Per-section collapse button, persists | Auto on imdb.com | [IMDb_Enhanced.user.js:1136-1180](IMDb_Enhanced.user.js#L1136-L1180) | Complete | None | CSS exception `[class*="title"]` is too broad — `tm-box-addtolist-button` and other classes match. Use explicit allow-list. |
@@ -371,10 +372,11 @@ Same item, listed here for completeness — it is both an existing-feature relia
 - **Complexity**: S — **P1**
 
 ### IM-7 — Consolidate `enhancedRatingDisplay` ↔ `ratingColorCoding`
-- **Current**: Both write `text-shadow` to the same `[data-testid="hero-rating-bar__aggregate-rating__score"] span:first-child` — last one wins ([IMDb_Enhanced.user.js:824](IMDb_Enhanced.user.js#L824) vs [IMDb_Enhanced.user.js:924](IMDb_Enhanced.user.js#L924)).
-- **Problem**: Inconsistent halo colour depending on init order.
-- **Fix**: Move `text-shadow` and colour computation into `ratingColorCoding` only; `enhancedRatingDisplay` keeps the surrounding pill but stops styling the inner score.
-- **Verify**: Toggle each independently; colours behave consistently.
+- **Status**: Complete as of 2026-05-24.
+- **Current**: `enhancedRatingDisplay` keeps the surrounding pill and score sizing; `ratingColorCoding` owns score colour, score shadow, quality badge variables, and cleanup.
+- **Problem**: Resolved; the two toggles no longer race on inline score styles.
+- **Fix**: Moved `text-shadow` and colour computation into `ratingColorCoding` only.
+- **Verify**: Toggle each independently; colours behave consistently. `rg "scoreEl\\.style|style\\.textShadow" IMDb_Enhanced.user.js` returns no matches.
 - **Complexity**: S — **P2**
 
 ### IM-8 — Tighten `collapsibleSections` CSS exception
@@ -710,10 +712,11 @@ Same item, listed here for completeness — it is both an existing-feature relia
   - Acceptance: Storage stays bounded at 120 live cache records; "unavailable" results are cached for 24 h while successful lookups keep the 7-day default.
   - Verify: `node --check IMDb_Enhanced.user.js`; cache GC runs once per page session and deletes expired/corrupt/oldest overflow keys.
 
-- [ ] **P2** — Consolidate rating-display + rating-color-coding (IM-7)
+- [x] **P2** — Consolidate rating-display + rating-color-coding (IM-7)
   - Why: Avoid duplicate `text-shadow` writes.
   - Touches: Both feature CSS blocks.
-  - Acceptance: Toggling each independently behaves consistently.
+  - Acceptance: `enhancedRatingDisplay` no longer computes inner score colour/shadow; `ratingColorCoding` applies/removes score colour, shadow, and badge state with CSS variables.
+  - Verify: `node --check IMDb_Enhanced.user.js`; `rg "scoreEl\\.style|style\\.textShadow" IMDb_Enhanced.user.js` returns no matches.
 
 - [ ] **P2** — Settings panel: focus first focusable on open (IM-10)
   - Why: WCAG 2.4.3.
