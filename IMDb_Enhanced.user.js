@@ -3332,6 +3332,12 @@ section[id*="quote" i] .ipc-list-card { padding: 4px 0 !important; margin: 2px 0
     let settingsOpen = false;
     let lastFocusedElement = null;
 
+    function getSettingsFocusables(root) {
+        if (!root) return [];
+        return [...root.querySelectorAll('button, [href], input, textarea, [tabindex]:not([tabindex="-1"])')]
+            .filter(el => !el.disabled && el.offsetParent !== null);
+    }
+
     function refreshFeature(key) {
         const feature = features.find(f => f.key === key);
         if (!feature || !get(key)) return;
@@ -3712,8 +3718,7 @@ section[id*="quote" i] .ipc-list-card { padding: 4px 0 !important; margin: 2px 0
                 return;
             }
             if (e.key !== 'Tab') return;
-            const focusables = [...overlay.querySelectorAll('button, [href], input, textarea, [tabindex]:not([tabindex="-1"])')]
-                .filter(el => !el.disabled && el.offsetParent !== null);
+            const focusables = getSettingsFocusables(overlay);
             if (!focusables.length) return;
             const first = focusables[0];
             const last = focusables[focusables.length - 1];
@@ -3793,7 +3798,7 @@ section[id*="quote" i] .ipc-list-card { padding: 4px 0 !important; margin: 2px 0
         document.documentElement.style.overflow = settingsOpen ? 'hidden' : '';
         if (settingsOpen) {
             lastFocusedElement = document.activeElement;
-            setTimeout(() => panel?.focus(), 40);
+            setTimeout(() => (getSettingsFocusables(overlay)[0] || panel)?.focus(), 40);
         } else {
             lastFocusedElement?.focus?.();
         }

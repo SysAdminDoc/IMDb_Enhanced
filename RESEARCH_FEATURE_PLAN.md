@@ -20,6 +20,7 @@
 - 2026-05-24 — Added opt-in local Servarr quick-add. Settings now capture localhost Radarr/Sonarr URLs, API keys, root folders, and profile IDs; title pages render the matching Add Radarr/Add Sonarr action when configured, using lookup then POST add requests through `GM_xmlhttpRequest`.
 - 2026-05-24 — Added cache TTL metadata and startup garbage collection. Existing cache entries keep the 7-day default, unavailable sentinels now expire after 24 hours, expired/corrupt keys are removed, and live cache entries are capped at 120 newest records.
 - 2026-05-24 — Consolidated IMDb rating color state. `enhancedRatingDisplay` now owns the rating pill/sizing only, while `ratingColorCoding` owns score color, score shadow, badge variables, and complete cleanup on disable.
+- 2026-05-24 — Fixed settings dialog initial focus. Opening settings now focuses the first visible interactive control using the same focusable-element lookup as the dialog trap, with the panel container retained only as a fallback.
 
 ---
 
@@ -395,8 +396,9 @@ Same item, listed here for completeness — it is both an existing-feature relia
 - **Complexity**: S — **P1**
 
 ### IM-10 — Settings panel focus management
-- **Current**: When opened, `panel?.focus()` is called ([IMDb_Enhanced.user.js:2121](IMDb_Enhanced.user.js#L2121)) — the panel container gets focus, not the first interactive element.
-- **Problem**: Screen-reader users hear the dialog title but Tab takes two presses to reach the close button. Mild WCAG 2.4.3 issue.
+- **Status**: Complete as of 2026-05-24.
+- **Current**: Opening settings focuses the first visible interactive element, using the same helper as the focus trap.
+- **Problem**: Resolved; screen-reader and keyboard users no longer land on the inert panel container first.
 - **Fix**: Focus the first focusable inside the panel (the close button, since it's the first DOM child). Keep `tabindex="-1"` on the panel as a fallback target.
 - **Touches**: `toggleSettings`.
 - **Verify**: Open settings → Tab → first toggle reached.
@@ -718,9 +720,10 @@ Same item, listed here for completeness — it is both an existing-feature relia
   - Acceptance: `enhancedRatingDisplay` no longer computes inner score colour/shadow; `ratingColorCoding` applies/removes score colour, shadow, and badge state with CSS variables.
   - Verify: `node --check IMDb_Enhanced.user.js`; `rg "scoreEl\\.style|style\\.textShadow" IMDb_Enhanced.user.js` returns no matches.
 
-- [ ] **P2** — Settings panel: focus first focusable on open (IM-10)
+- [x] **P2** — Settings panel: focus first focusable on open (IM-10)
   - Why: WCAG 2.4.3.
-  - Acceptance: Open settings → Tab → first toggle reached.
+  - Acceptance: Open settings → initial focus lands on the first visible dialog control; Tab proceeds through the normal focus order.
+  - Verify: `node --check IMDb_Enhanced.user.js`; focus trap and open handler share `getSettingsFocusables()`.
 
 - [ ] **P2** — Cineby host preference + namespaced storage key (IM-11)
   - Why: User choice + no key collision.
@@ -763,7 +766,7 @@ These are <= 1-hour changes with clear value:
 6. **Namespace `GM_setValue('movieTitle', …)` to `imdb_enh_cineby_query`** (IM-11 part).
 7. **Reset-to-defaults button** in settings (recovery gap).
 8. **Console info stamp** at init: `[IMDb Enhanced] v2.3.1 — N features enabled`.
-9. **Settings panel: focus the close button on open** (IM-10).
+9. **Done 2026-05-24** — Settings panel: focus the close button on open (IM-10).
 10. **Drop the `,` keyboard shortcut**, keep `s` only (IM-15 part).
 11. **Direct Trakt redirect URL** swap (IM-17) — one-line per call site.
 
