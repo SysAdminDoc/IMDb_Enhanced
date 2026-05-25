@@ -18,6 +18,7 @@
 - 2026-05-24 — Added Light and High contrast theme variants plus opt-in `themeAuto` system-theme following. Theme CSS now emits the correct `color-scheme`, refreshes dependent header/rating styles on theme changes, and keeps the existing Dark default for current users.
 - 2026-05-24 — Added local Watched / Skip marking. Poster cards and the hero poster get hover controls, saved marks render with badges/dimmed cards wherever the same IMDb ID appears, and the settings panel now includes a local marks review/clear section backed by exported `userMarks` data.
 - 2026-05-24 — Added opt-in local Servarr quick-add. Settings now capture localhost Radarr/Sonarr URLs, API keys, root folders, and profile IDs; title pages render the matching Add Radarr/Add Sonarr action when configured, using lookup then POST add requests through `GM_xmlhttpRequest`.
+- 2026-05-24 — Added cache TTL metadata and startup garbage collection. Existing cache entries keep the 7-day default, unavailable sentinels now expire after 24 hours, expired/corrupt keys are removed, and live cache entries are capped at 120 newest records.
 
 ---
 
@@ -703,10 +704,11 @@ Same item, listed here for completeness — it is both an existing-feature relia
   - Acceptance: Configured movie pages show Add Radarr; configured series pages show Add Sonarr; each performs Servarr lookup then POST add and surfaces failures in a toast.
   - Verify: `node --check IMDb_Enhanced.user.js`; local-only request permissions are explicit (`localhost`, `127.0.0.1`) without restoring wildcard `@connect`.
 
-- [ ] **P2** — Cache GC + per-key TTL (IM-14, IM-6)
+- [x] **P2** — Cache GC + per-key TTL (IM-14, IM-6)
   - Why: Storage cap; faster loads.
   - Touches: `cacheGet/cacheSet`, init-time GC.
-  - Acceptance: Storage stays bounded; "unavailable" results cached for 24 h.
+  - Acceptance: Storage stays bounded at 120 live cache records; "unavailable" results are cached for 24 h while successful lookups keep the 7-day default.
+  - Verify: `node --check IMDb_Enhanced.user.js`; cache GC runs once per page session and deletes expired/corrupt/oldest overflow keys.
 
 - [ ] **P2** — Consolidate rating-display + rating-color-coding (IM-7)
   - Why: Avoid duplicate `text-shadow` writes.

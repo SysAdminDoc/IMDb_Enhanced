@@ -40,6 +40,8 @@
     const VERSION = '2.3.1';
     const PREFIX  = 'imdb_enh_';
     const CACHE_TTL = 7 * 24 * 60 * 60 * 1000; // 7 days
+    const CACHE_UNAVAILABLE_TTL = 24 * 60 * 60 * 1000; // 24 hours
+    const CACHE_MAX_ENTRIES = 120;
     const TITLE_STACK_ORDER = {
         quickCopyID: 10,
         searchButtons: 20,
@@ -137,18 +139,52 @@
 
     function cacheGet(key) {
         try {
-            const raw = GM_getValue('cache_' + key, null);
+            const storageKey = 'cache_' + key;
+            const raw = GM_getValue(storageKey, null);
             if (!raw) return null;
-            const { data, ts } = JSON.parse(raw);
-            if (Date.now() - ts > CACHE_TTL) return null;
+            const { data, ts, ttl } = JSON.parse(raw);
+            if (!ts || Date.now() - ts > (ttl || CACHE_TTL)) {
+                if (typeof GM_deleteValue === 'function') GM_deleteValue(storageKey);
+                return null;
+            }
             return data;
         } catch { return null; }
     }
-    function cacheSet(key, data) {
-        GM_setValue('cache_' + key, JSON.stringify({ data, ts: Date.now() }));
+    function cacheSet(key, data, ttl = CACHE_TTL) {
+        GM_setValue('cache_' + key, JSON.stringify({ data, ts: Date.now(), ttl }));
     }
     function cacheSetUnavailable(key) {
-        cacheSet(key, { unavailable: true });
+        cacheSet(key, { unavailable: true }, CACHE_UNAVAILABLE_TTL);
+    }
+    function cacheGC() {
+        if (cacheGC._ran) return;
+        cacheGC._ran = true;
+        try {
+            const now = Date.now();
+            const live = [];
+            GM_listValues().forEach(storageKey => {
+                if (!storageKey.startsWith('cache_')) return;
+                try {
+                    const raw = GM_getValue(storageKey, null);
+                    const entry = raw ? JSON.parse(raw) : null;
+                    const ts = Number(entry?.ts) || 0;
+                    const ttl = Number(entry?.ttl) || CACHE_TTL;
+                    if (!entry || !ts || now - ts > ttl) {
+                        if (typeof GM_deleteValue === 'function') GM_deleteValue(storageKey);
+                        return;
+                    }
+                    live.push({ storageKey, ts });
+                } catch {
+                    if (typeof GM_deleteValue === 'function') GM_deleteValue(storageKey);
+                }
+            });
+            if (live.length <= CACHE_MAX_ENTRIES) return;
+            live.sort((a, b) => a.ts - b.ts)
+                .slice(0, live.length - CACHE_MAX_ENTRIES)
+                .forEach(entry => GM_deleteValue(entry.storageKey));
+        } catch (e) {
+            console.warn('[IMDb Enhanced] cache GC failed:', e);
+        }
     }
     function normalizeUserMark(record) {
         if (record === 'watched' || record === 'skip') return { state: record, title: '', ts: 0 };
@@ -3515,7 +3551,7 @@ section[id*="quote" i] .ipc-list-card { padding: 4px 0 !important; margin: 2px 0
                 <div class="enh-settings-footer-actions">
                     <button type="button" class="enh-settings-footer-btn" id="enh-export-btn" title="Copy all settings to clipboard">Export</button>
                     <button type="button" class="enh-settings-footer-btn" id="enh-import-btn" title="Import settings from JSON">Import</button>
-                    <button type="button" class="enh-settings-footer-btn" id="enh-clearcache-btn" title="Clear cached Rotten Tomatoes and Metacritic scores">Clear cache</button>
+                    <button type="button" class="enh-settings-footer-btn" id="enh-clearcache-btn" title="Clear cached third-party lookups">Clear cache</button>
                 </div>
                 <span class="enh-settings-footer-note">Stored locally in your userscript manager.</span>
             </div>
@@ -3809,6 +3845,7 @@ section[id*="quote" i] .ipc-list-card { padding: 4px 0 !important; margin: 2px 0
         if (activeRouteKey) destroyRouteFeatures();
         activeRouteKey = routeKey;
         _ldData = null;
+        cacheGC();
 
         injectGlobalStyles();
         const enabledFeatures = features.filter(f => get(f.key));
