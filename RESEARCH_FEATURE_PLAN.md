@@ -26,6 +26,7 @@
 - 2026-05-24 — Expanded Rotten Tomatoes direct slug probing. RT lookups now try underscore, hyphen, compact, and leading-article-stripped variants before falling back to the search page.
 - 2026-05-24 — Added a no-dependency Node smoke-test harness at `tests/run.js`. It checks userscript syntax, metadata guardrails, selector regressions, core P2 feature registration, and that no P0-P2 roadmap checklist items remain open.
 - 2026-05-24 — Added an in-page Trailer popover. The feature appends a Trailer control, fetches YouTube search results on click, caches the first parsed video ID, and embeds it through `youtube-nocookie.com` with a YouTube search fallback.
+- 2026-05-24 — Added watchlist batch IMDb-ID copy. The userscript now matches `/user/*/watchlist*`, initializes only watchlist-safe features on that route, and renders a sticky button that copies deduped visible `tt…` IDs.
 
 ---
 
@@ -68,7 +69,7 @@ Top opportunities, priority order:
 
 ### Headers & metadata
 - `@updateURL` / `@downloadURL` were removed on 2026-05-24 because `SysAdminDoc/IMDb-Enhanced` does not exist and this checkout has no remote. **Verified**: no dead update URL remains in the userscript.
-- `@match` covers `imdb.com/title/*`, `imdb.com/name/*`, `imdb.com/*/title/*` (locale prefix), `imdb.com/*/name/*`, `m.imdb.com/title/*`, `m.imdb.com/name/*`, and three `cineby.*` search hosts.
+- `@match` covers `imdb.com/title/*`, `imdb.com/name/*`, `imdb.com/*/title/*` (locale prefix), `imdb.com/*/name/*`, `imdb.com/user/*/watchlist*`, `m.imdb.com/title/*`, `m.imdb.com/name/*`, and three `cineby.*` search hosts.
 - `@grant` set: `GM_getValue`, `GM_setValue`, `GM_addStyle`, `GM_setClipboard`, `GM_xmlhttpRequest`, `GM_listValues`, `GM_deleteValue`.
 - `@connect` set: `www.rottentomatoes.com`, `backend.metacritic.com`, `letterboxd.com`, `www.justwatch.com`, `www.opensubtitles.org`, `www.youtube.com`, `localhost`, and `127.0.0.1`. Wildcard access was removed on 2026-05-24.
 
@@ -318,8 +319,8 @@ Grouped exactly as in the source: Cleanup (7), Appearance (5), Layout (3), Score
 ### NF-10 — Watchlist page batch IMDb-ID copy
 - **User problem**: Users with large IMDb watchlists need to export to other systems (Radarr / Stremio / Plex). IMDb's CSV export is buried in account settings.
 - **Evidence**: The `quickCopyID` feature ([IMDb_Enhanced.user.js:1479-1496](IMDb_Enhanced.user.js#L1479-L1496)) already copies a single ID. The `@match` set does not currently include `/user/*/watchlist/`.
-- **Proposed behaviour**: Add `@match https://www.imdb.com/user/*/watchlist*`; render a single "Copy all IMDb IDs" button at the top of the list. Outputs newline-separated `tt…` IDs.
-- **Implementation areas**: New `watchlistBatch` feature gated by URL; `document.querySelectorAll('a[href*="/title/tt"]')` dedupe.
+- **Implemented behaviour**: Added `@match https://www.imdb.com/user/*/watchlist*`; renders a sticky "Copy all IMDb IDs" button. Output is newline-separated, deduped `tt…` IDs.
+- **Implementation areas**: New `watchlistBatch` feature gated by URL; `document.querySelectorAll('a[href*="/title/tt"]')` dedupe; watchlist route initializes only watchlist-safe features.
 - **Risk / edge cases**: Watchlist supports paging — the button should warn that only currently-loaded items are copied.
 - **Verification**: 50-item watchlist → click → clipboard contains 50 unique IDs.
 - **Complexity**: S
@@ -758,7 +759,7 @@ Same item, listed here for completeness — it is both an existing-feature relia
 ### Phase 3 — Polish + reach (when convenient)
 
 - [x] **P3** — Trailer popover (NF-8)
-- [ ] **P3** — Watchlist batch IMDb-ID copy (NF-10)
+- [x] **P3** — Watchlist batch IMDb-ID copy (NF-10)
 - [ ] **P3** — `getMediaType` returns granular kinds (IM-19)
 - [ ] **P3** — Direct Trakt redirect URL (IM-17)
 - [ ] **P3** — Keyboard-shortcut collision audit (IM-15)

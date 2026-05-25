@@ -41,6 +41,7 @@ test('core P2 features remain registered', () => {
         'streamAvailability',
         'watchedMarking',
         'servarrIntegration',
+        'watchlistBatch',
         'themeAuto',
         'getRTSlugCandidates',
         'cacheGC',

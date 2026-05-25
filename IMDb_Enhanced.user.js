@@ -8,6 +8,7 @@
 // @match        https://www.imdb.com/name/*
 // @match        https://www.imdb.com/*/title/*
 // @match        https://www.imdb.com/*/name/*
+// @match        https://www.imdb.com/user/*/watchlist*
 // @match        https://m.imdb.com/title/*
 // @match        https://m.imdb.com/name/*
 // @match        https://www.cineby.app/search
@@ -107,7 +108,7 @@
         // TV
         tvEpisodeTools: true, tvShowEnhancements: true, subtitleLinks: true,
         // Utility
-        quickCopyID: true, keyboardShortcuts: false,
+        quickCopyID: true, watchlistBatch: true, keyboardShortcuts: false,
     };
 
     const FEATURE_DETAILS = {
@@ -140,6 +141,7 @@
         tvShowEnhancements: 'Adds TV-specific lookup shortcuts on series pages.',
         subtitleLinks: 'Adds subtitle lookup links in the details section.',
         quickCopyID: 'Adds a visible IMDb ID copy button beside the title.',
+        watchlistBatch: 'Adds a watchlist-page button that copies all visible IMDb title IDs.',
         keyboardShortcuts: 'Optional. Enables single-key actions for users who want them.',
     };
 
@@ -2916,6 +2918,52 @@ section[id*="quote" i] .ipc-list-card { padding: 4px 0 !important; margin: 2px 0
     // #########################################################################
 
     reg({
+        key: 'watchlistBatch', name: 'Watchlist batch ID copy', group: 'Utility',
+        init() {
+            if (!/\/user\/[^/]+\/watchlist/i.test(location.pathname)) return;
+            if (document.getElementById('enh-watchlist-copy')) return;
+            const t = getTheme();
+            addCSS(`
+                #enh-watchlist-copy {
+                    position: sticky; top: 72px; z-index: 30;
+                    display: inline-flex; align-items: center; justify-content: center;
+                    min-height: 34px; margin: 12px 0; padding: 0 14px;
+                    border-radius: 8px; border: 1px solid ${t.accentBorder};
+                    background: ${t.accentMuted}; color: ${t.accent};
+                    font: 800 12px/1 -apple-system, BlinkMacSystemFont, 'Segoe UI', sans-serif;
+                    cursor: pointer; box-shadow: ${t.sh1};
+                }
+                #enh-watchlist-copy:hover { background: ${t.sf2}; transform: translateY(-1px); }
+            `, 'enh-watchlistBatch');
+
+            const btn = makeEl('button', {
+                id:'enh-watchlist-copy',
+                type:'button',
+                onClick: () => {
+                    const ids = this._ids();
+                    if (!ids.length) { showToast('No IMDb title IDs found'); return; }
+                    GM_setClipboard(ids.join('\n'));
+                    showToast(`Copied ${ids.length} IMDb IDs`);
+                    btn.textContent = `Copy ${ids.length} IMDb IDs`;
+                },
+            }, `Copy ${this._ids().length || 'all'} IMDb IDs`);
+
+            const target = document.querySelector('main') || document.body;
+            target.insertBefore(btn, target.firstElementChild || null);
+        },
+        _ids() {
+            const ids = Array.from(document.querySelectorAll('a[href*="/title/tt"]'))
+                .map(a => a.href.match(/\/title\/(tt\d+)/)?.[1])
+                .filter(Boolean);
+            return [...new Set(ids)];
+        },
+        destroy() {
+            removeCSS('enh-watchlistBatch');
+            document.getElementById('enh-watchlist-copy')?.remove();
+        }
+    });
+
+    reg({
         key: 'quickCopyID', name: 'Quick copy IMDb ID', group: 'Utility',
         init() {
             waitForTitleSurface().then(titleEl => {
@@ -3473,6 +3521,7 @@ section[id*="quote" i] .ipc-list-card { padding: 4px 0 !important; margin: 2px 0
 .enh-ext-link:focus-visible,
 #enh-trailer-btn:focus-visible,
 .enh-trailer-close:focus-visible,
+#enh-watchlist-copy:focus-visible,
 #enh-link-menu-trigger:focus-visible,
 .enh-link-dropdown__item:focus-visible,
 #enh-copy-id:focus-visible,
@@ -4058,6 +4107,15 @@ section[id*="quote" i] .ipc-list-card { padding: 4px 0 !important; margin: 2px 0
         return window.location.hostname.includes('imdb.com');
     }
 
+    function isWatchlistPage() {
+        return /\/user\/[^/]+\/watchlist/i.test(location.pathname);
+    }
+
+    function shouldInitFeature(feature) {
+        if (!isWatchlistPage()) return true;
+        return ['modernUI', 'compactHeader', 'watchlistBatch', 'keyboardShortcuts'].includes(feature.key);
+    }
+
     function getRouteKey() {
         return `${window.location.hostname}${window.location.pathname}${window.location.search}`;
     }
@@ -4108,9 +4166,9 @@ section[id*="quote" i] .ipc-list-card { padding: 4px 0 !important; margin: 2px 0
         cacheGC();
 
         injectGlobalStyles();
-        const enabledFeatures = features.filter(f => get(f.key));
+        const enabledFeatures = features.filter(f => get(f.key) && shouldInitFeature(f));
         enabledFeatures.forEach(f => {
-            if (get(f.key)) { try { f.init(); } catch (e) { console.warn(`[IMDb Enhanced] ${f.key}:`, e); } }
+            try { f.init(); } catch (e) { console.warn(`[IMDb Enhanced] ${f.key}:`, e); }
         });
         createSettingsPanel();
         createFAB();
