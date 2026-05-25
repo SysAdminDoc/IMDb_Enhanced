@@ -82,6 +82,7 @@
         // Links
         searchButtons: true, externalLinks: true, expandedLinkMenu: true,
         watchSites: DEFAULT_WATCH_SITES, externalSites: DEFAULT_EXTERNAL_SITES,
+        watchedMarking: true, userMarks: {},
         // TV
         tvEpisodeTools: true, tvShowEnhancements: true, subtitleLinks: true,
         // Utility
@@ -111,6 +112,7 @@
         searchButtons: 'Adds compact watch-search launch buttons near the title.',
         externalLinks: 'Adds trusted research and trailer links near the title.',
         expandedLinkMenu: 'Groups additional movie, review, subtitle, and TV lookup links.',
+        watchedMarking: 'Adds local Watched and Skip marks to title posters and recommendation cards.',
         tvEpisodeTools: 'Blurs episode synopses and surfaces the highest-rated episodes where episode data is present.',
         tvShowEnhancements: 'Adds TV-specific lookup shortcuts on series pages.',
         subtitleLinks: 'Adds subtitle lookup links in the details section.',
@@ -138,6 +140,47 @@
     }
     function cacheSetUnavailable(key) {
         cacheSet(key, { unavailable: true });
+    }
+    function normalizeUserMark(record) {
+        if (record === 'watched' || record === 'skip') return { state: record, title: '', ts: 0 };
+        if (!record || typeof record !== 'object') return null;
+        const state = record.state === 'watched' || record.state === 'skip' ? record.state : '';
+        if (!state) return null;
+        return {
+            state,
+            title: String(record.title || '').trim().slice(0, 160),
+            ts: Number(record.ts) || 0,
+        };
+    }
+    function getUserMarks() {
+        const raw = get('userMarks');
+        if (!raw || typeof raw !== 'object' || Array.isArray(raw)) return {};
+        const marks = {};
+        Object.entries(raw).forEach(([id, record]) => {
+            if (!/^tt\d+$/.test(id)) return;
+            const normalized = normalizeUserMark(record);
+            if (normalized) marks[id] = normalized;
+        });
+        return marks;
+    }
+    function setUserMarks(marks) {
+        set('userMarks', marks && typeof marks === 'object' && !Array.isArray(marks) ? marks : {});
+    }
+    function getUserMark(imdbId) {
+        return getUserMarks()[imdbId]?.state || '';
+    }
+    function setUserMark(imdbId, state, title = '') {
+        if (!/^tt\d+$/.test(imdbId || '')) return;
+        const marks = getUserMarks();
+        if (state === 'watched' || state === 'skip') {
+            marks[imdbId] = { state, title: String(title || '').trim().slice(0, 160), ts: Date.now() };
+        } else {
+            delete marks[imdbId];
+        }
+        setUserMarks(marks);
+    }
+    function getUserMarkEntries() {
+        return Object.entries(getUserMarks()).sort((a, b) => (b[1].ts || 0) - (a[1].ts || 0));
     }
 
     // =========================================================================
@@ -646,7 +689,7 @@
         if (autoInput) autoInput.checked = !!get('themeAuto');
     }
     function refreshThemeDependentFeatures() {
-        ['compactHeader', 'enhancedRatingDisplay'].forEach(refreshFeature);
+        ['compactHeader', 'enhancedRatingDisplay', 'watchedMarking'].forEach(refreshFeature);
     }
     function applyThemeStyles(options = {}) {
         const activeId = getActiveThemeId();
@@ -1995,6 +2038,183 @@ section[id*="quote" i] .ipc-list-card { padding: 4px 0 !important; margin: 2px 0
         }
     });
 
+    reg({
+        key: 'watchedMarking', name: 'Watched / skip marks', group: 'Features',
+        _observer: null,
+        _clickHandler: null,
+        _raf: 0,
+        init() {
+            if (!window.location.hostname.includes('imdb.com')) return;
+            const t = getTheme();
+            addCSS(`
+                .enh-markable-card{position:relative!important}
+                .enh-markable-card.enh-marked{opacity:.72;filter:saturate(.58);transition:opacity .15s ease,filter .15s ease}
+                .enh-markable-card.enh-marked:hover,.enh-markable-card.enh-marked:focus-within{opacity:1;filter:none}
+                .enh-mark-controls{
+                    position:absolute;top:6px;left:6px;right:6px;z-index:20;
+                    display:flex;gap:4px;align-items:center;justify-content:center;
+                    opacity:0;transform:translateY(-2px);pointer-events:none;
+                    transition:opacity .12s ease,transform .12s ease;
+                }
+                .enh-markable-card:hover .enh-mark-controls,
+                .enh-markable-card:focus-within .enh-mark-controls,
+                .enh-markable-card.enh-marked .enh-mark-controls{
+                    opacity:1;transform:translateY(0);pointer-events:auto;
+                }
+                .enh-mark-btn{
+                    min-width:0;height:24px;padding:0 7px;border-radius:6px;
+                    border:1px solid ${t.bd1};background:${t.sf1};color:${t.tx1};
+                    font:700 10px/1 -apple-system,BlinkMacSystemFont,'Segoe UI',sans-serif;
+                    cursor:pointer;box-shadow:${t.sh1};white-space:nowrap;
+                }
+                .enh-mark-btn:hover{border-color:${t.accentBorder};color:${t.accent}}
+                .enh-mark-btn[data-active="true"]{background:${t.accent};border-color:${t.accent};color:#050505}
+                .enh-mark-btn--skip[data-active="true"]{background:${t.red};border-color:${t.red};color:#fff}
+                .enh-mark-badge{
+                    position:absolute;left:6px;bottom:6px;z-index:19;
+                    padding:4px 7px;border-radius:6px;background:${t.accent};color:#050505;
+                    font:800 10px/1 -apple-system,BlinkMacSystemFont,'Segoe UI',sans-serif;
+                    box-shadow:${t.sh1};text-transform:uppercase;letter-spacing:.04em;
+                    pointer-events:none;
+                }
+                .enh-mark-badge--skip{background:${t.red};color:#fff}
+            `, 'enh-watchedMarking');
+
+            this._clickHandler = (e) => {
+                const btn = e.target.closest?.('[data-enh-mark-action]');
+                if (!btn) return;
+                const card = btn.closest('.enh-markable-card');
+                const imdbId = card?.dataset.enhMarkId;
+                if (!imdbId) return;
+                e.preventDefault();
+                e.stopPropagation();
+                e.stopImmediatePropagation?.();
+                const action = btn.dataset.enhMarkAction;
+                const state = action === 'clear' ? '' : action;
+                setUserMark(imdbId, state, card.dataset.enhMarkTitle || getTitleText());
+                this._syncAll();
+                showToast(state ? `Marked ${state}` : 'Mark cleared');
+            };
+            document.body.addEventListener('click', this._clickHandler, true);
+
+            this._scan(document);
+            this._observer = new MutationObserver(() => {
+                cancelAnimationFrame(this._raf);
+                this._raf = requestAnimationFrame(() => this._scan(document));
+            });
+            this._observer.observe(document.body, { childList: true, subtree: true });
+        },
+        _scan(root) {
+            const seen = new Set();
+            const currentId = getIMDbID();
+            const heroPoster = document.querySelector('[data-testid="hero-media__poster"]');
+            if (heroPoster && currentId) {
+                this._decorate(heroPoster, currentId, getTitleText());
+                seen.add(heroPoster);
+            }
+
+            const anchors = [];
+            if (root?.matches?.('a[href*="/title/tt"]')) anchors.push(root);
+            root?.querySelectorAll?.('a[href*="/title/tt"]').forEach(a => anchors.push(a));
+            anchors.forEach(anchor => {
+                const imdbId = anchor.href?.match(/\/title\/(tt\d+)/)?.[1];
+                if (!imdbId) return;
+                const card = this._findCard(anchor);
+                if (!card || seen.has(card)) return;
+                seen.add(card);
+                this._decorate(card, imdbId, this._extractTitle(card, anchor));
+            });
+        },
+        _findCard(anchor) {
+            const posterCard = anchor.closest('.ipc-poster-card');
+            if (posterCard) return posterCard;
+            const summary = anchor.closest('.ipc-metadata-list-summary-item');
+            if (summary?.querySelector('img')) return summary;
+            const listItem = anchor.closest('li');
+            if (listItem?.querySelector('img')) return listItem;
+            const media = anchor.closest('[class*="poster"],[class*="Poster"],[class*="media"],[class*="Media"]');
+            if (media?.querySelector('img')) return media;
+            return null;
+        },
+        _extractTitle(card, anchor) {
+            const fromImg = card.querySelector('img[alt]')?.alt?.replace(/^poster for\s+/i, '').trim();
+            if (fromImg) return fromImg;
+            const fromTitle = card.querySelector('.ipc-title__text,[data-testid*="title" i]')?.textContent?.trim();
+            if (fromTitle) return fromTitle.replace(/^\d+\.\s*/, '');
+            return anchor.textContent?.trim().replace(/^\d+\.\s*/, '') || '';
+        },
+        _decorate(card, imdbId, title) {
+            if (!card || card.closest('#enh-settings-panel')) return;
+            card.dataset.enhMarkId = imdbId;
+            card.dataset.enhMarkTitle = title || imdbId;
+            card.classList.add('enh-markable-card');
+
+            if (!Array.from(card.children).some(child => child.classList?.contains('enh-mark-controls'))) {
+                const controls = makeEl('div', { className: 'enh-mark-controls' },
+                    makeEl('button', {
+                        type: 'button',
+                        className: 'enh-mark-btn enh-mark-btn--watched',
+                        dataset: { enhMarkAction: 'watched' },
+                        'aria-label': `Mark ${title || imdbId} as watched`,
+                    }, 'Seen'),
+                    makeEl('button', {
+                        type: 'button',
+                        className: 'enh-mark-btn enh-mark-btn--skip',
+                        dataset: { enhMarkAction: 'skip' },
+                        'aria-label': `Mark ${title || imdbId} as skipped`,
+                    }, 'Skip'),
+                    makeEl('button', {
+                        type: 'button',
+                        className: 'enh-mark-btn enh-mark-btn--clear',
+                        dataset: { enhMarkAction: 'clear' },
+                        'aria-label': `Clear mark for ${title || imdbId}`,
+                    }, 'Clear')
+                );
+                card.appendChild(controls);
+            }
+            this._applyCardState(card);
+        },
+        _applyCardState(card) {
+            const mark = getUserMark(card.dataset.enhMarkId);
+            card.classList.toggle('enh-marked', Boolean(mark));
+            card.classList.toggle('enh-marked--watched', mark === 'watched');
+            card.classList.toggle('enh-marked--skip', mark === 'skip');
+            card.querySelectorAll('.enh-mark-btn').forEach(btn => {
+                btn.dataset.active = String(btn.dataset.enhMarkAction === mark);
+            });
+
+            let badge = Array.from(card.children).find(child => child.classList?.contains('enh-mark-badge'));
+            if (!mark) {
+                badge?.remove();
+                return;
+            }
+            if (!badge) {
+                badge = makeEl('div', { className: 'enh-mark-badge' });
+                card.appendChild(badge);
+            }
+            badge.textContent = mark === 'watched' ? 'Watched' : 'Skip';
+            badge.classList.toggle('enh-mark-badge--skip', mark === 'skip');
+        },
+        _syncAll() {
+            document.querySelectorAll('.enh-markable-card').forEach(card => this._applyCardState(card));
+            document.dispatchEvent(new CustomEvent('imdb-enhanced:marks-updated'));
+        },
+        destroy() {
+            removeCSS('enh-watchedMarking');
+            if (this._clickHandler) document.body.removeEventListener('click', this._clickHandler, true);
+            this._clickHandler = null;
+            this._observer?.disconnect();
+            this._observer = null;
+            cancelAnimationFrame(this._raf);
+            document.querySelectorAll('.enh-markable-card').forEach(card => {
+                card.classList.remove('enh-markable-card', 'enh-marked', 'enh-marked--watched', 'enh-marked--skip');
+                delete card.dataset.enhMarkId;
+                delete card.dataset.enhMarkTitle;
+                card.querySelectorAll('.enh-mark-controls,.enh-mark-badge').forEach(el => el.remove());
+            });
+        }
+    });
+
     // #########################################################################
     //
     //  TV SHOW FEATURES
@@ -2707,6 +2927,48 @@ section[id*="quote" i] .ipc-list-card { padding: 4px 0 !important; margin: 2px 0
     box-shadow: 0 0 0 2px ${t.accentMuted};
 }
 
+/* ════ Mark Review Panel ════ */
+.enh-marks-panel {
+    margin: 14px 0 4px;
+    padding: 12px;
+    border: 1px solid ${t.bd1};
+    border-radius: 10px;
+    background: ${t.sf1};
+}
+.enh-marks-panel__header {
+    display: flex; justify-content: space-between; align-items: center;
+    gap: 10px; margin-bottom: 10px;
+}
+.enh-marks-panel__title { color: ${t.tx1}; font: 700 12px/1.3 -apple-system, BlinkMacSystemFont, 'Segoe UI', sans-serif; }
+.enh-marks-panel__count { color: ${t.tx3}; font: 600 11px/1.3 -apple-system, BlinkMacSystemFont, 'Segoe UI', sans-serif; }
+.enh-marks-panel__rows { display: flex; flex-direction: column; gap: 6px; max-height: 220px; overflow: auto; }
+.enh-mark-row {
+    display: grid; grid-template-columns: minmax(0, 1fr) auto auto auto;
+    gap: 6px; align-items: center;
+    padding: 7px; border: 1px solid ${t.bd0}; border-radius: 8px;
+    background: ${t.sf0};
+}
+.enh-mark-row__title { min-width: 0; color: ${t.tx1}; font: 600 11px/1.25 -apple-system, BlinkMacSystemFont, 'Segoe UI', sans-serif; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
+.enh-mark-row__id { color: ${t.tx3}; font-weight: 500; margin-left: 4px; }
+.enh-mark-row__state {
+    padding: 3px 7px; border-radius: 999px;
+    background: ${t.accentMuted}; color: ${t.accent};
+    font: 800 10px/1 -apple-system, BlinkMacSystemFont, 'Segoe UI', sans-serif;
+    text-transform: uppercase; letter-spacing: .04em;
+}
+.enh-mark-row__state--skip { background: ${t.redMuted}; color: ${t.red}; }
+.enh-mark-row__link {
+    color: ${t.blue} !important; text-decoration: none !important;
+    font: 700 11px/1 -apple-system, BlinkMacSystemFont, 'Segoe UI', sans-serif;
+}
+.enh-mark-row__clear {
+    width: 26px; height: 26px; border-radius: 7px;
+    border: 1px solid ${t.bd1}; background: ${t.sf1}; color: ${t.tx2};
+    cursor: pointer; font: 800 13px/1 -apple-system, BlinkMacSystemFont, 'Segoe UI', sans-serif;
+}
+.enh-mark-row__clear:hover { border-color: ${t.red}; color: ${t.red}; }
+.enh-marks-empty { color: ${t.tx3}; font: 500 11px/1.4 -apple-system, BlinkMacSystemFont, 'Segoe UI', sans-serif; }
+
 /* ════ FAB ════ */
 #enh-settings-fab {
     position: fixed; bottom: 20px; left: 20px;
@@ -2728,6 +2990,8 @@ section[id*="quote" i] .ipc-list-card { padding: 4px 0 !important; margin: 2px 0
 #enh-link-menu-trigger:focus-visible,
 .enh-link-dropdown__item:focus-visible,
 #enh-copy-id:focus-visible,
+.enh-mark-btn:focus-visible,
+.enh-mark-row__clear:focus-visible,
 .enh-site-remove:focus-visible,
 .enh-settings-footer-btn:focus-visible,
 .enh-settings-close:focus-visible,
@@ -2758,6 +3022,8 @@ section[id*="quote" i] .ipc-list-card { padding: 4px 0 !important; margin: 2px 0
     .enh-settings-footer { align-items: flex-start; flex-direction: column; }
     .enh-settings-footer-note { text-align: left; max-width: none; }
     .enh-site-row { grid-template-columns: 1fr 1fr 34px 30px; }
+    .enh-mark-row { grid-template-columns: minmax(0, 1fr) auto auto; }
+    .enh-mark-row__link { display: none; }
 }
         `, 'enh-global');
     }
@@ -2871,6 +3137,75 @@ section[id*="quote" i] .ipc-list-card { padding: 4px 0 !important; margin: 2px 0
         getSiteList(key, defaults).forEach(site => addRow(site));
         editor.appendChild(rows);
         return editor;
+    }
+
+    function createMarksPanel() {
+        const panel = makeEl('div', { className:'enh-marks-panel' });
+        const count = makeEl('div', { className:'enh-marks-panel__count' });
+        const rows = makeEl('div', { className:'enh-marks-panel__rows' });
+        const clearAll = makeEl('button', {
+            type:'button',
+            className:'enh-settings-footer-btn',
+            onClick: () => {
+                const entries = getUserMarkEntries();
+                if (!entries.length) return;
+                if (!confirm(`Clear ${entries.length} saved title marks?`)) return;
+                setUserMarks({});
+                refreshFeature('watchedMarking');
+                render();
+                showToast('All title marks cleared');
+            },
+        }, 'Clear all');
+
+        const render = () => {
+            const entries = getUserMarkEntries();
+            count.textContent = `${entries.length} saved`;
+            clearAll.disabled = entries.length === 0;
+            rows.replaceChildren();
+            if (!entries.length) {
+                rows.appendChild(makeEl('div', { className:'enh-marks-empty' }, 'No local title marks yet.'));
+                return;
+            }
+            entries.forEach(([id, record]) => {
+                const title = record.title || id;
+                const state = record.state === 'watched' ? 'Watched' : 'Skip';
+                const titleEl = makeEl('div', { className:'enh-mark-row__title', title },
+                    title,
+                    record.title ? makeEl('span', { className:'enh-mark-row__id' }, id) : ''
+                );
+                const stateEl = makeEl('div', {
+                    className:'enh-mark-row__state' + (record.state === 'skip' ? ' enh-mark-row__state--skip' : ''),
+                }, state);
+                const open = makeEl('a', {
+                    href:`https://www.imdb.com/title/${id}/`,
+                    target:'_blank',
+                    rel:'noopener',
+                    className:'enh-mark-row__link',
+                }, 'Open');
+                const clear = makeEl('button', {
+                    type:'button',
+                    className:'enh-mark-row__clear',
+                    title:`Clear ${title}`,
+                    'aria-label':`Clear mark for ${title}`,
+                    onClick: () => {
+                        setUserMark(id, '');
+                        refreshFeature('watchedMarking');
+                        render();
+                        showToast('Mark cleared');
+                    },
+                }, 'x');
+                rows.appendChild(makeEl('div', { className:'enh-mark-row' }, titleEl, stateEl, open, clear));
+            });
+        };
+
+        panel.appendChild(makeEl('div', { className:'enh-marks-panel__header' },
+            makeEl('div', { className:'enh-marks-panel__title' }, 'My title marks'),
+            makeEl('div', { className:'enh-site-editor__actions' }, count, clearAll)
+        ));
+        panel.appendChild(rows);
+        document.addEventListener('imdb-enhanced:marks-updated', render);
+        render();
+        return panel;
     }
 
     function createSettingsPanel() {
@@ -2995,6 +3330,8 @@ section[id*="quote" i] .ipc-list-card { padding: 4px 0 !important; margin: 2px 0
             defaults:DEFAULT_EXTERNAL_SITES,
             featureKey:'externalLinks',
         }));
+        body.appendChild(makeEl('div', { className:'enh-settings-group-label' }, 'Local marks'));
+        body.appendChild(createMarksPanel());
 
         const importPanel = makeEl('div', { className:'enh-import-panel', hidden:'hidden' },
             makeEl('label', { className:'enh-import-label', for:'enh-import-textarea' }, 'Paste exported settings JSON'),

@@ -16,6 +16,7 @@
 - 2026-05-24 — Hardened `getTitleYear()` with JSON-LD release candidates (`datePublished`, release/start dates, release events) plus stable DOM, Open Graph, heading, and document-title regex fallbacks.
 - 2026-05-24 — Added inline JustWatch streaming availability. The old unauthenticated JustWatch API endpoints now return 401/404, so the feature fetches public `www.justwatch.com` SSR title/search pages, parses provider names from metadata/JSON-LD, caches misses, and renders a compact provider widget in the rating bar.
 - 2026-05-24 — Added Light and High contrast theme variants plus opt-in `themeAuto` system-theme following. Theme CSS now emits the correct `color-scheme`, refreshes dependent header/rating styles on theme changes, and keeps the existing Dark default for current users.
+- 2026-05-24 — Added local Watched / Skip marking. Poster cards and the hero poster get hover controls, saved marks render with badges/dimmed cards wherever the same IMDb ID appears, and the settings panel now includes a local marks review/clear section backed by exported `userMarks` data.
 
 ---
 
@@ -688,10 +689,11 @@ Same item, listed here for completeness — it is both an existing-feature relia
   - Acceptance: Light and High contrast swatches are available; OS light/dark changes resolve to Light/Dark and update active swatches when `themeAuto = true`.
   - Verify: `node --check IMDb_Enhanced.user.js`; `rg "color-scheme: dark" IMDb_Enhanced.user.js` returns no hard-coded theme shell.
 
-- [ ] **P2** — Personal Watched / Skip marks (NF-5)
+- [x] **P2** — Personal Watched / Skip marks (NF-5)
   - Why: Power-user retention; doesn't require IMDb login.
   - Touches: Poster-card delegated listener; settings review panel.
-  - Acceptance: Marks persist + show on MoreLikeThis posters.
+  - Acceptance: Watched / Skip marks persist in `userMarks`, render on hero and poster cards, and can be reviewed or cleared from settings.
+  - Verify: `node --check IMDb_Enhanced.user.js`; delegated controls write local mark state and resync visible marked cards.
 
 - [ ] **P2** — Sonarr / Radarr quick-add (NF-7)
   - Why: Self-hosters demand it; precedent in Greasy Fork.
