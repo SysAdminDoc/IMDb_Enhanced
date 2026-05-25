@@ -31,6 +31,7 @@
 - 2026-05-24 — Swapped Trakt links from query-string search URLs to direct IMDb ID search paths with `id_type=movie/show`.
 - 2026-05-24 — Completed keyboard-shortcut collision cleanup. Settings now uses `?` instead of comma/bare `s`, while copy/rating/top shortcuts remain opt-in and disabled by default.
 - 2026-05-24 — Improved watch-site accessibility. The watch row now renders as a labeled region with real links, stronger visual emphasis, larger tap targets, and preserved Cineby query handoff on normal clicks.
+- 2026-05-25 — Reduced console noise from IMDb title pages: Servarr API key fields now live inside a real settings form with password autocomplete hints, and initial/SPA route initialization is delayed until after page load/route settle to avoid racing IMDb's Next.js hydration.
 
 ---
 

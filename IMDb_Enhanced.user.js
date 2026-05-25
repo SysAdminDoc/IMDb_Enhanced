@@ -3709,10 +3709,11 @@ section[id*="quote" i] .ipc-list-card { padding: 4px 0 !important; margin: 2px 0
         const id = `enh-setting-${key}`;
         const input = makeEl('input', {
             id,
+            name:key,
             type,
             className:'enh-servarr-input',
             placeholder,
-            autocomplete:'off',
+            autocomplete: type === 'password' ? 'new-password' : 'off',
             spellcheck:'false',
         });
         input.value = get(key) || '';
@@ -3764,7 +3765,10 @@ section[id*="quote" i] .ipc-list-card { padding: 4px 0 !important; margin: 2px 0
             );
         };
 
-        return makeEl('div', { className:'enh-servarr-panel' },
+        const panel = makeEl('form', {
+            className:'enh-servarr-panel',
+            autocomplete:'off',
+        },
             section({
                 title:'Radarr',
                 fields:[
@@ -3788,6 +3792,8 @@ section[id*="quote" i] .ipc-list-card { padding: 4px 0 !important; margin: 2px 0
                 'API keys are stored locally in plain text. This build allows userscript requests only to localhost and 127.0.0.1.'
             )
         );
+        panel.addEventListener('submit', e => e.preventDefault());
+        return panel;
     }
 
     function createMarksPanel() {
@@ -4124,6 +4130,7 @@ section[id*="quote" i] .ipc-list-card { padding: 4px 0 !important; margin: 2px 0
     let routeInitCount = 0;
     let routerInstalled = false;
     let routeTimer = null;
+    let initTimer = null;
 
     function isIMDbHost() {
         return window.location.hostname.includes('imdb.com');
@@ -4150,11 +4157,16 @@ section[id*="quote" i] .ipc-list-card { padding: 4px 0 !important; margin: 2px 0
         document.getElementById('enh-toast')?.remove();
     }
 
+    function scheduleInit(delay = 350) {
+        clearTimeout(initTimer);
+        initTimer = setTimeout(init, delay);
+    }
+
     function scheduleRouteInit() {
         clearTimeout(routeTimer);
         routeTimer = setTimeout(() => {
-            if (activeRouteKey !== getRouteKey()) init();
-        }, 120);
+            if (activeRouteKey !== getRouteKey()) scheduleInit(350);
+        }, 250);
     }
 
     function installSPARouter() {
@@ -4199,7 +4211,8 @@ section[id*="quote" i] .ipc-list-card { padding: 4px 0 !important; margin: 2px 0
     }
 
     if (isIMDbHost()) installSPARouter();
-    if (document.readyState === 'complete' || document.readyState === 'interactive') init();
-    else document.addEventListener('DOMContentLoaded', init);
+    // Let IMDb's Next.js hydration settle before mutating title-page DOM.
+    if (document.readyState === 'complete') scheduleInit(250);
+    else window.addEventListener('load', () => scheduleInit(250), { once:true });
 
 })();
