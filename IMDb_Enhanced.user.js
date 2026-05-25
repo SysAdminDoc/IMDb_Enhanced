@@ -75,7 +75,7 @@
         { name:'YouTube', color:'#ff0000', url:'https://www.youtube.com/results?search_query={{TITLE}}%20trailer' },
         { name:'Wikipedia', color:'#636466', url:'https://en.wikipedia.org/w/index.php?search={{TITLE}}+film' },
         { name:'JustWatch', color:'#fbc500', url:'https://www.justwatch.com/us/search?q={{TITLE}}' },
-        { name:'Trakt', color:'#ed1c24', url:'https://trakt.tv/search/imdb?query={{IMDB_ID}}' },
+        { name:'Trakt', color:'#ed1c24', url:'https://trakt.tv/search/imdb/{{IMDB_ID}}?id_type={{TRAKT_TYPE}}' },
     ];
 
     const DEFAULTS = {
@@ -405,6 +405,7 @@
             TITLE_SLUG: rawTitle.toLowerCase().replace(/[^a-z0-9\s]/g, '').trim().replace(/\s+/g, '-'),
             IMDB_ID: imdbId || '',
             IMDB_NUM: (imdbId || '').replace(/^tt/, ''),
+            TRAKT_TYPE: isTVType() ? 'show' : 'movie',
             YEAR: year || '',
         };
     }
@@ -2315,7 +2316,7 @@ section[id*="quote" i] .ipc-list-card { padding: 4px 0 !important; margin: 2px 0
                 { n:'AllMovie', u:'http://www.allmovie.com/search/movies/{{T}}' },
                 { n:'Box Office Mojo', u:'https://www.boxofficemojo.com/search/?q={{T}}' },
                 { n:'Criticker', u:'https://www.criticker.com/?search=tt{{ID}}' },
-                { n:'Trakt', u:'https://trakt.tv/search/imdb?query={{ID}}' },
+                { n:'Trakt', u:'https://trakt.tv/search/imdb/{{ID}}?id_type={{TRAKT_TYPE}}' },
             ],
             'Reviews': [
                 { n:'Rotten Tomatoes', u:'https://www.rottentomatoes.com/search?search={{T}}' },
@@ -2349,6 +2350,7 @@ section[id*="quote" i] .ipc-list-card { padding: 4px 0 !important; margin: 2px 0
                 const title = getTitleText(), year = getTitleYear(), imdbId = getIMDbID();
                 if (!title || !imdbId) return;
                 const buildUrl = (tpl) => tpl.replace(/\{\{ID\}\}/g, imdbId)
+                    .replace(/\{\{TRAKT_TYPE\}\}/g, isTVType() ? 'show' : 'movie')
                     .replace(/\{\{T\}\}/g, encodeURIComponent(title)).replace(/\{\{Y\}\}/g, year);
 
                 const container = makeEl('div', { id:'enh-link-menu-wrap' });
@@ -2888,7 +2890,7 @@ section[id*="quote" i] .ipc-list-card { padding: 4px 0 !important; margin: 2px 0
                     { l:'Episodes List', u:`https://www.imdb.com/title/${imdbId}/episodes/` },
                     { l:'TheTVDB', u:`https://www.thetvdb.com/search?query=tt${imdbId}` },
                     { l:'TVMaze', u:`https://www.tvmaze.com/search?q=${encodeURIComponent(title)}` },
-                    { l:'Trakt', u:`https://trakt.tv/search/imdb?query=${imdbId}` },
+                    { l:'Trakt', u:`https://trakt.tv/search/imdb/${imdbId}?id_type=show` },
                     { l:'Ep Calendar', u:`https://episodecalendar.com/en/shows?q%5Bname_cont%5D=${encodeURIComponent(title)}` },
                 ].forEach(c => bar.appendChild(makeEl('a', { href:c.u, target:'_blank', rel:'noopener', className:'enh-tv-chip' }, c.l)));
 

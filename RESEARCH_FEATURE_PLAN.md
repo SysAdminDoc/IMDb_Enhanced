@@ -28,6 +28,7 @@
 - 2026-05-24 — Added an in-page Trailer popover. The feature appends a Trailer control, fetches YouTube search results on click, caches the first parsed video ID, and embeds it through `youtube-nocookie.com` with a YouTube search fallback.
 - 2026-05-24 — Added watchlist batch IMDb-ID copy. The userscript now matches `/user/*/watchlist*`, initializes only watchlist-safe features on that route, and renders a sticky button that copies deduped visible `tt…` IDs.
 - 2026-05-24 — Made `getMediaType()` granular. It now returns `series`, `episode`, `miniseries`, `short`, or `movie`, with `isTVType()` preserving existing TV gating call sites.
+- 2026-05-24 — Swapped Trakt links from query-string search URLs to direct IMDb ID search paths with `id_type=movie/show`.
 
 ---
 
@@ -459,9 +460,10 @@ Same item, listed here for completeness — it is both an existing-feature relia
 - **Complexity**: M — **P1**
 
 ### IM-17 — Trakt URL — go direct
-- **Current**: `https://trakt.tv/search/imdb?query=tt…` — lands on a search-results page.
-- **Problem**: User has to click once more.
-- **Fix**: Use `https://trakt.tv/redirect/imdb/tt…` (or `https://trakt.tv/find?q=tt…` which 302s direct to the title). Verify with one sample.
+- **Status**: Complete as of 2026-05-24.
+- **Current**: Trakt links use `https://trakt.tv/search/imdb/tt…?id_type=movie|show`.
+- **Problem**: Resolved; links route by IMDb ID and media type instead of the generic query parameter search page.
+- **Fix**: Use Trakt's IMDb ID path with `id_type`.
 - **Touches**: [IMDb_Enhanced.user.js:1314](IMDb_Enhanced.user.js#L1314), [IMDb_Enhanced.user.js:1337](IMDb_Enhanced.user.js#L1337), [IMDb_Enhanced.user.js:1439](IMDb_Enhanced.user.js#L1439).
 - **Verify**: Each link lands on the title page in one hop.
 - **Complexity**: S — **P3**
@@ -763,7 +765,7 @@ Same item, listed here for completeness — it is both an existing-feature relia
 - [x] **P3** — Trailer popover (NF-8)
 - [x] **P3** — Watchlist batch IMDb-ID copy (NF-10)
 - [x] **P3** — `getMediaType` returns granular kinds (IM-19)
-- [ ] **P3** — Direct Trakt redirect URL (IM-17)
+- [x] **P3** — Direct Trakt redirect URL (IM-17)
 - [ ] **P3** — Keyboard-shortcut collision audit (IM-15)
 - [ ] **P3** — Publish to Greasy Fork (precondition: P0 connect-whitelist + P0 update-URL fixed; consider removing grey-market default sites first)
 - [ ] **P3** — README + screenshots + CHANGELOG (move from gitignored `CODEX_CHANGELOG.md` to a tracked file)
@@ -785,7 +787,7 @@ These are <= 1-hour changes with clear value:
 8. **Console info stamp** at init: `[IMDb Enhanced] v2.3.1 — N features enabled`.
 9. **Done 2026-05-24** — Settings panel: focus the close button on open (IM-10).
 10. **Drop the `,` keyboard shortcut**, keep `s` only (IM-15 part).
-11. **Direct Trakt redirect URL** swap (IM-17) — one-line per call site.
+11. **Done 2026-05-24** — Direct Trakt redirect URL swap (IM-17).
 
 ---
 
