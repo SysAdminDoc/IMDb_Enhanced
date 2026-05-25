@@ -131,7 +131,7 @@
         inlineLetterboxdScore: 'Shows Letterboxd average ratings inline for films when available.',
         inlineMetacriticScore: 'Shows Metacritic score feedback inline when available.',
         streamAvailability: 'Shows one-glance JustWatch streaming providers when available.',
-        searchButtons: 'Adds compact watch-search launch buttons near the title.',
+        searchButtons: 'Adds prominent, keyboard-friendly watch-site links near the title.',
         externalLinks: 'Adds trusted research and trailer links near the title.',
         expandedLinkMenu: 'Groups additional movie, review, subtitle, and TV lookup links.',
         trailerPopover: 'Adds an in-page trailer modal backed by a click-to-fetch YouTube lookup.',
@@ -2099,20 +2099,27 @@ section[id*="quote" i] .ipc-list-card { padding: 4px 0 !important; margin: 2px 0
                 if (!title) return;
                 const ctx = getLinkContext(title);
                 const sites = getSiteList('watchSites', DEFAULT_WATCH_SITES);
-                const wrap = makeEl('div', { id:'enh-search-buttons' });
+                const wrap = makeEl('section', {
+                    id:'enh-search-buttons',
+                    role:'region',
+                    'aria-label':'Watch movie and show sites',
+                });
                 const label = makeEl('div', { className:'enh-stream-label' },
                     makeEl('span', { className:'enh-stream-label__dot' }),
-                    'WATCH SEARCH'
+                    'WATCH MOVIES & SHOWS'
                 );
                 const row = makeEl('div', { className:'enh-search-row' });
                 sites.forEach(site => {
                     const url = site.storeQuery ? getCinebyHost() : applyLinkTemplate(site.url, ctx);
-                    const btn = makeEl('button', {
-                        type:'button',
+                    const btn = makeEl('a', {
+                        href:url,
+                        target:'_blank',
+                        rel:'noopener',
                         className:'enh-search-btn',
                         dataset:{ url, storeQuery:String(Boolean(site.storeQuery)) },
                         style:{ '--btn-color':site.color },
-                        'aria-label': `Search ${site.name} for ${title}`,
+                        title:`Search ${site.name} for ${title}`,
+                        'aria-label': `Open ${site.name} search for ${title}`,
                     }, makeEl('span', {}, site.name));
                     row.appendChild(btn);
                 });
@@ -2122,7 +2129,6 @@ section[id*="quote" i] .ipc-list-card { padding: 4px 0 !important; margin: 2px 0
                 wrap.querySelectorAll('.enh-search-btn').forEach(btn => {
                     btn.addEventListener('click', () => {
                         if (btn.dataset.storeQuery === 'true') GM_setValue(CINEBY_QUERY_KEY, title);
-                        window.open(btn.dataset.url, '_blank');
                     });
                 });
             }).catch(() => {});
@@ -3058,8 +3064,9 @@ section[id*="quote" i] .ipc-list-card { padding: 4px 0 !important; margin: 2px 0
     margin: 12px 0 8px;
     padding: 10px 12px 11px;
     background: ${t.sf0};
-    border: 1px solid ${t.bd0};
+    border: 1px solid ${t.accentBorder};
     border-radius: 10px;
+    box-shadow: ${t.sh1};
 }
 .enh-stream-label {
     display: flex; align-items: center; gap: 6px;
@@ -3073,18 +3080,20 @@ section[id*="quote" i] .ipc-list-card { padding: 4px 0 !important; margin: 2px 0
 }
 .enh-search-row {
     display: grid;
-    grid-template-columns: repeat(auto-fit, minmax(98px, 1fr));
+    grid-template-columns: repeat(auto-fit, minmax(112px, 1fr));
     gap: 6px;
 }
 .enh-search-btn {
     display: flex; align-items: center; justify-content: center;
-    padding: 8px 6px;
+    min-height: 38px;
+    padding: 8px 8px;
     background: color-mix(in srgb, var(--btn-color) 14%, ${t.sf1});
     border: 1px solid color-mix(in srgb, var(--btn-color) 24%, transparent);
     border-radius: 8px;
     color: color-mix(in srgb, var(--btn-color) 88%, #fff);
     font: 600 12px/1.2 -apple-system, BlinkMacSystemFont, 'Segoe UI', sans-serif;
     cursor: pointer; transition: background .18s cubic-bezier(.4,0,.2,1), border-color .18s ease, color .18s ease, transform .18s cubic-bezier(.4,0,.2,1), box-shadow .18s ease; outline: none;
+    text-decoration: none !important;
     text-align: center; white-space: nowrap; min-width: 0;
 }
 .enh-search-btn:hover {

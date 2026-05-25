@@ -30,6 +30,7 @@
 - 2026-05-24 — Made `getMediaType()` granular. It now returns `series`, `episode`, `miniseries`, `short`, or `movie`, with `isTVType()` preserving existing TV gating call sites.
 - 2026-05-24 — Swapped Trakt links from query-string search URLs to direct IMDb ID search paths with `id_type=movie/show`.
 - 2026-05-24 — Completed keyboard-shortcut collision cleanup. Settings now uses `?` instead of comma/bare `s`, while copy/rating/top shortcuts remain opt-in and disabled by default.
+- 2026-05-24 — Improved watch-site accessibility. The watch row now renders as a labeled region with real links, stronger visual emphasis, larger tap targets, and preserved Cineby query handoff on normal clicks.
 
 ---
 
@@ -163,7 +164,7 @@ Grouped exactly as in the source: Cleanup (7), Appearance (5), Layout (3), Score
 | 15 | Collapsible sections | Per-section collapse button, persists | Auto on imdb.com | [IMDb_Enhanced.user.js:1136-1180](IMDb_Enhanced.user.js#L1136-L1180) | Complete | None | CSS exception `[class*="title"]` is too broad — `tm-box-addtolist-button` and other classes match. Use explicit allow-list. |
 | 16 | Spoiler blur on plot | Blurs `plot-l`/`plot-xl` until click | Auto | [IMDb_Enhanced.user.js:1182-1208](IMDb_Enhanced.user.js#L1182-L1208) | Partial — only one plot field; episode titles / synopses still spoil | None | Extend to per-episode rows, MoreLikeThis poster titles, sub-section editorial |
 | 17 | Section navigator | Right-rail dot nav | Auto ≥ 1200 px | [IMDb_Enhanced.user.js:1210-1253](IMDb_Enhanced.user.js#L1210-L1253) | Complete | None | No active-section highlighting; no keyboard navigation; single-letter icons are not screen-reader friendly even with `aria-label` |
-| 18 | Watch search buttons | Configurable row of watch-search sites | Auto | [IMDb_Enhanced.user.js:1261-1297](IMDb_Enhanced.user.js#L1261-L1297) | Complete | None | Defaults preserve the old list; settings allow add/remove/reset |
+| 18 | Watch search buttons | Configurable row of watch-site links | Auto | [IMDb_Enhanced.user.js:1261-1297](IMDb_Enhanced.user.js#L1261-L1297) | Complete | None | Real links, labeled region, larger tap targets; settings allow add/remove/reset |
 | 19 | External links bar | Configurable RT, Letterboxd, TMDB, YouTube, Wikipedia, JustWatch, Trakt-style links | Auto | [IMDb_Enhanced.user.js:1299-1325](IMDb_Enhanced.user.js#L1299-L1325) | Complete | None | Settings allow add/remove/reset; Letterboxd link uses `/imdb/{id}/` |
 | 20 | Expanded link menu | "More links" dropdown grouping 7 categories | Auto, depends on #19 | [IMDb_Enhanced.user.js:1328-1408](IMDb_Enhanced.user.js#L1328-L1408) | Complete | None | Subtitles now use SubDL + movie-only YIFY; `Torrents` group surfaces only on `expandedLinkMenu = true` — should also gate behind explicit user opt-in |
 | 21 | TV show quick links | Chip row of TV-DB / TVMaze / Trakt / Ep Calendar | Auto on TV | [IMDb_Enhanced.user.js:1416-1448](IMDb_Enhanced.user.js#L1416-L1448) | Complete | None | Could add Sonarr/Radarr quick-add (compare with "Universal Servarr Add Tool" on Greasy Fork) |
@@ -577,7 +578,7 @@ Same item, listed here for completeness — it is both an existing-feature relia
 - **Single-letter icons in QuickNav** ("O", "C", "R", "S", "D", "$", "?") — `aria-label` mitigates, but sighted users have to memorise; consider a configurable show-labels mode.
 
 ### Microcopy and trust signals
-- **"WATCH SEARCH" / "TOMATOMETER" / "METASCORE" all uppercase** — visually inconsistent with IMDb's sentence-case treatment. The polish commit moved feature names to sentence case ("Hide news modules"); apply the same rule to widget labels.
+- **Score widgets still use uppercase labels** ("TOMATOMETER" / "METASCORE"); watch-site access now uses clearer "WATCH MOVIES & SHOWS" copy.
 - **No version chip in the page** outside the settings panel — power users can't tell at a glance which version is running.
 - **No update-available indicator** in the FAB even if `@updateURL` worked. (Tampermonkey handles updates separately, but a soft prompt is friendly.)
 
