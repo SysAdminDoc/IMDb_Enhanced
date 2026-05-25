@@ -8,7 +8,8 @@
 // @match        https://www.imdb.com/name/*
 // @match        https://www.imdb.com/*/title/*
 // @match        https://www.imdb.com/*/name/*
-// @match        https://m.imdb.com/*
+// @match        https://m.imdb.com/title/*
+// @match        https://m.imdb.com/name/*
 // @match        https://www.cineby.app/search
 // @match        https://www.cineby.gd/search
 // @match        https://www.cineby.sc/search

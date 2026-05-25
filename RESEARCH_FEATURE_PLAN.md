@@ -22,6 +22,7 @@
 - 2026-05-24 — Consolidated IMDb rating color state. `enhancedRatingDisplay` now owns the rating pill/sizing only, while `ratingColorCoding` owns score color, score shadow, badge variables, and complete cleanup on disable.
 - 2026-05-24 — Fixed settings dialog initial focus. Opening settings now focuses the first visible interactive control using the same focusable-element lookup as the dialog trap, with the panel container retained only as a fallback.
 - 2026-05-24 — Added Cineby host preference and namespaced query handoff. Settings can switch between the three matched Cineby hosts, search buttons use `imdb_enh_cineby_query`, and the Cineby-side autofill clears both the new key and legacy `movieTitle` key after consumption.
+- 2026-05-24 — Tightened mobile IMDb match scope from all `m.imdb.com/*` pages to only mobile title and name pages.
 
 ---
 
@@ -64,7 +65,7 @@ Top opportunities, priority order:
 
 ### Headers & metadata
 - `@updateURL` / `@downloadURL` were removed on 2026-05-24 because `SysAdminDoc/IMDb-Enhanced` does not exist and this checkout has no remote. **Verified**: no dead update URL remains in the userscript.
-- `@match` covers `imdb.com/title/*`, `imdb.com/name/*`, `imdb.com/*/title/*` (locale prefix), `imdb.com/*/name/*`, `m.imdb.com/*`, and three `cineby.*` search hosts.
+- `@match` covers `imdb.com/title/*`, `imdb.com/name/*`, `imdb.com/*/title/*` (locale prefix), `imdb.com/*/name/*`, `m.imdb.com/title/*`, `m.imdb.com/name/*`, and three `cineby.*` search hosts.
 - `@grant` set: `GM_getValue`, `GM_setValue`, `GM_addStyle`, `GM_setClipboard`, `GM_xmlhttpRequest`, `GM_listValues`, `GM_deleteValue`.
 - `@connect` set: `www.rottentomatoes.com`, `backend.metacritic.com`, `letterboxd.com`, `www.justwatch.com`, `www.opensubtitles.org`, `localhost`, and `127.0.0.1`. Wildcard access was removed on 2026-05-24.
 
@@ -415,9 +416,10 @@ Same item, listed here for completeness — it is both an existing-feature relia
 - **Complexity**: S — **P2**
 
 ### IM-12 — `m.imdb.com/*` match scope
-- **Current**: `@match https://m.imdb.com/*` — matches the mobile site's homepage, search, lists, everything ([IMDb_Enhanced.user.js:11](IMDb_Enhanced.user.js#L11)).
-- **Problem**: Cleanup CSS injects on every mobile page, but feature widgets that depend on desktop `data-testid` quietly time out everywhere. Bloats memory; many features just do nothing.
-- **Fix**: Either drop `m.imdb.com` (mobile redirects to `www.imdb.com` if `?ref_=*` is present anyway) OR scope to `m.imdb.com/title/*` and `m.imdb.com/name/*` and add mobile-specific selectors where useful.
+- **Status**: Complete as of 2026-05-24.
+- **Current**: Mobile matches are scoped to `m.imdb.com/title/*` and `m.imdb.com/name/*`.
+- **Problem**: Resolved for mobile homepage/search/list pages; feature widgets no longer initialize there.
+- **Fix**: Scoped mobile matching to title and name pages.
 - **Verify**: Loading the mobile homepage no longer runs any script.
 - **Complexity**: S — **P2**
 
@@ -732,9 +734,10 @@ Same item, listed here for completeness — it is both an existing-feature relia
   - Acceptance: Switch host → search lands on chosen host; query handoff uses `imdb_enh_cineby_query` and clears after auto-fill.
   - Verify: `node --check IMDb_Enhanced.user.js`; `rg "GM_setValue\\('movieTitle'" IMDb_Enhanced.user.js` returns no matches.
 
-- [ ] **P2** — Tighten `m.imdb.com` match scope (IM-12)
+- [x] **P2** — Tighten `m.imdb.com` match scope (IM-12)
   - Why: Avoid running on irrelevant mobile pages.
   - Acceptance: Mobile homepage no longer runs the script.
+  - Verify: `node --check IMDb_Enhanced.user.js`; header has no `@match https://m.imdb.com/*`.
 
 - [ ] **P2** — RT slug multi-delimiter strategy (IM-18)
   - Why: Higher direct-hit rate.
