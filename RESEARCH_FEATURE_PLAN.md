@@ -29,6 +29,7 @@
 - 2026-05-24 — Added watchlist batch IMDb-ID copy. The userscript now matches `/user/*/watchlist*`, initializes only watchlist-safe features on that route, and renders a sticky button that copies deduped visible `tt…` IDs.
 - 2026-05-24 — Made `getMediaType()` granular. It now returns `series`, `episode`, `miniseries`, `short`, or `movie`, with `isTVType()` preserving existing TV gating call sites.
 - 2026-05-24 — Swapped Trakt links from query-string search URLs to direct IMDb ID search paths with `id_type=movie/show`.
+- 2026-05-24 — Completed keyboard-shortcut collision cleanup. Settings now uses `?` instead of comma/bare `s`, while copy/rating/top shortcuts remain opt-in and disabled by default.
 
 ---
 
@@ -116,7 +117,7 @@ Grouped exactly as in the source: Cleanup (7), Appearance (5), Layout (3), Score
 - **The dark-mode purist**: wants IMDb without ads or upsells, in a dark/OLED/midnight tone.
 - **The data triangulator**: wants RT + Metacritic next to the IMDb score on the same page.
 - **The torrent user**: uses the YTS / 1337x links + OpenSubtitles for self-hosting.
-- **The keyboard user**: opt-in single-key shortcuts (`,`, `s`, `c`, `r`, `t`, `Escape`).
+- **The keyboard user**: opt-in single-key shortcuts (`?`, `c`, `r`, `t`, `Escape`).
 
 ### Platforms & distribution
 - **Userscript managers**: Tampermonkey / Violentmonkey / (probably) Greasemonkey. Tested in Chromium-based Tampermonkey is the implicit baseline.
@@ -168,7 +169,7 @@ Grouped exactly as in the source: Cleanup (7), Appearance (5), Layout (3), Score
 | 21 | TV show quick links | Chip row of TV-DB / TVMaze / Trakt / Ep Calendar | Auto on TV | [IMDb_Enhanced.user.js:1416-1448](IMDb_Enhanced.user.js#L1416-L1448) | Complete | None | Could add Sonarr/Radarr quick-add (compare with "Universal Servarr Add Tool" on Greasy Fork) |
 | 22 | Subtitle links | OpenSubtitles + OpenSubs.com + SubDL + YIFY-Subs + Addic7ed | Auto | [IMDb_Enhanced.user.js:1450-1471](IMDb_Enhanced.user.js#L1450-L1471) | Complete | None | YIFY is movie-only and hidden on TV pages |
 | 23 | Quick copy IMDb ID | Button next to title | Auto | [IMDb_Enhanced.user.js:1479-1496](IMDb_Enhanced.user.js#L1479-L1496) | Complete | None | Insertion target `titleEl.parentElement` differs from other buttons — visual rhythm drifts |
-| 24 | Optional keyboard shortcuts | Single-key bindings (opt-in, default OFF) | Manual toggle | [IMDb_Enhanced.user.js:1498-1513](IMDb_Enhanced.user.js#L1498-L1513) | Complete | None | Both `,` and `s` open settings — drop one; `s` collides with IMDb's own "/" search shortcut habits |
+| 24 | Optional keyboard shortcuts | Single-key bindings (opt-in, default OFF) | Manual toggle | [IMDb_Enhanced.user.js:1498-1513](IMDb_Enhanced.user.js#L1498-L1513) | Complete | None | Settings uses `?`; bare `s` and comma bindings were removed |
 | 25 | Theme variant | dark / oled / midnight | Settings panel | [IMDb_Enhanced.user.js:325-422](IMDb_Enhanced.user.js#L325-L422) + selector [1958-1989](IMDb_Enhanced.user.js#L1958-L1989) | Complete | None | No light theme; no `prefers-color-scheme` auto |
 
 ### Hidden / undocumented / non-toggleable behaviour
@@ -445,9 +446,10 @@ Same item, listed here for completeness — it is both an existing-feature relia
 - **Complexity**: S — **P2**
 
 ### IM-15 — `keyboardShortcuts` collision audit
-- **Current**: `,` and `s` both toggle settings; `c` copies ID; `r` scrolls to rating; `t` scrolls to top ([IMDb_Enhanced.user.js:1504-1508](IMDb_Enhanced.user.js#L1504-L1508)).
-- **Problem**: `s` collides with sites that use `s` for site-wide search. `,` is rarely typed but a long-form title with a comma in user-typed search collides if focus leaves the input.
-- **Fix**: Drop `,`; keep `s` but require Shift (`?`); document binding in settings.
+- **Status**: Complete as of 2026-05-24.
+- **Current**: `?` toggles settings; `c` copies ID; `r` scrolls to rating; `t` scrolls to top.
+- **Problem**: Resolved; bare `s` and comma no longer collide with site search or typed title punctuation.
+- **Fix**: Dropped `,` and bare `s`; documented the `?` binding in settings text.
 - **Verify**: Type "Bend it like Beckham, the sequel" into IMDb search box without triggering settings.
 - **Complexity**: S — **P3**
 
@@ -766,7 +768,7 @@ Same item, listed here for completeness — it is both an existing-feature relia
 - [x] **P3** — Watchlist batch IMDb-ID copy (NF-10)
 - [x] **P3** — `getMediaType` returns granular kinds (IM-19)
 - [x] **P3** — Direct Trakt redirect URL (IM-17)
-- [ ] **P3** — Keyboard-shortcut collision audit (IM-15)
+- [x] **P3** — Keyboard-shortcut collision audit (IM-15)
 - [ ] **P3** — Publish to Greasy Fork (precondition: P0 connect-whitelist + P0 update-URL fixed; consider removing grey-market default sites first)
 - [ ] **P3** — README + screenshots + CHANGELOG (move from gitignored `CODEX_CHANGELOG.md` to a tracked file)
 - [ ] **P3** — `package.json` + esbuild build step + version single-source-of-truth
@@ -786,7 +788,7 @@ These are <= 1-hour changes with clear value:
 7. **Reset-to-defaults button** in settings (recovery gap).
 8. **Console info stamp** at init: `[IMDb Enhanced] v2.3.1 — N features enabled`.
 9. **Done 2026-05-24** — Settings panel: focus the close button on open (IM-10).
-10. **Drop the `,` keyboard shortcut**, keep `s` only (IM-15 part).
+10. **Done 2026-05-24** — Drop comma/bare `s` settings shortcuts; use `?` instead (IM-15 part).
 11. **Done 2026-05-24** — Direct Trakt redirect URL swap (IM-17).
 
 ---

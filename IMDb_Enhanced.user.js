@@ -142,7 +142,7 @@
         subtitleLinks: 'Adds subtitle lookup links in the details section.',
         quickCopyID: 'Adds a visible IMDb ID copy button beside the title.',
         watchlistBatch: 'Adds a watchlist-page button that copies all visible IMDb title IDs.',
-        keyboardShortcuts: 'Optional. Enables single-key actions for users who want them.',
+        keyboardShortcuts: 'Optional. Enables ? for settings, c to copy, r for rating, and t for top.',
     };
 
     // =========================================================================
@@ -3001,7 +3001,7 @@ section[id*="quote" i] .ipc-list-card { padding: 4px 0 !important; margin: 2px 0
         init() {
             this._h = (e) => {
                 if (['INPUT','TEXTAREA','SELECT'].includes(e.target.tagName) || e.target.isContentEditable) return;
-                if (e.key === ',' || e.key === 's') { e.preventDefault(); toggleSettings(); }
+                if (e.key === '?') { e.preventDefault(); toggleSettings(); }
                 else if (e.key === 'c' && !e.ctrlKey && !e.metaKey) { const id = getIMDbID(); if (id) { GM_setClipboard(id); showToast(`Copied ${id}`); } }
                 else if (e.key === 'r') { document.querySelector('[data-testid="hero-rating-bar__aggregate-rating"]')?.scrollIntoView({behavior:'smooth',block:'center'}); }
                 else if (e.key === 't') { window.scrollTo({top:0,behavior:'smooth'}); }
