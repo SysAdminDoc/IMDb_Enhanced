@@ -2,6 +2,8 @@
 // @name         IMDb Enhanced
 // @namespace    https://github.com/SysAdminDoc
 // @version      2.3.1
+// @updateURL    https://raw.githubusercontent.com/SysAdminDoc/IMDb_Enhanced/main/IMDb_Enhanced.user.js
+// @downloadURL  https://raw.githubusercontent.com/SysAdminDoc/IMDb_Enhanced/main/IMDb_Enhanced.user.js
 // @description  Premium IMDb overhaul: cleaner pages, modern themes, refined score widgets, section controls, spoiler protection, quick navigation, richer external links, TV tools, search shortcuts, and polished settings import/export
 // @author       SysAdminDoc
 // @match        https://www.imdb.com/title/*
