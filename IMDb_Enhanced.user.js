@@ -1,7 +1,7 @@
 // ==UserScript==
 // @name         IMDb Enhanced
 // @namespace    https://github.com/SysAdminDoc
-// @version      2.3.1
+// @version      2.4.0
 // @updateURL    https://raw.githubusercontent.com/SysAdminDoc/IMDb_Enhanced/main/IMDb_Enhanced.user.js
 // @downloadURL  https://raw.githubusercontent.com/SysAdminDoc/IMDb_Enhanced/main/IMDb_Enhanced.user.js
 // @description  Premium IMDb overhaul: cleaner pages, modern themes, refined score widgets, section controls, spoiler protection, quick navigation, richer external links, TV tools, search shortcuts, and polished settings import/export
@@ -13,9 +13,7 @@
 // @match        https://www.imdb.com/user/*/watchlist*
 // @match        https://m.imdb.com/title/*
 // @match        https://m.imdb.com/name/*
-// @match        https://www.cineby.app/search
-// @match        https://www.cineby.gd/search
-// @match        https://www.cineby.sc/search
+// @match        https://www.cineby.at/search
 // @grant        GM_getValue
 // @grant        GM_setValue
 // @grant        GM_addStyle
@@ -42,7 +40,7 @@
     // =========================================================================
     //  CONSTANTS & CONFIG
     // =========================================================================
-    const VERSION = '2.3.1';
+    const VERSION = '2.4.0';
     const PREFIX  = 'imdb_enh_';
     const CINEBY_QUERY_KEY = PREFIX + 'cineby_query';
     const CACHE_TTL = 7 * 24 * 60 * 60 * 1000; // 7 days
@@ -57,18 +55,18 @@
         tvShowEnhancements: 40,
     };
     const CINEBY_HOSTS = [
-        { label:'Cineby SC', url:'https://www.cineby.sc/search' },
-        { label:'Cineby GD', url:'https://www.cineby.gd/search' },
-        { label:'Cineby App', url:'https://www.cineby.app/search' },
+        { label:'Cineby', url:'https://www.cineby.at/search' },
     ];
     const DEFAULT_WATCH_SITES = [
         { name:'Cineby', color:'#6366f1', url:CINEBY_HOSTS[0].url, storeQuery:true },
-        { name:'Popcorn', color:'#10b981', url:'https://popcornmovies.org/search/{{TITLE_DASH}}' },
-        { name:'XPrime', color:'#f59e0b', url:'https://xprime.su/search/{{TITLE_DASH}}' },
-        { name:'Aether', color:'#8b5cf6', url:'https://aether.mom/browse/{{TITLE}}' },
-        { name:'Fmovies+', color:'#ef4444', url:'https://fmovies.gd/search/{{TITLE_DASH}}' },
-        { name:'Rive', color:'#ec4899', url:'https://rivestream.app/search?q={{TITLE}}' },
-        { name:'67Movies', color:'#06b6d4', url:'https://67movies.net/search/{{TITLE_DASH}}' },
+        { name:'StreamXTV', color:'#10b981', url:'https://www.streamxtv.tech/search?q={{TITLE}}' },
+        { name:'LookMovie', color:'#f59e0b', url:'https://www.lookmovie2.to/movies/search/?q={{TITLE}}' },
+        { name:'CineVids', color:'#8b5cf6', url:'https://cinevids.site/?s={{TITLE}}' },
+        { name:'CinemaOS', color:'#ef4444', url:'https://cinemaos.live/search?q={{TITLE}}' },
+        { name:'LivNet', color:'#ec4899', url:'https://livnet.pages.dev/search?q={{TITLE}}' },
+        { name:'Flixer', color:'#06b6d4', url:'https://flixer.su/search?q={{TITLE}}' },
+        { name:'Cine.su', color:'#14b8a6', url:'https://cine.su/en/search' },
+        { name:'Fmovies+', color:'#f97316', url:'https://fmovies.gd/search/{{TITLE_DASH}}' },
     ];
     const DEFAULT_EXTERNAL_SITES = [
         { name:'Rotten Tomatoes', color:'#fa320a', url:'https://www.rottentomatoes.com/search?search={{TITLE}}' },
