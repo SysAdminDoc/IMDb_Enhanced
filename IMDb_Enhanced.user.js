@@ -93,7 +93,7 @@
         collapsibleSections: true, spoilerBlur: true, quickNav: true,
         // Scores
         inlineRTScore: true, inlineLetterboxdScore: true, inlineMetacriticScore: true,
-        streamAvailability: true,
+        ratingHistogram: true, streamAvailability: true,
         // Links
         searchButtons: true, externalLinks: true, expandedLinkMenu: true,
         trailerPopover: true,
@@ -127,6 +127,7 @@
         collapsibleSections: 'Adds per-section collapse controls and remembers each state.',
         spoilerBlur: 'Softens long plot text until you intentionally reveal it.',
         quickNav: 'Adds a right-side section navigator on wide screens.',
+        ratingHistogram: 'Shows a compact 1-10 vote distribution bar chart beside the IMDb rating.',
         inlineRTScore: 'Shows Rotten Tomatoes score feedback inline when available.',
         inlineLetterboxdScore: 'Shows Letterboxd average ratings inline for films when available.',
         inlineMetacriticScore: 'Shows Metacritic score feedback inline when available.',
@@ -1505,6 +1506,62 @@ section[id*="quote" i] .ipc-list-card { padding: 4px 0 !important; margin: 2px 0
         return agg.parentElement;
     }
 
+    function getHistogramData() {
+        try {
+            const scripts = document.querySelectorAll('script[type="application/json"]');
+            for (const s of scripts) {
+                const text = s.textContent;
+                if (!text.includes('histogramData') && !text.includes('ratingsSummary')) continue;
+                const json = JSON.parse(text);
+                const find = (obj) => {
+                    if (!obj || typeof obj !== 'object') return null;
+                    if (obj.histogramData && Array.isArray(obj.histogramData)) return obj.histogramData;
+                    if (obj.ratingsSummary?.histogramData) return obj.ratingsSummary.histogramData;
+                    for (const v of Object.values(obj)) {
+                        const r = find(v);
+                        if (r) return r;
+                    }
+                    return null;
+                };
+                const data = find(json);
+                if (data?.length) return data;
+            }
+        } catch { /* ignore */ }
+        return null;
+    }
+
+    reg({
+        key: 'ratingHistogram', name: 'Rating histogram', group: 'Scores',
+        init() {
+            if (document.getElementById('enh-histogram')) return;
+            const histogram = getHistogramData();
+            if (!histogram?.length) return;
+            const bar = findRatingBar();
+            if (!bar) return;
+
+            const maxVotes = Math.max(...histogram.map(b => b.voteCount || b.count || 0), 1);
+            const t = getTheme();
+            const w = makeEl('div', { id: 'enh-histogram', className: 'enh-score-widget' });
+            const label = makeEl('div', { className: 'enh-score-widget__label' }, 'VOTES');
+            const chart = makeEl('div', { className: 'enh-histogram-chart' });
+            const sorted = [...histogram].sort((a, b) => (a.rating || 0) - (b.rating || 0));
+            sorted.forEach(bucket => {
+                const rating = bucket.rating || 0;
+                const votes = bucket.voteCount || bucket.count || 0;
+                const pct = Math.max((votes / maxVotes) * 100, 2);
+                const col = makeEl('div', { className: 'enh-histogram-col', title: `${rating}/10: ${votes.toLocaleString()} votes` },
+                    makeEl('div', { className: 'enh-histogram-bar', style: { height: pct + '%' } }),
+                    makeEl('div', { className: 'enh-histogram-label' }, String(rating))
+                );
+                chart.appendChild(col);
+            });
+            w.appendChild(label);
+            w.appendChild(chart);
+            bar.appendChild(w);
+        },
+        destroy() { document.getElementById('enh-histogram')?.remove(); }
+    });
+
     reg({
         key: 'inlineRTScore', name: 'Rotten Tomatoes scores', group: 'Scores',
         async init() {
@@ -2097,6 +2154,39 @@ section[id*="quote" i] .ipc-list-card { padding: 4px 0 !important; margin: 2px 0
     //
     // #########################################################################
 
+    function probeSiteHealth(url, timeout = 4000) {
+        return new Promise(resolve => {
+            try {
+                const origin = new URL(url).origin;
+                const img = new Image();
+                let settled = false;
+                const settle = (alive) => { if (!settled) { settled = true; resolve(alive); } };
+                img.onload = () => settle(true);
+                img.onerror = () => settle(true);
+                setTimeout(() => settle(false), timeout);
+                img.src = origin + '/favicon.ico?' + Date.now();
+            } catch { resolve(false); }
+        });
+    }
+
+    const SITE_HEALTH_CACHE_TTL = 6 * 60 * 60 * 1000; // 6 hours
+    function getSiteHealthCache() {
+        try {
+            const raw = GM_getValue(PREFIX + 'siteHealth', null);
+            if (!raw) return {};
+            const parsed = JSON.parse(raw);
+            const now = Date.now();
+            const live = {};
+            Object.entries(parsed).forEach(([domain, entry]) => {
+                if (now - (entry.ts || 0) < SITE_HEALTH_CACHE_TTL) live[domain] = entry;
+            });
+            return live;
+        } catch { return {}; }
+    }
+    function setSiteHealthCache(cache) {
+        GM_setValue(PREFIX + 'siteHealth', JSON.stringify(cache));
+    }
+
     reg({
         key: 'searchButtons', name: 'Watch search buttons', group: 'Features',
         init() {
@@ -2139,7 +2229,31 @@ section[id*="quote" i] .ipc-list-card { padding: 4px 0 !important; margin: 2px 0
                         if (btn.dataset.storeQuery === 'true') GM_setValue(CINEBY_QUERY_KEY, title);
                     });
                 });
+                this._probeButtons(row);
             }).catch(() => {});
+        },
+        async _probeButtons(row) {
+            const cache = getSiteHealthCache();
+            const buttons = Array.from(row.querySelectorAll('.enh-search-btn'));
+            const toProbe = [];
+            buttons.forEach(btn => {
+                try {
+                    const domain = new URL(btn.href).hostname;
+                    const cached = cache[domain];
+                    if (cached) {
+                        if (!cached.alive) btn.classList.add('enh-search-btn--dead');
+                    } else {
+                        toProbe.push({ btn, domain });
+                    }
+                } catch { /* skip malformed URLs */ }
+            });
+            if (!toProbe.length) return;
+            await Promise.all(toProbe.map(async ({ btn, domain }) => {
+                const alive = await probeSiteHealth(btn.href);
+                cache[domain] = { alive, ts: Date.now() };
+                if (!alive) btn.classList.add('enh-search-btn--dead');
+            }));
+            setSiteHealthCache(cache);
         },
         destroy() { document.getElementById('enh-search-buttons')?.remove(); pruneTitleStack(); }
     });
@@ -3140,6 +3254,13 @@ section[id*="quote" i] .ipc-list-card { padding: 4px 0 !important; margin: 2px 0
     box-shadow: 0 4px 14px color-mix(in srgb, var(--btn-color) 22%, transparent);
 }
 .enh-search-btn:active { transform: translateY(0); }
+.enh-search-btn--dead {
+    opacity: .35; text-decoration: line-through; pointer-events: auto;
+    filter: grayscale(.6);
+}
+.enh-search-btn--dead::after {
+    content: ' (offline)'; font-size: 10px; opacity: .7; margin-left: 3px;
+}
 
 /* ════ External Links ════ */
 #enh-external-links {
@@ -3274,6 +3395,23 @@ section[id*="quote" i] .ipc-list-card { padding: 4px 0 !important; margin: 2px 0
 @keyframes enh-shimmer {
     0% { background-position: 120% 0; }
     100% { background-position: -120% 0; }
+}
+.enh-histogram-chart {
+    display: flex; align-items: flex-end; gap: 2px; height: 36px; min-width: 80px;
+}
+.enh-histogram-col {
+    flex: 1; display: flex; flex-direction: column; align-items: center; height: 100%;
+    justify-content: flex-end; cursor: default;
+}
+.enh-histogram-bar {
+    width: 100%; min-width: 5px; border-radius: 2px 2px 0 0;
+    background: ${t.accent}; opacity: .7;
+    transition: opacity .15s ease;
+}
+.enh-histogram-col:hover .enh-histogram-bar { opacity: 1; }
+.enh-histogram-label {
+    font: 600 8px/1 -apple-system, BlinkMacSystemFont, 'Segoe UI', sans-serif;
+    color: ${t.tx3}; margin-top: 2px;
 }
 
 /* ════ Settings Overlay ════ */
