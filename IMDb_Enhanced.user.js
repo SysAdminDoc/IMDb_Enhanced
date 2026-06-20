@@ -136,7 +136,7 @@
         expandedLinkMenu: 'Groups additional movie, review, subtitle, and TV lookup links.',
         trailerPopover: 'Adds an in-page trailer modal backed by a click-to-fetch YouTube lookup.',
         watchedMarking: 'Adds local Watched and Skip marks to title posters and recommendation cards.',
-        servarrIntegration: 'Adds optional local Radarr/Sonarr quick-add buttons when API settings are configured.',
+        servarrIntegration: 'Adds optional local Radarr/Sonarr quick-add buttons with library status indicator when API settings are configured.',
         tvEpisodeTools: 'Blurs episode synopses and surfaces the highest-rated episodes where episode data is present.',
         tvShowEnhancements: 'Adds TV-specific lookup shortcuts on series pages.',
         subtitleLinks: 'Adds subtitle lookup links in the details section.',
@@ -1536,7 +1536,7 @@ section[id*="quote" i] .ipc-list-card { padding: 4px 0 !important; margin: 2px 0
                 const tm = res2.responseText.match(/"tomatoScore"\s*:\s*(\d+)/);
                 const au = res2.responseText.match(/"audienceScore"\s*:\s*(\d+)/);
                 if (tm) {
-                    const d = { tomatometer: parseInt(tm[1]), audience: au ? parseInt(au[1]) : null };
+                    const d = { tomatometer: parseInt(tm[1]), audience: au ? parseInt(au[1]) : null, consensus: null };
                     cacheSet(cacheKey, d); this._render(d);
                     return;
                 }
@@ -1546,15 +1546,21 @@ section[id*="quote" i] .ipc-list-card { padding: 4px 0 !important; margin: 2px 0
         },
         _parse(html) {
             try {
+                let tomatometer = null, audience = null, consensus = null;
                 const ldM = html.match(/<script type="application\/ld\+json">([\s\S]*?)<\/script>/);
                 if (ldM) {
                     const ld = JSON.parse(ldM[1]);
                     if (ld.aggregateRating)
-                        return { tomatometer: Math.round(ld.aggregateRating.ratingValue), audience: null };
+                        tomatometer = Math.round(ld.aggregateRating.ratingValue);
                 }
                 const tm = html.match(/tomatometer[^}]*?"value"\s*:\s*(\d+)/);
                 const au = html.match(/audienceScore[^}]*?"value"\s*:\s*(\d+)/);
-                if (tm) return { tomatometer: parseInt(tm[1]), audience: au ? parseInt(au[1]) : null };
+                if (tm && tomatometer === null) tomatometer = parseInt(tm[1]);
+                if (au) audience = parseInt(au[1]);
+                const cm = html.match(/critics-consensus[^>]*>([^<]+)</i)
+                    || html.match(/"criticsConsensus"\s*:\s*"([^"]+)"/);
+                if (cm) consensus = cm[1].trim();
+                if (tomatometer !== null) return { tomatometer, audience, consensus };
             } catch { /* ignore */ }
             return null;
         },
@@ -1565,11 +1571,13 @@ section[id*="quote" i] .ipc-list-card { padding: 4px 0 !important; margin: 2px 0
             const hasScore = data.tomatometer !== null && data.tomatometer !== undefined;
             const hasAudience = data.audience !== null && data.audience !== undefined;
             const color = hasScore ? rtColorFn(data.tomatometer) : '#555';
+            const titleAttr = data.consensus ? data.consensus : '';
             const w = makeEl('div', { id: 'enh-rt-widget', className: 'enh-score-widget' });
             w.innerHTML = `
                 <div class="enh-score-widget__label">TOMATOMETER</div>
                 <a href="https://www.rottentomatoes.com/search?search=${encodeURIComponent(getTitleText())}"
-                   target="_blank" rel="noopener" class="enh-score-widget__score" style="--score-color:${color}">
+                   target="_blank" rel="noopener" class="enh-score-widget__score" style="--score-color:${color}"
+                   ${titleAttr ? `title="${titleAttr.replace(/"/g, '&quot;')}"` : ''}>
                     <span class="enh-score-widget__badge enh-score-widget__badge--outline">RT</span>
                     <span class="enh-score-widget__value">${hasScore ? data.tomatometer + '%' : '--'}</span>
                 </a>
@@ -2604,6 +2612,15 @@ section[id*="quote" i] .ipc-list-card { padding: 4px 0 !important; margin: 2px 0
                         font: 700 10px/1 -apple-system, BlinkMacSystemFont, 'Segoe UI', sans-serif;
                         letter-spacing: .08em; color: ${t.tx3};
                     }
+                    .enh-servarr-status {
+                        display: inline-flex; align-items: center; gap: 5px;
+                        font: 700 11px/1 -apple-system, BlinkMacSystemFont, 'Segoe UI', sans-serif;
+                        color: ${t.green}; padding: 0 4px;
+                    }
+                    .enh-servarr-status--dot {
+                        width: 8px; height: 8px; border-radius: 50%; background: ${t.green};
+                        box-shadow: 0 0 6px ${t.green};
+                    }
                     .enh-servarr-btn {
                         display: inline-flex; align-items: center; justify-content: center;
                         min-height: 28px; padding: 0 11px; border-radius: 7px;
@@ -2632,6 +2649,7 @@ section[id*="quote" i] .ipc-list-card { padding: 4px 0 !important; margin: 2px 0
                                 await this._add(action.kind, imdbId, title);
                                 showToast(`${title} sent to ${action.kind === 'radarr' ? 'Radarr' : 'Sonarr'}`);
                                 btn.textContent = 'Added';
+                                btn.disabled = true;
                             } catch (error) {
                                 console.warn('[IMDb Enhanced] Servarr add failed:', error);
                                 showToast(`${action.kind === 'radarr' ? 'Radarr' : 'Sonarr'} add failed: ${getRequestErrorMessage(error)}`, 4500);
@@ -2641,9 +2659,28 @@ section[id*="quote" i] .ipc-list-card { padding: 4px 0 !important; margin: 2px 0
                         },
                     }, action.label);
                     bar.appendChild(btn);
+                    this._checkLibrary(action.kind, imdbId, btn, bar);
                 });
                 appendTitleStackItem(bar, TITLE_STACK_ORDER.servarrIntegration);
             }).catch(() => {});
+        },
+        async _checkLibrary(kind, imdbId, btn, bar) {
+            try {
+                const path = kind === 'radarr' ? 'movie/lookup' : 'series/lookup';
+                const response = await servarrRequest(kind, path, { query:{ term: `imdb:${imdbId}` } });
+                const items = parseJSONResponse(response);
+                if (!Array.isArray(items) || !items.length) return;
+                const found = items.find(item => item.id && item.id > 0);
+                if (found) {
+                    btn.textContent = 'In Library';
+                    btn.disabled = true;
+                    const label = kind === 'radarr' ? 'Radarr' : 'Sonarr';
+                    const status = makeEl('span', { className:'enh-servarr-status', title:`Already in ${label}` },
+                        makeEl('span', { className:'enh-servarr-status--dot' }),
+                    );
+                    bar.insertBefore(status, btn);
+                }
+            } catch { /* library check is best-effort */ }
         },
         async _lookup(kind, imdbId, title) {
             const path = kind === 'radarr' ? 'movie/lookup' : 'series/lookup';

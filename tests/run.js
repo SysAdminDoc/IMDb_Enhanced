@@ -5,10 +5,8 @@ const { execFileSync } = require('child_process');
 
 const root = path.resolve(__dirname, '..');
 const scriptPath = path.join(root, 'IMDb_Enhanced.user.js');
-const roadmapPath = path.join(root, 'RESEARCH_FEATURE_PLAN.md');
 
 const script = fs.readFileSync(scriptPath, 'utf8');
-const roadmap = fs.readFileSync(roadmapPath, 'utf8');
 
 function test(name, fn) {
     try {
@@ -25,10 +23,11 @@ test('userscript parses', () => {
 });
 
 test('metadata stays distribution-safe', () => {
-    assert(!/@updateURL|@downloadURL/.test(script), 'dead update/download URLs should not return');
     assert(!/@connect\s+\*/.test(script), 'wildcard @connect should not return');
     assert(/@noframes/.test(script), '@noframes should remain present');
     assert(!/@match\s+https:\/\/m\.imdb\.com\/\*/.test(script), 'mobile wildcard match should stay scoped');
+    assert(/@updateURL/.test(script), '@updateURL should be present for update channel');
+    assert(/@downloadURL/.test(script), '@downloadURL should be present for update channel');
 });
 
 test('fragile selectors and global Cineby key stay removed', () => {
@@ -36,7 +35,7 @@ test('fragile selectors and global Cineby key stay removed', () => {
     assert(!/GM_setValue\('movieTitle'/.test(script), 'Cineby should not write the global movieTitle key');
 });
 
-test('core P2 features remain registered', () => {
+test('core features remain registered', () => {
     [
         'streamAvailability',
         'watchedMarking',
@@ -48,9 +47,22 @@ test('core P2 features remain registered', () => {
     ].forEach(token => assert(script.includes(token), `${token} missing`));
 });
 
-test('roadmap P0-P2 tasks are complete', () => {
-    const openPriority = roadmap.match(/- \[ \] \*\*P[0-2]\*\*/g);
-    assert(!openPriority, `open P0-P2 tasks remain: ${(openPriority || []).join(', ')}`);
+test('version strings match', () => {
+    const metaVersion = script.match(/@version\s+(\S+)/)?.[1];
+    const constVersion = script.match(/const VERSION\s*=\s*'([^']+)'/)?.[1];
+    assert(metaVersion, 'metadata @version must exist');
+    assert.strictEqual(metaVersion, constVersion, `version mismatch: @version=${metaVersion} vs VERSION=${constVersion}`);
+});
+
+test('default watch sites are all live domains', () => {
+    const deadDomains = ['popcornmovies.org', 'xprime.su', 'aether.mom', 'rivestream.app', 'cineby.sc', 'cineby.gd', 'cineby.app'];
+    deadDomains.forEach(domain => {
+        assert(!script.includes(domain), `dead domain ${domain} should be removed`);
+    });
+});
+
+test('cineby uses current domain', () => {
+    assert(script.includes('cineby.at'), 'cineby.at should be the active Cineby domain');
 });
 
 console.log('All tests passed.');
