@@ -1498,6 +1498,14 @@ section[id*="quote" i] .ipc-list-card { padding: 4px 0 !important; margin: 2px 0
     //
     // #########################################################################
 
+    function onceVisible(el, callback) {
+        if (!el || typeof IntersectionObserver === 'undefined') { callback(); return; }
+        const obs = new IntersectionObserver((entries, observer) => {
+            if (entries.some(e => e.isIntersecting)) { observer.disconnect(); callback(); }
+        }, { rootMargin: '200px' });
+        obs.observe(el);
+    }
+
     function findRatingBar() {
         const agg = document.querySelector('[data-testid="hero-rating-bar__aggregate-rating"]');
         if (!agg) return null;
@@ -1579,6 +1587,8 @@ section[id*="quote" i] .ipc-list-card { padding: 4px 0 !important; margin: 2px 0
                 else this._render(cached);
                 return;
             }
+            const bar = findRatingBar();
+            await new Promise(r => onceVisible(bar, r));
             this._renderLoading();
 
             const type = isTVType() ? 'tv' : 'movie';
@@ -1690,6 +1700,8 @@ section[id*="quote" i] .ipc-list-card { padding: 4px 0 !important; margin: 2px 0
                 else this._render(cached);
                 return;
             }
+            const bar = findRatingBar();
+            await new Promise(r => onceVisible(bar, r));
             this._renderLoading();
 
             const lookupUrl = `https://letterboxd.com/imdb/${imdbId}/`;
@@ -1800,6 +1812,8 @@ section[id*="quote" i] .ipc-list-card { padding: 4px 0 !important; margin: 2px 0
                 else this._render(cached);
                 return;
             }
+            const bar = findRatingBar();
+            await new Promise(r => onceVisible(bar, r));
             this._renderLoading();
 
             const type = isTVType() ? '1' : '2';
