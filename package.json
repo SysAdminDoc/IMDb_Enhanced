@@ -1,0 +1,15 @@
+{
+  "name": "imdb-enhanced",
+  "version": "2.4.0",
+  "description": "Premium IMDb overhaul userscript",
+  "private": true,
+  "scripts": {
+    "test": "node tests/run.js",
+    "version": "node scripts/sync-version.js && git add IMDb_Enhanced.user.js"
+  },
+  "license": "MIT",
+  "repository": {
+    "type": "git",
+    "url": "https://github.com/SysAdminDoc/IMDb_Enhanced.git"
+  }
+}
