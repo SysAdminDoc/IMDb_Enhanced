@@ -11,6 +11,8 @@
 // @match        https://www.imdb.com/*/title/*
 // @match        https://www.imdb.com/*/name/*
 // @match        https://www.imdb.com/user/*/watchlist*
+// @match        https://www.imdb.com/list/*
+// @match        https://www.imdb.com/chart/*
 // @match        https://m.imdb.com/title/*
 // @match        https://m.imdb.com/name/*
 // @match        https://www.cineby.at/search
@@ -108,7 +110,8 @@
         // TV
         tvEpisodeTools: true, tvShowEnhancements: true, subtitleLinks: true,
         // Utility
-        quickCopyID: true, watchlistBatch: true, keyboardShortcuts: false,
+        quickCopyID: true, watchlistBatch: true, listMultiSearch: true,
+        keyboardShortcuts: false,
     };
 
     const FEATURE_DETAILS = {
@@ -143,6 +146,7 @@
         subtitleLinks: 'Adds subtitle lookup links in the details section.',
         quickCopyID: 'Adds a visible IMDb ID copy button beside the title.',
         watchlistBatch: 'Adds a watchlist-page button that copies all visible IMDb title IDs.',
+        listMultiSearch: 'Adds a search-all button on watchlist, list, and chart pages to open each title on a selected watch site.',
         keyboardShortcuts: 'Optional. Enables ? for settings, c to copy, r for rating, and t for top.',
     };
 
@@ -3133,6 +3137,96 @@ section[id*="quote" i] .ipc-list-card { padding: 4px 0 !important; margin: 2px 0
         }
     });
 
+    function isListPage() {
+        return /\/(watchlist|list\/|chart\/)/i.test(location.pathname);
+    }
+
+    function getListTitles() {
+        const links = document.querySelectorAll('a[href*="/title/tt"]');
+        const seen = new Set();
+        const titles = [];
+        links.forEach(a => {
+            const idMatch = a.href.match(/\/title\/(tt\d+)/);
+            if (!idMatch || seen.has(idMatch[1])) return;
+            seen.add(idMatch[1]);
+            const textEl = a.querySelector('[class*="title"]') || a;
+            const name = (textEl.textContent || '').trim().replace(/\s+/g, ' ').slice(0, 120);
+            if (name) titles.push({ id: idMatch[1], name });
+        });
+        return titles;
+    }
+
+    reg({
+        key: 'listMultiSearch', name: 'List multi-search', group: 'Utility',
+        init() {
+            if (!isListPage()) return;
+            if (document.getElementById('enh-multi-search')) return;
+            const sites = getSiteList('watchSites', DEFAULT_WATCH_SITES);
+            if (!sites.length) return;
+
+            const t = getTheme();
+            addCSS(`
+                #enh-multi-search {
+                    position: sticky; top: 112px; z-index: 29;
+                    display: inline-flex; align-items: center; gap: 6px; flex-wrap: wrap;
+                    margin: 6px 0 12px 0;
+                }
+                .enh-multi-search-label {
+                    font: 700 10px/1 -apple-system, BlinkMacSystemFont, 'Segoe UI', sans-serif;
+                    letter-spacing: .08em; color: ${t.tx3};
+                }
+                .enh-multi-search-btn {
+                    display: inline-flex; align-items: center; justify-content: center;
+                    min-height: 30px; padding: 0 10px; border-radius: 7px;
+                    border: 1px solid ${t.bd1}; background: ${t.sf1}; color: ${t.tx1};
+                    cursor: pointer; font: 700 11px/1 -apple-system, BlinkMacSystemFont, 'Segoe UI', sans-serif;
+                    transition: background .15s ease, border-color .15s ease, color .15s ease, transform .15s ease;
+                }
+                .enh-multi-search-btn:hover { background: ${t.sf2}; border-color: ${t.accentBorder}; color: ${t.accent}; transform: translateY(-1px); }
+                .enh-multi-search-btn:disabled { opacity: .5; cursor: wait; }
+            `, 'enh-listMultiSearch');
+
+            const bar = makeEl('div', { id:'enh-multi-search' },
+                makeEl('span', { className:'enh-multi-search-label' }, 'SEARCH ALL ON')
+            );
+            sites.forEach(site => {
+                const btn = makeEl('button', {
+                    type:'button',
+                    className:'enh-multi-search-btn',
+                    style:{ '--btn-color': site.color },
+                    onClick: () => this._searchAll(site, btn),
+                }, site.name);
+                bar.appendChild(btn);
+            });
+            const target = document.querySelector('main') || document.body;
+            target.insertBefore(bar, target.firstElementChild?.nextSibling || null);
+        },
+        async _searchAll(site, btn) {
+            const titles = getListTitles();
+            if (!titles.length) { showToast('No titles found on this page'); return; }
+            const max = Math.min(titles.length, 20);
+            btn.disabled = true;
+            btn.textContent = `Opening 0/${max}...`;
+            let opened = 0;
+            for (let i = 0; i < max; i++) {
+                const title = titles[i];
+                const ctx = getLinkContext(title.name, title.id, '');
+                const url = site.storeQuery ? getCinebyHost() : applyLinkTemplate(site.url, ctx);
+                if (site.storeQuery) GM_setValue(CINEBY_QUERY_KEY, title.name);
+                window.open(url, '_blank', 'noopener');
+                opened++;
+                btn.textContent = `Opening ${opened}/${max}...`;
+                if (i < max - 1) await new Promise(r => setTimeout(r, 800));
+            }
+            btn.textContent = `Opened ${opened} titles`;
+            setTimeout(() => { btn.disabled = false; btn.textContent = site.name; }, 3000);
+        },
+        destroy() {
+            removeCSS('enh-listMultiSearch');
+            document.getElementById('enh-multi-search')?.remove();
+        }
+    });
+
     reg({
         key: 'quickCopyID', name: 'Quick copy IMDb ID', group: 'Utility',
         init() {
@@ -4311,13 +4405,13 @@ section[id*="quote" i] .ipc-list-card { padding: 4px 0 !important; margin: 2px 0
         return window.location.hostname.includes('imdb.com');
     }
 
-    function isWatchlistPage() {
-        return /\/user\/[^/]+\/watchlist/i.test(location.pathname);
+    function isNonTitlePage() {
+        return /\/(watchlist|list\/|chart\/)/i.test(location.pathname);
     }
 
     function shouldInitFeature(feature) {
-        if (!isWatchlistPage()) return true;
-        return ['modernUI', 'compactHeader', 'watchlistBatch', 'keyboardShortcuts'].includes(feature.key);
+        if (!isNonTitlePage()) return true;
+        return ['modernUI', 'compactHeader', 'watchlistBatch', 'listMultiSearch', 'keyboardShortcuts'].includes(feature.key);
     }
 
     function getRouteKey() {
