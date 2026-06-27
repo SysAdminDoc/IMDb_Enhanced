@@ -1,5 +1,15 @@
 # Changelog
 
+## 2.5.0 — 2026-06-27
+
+### Added
+- **Plex/Jellyfin/Emby library indicator**: Optional local media server checks show whether the current IMDb title already exists in configured Plex, Jellyfin, or Emby libraries.
+- **Media server settings**: Added localhost-only URL/token fields for Plex and URL/API key fields for Jellyfin and Emby.
+- **Greasy Fork guardrail tests**: Smoke tests now prevent wildcard `@connect`, external executable metadata, dynamic script creation, `eval`, `new Function`, and confirmation dialogs from returning.
+
+### Changed
+- Settings reset and title-mark clearing now execute immediately with toast feedback instead of confirmation dialogs.
+
 ## 2.4.0 — 2026-06-20
 
 ### Added

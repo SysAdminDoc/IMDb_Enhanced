@@ -1,10 +1,10 @@
-[![Version](https://img.shields.io/badge/version-2.4.0-blue)](https://github.com/SysAdminDoc/IMDb_Enhanced)
+[![Version](https://img.shields.io/badge/version-2.5.0-blue)](https://github.com/SysAdminDoc/IMDb_Enhanced)
 [![License](https://img.shields.io/badge/license-MIT-green)](LICENSE)
 [![Platform](https://img.shields.io/badge/platform-Tampermonkey%20%7C%20Violentmonkey-yellow)](https://www.tampermonkey.net/)
 
 # IMDb Enhanced
 
-A premium IMDb overhaul delivered as a single userscript. Cleaner pages, modern themes, aggregated scores from Rotten Tomatoes, Letterboxd, and Metacritic, streaming site quick-search, Radarr/Sonarr integration, and more.
+A premium IMDb overhaul delivered as a single userscript. Cleaner pages, modern themes, aggregated scores from Rotten Tomatoes, Letterboxd, and Metacritic, streaming site quick-search, Radarr/Sonarr integration, Plex/Jellyfin/Emby library indicators, and more.
 
 ## Features
 
@@ -23,6 +23,8 @@ A premium IMDb overhaul delivered as a single userscript. Cleaner pages, modern 
 **Trailer Popover** - In-page trailer modal backed by YouTube search. No page navigation needed.
 
 **Radarr/Sonarr Integration** - Quick-add buttons with library status indicator (green dot when a title is already in your library). Localhost-only for security.
+
+**Media Server Indicator** - Optional Plex, Jellyfin, and Emby checks show whether the current title already exists in your local media library. Localhost-only for security.
 
 **Watched Marking** - Local watched/skip marks on title posters and recommendation cards. No IMDb login required.
 
@@ -51,6 +53,8 @@ Click the gear icon on any IMDb page to open settings. Every feature can be togg
 **Cineby** - Preferred Cineby host selector (search handoff via local storage key).
 
 **Radarr/Sonarr** - URL, API key, root folder, and quality profile for each. Localhost/127.0.0.1 only.
+
+**Media Servers** - Plex URL/token and Jellyfin/Emby URL/API key fields for local library checks. Localhost/127.0.0.1 only.
 
 **URL Templates** - Use `{{TITLE}}`, `{{TITLE_DASH}}`, `{{TITLE_SLUG}}`, `{{IMDB_ID}}`, `{{IMDB_NUM}}`, `{{TRAKT_TYPE}}`, `{{YEAR}}` in custom site URLs.
 

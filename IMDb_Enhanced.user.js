@@ -1,10 +1,10 @@
 // ==UserScript==
 // @name         IMDb Enhanced
 // @namespace    https://github.com/SysAdminDoc
-// @version      2.4.0
+// @version      2.5.0
 // @updateURL    https://raw.githubusercontent.com/SysAdminDoc/IMDb_Enhanced/main/IMDb_Enhanced.user.js
 // @downloadURL  https://raw.githubusercontent.com/SysAdminDoc/IMDb_Enhanced/main/IMDb_Enhanced.user.js
-// @description  Premium IMDb overhaul: cleaner pages, modern themes, refined score widgets, section controls, spoiler protection, quick navigation, richer external links, TV tools, search shortcuts, and polished settings import/export
+// @description  Premium IMDb overhaul: cleaner pages, modern themes, refined score widgets, media library indicators, quick navigation, richer external links, TV tools, search shortcuts, and polished settings import/export
 // @author       SysAdminDoc
 // @match        https://www.imdb.com/title/*
 // @match        https://www.imdb.com/name/*
@@ -42,7 +42,7 @@
     // =========================================================================
     //  CONSTANTS & CONFIG
     // =========================================================================
-    const VERSION = '2.4.0';
+    const VERSION = '2.5.0';
     const PREFIX  = 'imdb_enh_';
     const CINEBY_QUERY_KEY = PREFIX + 'cineby_query';
     const CACHE_TTL = 7 * 24 * 60 * 60 * 1000; // 7 days
@@ -54,6 +54,7 @@
         externalLinks: 30,
         trailerPopover: 32,
         servarrIntegration: 35,
+        mediaServerIntegration: 36,
         tvShowEnhancements: 40,
     };
     const CINEBY_HOSTS = [
@@ -107,6 +108,10 @@
         radarrRootFolderPath: '', radarrQualityProfileId: '1',
         sonarrUrl: 'http://localhost:8989', sonarrApiKey: '',
         sonarrRootFolderPath: '', sonarrQualityProfileId: '1', sonarrLanguageProfileId: '1',
+        mediaServerIntegration: false,
+        plexUrl: 'http://localhost:32400', plexToken: '',
+        jellyfinUrl: 'http://localhost:8096', jellyfinApiKey: '',
+        embyUrl: 'http://localhost:8096', embyApiKey: '',
         // TV
         tvEpisodeTools: true, tvShowEnhancements: true, subtitleLinks: true,
         // Utility
@@ -141,6 +146,7 @@
         trailerPopover: 'Adds an in-page trailer modal backed by a click-to-fetch YouTube lookup.',
         watchedMarking: 'Adds local Watched and Skip marks to title posters and recommendation cards.',
         servarrIntegration: 'Adds optional local Radarr/Sonarr quick-add buttons with library status indicator when API settings are configured.',
+        mediaServerIntegration: 'Checks configured local Plex, Jellyfin, and Emby servers and shows whether the title is already in your library.',
         tvEpisodeTools: 'Blurs episode synopses and surfaces the highest-rated episodes where episode data is present.',
         tvShowEnhancements: 'Adds TV-specific lookup shortcuts on series pages.',
         subtitleLinks: 'Adds subtitle lookup links in the details section.',
@@ -557,11 +563,14 @@
             return url.href.replace(/\/+$/, '');
         } catch { return ''; }
     }
-    function isLocalServarrUrl(baseUrl) {
+    function isLocalServiceUrl(baseUrl) {
         try {
             const host = new URL(baseUrl).hostname.toLowerCase();
             return host === 'localhost' || host === '127.0.0.1';
         } catch { return false; }
+    }
+    function isLocalServarrUrl(baseUrl) {
+        return isLocalServiceUrl(baseUrl);
     }
     function getServarrConfig(kind) {
         const prefix = kind === 'sonarr' ? 'sonarr' : 'radarr';
@@ -600,6 +609,101 @@
                 'X-Api-Key': cfg.apiKey,
                 ...(opts.headers || {}),
             },
+        });
+    }
+    function buildLocalServiceUrl(baseUrl, path, query = {}) {
+        const url = new URL(String(path || '').replace(/^\/+/, ''), `${baseUrl.replace(/\/+$/, '')}/`);
+        Object.entries(query).forEach(([key, value]) => {
+            if (value !== undefined && value !== null && value !== '') url.searchParams.set(key, value);
+        });
+        return url.href;
+    }
+    function getMediaServerConfig(kind) {
+        const defs = {
+            plex: { label:'Plex', urlKey:'plexUrl', tokenKey:'plexToken' },
+            jellyfin: { label:'Jellyfin', urlKey:'jellyfinUrl', tokenKey:'jellyfinApiKey' },
+            emby: { label:'Emby', urlKey:'embyUrl', tokenKey:'embyApiKey' },
+        };
+        const def = defs[kind];
+        if (!def) return null;
+        return {
+            kind,
+            label: def.label,
+            baseUrl: normalizeServarrBaseUrl(get(def.urlKey)),
+            token: String(get(def.tokenKey) || '').trim(),
+        };
+    }
+    function getConfiguredMediaServers() {
+        return ['plex', 'jellyfin', 'emby']
+            .map(getMediaServerConfig)
+            .filter(cfg => cfg?.baseUrl && cfg.token);
+    }
+    function normalizeIMDbProviderId(value) {
+        return String(value || '').match(/tt\d+/i)?.[0]?.toLowerCase() || '';
+    }
+    function normalizeLookupTitle(value) {
+        return String(value || '')
+            .toLowerCase()
+            .replace(/&/g, ' and ')
+            .replace(/[^a-z0-9]+/g, ' ')
+            .trim();
+    }
+    function collectProviderIds(item = {}) {
+        const ids = [item.guid, item.Guid, item.key, item.ratingKey].filter(Boolean);
+        const providerIds = item.providerIds || item.ProviderIds;
+        if (Array.isArray(providerIds)) ids.push(...providerIds);
+        else if (providerIds && typeof providerIds === 'object') ids.push(...Object.values(providerIds));
+        return ids.map(normalizeIMDbProviderId).filter(Boolean);
+    }
+    function mediaItemMatches(item, ctx) {
+        const imdbId = normalizeIMDbProviderId(ctx?.imdbId);
+        if (imdbId && collectProviderIds(item).includes(imdbId)) return true;
+
+        const itemTitle = normalizeLookupTitle(item?.title || item?.Name || item?.name || item?.OriginalTitle);
+        const wantedTitle = normalizeLookupTitle(ctx?.title);
+        if (!itemTitle || itemTitle !== wantedTitle) return false;
+
+        const itemYear = Number(item?.year || item?.ProductionYear || item?.productionYear) || 0;
+        const wantedYear = Number(ctx?.year) || 0;
+        return !itemYear || !wantedYear || Math.abs(itemYear - wantedYear) <= 1;
+    }
+    function parsePlexItems(xmlText) {
+        try {
+            const doc = new DOMParser().parseFromString(String(xmlText || ''), 'application/xml');
+            return Array.from(doc.querySelectorAll('Video,Directory')).map(node => ({
+                title: node.getAttribute('title') || node.getAttribute('originalTitle') || '',
+                year: Number(node.getAttribute('year')) || 0,
+                providerIds: [
+                    node.getAttribute('guid') || '',
+                    ...Array.from(node.querySelectorAll('Guid')).map(guid => guid.getAttribute('id') || ''),
+                ],
+            }));
+        } catch { return []; }
+    }
+    function parseMediaServerItems(payload) {
+        try {
+            const data = typeof payload === 'string' ? JSON.parse(payload || '{}') : (payload || {});
+            const items = Array.isArray(data) ? data : (Array.isArray(data.Items) ? data.Items : []);
+            return items.map(item => ({
+                title: item.Name || item.OriginalTitle || item.SeriesName || '',
+                year: Number(item.ProductionYear) || 0,
+                providerIds: item.ProviderIds || {},
+            }));
+        } catch { return []; }
+    }
+    async function mediaServerRequest(cfg, path, opts = {}) {
+        if (!isLocalServiceUrl(cfg.baseUrl)) {
+            throw new Error('Only localhost and 127.0.0.1 media server URLs are allowed by this userscript build.');
+        }
+        const query = { ...(opts.query || {}) };
+        const headers = cfg.kind === 'plex'
+            ? { Accept:'application/xml', ...(opts.headers || {}) }
+            : { Accept:'application/json', 'X-Emby-Token': cfg.token, ...(opts.headers || {}) };
+        if (cfg.kind === 'plex') query['X-Plex-Token'] = cfg.token;
+        return httpRequest(buildLocalServiceUrl(cfg.baseUrl, path, query), {
+            method: opts.method || 'GET',
+            timeout: opts.timeout || 12000,
+            headers,
         });
     }
 
@@ -2866,6 +2970,110 @@ section[id*="quote" i] .ipc-list-card { padding: 4px 0 !important; margin: 2px 0
         }
     });
 
+    reg({
+        key: 'mediaServerIntegration', name: 'Plex/Jellyfin/Emby indicator', group: 'Features',
+        init() {
+            if (!window.location.hostname.includes('imdb.com')) return;
+            waitForTitleSurface().then(() => {
+                if (document.getElementById('enh-media-server-status')) return;
+                const imdbId = getIMDbID(), title = getTitleText(), year = getTitleYear();
+                if (!imdbId || !title) return;
+
+                const servers = getConfiguredMediaServers();
+                if (!servers.length) return;
+
+                const t = getTheme();
+                addCSS(`
+                    #enh-media-server-status {
+                        margin-top: 8px; display: flex; align-items: center; gap: 8px; flex-wrap: wrap;
+                    }
+                    .enh-media-server-label {
+                        font: 700 10px/1 -apple-system, BlinkMacSystemFont, 'Segoe UI', sans-serif;
+                        letter-spacing: .08em; color: ${t.tx3};
+                    }
+                    .enh-media-server-pill {
+                        min-height: 28px; display: inline-flex; align-items: center; gap: 6px;
+                        border: 1px solid ${t.bd1}; border-radius: 7px; background: ${t.sf1};
+                        color: ${t.tx2}; padding: 0 10px;
+                        font: 700 11px/1 -apple-system, BlinkMacSystemFont, 'Segoe UI', sans-serif;
+                    }
+                    .enh-media-server-pill__dot {
+                        width: 8px; height: 8px; border-radius: 50%; background: ${t.tx3};
+                    }
+                    .enh-media-server-pill--found { color: ${t.green}; border-color: rgba(34,197,94,.35); background: rgba(34,197,94,.08); }
+                    .enh-media-server-pill--found .enh-media-server-pill__dot { background: ${t.green}; box-shadow: 0 0 6px ${t.green}; }
+                    .enh-media-server-pill--missing { color: ${t.tx3}; }
+                    .enh-media-server-pill--error { color: ${t.red}; border-color: rgba(239,68,68,.35); background: rgba(239,68,68,.08); }
+                    .enh-media-server-pill--error .enh-media-server-pill__dot { background: ${t.red}; }
+                `, 'enh-mediaServerIntegration');
+
+                const ctx = { imdbId, title, year };
+                const bar = makeEl('div', { id:'enh-media-server-status' },
+                    makeEl('div', { className:'enh-media-server-label' }, 'MEDIA SERVER')
+                );
+                servers.forEach(server => {
+                    const state = makeEl('span', { className:'enh-media-server-pill__state' }, 'Checking');
+                    const pill = makeEl('span', {
+                        className:'enh-media-server-pill',
+                        title:`Checking ${server.label} for ${title}`,
+                    },
+                        makeEl('span', { className:'enh-media-server-pill__dot' }),
+                        makeEl('span', {}, server.label),
+                        state
+                    );
+                    bar.appendChild(pill);
+                    this._check(server, ctx).then(found => {
+                        pill.classList.add(found ? 'enh-media-server-pill--found' : 'enh-media-server-pill--missing');
+                        state.textContent = found ? 'In Library' : 'Not found';
+                        pill.title = `${server.label}: ${found ? 'already in library' : 'not found'}`;
+                    }).catch(error => {
+                        pill.classList.add('enh-media-server-pill--error');
+                        state.textContent = 'Unavailable';
+                        pill.title = `${server.label}: ${getRequestErrorMessage(error)}`;
+                    });
+                });
+                appendTitleStackItem(bar, TITLE_STACK_ORDER.mediaServerIntegration);
+            }).catch(() => {});
+        },
+        async _check(server, ctx) {
+            if (server.kind === 'plex') return this._checkPlex(server, ctx);
+            return this._checkJellyfinEmby(server, ctx);
+        },
+        async _checkPlex(server, ctx) {
+            const queries = [
+                { query: ctx.imdbId, includeGuids:'1' },
+                { query: ctx.title, includeGuids:'1' },
+            ];
+            for (const query of queries) {
+                const response = await mediaServerRequest(server, '/library/search', { query });
+                if (parsePlexItems(response.responseText).some(item => mediaItemMatches(item, ctx))) return true;
+            }
+            return false;
+        },
+        async _checkJellyfinEmby(server, ctx) {
+            const common = {
+                Recursive:'true',
+                IncludeItemTypes:'Movie,Series',
+                Fields:'ProviderIds,ProductionYear',
+                Limit:'20',
+            };
+            const queries = [
+                { ...common, AnyProviderIdEquals:`imdb.${ctx.imdbId}` },
+                { ...common, SearchTerm:ctx.title },
+            ];
+            for (const query of queries) {
+                const response = await mediaServerRequest(server, '/Items', { query });
+                if (parseMediaServerItems(response.responseText).some(item => mediaItemMatches(item, ctx))) return true;
+            }
+            return false;
+        },
+        destroy() {
+            removeCSS('enh-mediaServerIntegration');
+            document.getElementById('enh-media-server-status')?.remove();
+            pruneTitleStack();
+        }
+    });
+
     // #########################################################################
     //
     //  TV SHOW FEATURES
@@ -3971,10 +4179,10 @@ section[id*="quote" i] .ipc-list-card { padding: 4px 0 !important; margin: 2px 0
             type:'button',
             className:'enh-settings-footer-btn',
             onClick: () => {
-                if (!confirm(`Reset ${title.toLowerCase()} to defaults?`)) return;
                 rows.replaceChildren();
                 defaults.forEach(site => addRow(site));
                 save();
+                showToast(`${title} reset to defaults`);
             },
         }, 'Reset');
 
@@ -3988,7 +4196,7 @@ section[id*="quote" i] .ipc-list-card { padding: 4px 0 !important; margin: 2px 0
         return editor;
     }
 
-    function createSettingsInput({ key, label, type = 'text', wide = false, placeholder = '' }) {
+    function createSettingsInput({ key, label, type = 'text', wide = false, placeholder = '', refreshKey = 'servarrIntegration' }) {
         const id = `enh-setting-${key}`;
         const input = makeEl('input', {
             id,
@@ -4002,7 +4210,7 @@ section[id*="quote" i] .ipc-list-card { padding: 4px 0 !important; margin: 2px 0
         input.value = get(key) || '';
         input.addEventListener('change', () => {
             set(key, input.value.trim());
-            refreshFeature('servarrIntegration');
+            if (refreshKey) refreshFeature(refreshKey);
         });
         return makeEl('div', { className:'enh-servarr-field' + (wide ? ' enh-servarr-field--wide' : '') },
             makeEl('label', { for:id }, label),
@@ -4079,6 +4287,49 @@ section[id*="quote" i] .ipc-list-card { padding: 4px 0 !important; margin: 2px 0
         return panel;
     }
 
+    function createMediaServerSettingsPanel() {
+        const mediaField = field => createSettingsInput({ ...field, refreshKey:'mediaServerIntegration' });
+        const section = ({ title, fields }) => {
+            const grid = makeEl('div', { className:'enh-servarr-grid' }, ...fields.map(mediaField));
+            return makeEl('div', { className:'enh-servarr-section' },
+                makeEl('div', { className:'enh-servarr-title' }, title),
+                grid
+            );
+        };
+
+        const panel = makeEl('form', {
+            className:'enh-servarr-panel',
+            autocomplete:'off',
+        },
+            section({
+                title:'Plex',
+                fields:[
+                    { key:'plexUrl', label:'URL', wide:true, placeholder:'http://localhost:32400' },
+                    { key:'plexToken', label:'Token', type:'password', wide:true },
+                ],
+            }),
+            section({
+                title:'Jellyfin',
+                fields:[
+                    { key:'jellyfinUrl', label:'URL', wide:true, placeholder:'http://localhost:8096' },
+                    { key:'jellyfinApiKey', label:'API key', type:'password', wide:true },
+                ],
+            }),
+            section({
+                title:'Emby',
+                fields:[
+                    { key:'embyUrl', label:'URL', wide:true, placeholder:'http://localhost:8096' },
+                    { key:'embyApiKey', label:'API key', type:'password', wide:true },
+                ],
+            }),
+            makeEl('div', { className:'enh-servarr-note' },
+                'Media server checks use IMDb provider IDs first, then title and year. This build allows userscript requests only to localhost and 127.0.0.1.'
+            )
+        );
+        panel.addEventListener('submit', e => e.preventDefault());
+        return panel;
+    }
+
     function createMarksPanel() {
         const panel = makeEl('div', { className:'enh-marks-panel' });
         const count = makeEl('div', { className:'enh-marks-panel__count' });
@@ -4089,11 +4340,10 @@ section[id*="quote" i] .ipc-list-card { padding: 4px 0 !important; margin: 2px 0
             onClick: () => {
                 const entries = getUserMarkEntries();
                 if (!entries.length) return;
-                if (!confirm(`Clear ${entries.length} saved title marks?`)) return;
                 setUserMarks({});
                 refreshFeature('watchedMarking');
                 render();
-                showToast('All title marks cleared');
+                showToast(`Cleared ${entries.length} saved title marks`);
             },
         }, 'Clear all');
 
@@ -4273,6 +4523,8 @@ section[id*="quote" i] .ipc-list-card { padding: 4px 0 !important; margin: 2px 0
         }));
         body.appendChild(makeEl('div', { className:'enh-settings-group-label' }, 'Servarr'));
         body.appendChild(createServarrSettingsPanel());
+        body.appendChild(makeEl('div', { className:'enh-settings-group-label' }, 'Media servers'));
+        body.appendChild(createMediaServerSettingsPanel());
         body.appendChild(makeEl('div', { className:'enh-settings-group-label' }, 'Local marks'));
         body.appendChild(createMarksPanel());
 
