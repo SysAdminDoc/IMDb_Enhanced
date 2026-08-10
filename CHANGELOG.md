@@ -63,3 +63,29 @@
 ## 2.0.0
 
 - Initial public release with theme system, rating aggregation, page cleanup, and configurable link sites.
+
+## Roadmap archive — 2026-08-10 — ROADMAP.md
+
+<details>
+<summary>Original roadmap snapshot</summary>
+
+```markdown
+# IMDb Enhanced Roadmap
+
+Research context lives in [RESEARCH.md](RESEARCH.md).
+Blocked items live in [Roadmap_Blocked.md](Roadmap_Blocked.md).
+
+## Active Constraints
+
+- Live IMDb selector behavior needs manual browser validation because
+  non-browser fetches can hit bot verification.
+- Keep the single-file userscript simple. The build step (`npm version`)
+  only syncs versions — no bundling or transpilation.
+
+## Open Work
+
+No actionable items remain. Blocked items are tracked in
+[Roadmap_Blocked.md](Roadmap_Blocked.md).
+```
+
+</details>
