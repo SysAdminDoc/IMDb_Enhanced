@@ -1,5 +1,9 @@
 # Changelog
 
+## 2.5.1 — 2026-08-12
+
+- Drained the active roadmap while preserving the single-file userscript and version-only npm lifecycle.
+
 ## 2.5.0 — 2026-06-27
 
 ### Added
