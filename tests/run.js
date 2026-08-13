@@ -503,6 +503,13 @@ test('remembered section state participates in backup and migrates legacy keys',
     assert.strictEqual(prepared.entries[0].value.Details, true);
     assert.strictEqual(Object.keys(prepared.entries[0].value).length, 1, 'unknown or non-boolean section states should be ignored');
     assert(script.includes('sectionCollapseState: {}'), 'remembered section state should be included in exported defaults');
+    assert(script.includes('try { getSectionCollapseState(); }'), 'legacy section state should migrate even when collapsible sections are disabled');
+
+    const failingHooks = loadScriptTestHooks();
+    failingHooks.seedRawStorage('enh_coll_Details', true);
+    failingHooks.failSettingWriteAt(1);
+    assert.throws(() => failingHooks.getSectionCollapseState(), /simulated settings write failure/);
+    assert(failingHooks.getStorageKeys().includes('enh_coll_Details'), 'legacy state must survive a failed schema write');
 });
 
 test('settings reset is explicit, complete, and isolated from live defaults', () => {

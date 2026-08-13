@@ -343,6 +343,7 @@
     function getSectionCollapseState() {
         const state = normalizeSectionCollapseState(get('sectionCollapseState'));
         let migrated = false;
+        const legacyKeys = [];
         COLLAPSIBLE_SECTION_IDS.forEach(id => {
             const legacyKey = 'enh_coll_' + id;
             try {
@@ -351,10 +352,15 @@
                     state[id] = legacy;
                     migrated = true;
                 }
-                if (legacy !== null && typeof GM_deleteValue === 'function') GM_deleteValue(legacyKey);
-            } catch { /* best-effort legacy migration */ }
+                if (legacy !== null) legacyKeys.push(legacyKey);
+            } catch { /* inspect remaining legacy keys */ }
         });
         if (migrated) set('sectionCollapseState', state);
+        if (typeof GM_deleteValue === 'function') {
+            legacyKeys.forEach(key => {
+                try { GM_deleteValue(key); } catch { /* migration is already durable */ }
+            });
+        }
         return state;
     }
     function setSectionCollapsed(id, collapsed) {
@@ -6368,6 +6374,8 @@ section[id*="quote" i] .ipc-list-card { padding: 4px 0 !important; margin: 2px 0
         activeRouteGeneration += 1;
         _ldData = null;
         cacheGC();
+        try { getSectionCollapseState(); }
+        catch (error) { console.warn('[IMDb Enhanced] section-state migration deferred:', error); }
 
         injectGlobalStyles();
         const enabledFeatures = features.filter(f => get(f.key) && shouldInitFeature(f));
