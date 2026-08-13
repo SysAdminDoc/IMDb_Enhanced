@@ -5651,6 +5651,7 @@ section[id*="quote" i] .ipc-list-card { padding: 4px 0 !important; margin: 2px 0
         const rows = makeEl('div', { className:'enh-site-editor__rows' });
         const count = makeEl('span', { className:'enh-settings-route-badge' });
         let add = null;
+        let lastSaveFailure = '';
         const updateCount = () => {
             const total = rows.querySelectorAll('.enh-site-row').length;
             count.textContent = `${total} ${total === 1 ? 'site' : 'sites'}`;
@@ -5680,8 +5681,15 @@ section[id*="quote" i] .ipc-list-card { padding: 4px 0 !important; margin: 2px 0
         };
 
         const save = (refresh = true) => {
-            if (!validateRows()) return false;
-            if (!setSiteList(key, readRows(), refresh)) return false;
+            lastSaveFailure = '';
+            if (!validateRows()) {
+                lastSaveFailure = 'validation';
+                return false;
+            }
+            if (!setSiteList(key, readRows(), refresh)) {
+                lastSaveFailure = 'storage';
+                return false;
+            }
             if (refresh) refreshFeature(featureKey);
             updateCount();
             return true;
@@ -5720,13 +5728,24 @@ section[id*="quote" i] .ipc-list-card { padding: 4px 0 !important; margin: 2px 0
                 className:'enh-site-remove',
                 title:'Remove site',
                 'aria-label':'Remove site',
-                onClick: () => { row.remove(); save(); },
+                onClick: () => {
+                    const next = row.nextSibling;
+                    row.remove();
+                    if (save()) return;
+                    rows.insertBefore(row, next?.parentNode === rows ? next : null);
+                    updateCount();
+                    if (lastSaveFailure === 'validation') {
+                        showToast('Finish or remove the incomplete site row before changing the list');
+                    }
+                },
             }, 'Remove');
 
             [nameInput, urlInput, colorInput].forEach(input => {
                 input.addEventListener('input', () => save(false));
                 input.addEventListener('change', () => {
-                    if (!save(true)) showToast('Enter a site name, a valid HTTP(S) URL, and only supported template tokens');
+                    if (!save(true) && lastSaveFailure === 'validation') {
+                        showToast('Enter a site name, a valid HTTP(S) URL, and only supported template tokens');
+                    }
                 });
             });
             row.appendChild(nameInput);
@@ -5754,9 +5773,14 @@ section[id*="quote" i] .ipc-list-card { padding: 4px 0 !important; margin: 2px 0
             type:'button',
             className:'enh-settings-footer-btn',
             onClick: () => {
+                const previousRows = Array.from(rows.children);
                 rows.replaceChildren();
                 defaults.forEach(site => addRow(site));
-                save();
+                if (!save()) {
+                    rows.replaceChildren(...previousRows);
+                    updateCount();
+                    return;
+                }
                 showToast(`${title} reset to defaults`);
             },
         }, 'Reset');

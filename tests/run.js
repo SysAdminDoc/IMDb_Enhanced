@@ -448,6 +448,8 @@ test('settings use six accessible desktop destinations', () => {
     assert(script.includes('else if (failed) showToast(`Cleared ${cleared} cached entries; ${failed} could not be removed.`'), 'partial cache deletion must not claim complete success');
     assert(script.includes('if (!trySaveSetting(feature.key, enabled))'), 'feature toggles should revert when storage fails');
     assert(script.includes("showToast('Could not save the theme. Previous settings were restored.'"), 'multi-key theme changes should report transactional rollback');
+    assert(script.includes('rows.insertBefore(row, next?.parentNode === rows ? next : null)'), 'failed site removal should restore its row');
+    assert(/const previousRows = Array\.from\(rows\.children\);[\s\S]*?rows\.replaceChildren\(\.\.\.previousRows\);/.test(script), 'failed site reset should restore the prior editor rows');
     assert(script.includes('if (!settingsOpen || overlay.contains(event.target)) return'), 'settings should recapture focus that leaves the modal');
     assert(script.includes('createMarksPanel(registerCleanup)'), 'settings-owned document listeners should join the panel cleanup lifecycle');
     assert(script.includes("document.removeEventListener('imdb-enhanced:marks-updated', render)"), 'marks listener must be removed when settings are rebuilt');
