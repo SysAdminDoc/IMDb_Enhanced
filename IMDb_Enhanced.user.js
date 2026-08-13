@@ -1311,6 +1311,7 @@
         key: 'removeAds', name: 'Hide ads and sponsored shells', group: 'Cleanup',
         init() { injectEarlyAdShell(); },
         destroy() {
+            if (get('removeAds')) return;
             removeCSS('enh-early-ad-shell');
             setAdRequestBlocking(false);
         }

@@ -243,6 +243,10 @@ test('ad cleanup preserves core media and covers current IMDb shells', () => {
     ].forEach(token => assert(script.includes(token), `${token} missing from ad-shell cleanup`));
     assert(script.indexOf('injectEarlyAdShell();') < script.indexOf("key: 'removeAds'"), 'ad shell should be injected before normal feature initialization');
     assert(script.includes('const pendingStyles = new Map()'), 'document-start style attachment guard missing');
+    assert(
+        /key: 'removeAds'[\s\S]*?destroy\(\) \{\s*if \(get\('removeAds'\)\) return;/.test(script),
+        'SPA route teardown must not unregister an enabled request blocker or remove its early shell'
+    );
 
     const hooks = loadScriptTestHooks();
     assert(hooks.setAdRequestBlocking(true), 'supported managers should register request rules');
