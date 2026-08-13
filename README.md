@@ -26,7 +26,7 @@ Third-party lookup responses are rendered as text and their outbound links are r
 
 **Radarr/Sonarr Integration** - Quick-add buttons with library status indicator (green dot when a title is already in your library). Localhost-only for security.
 
-**Media Server Indicator** - Optional Plex, Jellyfin, and Emby checks show whether the current title already exists in your local media library. Localhost-only for security.
+**Media Server Indicator** - Optional Plex, Jellyfin, and Emby checks show whether the current title already exists in your local media library. Localhost-only for security; access tokens are sent in request headers, not URLs.
 
 **Watched Marking** - Local watched/skip toggle controls on title posters and recommendation cards, with exposed pressed state and a newest-first 5,000-title storage bound. No IMDb login required.
 

@@ -930,6 +930,10 @@
     function isLocalServarrUrl(baseUrl) {
         return isLocalServiceUrl(baseUrl);
     }
+    function toPositiveInteger(value, fallback = 1) {
+        const parsed = Number(value);
+        return Number.isSafeInteger(parsed) && parsed > 0 ? parsed : fallback;
+    }
     function getServarrConfig(kind) {
         const prefix = kind === 'sonarr' ? 'sonarr' : 'radarr';
         const baseUrl = normalizeServarrBaseUrl(get(`${prefix}Url`));
@@ -938,8 +942,8 @@
             baseUrl,
             apiKey: String(get(`${prefix}ApiKey`) || '').trim(),
             rootFolderPath: String(get(`${prefix}RootFolderPath`) || '').trim(),
-            qualityProfileId: parseInt(get(`${prefix}QualityProfileId`), 10) || 1,
-            languageProfileId: parseInt(get('sonarrLanguageProfileId'), 10) || 1,
+            qualityProfileId: toPositiveInteger(get(`${prefix}QualityProfileId`)),
+            languageProfileId: toPositiveInteger(get('sonarrLanguageProfileId')),
         };
     }
     function isServarrConfigured(kind) {
@@ -1056,9 +1060,8 @@
         }
         const query = { ...(opts.query || {}) };
         const headers = cfg.kind === 'plex'
-            ? { Accept:'application/xml', ...(opts.headers || {}) }
+            ? { Accept:'application/xml', 'X-Plex-Token':cfg.token, ...(opts.headers || {}) }
             : { Accept:'application/json', 'X-Emby-Token': cfg.token, ...(opts.headers || {}) };
-        if (cfg.kind === 'plex') query['X-Plex-Token'] = cfg.token;
         return httpRequest(buildLocalServiceUrl(cfg.baseUrl, path, query), {
             method: opts.method || 'GET',
             timeout: opts.timeout || 12000,

@@ -36,6 +36,7 @@
 - Completed the trailer dialog lifecycle with focus containment/restoration, explicit expanded state, page-scroll restoration, an accessible visible label and loading status, and guards against late lookup results after close or navigation.
 - Completed keyboard semantics for secondary interactions: the expanded-links menu now supports disclosure and roving-focus keys, watched/skip controls expose and toggle pressed state, and plot/episode spoilers reveal with Enter or Space while cleaning up only their own state.
 - Bounded local marks to the newest 5,000 entries, cached the normalized mark index for constant-time card updates, limited continuous DOM observation to added subtrees with a burst fallback, and made cache writes non-fatal while enforcing the 120-entry cap during long SPA sessions.
+- Moved Plex access tokens from query strings into request headers so credentials do not enter URLs or URL-bearing logs, and normalized legacy Servarr profile values to positive integers before use.
 
 ## 2.5.1 — 2026-08-12
 

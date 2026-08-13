@@ -48,6 +48,8 @@ function loadScriptTestHooks() {
         cacheGet,
         getUserMarks,
         setUserMark,
+        mediaServerRequest,
+        toPositiveInteger,
         httpRequest,
         waitFor,
         cancelPendingRouteWork,
@@ -64,6 +66,7 @@ function loadScriptTestHooks() {
     let sandboxWriteCount = 0;
     let sandboxFailWriteAt = null;
     const sandboxValues = new Map();
+    const sandboxRequests = [];
     let sandboxAbortedRequestCount = 0;
     const sandbox = {
         console: { ...console, warn: () => {} },
@@ -100,7 +103,10 @@ function loadScriptTestHooks() {
         },
         GM_addStyle: () => {},
         GM_setClipboard: () => {},
-        GM_xmlhttpRequest: () => ({ abort: () => { sandboxAbortedRequestCount += 1; } }),
+        GM_xmlhttpRequest: options => {
+            sandboxRequests.push(options);
+            return { abort: () => { sandboxAbortedRequestCount += 1; } };
+        },
         GM_listValues: () => [...sandboxValues.keys()],
         GM_deleteValue: key => { sandboxValues.delete(key); },
         GM_webRequest: rules => { sandbox.webRequestRules = rules; },
@@ -113,6 +119,7 @@ function loadScriptTestHooks() {
     sandbox.window.__enhTest.getStoredSetting = key => sandboxValues.get(`imdb_enh_${key}`);
     sandbox.window.__enhTest.failSettingWriteAt = offset => { sandboxFailWriteAt = sandboxWriteCount + offset; };
     sandbox.window.__enhTest.getStorageKeys = () => [...sandboxValues.keys()];
+    sandbox.window.__enhTest.getCapturedRequests = () => [...sandboxRequests];
     return sandbox.window.__enhTest;
 }
 
@@ -531,6 +538,21 @@ test('media server integration is configurable and local-only', () => {
         'AnyProviderIdEquals',
     ].forEach(token => assert(script.includes(token), `${token} missing`));
     assert(script.includes('Only localhost and 127.0.0.1 media server URLs are allowed'), 'media server local-only guard missing');
+});
+
+test('local-service credentials stay out of request URLs', () => {
+    const hooks = loadScriptTestHooks();
+    hooks.mediaServerRequest({
+        kind:'plex', label:'Plex', baseUrl:'http://localhost:32400', token:'plex-secret',
+    }, '/library/sections', { query:{ type:'movie' } }).catch(() => {});
+    const requests = hooks.getCapturedRequests();
+    const request = requests[requests.length - 1];
+    assert(request, 'Plex request was not created');
+    assert.strictEqual(request.headers['X-Plex-Token'], 'plex-secret');
+    assert(!request.url.includes('plex-secret'), 'Plex token must not appear in the request URL');
+    assert.strictEqual(new URL(request.url).searchParams.get('type'), 'movie');
+    assert.strictEqual(hooks.toPositiveInteger('-4'), 1, 'legacy negative profile IDs should fall back safely');
+    assert.strictEqual(hooks.toPositiveInteger('7'), 7);
 });
 
 test('media server matching handles provider IDs and title fallback', () => {
