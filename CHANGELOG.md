@@ -77,6 +77,7 @@
 - Added a five-second, two-action confirmation state before clearing every saved title mark, preventing an irreversible one-click loss without using a blocking browser dialog.
 - Cancelled reset/import subflows whenever settings close and cleared pasted backup JSON from the page, so a later reopen cannot resume a stale destructive state or retain copied credentials.
 - Routed every copy/export action through one guarded clipboard boundary, replacing false success feedback with actionable permission errors when a userscript manager rejects the write.
+- Repainted all feature-local theme styles in place instead of restarting feature lifecycles, preventing theme changes from repeating Servarr/media work, dropping list queues, or leaving stale-color controls.
 
 ## 2.5.1 — 2026-08-12
 

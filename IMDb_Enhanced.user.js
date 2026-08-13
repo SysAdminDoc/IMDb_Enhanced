@@ -490,6 +490,7 @@
     }
 
     const pendingStyles = new Map();
+    const themedStyleFactories = new Map();
 
     function addCSS(css, id) {
         let s = document.getElementById(id) || pendingStyles.get(id);
@@ -513,10 +514,20 @@
         }
         return s;
     }
+    function addThemedCSS(factory, id) {
+        themedStyleFactories.set(id, factory);
+        return addCSS(factory(getTheme()), id);
+    }
+    function refreshThemedStyles() {
+        themedStyleFactories.forEach((factory, id) => {
+            if (document.getElementById(id) || pendingStyles.has(id)) addCSS(factory(getTheme()), id);
+        });
+    }
     function removeCSS(id) {
         document.getElementById(id)?.remove();
         pendingStyles.get(id)?.remove();
         pendingStyles.delete(id);
+        themedStyleFactories.delete(id);
     }
 
     function injectEarlyAdShell() {
@@ -1505,9 +1516,6 @@
         const autoInput = document.getElementById('enh-theme-auto');
         if (autoInput) autoInput.checked = !!get('themeAuto');
     }
-    function refreshThemeDependentFeatures() {
-        ['compactHeader', 'enhancedRatingDisplay', 'watchedMarking', 'servarrIntegration'].forEach(refreshFeature);
-    }
     function applyThemeStyles(options = {}) {
         const activeId = getActiveThemeId();
         if (get('modernUI')) addCSS(getThemeCSS(activeId), 'enh-modernUI');
@@ -1518,7 +1526,7 @@
         }
         injectGlobalStyles();
         injectEarlyThemeShell();
-        if (options.refreshDependent !== false) refreshThemeDependentFeatures();
+        if (options.refreshDependent !== false) refreshThemedStyles();
         updateThemeControls(activeId);
     }
     function setupThemeAutoSync() {
@@ -1902,8 +1910,7 @@ html[data-imdb-enhanced="active"] .ipc-page-background {
     reg({
         key: 'compactHeader', name: 'Compact header', group: 'Appearance',
         init() {
-            const t = getTheme();
-            addCSS(`
+            addThemedCSS(t => `
                 #imdbHeader {
                     padding: 4px 0 !important;
                     background: ${t.hdr} !important;
@@ -1920,8 +1927,7 @@ html[data-imdb-enhanced="active"] .ipc-page-background {
     reg({
         key: 'enhancedRatingDisplay', name: 'Refined rating display', group: 'Appearance',
         init() {
-            const t = getTheme();
-            addCSS(`
+            addThemedCSS(t => `
                 [data-testid="hero-rating-bar__aggregate-rating"] {
                     background: ${t.accentMuted} !important;
                     border: 1px solid ${t.accentBorder} !important;
@@ -3263,8 +3269,7 @@ section[id*="quote" i] .ipc-list-card { padding: 4px 0 !important; margin: 2px 0
         init() {
             if (!isIMDbHost()) return;
             const isCurrent = createFeatureGuard(this);
-            const t = getTheme();
-            addCSS(`
+            addThemedCSS(t => `
                 #enh-trailer-btn {
                     border: 1px solid ${t.bd1};
                     background: ${t.sf1};
@@ -3621,8 +3626,7 @@ section[id*="quote" i] .ipc-list-card { padding: 4px 0 !important; margin: 2px 0
         _pendingScanRoots: null,
         init() {
             if (!isIMDbHost()) return;
-            const t = getTheme();
-            addCSS(`
+            addThemedCSS(t => `
                 .enh-markable-card{position:relative!important}
                 .enh-markable-card.enh-marked{opacity:.72;filter:saturate(.58);transition:opacity .15s ease,filter .15s ease}
                 .enh-markable-card.enh-marked:hover,.enh-markable-card.enh-marked:focus-within{opacity:1;filter:none}
@@ -3838,8 +3842,7 @@ section[id*="quote" i] .ipc-list-card { padding: 4px 0 !important; margin: 2px 0
                 if (isTVType(type) && isServarrConfigured('sonarr')) actions.push({ kind:'sonarr', label:'Add Sonarr' });
                 if (!actions.length) return;
 
-                const t = getTheme();
-                addCSS(`
+                addThemedCSS(t => `
                     #enh-servarr-actions {
                         margin-top: 8px; display: flex; align-items: center; gap: 8px; flex-wrap: wrap;
                     }
@@ -4001,8 +4004,7 @@ section[id*="quote" i] .ipc-list-card { padding: 4px 0 !important; margin: 2px 0
                 const servers = getConfiguredMediaServers();
                 if (!servers.length) return;
 
-                const t = getTheme();
-                addCSS(`
+                addThemedCSS(t => `
                     #enh-media-server-status {
                         margin-top: 8px; display: flex; align-items: center; gap: 8px; flex-wrap: wrap;
                     }
@@ -4377,8 +4379,7 @@ section[id*="quote" i] .ipc-list-card { padding: 4px 0 !important; margin: 2px 0
         init() {
             if (!/\/user\/[^/]+\/watchlist/i.test(location.pathname)) return;
             if (document.getElementById('enh-watchlist-copy')) return;
-            const t = getTheme();
-            addCSS(`
+            addThemedCSS(t => `
                 #enh-watchlist-copy {
                     position: sticky; top: 72px; z-index: 30;
                     display: inline-flex; align-items: center; justify-content: center;
@@ -4462,8 +4463,7 @@ section[id*="quote" i] .ipc-list-card { padding: 4px 0 !important; margin: 2px 0
             const sites = getSiteList('watchSites', DEFAULT_WATCH_SITES);
             if (!sites.length) return;
 
-            const t = getTheme();
-            addCSS(`
+            addThemedCSS(t => `
                 #enh-multi-search {
                     position: sticky; top: 112px; z-index: 29;
                     display: inline-flex; align-items: center; gap: 6px; flex-wrap: wrap;

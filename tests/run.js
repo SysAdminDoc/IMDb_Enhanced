@@ -480,6 +480,13 @@ test('all enhancements respect the operating-system reduced-motion preference', 
     assert(!readme.includes('WCAG AAA compliant'), 'README must not claim unverified conformance');
 });
 
+test('theme changes repaint feature styles without restarting behavior', () => {
+    assert(script.includes('const themedStyleFactories = new Map()'), 'theme-aware feature styles need a shared registry');
+    assert(script.includes('refreshThemedStyles();'), 'theme application should repaint registered feature styles');
+    assert(!script.includes('refreshThemeDependentFeatures'), 'theme changes must not restart feature lifecycles or network checks');
+    assert((script.match(/addThemedCSS\(t =>/g) || []).length >= 8, 'all feature-local theme styles should use the repaint registry');
+});
+
 test('optional keyboard shortcuts do not collide with browser or modal commands', () => {
     assert(script.includes('e.defaultPrevented || e.repeat || e.ctrlKey || e.metaKey || e.altKey'), 'modified and repeated key events should bypass shortcuts');
     assert(script.includes("document.getElementById('enh-trailer-overlay')"), 'page shortcuts should pause while the trailer dialog is open');
