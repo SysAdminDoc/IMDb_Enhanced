@@ -45,6 +45,7 @@
 - Removed a generated IMDb class dependency and a negative-margin poster-title hack from the wider-layout option so upstream class churn cannot widen unrelated elements or overlap adjacent card content.
 - Added per-feature lifecycle generations so an async callback started before a quick off/on toggle or settings refresh cannot become current again and render duplicate or stale controls on the same route.
 - Kept focus inside the trailer dialog even when keyboard navigation exits the cross-origin player frame, and restored plot/episode text to its original non-button semantics immediately after a one-way spoiler reveal.
+- Tightened third-party title identity matching so year-qualified IMDb titles reject score or streaming candidates with no release year, while canonical title comparison now tolerates accent variants such as `Amélie`/`Amelie`.
 
 ## 2.5.1 — 2026-08-12
 

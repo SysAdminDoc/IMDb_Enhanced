@@ -542,6 +542,12 @@ test('Rotten Tomatoes search fallback requires an exact title and year', () => {
     assert.strictEqual(hooks.parseRTSearchResult(html, 'The Matrix', 2021, 'movie'), null, 'a different title must not satisfy a matching year');
     assert.strictEqual(hooks.parseRTSearchResult(html, 'The Matrix', 1993, 'tv').tomatometer, 55, 'movie and TV results must stay separated');
     assert.strictEqual(hooks.parseRTSearchResult(html, 'Matrix', 1999, 'movie'), null, 'partial title matches must be rejected');
+    assert.strictEqual(
+        hooks.parseRTSearchResult('<search-page-media-row tomatometer-score="92"><a slot="title" href="https://www.rottentomatoes.com/m/amelie">Amelie</a></search-page-media-row>', 'Amélie', 2001, 'movie'),
+        null,
+        'a missing result year must not satisfy a year-qualified IMDb title'
+    );
+    assert.strictEqual(hooks.normalizeLookupTitle('Amélie'), hooks.normalizeLookupTitle('Amelie'), 'accent variants should retain title identity');
     assert(!script.includes('responseText.match(/"tomatoScore"'), 'unscoped first-score fallback should stay removed');
 });
 
@@ -557,6 +563,11 @@ test('Metacritic lookup selection requires exact title, type, and year context',
     assert.strictEqual(hooks.selectMetacriticResult(items, 'The Thing', 2005, 'tv'), items[2]);
     assert.strictEqual(hooks.selectMetacriticResult(items, 'The Thing', 1995, 'movie'), null, 'remake results must not cross years');
     assert.strictEqual(hooks.selectMetacriticResult(items, 'Thing', 2011, 'movie'), null, 'different exact titles must not be substituted by year');
+    assert.strictEqual(
+        hooks.selectMetacriticResult([{ title:'The Thing', type:'movie' }], 'The Thing', 1982, 'movie'),
+        null,
+        'a missing result year must not satisfy a year-qualified IMDb title'
+    );
     assert(!script.includes('const best = items[0]'), 'first-result Metacritic selection should stay removed');
 });
 
@@ -577,6 +588,11 @@ test('JustWatch direct and fallback pages preserve title identity', () => {
         'https://www.justwatch.com/us/movie/the-thing-1982'
     );
     assert.strictEqual(hooks.parseJustWatchSearchResult(searchHtml, 'The Thing', 1995, 'movie'), '');
+    assert.strictEqual(
+        hooks.parseJustWatchSearchResult('<a href="/us/movie/the-thing" class="title-list-row__column-header"><span class="header-title">The Thing</span></a>', 'The Thing', 1982, 'movie'),
+        '',
+        'a missing result year must not satisfy a year-qualified IMDb title'
+    );
     assert.strictEqual(
         hooks.parseJustWatchSearchResult(searchHtml, 'The Thing', 2005, 'tv-show'),
         'https://www.justwatch.com/us/tv-show/the-thing'

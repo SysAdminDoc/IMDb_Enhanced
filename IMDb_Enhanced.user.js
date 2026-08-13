@@ -1069,6 +1069,8 @@
     }
     function normalizeLookupTitle(value) {
         return String(value || '')
+            .normalize('NFKD')
+            .replace(/[\u0300-\u036f]/g, '')
             .toLowerCase()
             .replace(/&/g, ' and ')
             .replace(/[^a-z0-9]+/g, ' ')
@@ -2036,9 +2038,7 @@ section[id*="quote" i] .ipc-list-card { padding: 4px 0 !important; margin: 2px 0
         const wantedYear = Number(year) || 0;
         if (wantedYear) {
             const yearMatch = exact.find(candidate => candidate.year && Math.abs(candidate.year - wantedYear) <= 1);
-            if (yearMatch) return yearMatch;
-            if (exact.length === 1 && !exact[0].year) return exact[0];
-            return null;
+            return yearMatch || null;
         }
         return exact.length === 1 ? exact[0] : null;
     }
@@ -2057,19 +2057,14 @@ section[id*="quote" i] .ipc-list-card { padding: 4px 0 !important; margin: 2px 0
             const itemYear = Number(yearFromText(item?.releaseDate || item?.premiereDate || item?.year)) || 0;
             return itemYear && Math.abs(itemYear - wantedYear) <= 1;
         });
-        if (yearMatch) return yearMatch;
-        if (exact.length === 1) {
-            const onlyYear = Number(yearFromText(exact[0]?.releaseDate || exact[0]?.premiereDate || exact[0]?.year)) || 0;
-            if (!onlyYear) return exact[0];
-        }
-        return null;
+        return yearMatch || null;
     }
 
     function isMatchingTitleIdentity(candidate, title, year) {
         if (normalizeLookupTitle(candidate?.title) !== normalizeLookupTitle(title)) return false;
         const wantedYear = Number(year) || 0;
         const candidateYear = Number(candidate?.year) || 0;
-        return !wantedYear || !candidateYear || Math.abs(candidateYear - wantedYear) <= 1;
+        return !wantedYear || Boolean(candidateYear) && Math.abs(candidateYear - wantedYear) <= 1;
     }
 
     function parseJustWatchSearchResult(html, title, year, typePath = 'movie') {
