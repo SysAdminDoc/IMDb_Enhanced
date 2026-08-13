@@ -26,7 +26,6 @@
 // @connect      backend.metacritic.com
 // @connect      letterboxd.com
 // @connect      www.justwatch.com
-// @connect      www.opensubtitles.org
 // @connect      www.youtube.com
 // @connect      localhost
 // @connect      127.0.0.1
@@ -3387,14 +3386,14 @@ section[id*="quote" i] .ipc-list-card { padding: 4px 0 !important; margin: 2px 0
             'Movie Sites': [
                 { n:'Letterboxd', u:'https://letterboxd.com/imdb/{{ID}}/' },
                 { n:'TMDB', u:'https://www.themoviedb.org/search/movie?query={{T}}' },
-                { n:'AllMovie', u:'http://www.allmovie.com/search/movies/{{T}}' },
+                { n:'AllMovie', u:'https://www.allmovie.com/search/movies/{{T}}' },
                 { n:'Box Office Mojo', u:'https://www.boxofficemojo.com/search/?q={{T}}' },
                 { n:'Criticker', u:'https://www.criticker.com/?search={{ID}}' },
                 { n:'Trakt', u:'https://app.trakt.tv/search?query={{T}}' },
             ],
             'Reviews': [
                 { n:'Rotten Tomatoes', u:'https://www.rottentomatoes.com/search?search={{T}}' },
-                { n:'Metacritic', u:'https://www.metacritic.com/search/all/{{T}}/results' },
+                { n:'Metacritic', u:'https://www.metacritic.com/search/{{T}}/' },
             ],
             'Search': [
                 { n:'Google', u:'https://www.google.com/search?q={{T}}+{{Y}}' },
@@ -3414,7 +3413,6 @@ section[id*="quote" i] .ipc-list-card { padding: 4px 0 !important; margin: 2px 0
                 { n:'Ep Calendar', u:'https://episodecalendar.com/en/shows?q%5Bname_cont%5D={{T}}' },
             ],
             'Torrents': [
-                { n:'YTS', u:'https://yts.mx/browse-movies/{{ID}}' },
                 { n:'1337x', u:'https://1337x.to/search/{{T}}+{{Y}}/1/' },
             ],
         },

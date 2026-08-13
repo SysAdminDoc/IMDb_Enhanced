@@ -534,6 +534,9 @@ test('retired watch-site domains stay removed', () => {
     deadDomains.forEach(domain => {
         assert(!script.includes(domain), `dead domain ${domain} should be removed`);
     });
+    assert(!script.includes('yts.mx'), 'DNS-dead expanded destinations should stay removed');
+    assert(!script.includes('metacritic.com/search/all/'), 'retired Metacritic search paths should stay removed');
+    assert(!script.includes("u:'http://www.allmovie.com"), 'expanded external links should not downgrade to HTTP');
 });
 
 test('watch links avoid unreliable background origin probes', () => {
@@ -773,6 +776,7 @@ test('Greasy Fork distribution guardrails stay intact', () => {
     assert(!/@require\s+/i.test(script), '@require should not be used');
     assert(!/@resource\s+/i.test(script), '@resource should not be used');
     assert(!/@connect\s+\*/i.test(script), 'wildcard @connect should not return');
+    assert(!/@connect\s+www\.opensubtitles\.org/i.test(script), 'ordinary subtitle links should not retain cross-origin request permission');
     assert(!/\beval\s*\(/.test(script), 'eval should not be used');
     assert(!/\bnew\s+Function\s*\(/.test(script), 'new Function should not be used');
     assert(!/createElement\(['"]script['"]\)/.test(script), 'dynamic script tags should not be created');
