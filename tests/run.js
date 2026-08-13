@@ -48,6 +48,7 @@ function loadScriptTestHooks() {
         normalizeLocalServiceUrl,
         normalizeTrustedUrl,
         normalizeSite,
+        getSiteList,
         filterSitesForMediaType,
         boundedScore,
         parseRTSearchResult,
@@ -757,6 +758,7 @@ test('custom site templates require complete HTTP or HTTPS URLs', () => {
     assert.strictEqual(hooks.normalizeUrlTemplate('https://example.com/search?q={{TITLE}}'), 'https://example.com/search?q={{TITLE}}');
     assert.strictEqual(hooks.normalizeUrlTemplate('http://localhost:8080/search'), 'http://localhost:8080/search');
     assert.strictEqual(hooks.normalizeUrlTemplate('https://'), '');
+    assert.strictEqual(hooks.normalizeUrlTemplate('https:\\example.com\\search'), '', 'backslash-style URLs must not bypass authority validation');
     assert.strictEqual(hooks.normalizeUrlTemplate('javascript:alert(1)'), '');
     assert.strictEqual(hooks.normalizeUrlTemplate('file:///tmp/search'), '');
     assert.strictEqual(hooks.normalizeUrlTemplate('https://user:secret@example.com/search'), '');
@@ -772,6 +774,7 @@ test('custom site templates require complete HTTP or HTTPS URLs', () => {
     );
     assert.strictEqual(hooks.normalizeUrlTemplate('https://example.com/{{title}}'), '', 'lowercase unknown tokens must be rejected');
     assert.strictEqual(hooks.normalizeUrlTemplate('https://example.com/{{TITLE_RAW}}'), 'https://example.com/{{TITLE_RAW}}');
+    assert.strictEqual(hooks.normalizeUrlTemplate(`https://example.com/${'a'.repeat(4090)}`), '', 'oversized URL templates must be rejected');
     assert.strictEqual(hooks.normalizeSite({ name:'Broken', url:'https://' }), null);
     assert.strictEqual(
         hooks.normalizeSite({ name:'Edited Cineby', url:'https://example.com/search?q={{TITLE}}', storeQuery:true }).storeQuery,
@@ -797,6 +800,12 @@ test('custom site templates require complete HTTP or HTTPS URLs', () => {
     );
     assert(script.includes("if (cat === 'Movie Sites' && isTVType()) continue"), 'expanded movie-only links should stay off TV pages');
     assert(script.includes("url:'https://www.themoviedb.org/search?query={{TITLE}}'"), 'default TMDB search should cover movies and TV');
+    const oversizedSites = Array.from({ length:60 }, (_, index) => ({
+        name:`Site ${index}`, url:`https://example.com/${index}?q={{TITLE}}`, color:'#6366f1',
+    }));
+    hooks.seedStoredSetting('watchSites', oversizedSites);
+    assert.strictEqual(hooks.getSiteList('watchSites', []).length, 50, 'runtime custom-site lists must honor the import/UI bound');
+    assert(script.includes('add.disabled = total >= SITE_LIST_LIMIT'), 'site editor should expose the destination limit before adding another row');
 });
 
 test('third-party response links stay on trusted HTTPS domains', () => {
@@ -1119,7 +1128,7 @@ test('settings preserve host scroll state and complete nested tab keyboard suppo
     assert(!script.includes("site.name || 'New site'"), 'adding a custom site must not persist a fake destination name');
     assert(!script.includes("site.url || 'https://example.com/search?q={{TITLE}}'"), 'example URLs must remain placeholders rather than live saved destinations');
     assert(
-        /onClick: \(\) => \{\s*const row = addRow\(\);\s*updateCount\(\);[\s\S]*?\.focus\(\);\s*\}/.test(script),
+        /onClick: \(\) => \{[\s\S]*?rows\.children\.length >= SITE_LIST_LIMIT[\s\S]*?const row = addRow\(\);\s*updateCount\(\);[\s\S]*?\.focus\(\);\s*\}/.test(script),
         'Add should create and focus an unsaved draft row'
     );
     assert(

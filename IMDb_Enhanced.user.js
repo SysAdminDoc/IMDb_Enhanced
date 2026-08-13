@@ -63,6 +63,8 @@
     const STRUCTURED_DATA_TEXT_LIMIT = 2 * 1024 * 1024;
     const EXTERNAL_RESPONSE_TEXT_LIMIT = 8 * 1024 * 1024;
     const LOCAL_RESPONSE_TEXT_LIMIT = 4 * 1024 * 1024;
+    const SITE_LIST_LIMIT = 50;
+    const URL_TEMPLATE_TEXT_LIMIT = 4096;
     const URL_TEMPLATE_KEYS = new Set([
         'TITLE', 'TITLE_RAW', 'TITLE_DASH', 'TITLE_SLUG',
         'IMDB_ID', 'IMDB_NUM', 'TRAKT_TYPE', 'YEAR',
@@ -610,6 +612,7 @@
 
     function normalizeUrlTemplate(url) {
         const value = String(url || '').trim();
+        if (!value || value.length > URL_TEMPLATE_TEXT_LIMIT || !/^https?:\/\//i.test(value)) return '';
         try {
             const parsed = new URL(value);
             const safeProtocol = /^https?:$/i.test(parsed.protocol);
@@ -786,7 +789,7 @@
         }
         if (Array.isArray(fallback)) {
             if (!Array.isArray(value)) return null;
-            const limited = value.slice(0, 50);
+            const limited = value.slice(0, SITE_LIST_LIMIT);
             const normalized = limited.map(site => normalizeSite(site)).filter(Boolean);
             if (normalized.length !== limited.length) return null;
             return {
@@ -878,12 +881,12 @@
 
     function getSiteList(key, defaults) {
         const value = get(key);
-        if (Array.isArray(value)) return value.map(site => normalizeSite(site)).filter(Boolean);
-        return defaults.map(site => normalizeSite(site)).filter(Boolean);
+        if (Array.isArray(value)) return value.slice(0, SITE_LIST_LIMIT).map(site => normalizeSite(site)).filter(Boolean);
+        return defaults.slice(0, SITE_LIST_LIMIT).map(site => normalizeSite(site)).filter(Boolean);
     }
 
     function setSiteList(key, sites) {
-        const normalized = sites.map(site => normalizeSite(site)).filter(Boolean);
+        const normalized = sites.slice(0, SITE_LIST_LIMIT).map(site => normalizeSite(site)).filter(Boolean);
         set(key, normalized);
     }
 
@@ -5634,9 +5637,11 @@ section[id*="quote" i] .ipc-list-card { padding: 4px 0 !important; margin: 2px 0
         const editor = makeEl('div', { className:'enh-site-editor' });
         const rows = makeEl('div', { className:'enh-site-editor__rows' });
         const count = makeEl('span', { className:'enh-settings-route-badge' });
+        let add = null;
         const updateCount = () => {
             const total = rows.querySelectorAll('.enh-site-row').length;
             count.textContent = `${total} ${total === 1 ? 'site' : 'sites'}`;
+            if (add) add.disabled = total >= SITE_LIST_LIMIT;
         };
 
         const readRows = () => Array.from(rows.querySelectorAll('.enh-site-row')).map(row => ({
@@ -5719,10 +5724,14 @@ section[id*="quote" i] .ipc-list-card { padding: 4px 0 !important; margin: 2px 0
             return row;
         };
 
-        const add = makeEl('button', {
+        add = makeEl('button', {
             type:'button',
             className:'enh-settings-footer-btn',
             onClick: () => {
+                if (rows.children.length >= SITE_LIST_LIMIT) {
+                    showToast(`A site list can contain up to ${SITE_LIST_LIMIT} destinations`);
+                    return;
+                }
                 const row = addRow();
                 updateCount();
                 row.querySelector('[data-field="name"]')?.focus();
