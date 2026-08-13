@@ -111,6 +111,7 @@
 - Made transactional import/theme rollback restore previously absent storage keys as absent instead of materializing default-valued keys during recovery.
 - Removed the unused `GM_addStyle` grant now that all styles use the userscript's guarded document-start style host.
 - Kept IMDb theme repainting and operating-system theme listeners off Cineby's handoff-only page, preventing a later system-theme change from injecting IMDb presentation styles into the destination site.
+- Made all shared cross-origin requests anonymous so public score, availability, trailer, and token-authenticated local-service lookups do not send destination cookies.
 
 ## 2.5.1 — 2026-08-12
 

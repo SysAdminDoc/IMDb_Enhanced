@@ -1116,6 +1116,7 @@
                     ...requestOptions,
                     method: requestOptions.method || 'GET',
                     url,
+                    anonymous: true,
                     timeout: requestOptions.timeout || 10000,
                     headers,
                     data: hasBody ? JSON.stringify(body) : requestOptions.data,

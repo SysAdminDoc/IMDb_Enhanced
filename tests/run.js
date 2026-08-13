@@ -1272,6 +1272,15 @@ test('Greasy Fork distribution guardrails stay intact', () => {
     assert(!/\bconfirm\s*\(/.test(script), 'confirmation dialogs should not be used');
 });
 
+test('cross-origin requests omit destination cookies', () => {
+    const hooks = loadScriptTestHooks();
+    hooks.httpRequest('https://www.youtube.com/results?search_query=Alien').catch(() => {});
+    const request = hooks.getCapturedRequests().at(-1);
+    assert(request, 'request was not created');
+    assert.strictEqual(request.anonymous, true, 'public lookups should not carry destination cookies');
+    assert.strictEqual((script.match(/GM_xmlhttpRequest\(/g) || []).length, 1, 'requests should stay behind the shared privacy boundary');
+});
+
 test('media server integration is configurable and local-only', () => {
     [
         'mediaServerIntegration',
