@@ -532,6 +532,9 @@ test('theme text tokens remain readable on elevated surfaces', () => {
         assert(contrast(theme.tx2, theme.sf2) >= 4.5, `${id} secondary text is too faint on elevated surfaces`);
         assert(contrast(theme.tx3, theme.sf2) >= 4.5, `${id} tertiary text is too faint on elevated surfaces`);
     });
+    assert(!script.includes('--score-color:#8888a0'), 'unavailable score links should inherit the current theme instead of fixed dark-theme gray');
+    assert(script.includes('.enh-score-widget--muted { --score-color: ${t.tx2}; }'), 'unavailable score links should use the readable secondary token');
+    assert(!script.includes('.enh-score-widget--muted { opacity:'), 'muted status widgets should not reduce all text below the theme contrast target');
 });
 
 test('optional keyboard shortcuts do not collide with browser or modal commands', () => {

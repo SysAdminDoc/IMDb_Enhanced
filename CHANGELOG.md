@@ -88,6 +88,7 @@
 - Extended list, chart, and watchlist tools to IMDb's live locale-prefixed desktop routes instead of matching only their unprefixed English URLs.
 - Distinguished private Seen/Skip marks from IMDb's newer account-based Watched feature in settings, badges, accessible names, and save feedback without changing existing local mark data.
 - Raised secondary and tertiary text contrast across Dark, OLED, Midnight, and Light themes so settings help, status labels, metadata, and integration notes remain readable on elevated surfaces.
+- Replaced fixed gray and whole-widget opacity on unavailable score links with the active theme's readable secondary text token.
 
 ## 2.5.1 — 2026-08-12
 

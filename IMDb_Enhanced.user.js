@@ -2642,7 +2642,7 @@ section[id*="quote" i] .ipc-list-card { padding: 4px 0 !important; margin: 2px 0
             const audience = boundedScore(data.audience, 100);
             const hasScore = score !== null;
             const hasAudience = audience !== null;
-            const color = hasScore ? rtColorFn(score) : '#555';
+            const color = hasScore ? rtColorFn(score) : '';
             const consensus = String(data.consensus || '').trim().slice(0, 500);
             const fallbackUrl = `https://www.rottentomatoes.com/search?search=${encodeURIComponent(getTitleText())}`;
             const href = normalizeTrustedUrl(data.url, 'rottentomatoes.com', fallbackUrl);
@@ -2650,7 +2650,7 @@ section[id*="quote" i] .ipc-list-card { padding: 4px 0 !important; margin: 2px 0
             const scoreLink = makeEl('a', {
                 href,
                 target:'_blank', rel:'noopener', className:'enh-score-widget__score',
-                style:{ '--score-color':color },
+                style:hasScore ? { '--score-color':color } : {},
                 ...(consensus ? { title:consensus } : {}),
             },
                 makeEl('span', { className:'enh-score-widget__badge enh-score-widget__badge--outline' }, 'RT'),
@@ -2679,7 +2679,7 @@ section[id*="quote" i] .ipc-list-card { padding: 4px 0 !important; margin: 2px 0
             w.innerHTML = `
                 <div class="enh-score-widget__label">TOMATOMETER</div>
                 <a href="https://www.rottentomatoes.com/search?search=${encodeURIComponent(getTitleText())}"
-                   target="_blank" rel="noopener" class="enh-score-widget__score" style="--score-color:#8888a0">
+                   target="_blank" rel="noopener" class="enh-score-widget__score">
                     <span class="enh-score-widget__badge enh-score-widget__badge--outline">RT</span>
                     <span class="enh-score-widget__value">Open</span>
                 </a>
@@ -2770,7 +2770,7 @@ section[id*="quote" i] .ipc-list-card { padding: 4px 0 !important; margin: 2px 0
             w.innerHTML = `
                 <div class="enh-score-widget__label">LETTERBOXD</div>
                 <a href="https://letterboxd.com/imdb/${getIMDbID()}/"
-                   target="_blank" rel="noopener" class="enh-score-widget__score" style="--score-color:#8888a0">
+                   target="_blank" rel="noopener" class="enh-score-widget__score">
                     <span class="enh-score-widget__badge enh-score-widget__badge--outline">LB</span>
                     <span class="enh-score-widget__value">Open</span>
                 </a>
@@ -2841,7 +2841,7 @@ section[id*="quote" i] .ipc-list-card { padding: 4px 0 !important; margin: 2px 0
             const userScore = boundedScore(data.userScore, 10);
             const hasScore = score !== null;
             const hasUserScore = userScore !== null;
-            const color = hasScore ? mcColor(score) : '#555';
+            const color = hasScore ? mcColor(score) : '';
             const fallbackUrl = `https://www.metacritic.com/search/${encodeURIComponent(getTitleText())}/`;
             const href = normalizeTrustedUrl(data.url, 'metacritic.com', fallbackUrl);
             const w = makeEl('div', { id: 'enh-mc-widget', className: 'enh-score-widget' });
@@ -2849,10 +2849,10 @@ section[id*="quote" i] .ipc-list-card { padding: 4px 0 !important; margin: 2px 0
                 makeEl('div', { className:'enh-score-widget__label' }, 'METASCORE'),
                 makeEl('a', {
                     href, target:'_blank', rel:'noopener', className:'enh-score-widget__score',
-                    style:{ '--score-color':color },
+                    style:hasScore ? { '--score-color':color } : {},
                 }, makeEl('span', {
-                    className:'enh-score-widget__badge',
-                    style:{ background:color, color:score >= 60 ? '#000' : '#fff' },
+                    className:'enh-score-widget__badge' + (hasScore ? '' : ' enh-score-widget__badge--outline'),
+                    style:hasScore ? { background:color, color:score >= 60 ? '#000' : '#fff' } : {},
                 }, hasScore ? String(score) : '--'))
             );
             if (hasUserScore) {
@@ -2879,7 +2879,7 @@ section[id*="quote" i] .ipc-list-card { padding: 4px 0 !important; margin: 2px 0
             w.innerHTML = `
                 <div class="enh-score-widget__label">METASCORE</div>
                 <a href="https://www.metacritic.com/search/${encodeURIComponent(getTitleText())}/"
-                   target="_blank" rel="noopener" class="enh-score-widget__score" style="--score-color:#8888a0">
+                   target="_blank" rel="noopener" class="enh-score-widget__score">
                     <span class="enh-score-widget__badge enh-score-widget__badge--outline">MC</span>
                     <span class="enh-score-widget__value">Open</span>
                 </a>
@@ -3027,7 +3027,6 @@ section[id*="quote" i] .ipc-list-card { padding: 4px 0 !important; margin: 2px 0
                     target: '_blank',
                     rel: 'noopener',
                     className: 'enh-score-widget__score enh-score-widget__score--availability',
-                    style: { '--score-color': '#8888a0' },
                 },
                     makeEl('span', { className: 'enh-score-widget__badge enh-score-widget__badge--outline' }, 'JW'),
                     makeEl('span', { className: 'enh-score-widget__value' }, 'Open')
@@ -4946,7 +4945,7 @@ section[id*="quote" i] .ipc-list-card { padding: 4px 0 !important; margin: 2px 0
 }
 .enh-score-widget__score {
     display: flex; align-items: center; gap: 4px; text-decoration: none !important;
-    color: var(--score-color) !important; font-size: 20px; font-weight: 800;
+    color: var(--score-color, ${t.tx2}) !important; font-size: 20px; font-weight: 800;
     transition: transform .15s cubic-bezier(.4,0,.2,1), opacity .15s ease;
 }
 .enh-score-widget__score:hover { transform: translateY(-1px); }
@@ -4954,7 +4953,7 @@ section[id*="quote" i] .ipc-list-card { padding: 4px 0 !important; margin: 2px 0
     justify-content: center; max-width: 100%;
 }
 .enh-score-widget__icon { font-size: 18px; }
-.enh-score-widget__value { color: var(--score-color); }
+.enh-score-widget__value { color: var(--score-color, ${t.tx2}); }
 .enh-score-widget__value--availability {
     max-width: 150px; white-space: normal; text-align: left;
     font-size: 12px; line-height: 1.25;
@@ -4972,7 +4971,7 @@ section[id*="quote" i] .ipc-list-card { padding: 4px 0 !important; margin: 2px 0
     padding: 2px 7px;
 }
 .enh-score-widget__sub { font-size: 10px; color: ${t.tx3}; margin-top: 2px; }
-.enh-score-widget--muted { opacity: .82; }
+.enh-score-widget--muted { --score-color: ${t.tx2}; }
 .enh-score-widget__skeleton {
     width: 58px; height: 24px; border-radius: 6px;
     background: linear-gradient(90deg, ${t.sf1}, ${t.sf2}, ${t.sf1});
