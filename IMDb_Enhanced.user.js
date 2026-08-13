@@ -4085,22 +4085,32 @@ section[id*="quote" i] .ipc-list-card { padding: 4px 0 !important; margin: 2px 0
                         className:'enh-servarr-btn',
                         dataset:{ kind:action.kind },
                         'aria-label': `${action.label} for ${title}`,
+                        'aria-live':'polite',
+                        'aria-atomic':'true',
                         onClick: async () => {
                             const original = btn.textContent;
+                            const originalLabel = btn.getAttribute('aria-label');
+                            const service = action.kind === 'radarr' ? 'Radarr' : 'Sonarr';
                             btn.disabled = true;
                             btn.textContent = 'Adding...';
+                            btn.setAttribute('aria-busy', 'true');
+                            btn.setAttribute('aria-label', `Adding ${title} to ${service}`);
                             try {
                                 const added = await this._add(action.kind, imdbId, title, year, isCurrent);
                                 if (!added || !isCurrent()) return;
-                                showToast(`${title} sent to ${action.kind === 'radarr' ? 'Radarr' : 'Sonarr'}`);
+                                showToast(`${title} sent to ${service}`);
                                 btn.textContent = 'Added';
+                                btn.removeAttribute('aria-busy');
+                                btn.setAttribute('aria-label', `${title} added to ${service}`);
                                 btn.disabled = true;
                             } catch (error) {
                                 if (!isCurrent()) return;
                                 console.warn('[IMDb Enhanced] Servarr add failed:', error);
-                                showToast(`${action.kind === 'radarr' ? 'Radarr' : 'Sonarr'} add failed: ${getRequestErrorMessage(error)}`, 4500);
+                                showToast(`${service} add failed: ${getRequestErrorMessage(error)}`, 4500);
                                 btn.disabled = false;
                                 btn.textContent = original;
+                                btn.removeAttribute('aria-busy');
+                                btn.setAttribute('aria-label', originalLabel);
                             }
                         },
                     }, action.label);
@@ -4125,7 +4135,8 @@ section[id*="quote" i] .ipc-list-card { padding: 4px 0 !important; margin: 2px 0
                     btn.textContent = 'In Library';
                     btn.disabled = true;
                     const label = kind === 'radarr' ? 'Radarr' : 'Sonarr';
-                    const status = makeEl('span', { className:'enh-servarr-status', title:`Already in ${label}` },
+                    btn.setAttribute('aria-label', `${ctx.title} is already in ${label}`);
+                    const status = makeEl('span', { className:'enh-servarr-status', title:`Already in ${label}`, 'aria-hidden':'true' },
                         makeEl('span', { className:'enh-servarr-status--dot' }),
                     );
                     bar.insertBefore(status, btn);
@@ -4243,8 +4254,11 @@ section[id*="quote" i] .ipc-list-card { padding: 4px 0 !important; margin: 2px 0
                     const pill = makeEl('span', {
                         className:'enh-media-server-pill',
                         title:`Checking ${server.label} for ${title}`,
+                        role:'status',
+                        'aria-live':'polite',
+                        'aria-atomic':'true',
                     },
-                        makeEl('span', { className:'enh-media-server-pill__dot' }),
+                        makeEl('span', { className:'enh-media-server-pill__dot', 'aria-hidden':'true' }),
                         makeEl('span', {}, server.label),
                         state
                     );

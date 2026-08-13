@@ -1298,6 +1298,10 @@ test('media server integration is configurable and local-only', () => {
         'AnyProviderIdEquals',
     ].forEach(token => assert(script.includes(token), `${token} missing`));
     assert(script.includes('Only localhost and 127.0.0.1 media server URLs are allowed'), 'media server local-only guard missing');
+    assert(/className:'enh-media-server-pill',[\s\S]*?role:'status',[\s\S]*?'aria-live':'polite'/.test(script), 'async media-server state should be announced');
+    assert(script.includes("className:'enh-media-server-pill__dot', 'aria-hidden':'true'"), 'decorative media-server dots should stay out of the accessibility tree');
+    assert(script.includes("btn.setAttribute('aria-label', `${ctx.title} is already in ${label}`)"), 'Servarr library state should replace the stale Add accessible name');
+    assert(script.includes("btn.setAttribute('aria-busy', 'true')"), 'Servarr adds should expose their pending state');
 });
 
 test('local-service credentials stay out of request URLs', () => {
