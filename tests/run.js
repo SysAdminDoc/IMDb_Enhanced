@@ -1284,6 +1284,17 @@ test('third-party search and structured-data parsers enforce finite scan budgets
         null,
         'availability parsing must share the structured-data script budget'
     );
+    const oversizedExternalTypes = Array(21).fill('Thing');
+    oversizedExternalTypes[20] = 'Movie';
+    const oversizedTypeDetail = `<script type="application/ld+json">${JSON.stringify({
+        '@type':oversizedExternalTypes,
+        name:'The Matrix',
+        dateCreated:'1999-03-31',
+        aggregateRating:{ ratingValue:4.5, ratingCount:1000 },
+    })}</script>`;
+    assert.strictEqual(hooks.parseRTDetailPage(oversizedTypeDetail, 'The Matrix', 1999), null, 'RT type classification should stay bounded');
+    assert.strictEqual(hooks.parseLetterboxdDetailPage(oversizedTypeDetail, 'The Matrix', 1999), null, 'Letterboxd type classification should stay bounded');
+    assert.strictEqual(hooks.parseJustWatchIdentity(oversizedTypeDetail), null, 'JustWatch type classification should stay bounded');
     [
         'parseYouTubeTrailerVideoId', 'parseRTSearchResult', 'parseRTDetailPage',
         'parseLetterboxdDetailPage', 'parseJustWatchSearchResult', 'parseJustWatchIdentity',

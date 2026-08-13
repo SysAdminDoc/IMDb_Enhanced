@@ -130,6 +130,7 @@
 - Revalidated cached JustWatch provider lists at render time, inspecting at most 50 primitive labels, bounding each to 120 characters, and replacing repeated linear duplicate scans with a normalized set.
 - Hardened local-integration request guards to require credential-free HTTP(S) localhost base URLs without query/fragment state, and rejected API header credentials containing control characters across UI, import, and runtime reads.
 - Improved destination-list editing with live count announcements, remove labels that follow the edited site name, focus recovery after successful or rolled-back removal, and explicit removal feedback.
+- Applied the same finite JSON-LD type-list classification used for IMDb data to Rotten Tomatoes, Letterboxd, and JustWatch detail parsing.
 
 ## 2.5.1 — 2026-08-12
 

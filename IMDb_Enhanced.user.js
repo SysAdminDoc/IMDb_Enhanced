@@ -2465,7 +2465,7 @@ section[id*="quote" i] .ipc-list-card { padding: 4px 0 !important; margin: 2px 0
                         appendBoundedObjectChildren(queue, item, EXTERNAL_STRUCTURED_DATA_NODE_LIMIT);
                         continue;
                     }
-                    const types = Array.isArray(item['@type']) ? item['@type'] : [item['@type']];
+                    const types = getBoundedStructuredStrings(item['@type'], STRUCTURED_DATA_TYPE_LIMIT);
                     const itemType = types.includes('Movie') ? 'movie'
                         : types.some(value => ['TVSeries', 'TVShow'].includes(value)) ? 'tv'
                             : '';
@@ -2527,7 +2527,7 @@ section[id*="quote" i] .ipc-list-card { padding: 4px 0 !important; margin: 2px 0
                         appendBoundedObjectChildren(queue, item, EXTERNAL_STRUCTURED_DATA_NODE_LIMIT);
                         continue;
                     }
-                    const types = Array.isArray(item['@type']) ? item['@type'] : [item['@type']];
+                    const types = getBoundedStructuredStrings(item['@type'], STRUCTURED_DATA_TYPE_LIMIT);
                     if (types.includes('Movie') && isMatchingTitleIdentity({
                         title:item.name,
                         year:Number(yearFromText(item.dateCreated || item.datePublished)) || 0,
@@ -2601,7 +2601,7 @@ section[id*="quote" i] .ipc-list-card { padding: 4px 0 !important; margin: 2px 0
                 const parsed = JSON.parse(scriptText);
                 const roots = Array.isArray(parsed) ? parsed.slice(0, EXTERNAL_RESULT_SCAN_LIMIT) : [parsed];
                 for (const item of roots) {
-                    const types = Array.isArray(item?.['@type']) ? item['@type'] : [item?.['@type']];
+                    const types = getBoundedStructuredStrings(item?.['@type'], STRUCTURED_DATA_TYPE_LIMIT);
                     const type = types.includes('Movie') ? 'movie'
                         : types.some(value => ['TVSeries', 'TVShow'].includes(value)) ? 'tv-show'
                             : '';
