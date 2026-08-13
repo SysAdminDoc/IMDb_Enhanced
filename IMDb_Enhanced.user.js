@@ -63,6 +63,10 @@
     const STRUCTURED_DATA_TEXT_LIMIT = 2 * 1024 * 1024;
     const EXTERNAL_RESPONSE_TEXT_LIMIT = 8 * 1024 * 1024;
     const LOCAL_RESPONSE_TEXT_LIMIT = 4 * 1024 * 1024;
+    const URL_TEMPLATE_KEYS = new Set([
+        'TITLE', 'TITLE_RAW', 'TITLE_DASH', 'TITLE_SLUG',
+        'IMDB_ID', 'IMDB_NUM', 'TRAKT_TYPE', 'YEAR',
+    ]);
     const AD_SHELL_SELECTOR = [
         '.nas-slot',
         '.slot_wrapper',
@@ -609,7 +613,18 @@
         try {
             const parsed = new URL(value);
             const safeProtocol = /^https?:$/i.test(parsed.protocol);
-            return safeProtocol && parsed.hostname && !parsed.username && !parsed.password ? value : '';
+            if (!safeProtocol || !parsed.hostname || parsed.username || parsed.password) return '';
+
+            const tokens = Array.from(value.matchAll(/\{\{([^{}]+)\}\}/g));
+            if (tokens.some(match => !URL_TEMPLATE_KEYS.has(match[1]))) return '';
+            const remainder = value.replace(/\{\{[^{}]+\}\}/g, '');
+            if (/[{}]/.test(remainder)) return '';
+
+            const authorityStart = value.indexOf('//') + 2;
+            const relativeEnd = value.slice(authorityStart).search(/[\\/?#]/);
+            const authorityEnd = relativeEnd < 0 ? value.length : authorityStart + relativeEnd;
+            const authority = value.slice(authorityStart, authorityEnd);
+            return /\{\{[^{}]+\}\}/.test(authority) ? '' : value;
         } catch { return ''; }
     }
 
@@ -5693,7 +5708,7 @@ section[id*="quote" i] .ipc-list-card { padding: 4px 0 !important; margin: 2px 0
             [nameInput, urlInput, colorInput].forEach(input => {
                 input.addEventListener('input', () => save(false));
                 input.addEventListener('change', () => {
-                    if (!save(true)) showToast('Enter a site name and a valid HTTP or HTTPS URL');
+                    if (!save(true)) showToast('Enter a site name, a valid HTTP(S) URL, and only supported template tokens');
                 });
             });
             row.appendChild(nameInput);

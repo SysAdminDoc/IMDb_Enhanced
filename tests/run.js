@@ -760,6 +760,18 @@ test('custom site templates require complete HTTP or HTTPS URLs', () => {
     assert.strictEqual(hooks.normalizeUrlTemplate('javascript:alert(1)'), '');
     assert.strictEqual(hooks.normalizeUrlTemplate('file:///tmp/search'), '');
     assert.strictEqual(hooks.normalizeUrlTemplate('https://user:secret@example.com/search'), '');
+    assert.strictEqual(
+        hooks.normalizeUrlTemplate('https://{{TITLE}}.example.com/search'),
+        '',
+        'page-derived template values must not control the destination origin'
+    );
+    assert.strictEqual(
+        hooks.normalizeUrlTemplate('https://example.com/search?q={{TITEL}}'),
+        '',
+        'unknown template-token typos must not save as silently empty values'
+    );
+    assert.strictEqual(hooks.normalizeUrlTemplate('https://example.com/{{title}}'), '', 'lowercase unknown tokens must be rejected');
+    assert.strictEqual(hooks.normalizeUrlTemplate('https://example.com/{{TITLE_RAW}}'), 'https://example.com/{{TITLE_RAW}}');
     assert.strictEqual(hooks.normalizeSite({ name:'Broken', url:'https://' }), null);
     assert.strictEqual(
         hooks.normalizeSite({ name:'Edited Cineby', url:'https://example.com/search?q={{TITLE}}', storeQuery:true }).storeQuery,

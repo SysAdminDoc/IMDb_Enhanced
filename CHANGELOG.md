@@ -96,6 +96,7 @@
 - Rebuilt settings chrome cleanly across IMDb SPA routes, removing panel-owned document listeners and timers while restoring page scroll if navigation occurs with settings open.
 - Rejected oversized remote HTML/JSON-LD and local service JSON/XML before regex, JSON, or DOM parsing, complementing candidate limits with an actual input-size boundary.
 - Limited private-mark fading to poster imagery and replaced whole-row opacity on opened list-search links with semantic surfaces/text, keeping interactive labels at the theme contrast target.
+- Rejected custom URL templates with unknown/malformed tokens or placeholders in the destination authority, preventing typos from silently disappearing and IMDb page text from choosing the outbound origin.
 
 ## 2.5.1 — 2026-08-12
 

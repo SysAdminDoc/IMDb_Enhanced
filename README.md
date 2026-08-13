@@ -56,7 +56,7 @@ Click the gear icon on any covered IMDb page to open the six-section settings wo
 
 **Tools** - Title, TV/episode, list, watched-mark, and keyboard-shortcut controls.
 
-**Sites** - Editable watch-search and external-link destinations, URL templates, ordering, colors, and Cineby handoff. Incomplete, non-HTTP(S), or credential-bearing URLs are visibly rejected without replacing the last valid saved list.
+**Sites** - Editable watch-search and external-link destinations, URL templates, ordering, colors, and Cineby handoff. Incomplete, non-HTTP(S), credential-bearing, origin-dynamic, or unknown-token templates are visibly rejected without replacing the last valid saved list.
 
 **Integrations** - Tabbed Radarr/Sonarr and Plex/Jellyfin/Emby local-service configuration with arrow/Home/End keyboard navigation.
 
