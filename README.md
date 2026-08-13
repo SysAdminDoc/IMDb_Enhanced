@@ -66,7 +66,7 @@ Click the gear icon on any covered IMDb page to open the six-section settings wo
 
 **External Links** - Same customization as watch sites for research/trailer links.
 
-**Cineby** - The exact Cineby root uses a one-time, ten-minute local title handoff that is consumed as soon as Cineby opens. Edit or remove its watch-site row to use an ordinary URL template instead.
+**Cineby** - The exact Cineby root uses a one-time, ten-minute local title handoff that is consumed as soon as Cineby opens. A second Cineby navigation is held back while the first handoff is pending so it cannot replace the earlier title. Edit or remove its watch-site row to use an ordinary URL template instead.
 
 **Radarr/Sonarr** - URL, API key, root folder, and quality profile for each. Localhost/127.0.0.1 only. Current Sonarr v4+ language selection belongs in quality-profile custom formats; retired v3 language profiles are not configured.
 

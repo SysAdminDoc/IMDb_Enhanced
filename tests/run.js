@@ -1373,6 +1373,7 @@ test('cineby uses current domain', () => {
     assert(!script.includes('createCinebySettingsPanel'), 'a single supported Cineby host should not render a false-choice selector');
     assert(script.includes('The exact Cineby root uses a one-time local title handoff.'), 'Sites should explain the fixed handoff behavior');
     assert(!readme.includes('Preferred Cineby host selector'), 'README must not advertise a host choice that does not exist');
+    assert(readme.includes('held back while the first handoff is pending'), 'README should explain serialized Cineby navigation');
 });
 
 test('Cineby handoffs are short-lived and consumed only once', () => {
