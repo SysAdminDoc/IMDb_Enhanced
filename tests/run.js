@@ -58,6 +58,7 @@ function loadScriptTestHooks() {
         getListTitlesFromLinks,
         buildListSearchEntries,
         getEnhancementScrollBehavior,
+        copyTextToClipboard,
         getFocusableElements,
         prepareSettingsImport,
         applySettingsImport,
@@ -91,6 +92,7 @@ function loadScriptTestHooks() {
     let prefersReducedMotion = false;
     let sandboxWriteCount = 0;
     let sandboxFailWriteAt = null;
+    let sandboxClipboardFailure = false;
     const sandboxValues = new Map();
     const sandboxRequests = [];
     let sandboxAbortedRequestCount = 0;
@@ -144,7 +146,9 @@ function loadScriptTestHooks() {
             sandboxValues.set(key, value);
         },
         GM_addStyle: () => {},
-        GM_setClipboard: () => {},
+        GM_setClipboard: () => {
+            if (sandboxClipboardFailure) throw new Error('simulated clipboard failure');
+        },
         GM_xmlhttpRequest: options => {
             sandboxRequests.push(options);
             return { abort: () => { sandboxAbortedRequestCount += 1; } };
@@ -161,6 +165,7 @@ function loadScriptTestHooks() {
     sandbox.window.__enhTest.seedRawStorage = (key, value) => sandboxValues.set(key, value);
     sandbox.window.__enhTest.getStoredSetting = key => sandboxValues.get(`imdb_enh_${key}`);
     sandbox.window.__enhTest.failSettingWriteAt = offset => { sandboxFailWriteAt = sandboxWriteCount + offset; };
+    sandbox.window.__enhTest.setClipboardFailure = value => { sandboxClipboardFailure = Boolean(value); };
     sandbox.window.__enhTest.getStorageKeys = () => [...sandboxValues.keys()];
     sandbox.window.__enhTest.getCapturedRequests = () => [...sandboxRequests];
     return sandbox.window.__enhTest;
@@ -908,6 +913,14 @@ test('settings preserve host scroll state and complete nested tab keyboard suppo
         /const importPanel = document\.getElementById\('enh-import-panel'\);[\s\S]*?importPanel\.hidden = true;[\s\S]*?resetPanel\.hidden = true;[\s\S]*?importTextarea\.value = '';/.test(script),
         'closing settings must clear sensitive import text and cancel destructive subflows'
     );
+});
+
+test('clipboard actions report manager failures instead of claiming success', () => {
+    const hooks = loadScriptTestHooks();
+    assert.strictEqual(hooks.copyTextToClipboard('tt0133093'), true);
+    hooks.setClipboardFailure(true);
+    assert.strictEqual(hooks.copyTextToClipboard('sensitive export'), false);
+    assert.strictEqual((script.match(/GM_setClipboard\(/g) || []).length, 1, 'clipboard writes should pass through the guarded helper');
 });
 
 test('Greasy Fork distribution guardrails stay intact', () => {

@@ -985,6 +985,16 @@
         setTimeout(() => { t.classList.remove('visible'); setTimeout(() => t.remove(), 350); }, duration);
     }
 
+    function copyTextToClipboard(text) {
+        try {
+            GM_setClipboard(String(text ?? ''));
+            return true;
+        } catch (error) {
+            console.warn('[IMDb Enhanced] clipboard write failed:', error);
+            return false;
+        }
+    }
+
     // =========================================================================
     //  ASYNC HTTP
     // =========================================================================
@@ -4387,7 +4397,10 @@ section[id*="quote" i] .ipc-list-card { padding: 4px 0 !important; margin: 2px 0
                 onClick: () => {
                     const ids = this._ids();
                     if (!ids.length) { showToast('No IMDb title IDs found'); return; }
-                    GM_setClipboard(ids.join('\n'));
+                    if (!copyTextToClipboard(ids.join('\n'))) {
+                        showToast('Copy failed. Check the userscript clipboard permission.', 4500);
+                        return;
+                    }
                     showToast(`Copied ${ids.length} IMDb IDs`);
                     btn.textContent = `Copy ${ids.length} IMDb IDs`;
                 },
@@ -4610,10 +4623,9 @@ section[id*="quote" i] .ipc-list-card { padding: 4px 0 !important; margin: 2px 0
                     const text = site.storeQuery
                         ? entries.map(entry => `${entry.name} (${entry.id})`).join('\n')
                         : entries.map(entry => entry.url).join('\n');
-                    try {
-                        GM_setClipboard(text);
+                    if (copyTextToClipboard(text)) {
                         showToast(site.storeQuery ? `Copied ${entries.length} titles` : `Copied ${entries.length} search links`);
-                    } catch { showToast('Copy failed. Try the individual links instead.', 4500); }
+                    } else showToast('Copy failed. Try the individual links instead.', 4500);
                 },
             }, site.storeQuery ? 'Copy title list' : 'Copy all links');
             const close = makeEl('button', {
@@ -4661,7 +4673,9 @@ section[id*="quote" i] .ipc-list-card { padding: 4px 0 !important; margin: 2px 0
                     id:'enh-copy-id', className:'enh-action-btn', type:'button',
                     title:`Copy ${imdbId}`, 'aria-label': `Copy IMDb ID ${imdbId}`,
                     innerHTML: `<svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.5" stroke-linecap="round" stroke-linejoin="round"><rect x="9" y="9" width="13" height="13" rx="2"/><path d="M5 15H4a2 2 0 0 1-2-2V4a2 2 0 0 1 2-2h9a2 2 0 0 1 2 2v1"/></svg><span>${imdbId}</span>`,
-                    onClick: () => { GM_setClipboard(imdbId); showToast(`Copied ${imdbId}`); }
+                    onClick: () => showToast(copyTextToClipboard(imdbId)
+                        ? `Copied ${imdbId}`
+                        : 'Copy failed. Check the userscript clipboard permission.', 4500)
                 });
                 appendTitleStackItem(btn, TITLE_STACK_ORDER.quickCopyID);
             }).catch(() => {});
@@ -4682,7 +4696,12 @@ section[id*="quote" i] .ipc-list-card { padding: 4px 0 !important; margin: 2px 0
                     return;
                 }
                 if (e.key === '?') { e.preventDefault(); toggleSettings(); }
-                else if (e.key === 'c') { const id = getIMDbID(); if (id) { GM_setClipboard(id); showToast(`Copied ${id}`); } }
+                else if (e.key === 'c') {
+                    const id = getIMDbID();
+                    if (id) showToast(copyTextToClipboard(id)
+                        ? `Copied ${id}`
+                        : 'Copy failed. Check the userscript clipboard permission.', 4500);
+                }
                 else if (e.key === 'r') { document.querySelector('[data-testid="hero-rating-bar__aggregate-rating"]')?.scrollIntoView({ behavior:getEnhancementScrollBehavior(), block:'center' }); }
                 else if (e.key === 't') { window.scrollTo({ top:0, behavior:getEnhancementScrollBehavior() }); }
             };
@@ -6224,8 +6243,10 @@ section[id*="quote" i] .ipc-list-card { padding: 4px 0 !important; margin: 2px 0
             (activeTab || getFocusableElements(overlay)[0] || panel).focus();
         });
         overlay.querySelector('#enh-export-btn').addEventListener('click', () => {
-            GM_setClipboard(JSON.stringify(getExportSettings(), null, 2));
-            showToast('Settings copied to clipboard');
+            const copied = copyTextToClipboard(JSON.stringify(getExportSettings(), null, 2));
+            showToast(copied
+                ? 'Settings copied to clipboard'
+                : 'Export copy failed. Check the userscript clipboard permission.', copied ? 2500 : 4500);
         });
         overlay.querySelector('#enh-import-btn').addEventListener('click', () => {
             resetPanel.hidden = true;
