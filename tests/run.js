@@ -61,6 +61,7 @@ function loadScriptTestHooks() {
         parseJustWatchAvailability,
         collectJustWatchProviderNames,
         isTrailerTitleMatch,
+        normalizeYouTubeVideoId,
         parseYouTubeTrailerVideoId,
         getListTitlesFromLinks,
         buildListSearchEntries,
@@ -528,6 +529,9 @@ test('trailer dialog contains focus, restores page state, and ignores stale look
         {"videoRenderer":{"videoId":"BBBBBBBBBBB","title":{"runs":[{"text":"The Matrix Reloaded (2003) Official Trailer"}]}}},
         {"videoRenderer":{"videoId":"vKQi3bBA1y8","title":{"runs":[{"text":"The Matrix (1999) Official Trailer #1"}]}}}`;
     assert.strictEqual(hooks.parseYouTubeTrailerVideoId(searchHtml, 'The Matrix', 1999), 'vKQi3bBA1y8');
+    assert.strictEqual(hooks.normalizeYouTubeVideoId('vKQi3bBA1y8'), 'vKQi3bBA1y8');
+    assert.strictEqual(hooks.normalizeYouTubeVideoId('../watch?v=x'), '', 'cached embed IDs must stay exact');
+    assert(script.includes('const cachedVideoId = normalizeYouTubeVideoId(cached?.videoId)'), 'cached trailer IDs must be revalidated before embedding');
     assert.strictEqual(hooks.parseYouTubeTrailerVideoId(searchHtml, 'Alien', 1979), '', 'unrelated first video IDs must not autoplay');
     assert(!script.includes('_parseVideoId(html)'), 'unscoped first-video parsing should stay removed');
     assert(!hooks.isTrailerTitleMatch('It Ends with Us Official Trailer', 'It'), 'a generic title must not match a longer movie title');

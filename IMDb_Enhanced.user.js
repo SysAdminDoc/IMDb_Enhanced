@@ -2198,6 +2198,10 @@ section[id*="quote" i] .ipc-list-card { padding: 4px 0 !important; margin: 2px 0
         const query = [title, year, 'official trailer'].filter(Boolean).join(' ');
         return `https://www.youtube.com/results?search_query=${encodeURIComponent(query)}`;
     }
+    function normalizeYouTubeVideoId(value) {
+        const videoId = String(value || '');
+        return /^[a-zA-Z0-9_-]{11}$/.test(videoId) ? videoId : '';
+    }
     function isTrailerTitleMatch(candidateTitle, title) {
         const candidate = normalizeLookupTitle(candidateTitle);
         const wanted = normalizeLookupTitle(title);
@@ -2241,7 +2245,7 @@ section[id*="quote" i] .ipc-list-card { padding: 4px 0 !important; margin: 2px 0
             candidates.push({ videoId:match[1], score });
         }
         candidates.sort((a, b) => b.score - a.score);
-        return candidates[0]?.videoId || '';
+        return normalizeYouTubeVideoId(candidates[0]?.videoId);
     }
     function compactProviders(providers, limit = 2) {
         const clean = [];
@@ -3529,7 +3533,8 @@ section[id*="quote" i] .ipc-list-card { padding: 4px 0 !important; margin: 2px 0
             const generation = this._modalGeneration;
             const body = overlay.querySelector('.enh-trailer-body');
             try {
-                const videoId = await this._getVideoId();
+                const videoId = normalizeYouTubeVideoId(await this._getVideoId());
+                if (!videoId) throw new Error('Trailer unavailable');
                 if (generation !== this._modalGeneration || !body.isConnected) return;
                 body.replaceChildren(makeEl('iframe', {
                     src:`https://www.youtube-nocookie.com/embed/${videoId}?autoplay=1&rel=0`,
@@ -3634,7 +3639,8 @@ section[id*="quote" i] .ipc-list-card { padding: 4px 0 !important; margin: 2px 0
             const imdbId = getIMDbID();
             const cacheKey = imdbId ? `yt_${imdbId}` : '';
             const cached = cacheKey ? cacheGet(cacheKey) : null;
-            if (cached?.videoId) return cached.videoId;
+            const cachedVideoId = normalizeYouTubeVideoId(cached?.videoId);
+            if (cachedVideoId) return cachedVideoId;
             if (cached?.unavailable) throw new Error('Trailer unavailable');
 
             const res = await httpGet(getTrailerSearchUrl(), {

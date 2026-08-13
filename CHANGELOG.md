@@ -112,6 +112,7 @@
 - Removed the unused `GM_addStyle` grant now that all styles use the userscript's guarded document-start style host.
 - Kept IMDb theme repainting and operating-system theme listeners off Cineby's handoff-only page, preventing a later system-theme change from injecting IMDb presentation styles into the destination site.
 - Made all shared cross-origin requests anonymous so public score, availability, trailer, and token-authenticated local-service lookups do not send destination cookies.
+- Revalidated cached YouTube video IDs at both cache-read and embed boundaries so malformed local cache data cannot alter the trailer embed path.
 
 ## 2.5.1 — 2026-08-12
 
