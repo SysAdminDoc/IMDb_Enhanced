@@ -32,6 +32,7 @@ function loadScriptTestHooks() {
         findHistogramData,
         collectProviderIds,
         mediaItemMatches,
+        selectServarrLookupResult,
         parseMediaServerItems,
         getLinkedTitleId,
         isIMDbHost,
@@ -886,6 +887,25 @@ test('media server matching handles provider IDs and title fallback', () => {
         { Name: 'The Matrix Reloaded', ProductionYear: 2003, ProviderIds: {} },
         { imdbId: 'tt0133093', title: 'The Matrix', year: 1999 }
     ), 'different title should not match');
+    assert(!hooks.mediaItemMatches(
+        { Name:'The Matrix', ProductionYear:1999, ProviderIds:{ Imdb:'tt9999999' } },
+        { imdbId:'tt0133093', title:'The Matrix', year:1999 }
+    ), 'a conflicting provider ID must not fall through to title matching');
+    assert(!hooks.mediaItemMatches(
+        { Name:'The Matrix', ProviderIds:{} },
+        { imdbId:'tt0133093', title:'The Matrix', year:1999 }
+    ), 'a missing local-library year must not satisfy a year-qualified title');
+
+    const lookup = hooks.selectServarrLookupResult([
+        { id:5, imdbId:'tt0084787', title:'The Thing', year:1982 },
+        { id:0, imdbId:'tt0905372', title:'The Thing', year:2011 },
+    ], { imdbId:'tt0905372', title:'The Thing', year:2011 });
+    assert.strictEqual(lookup.imdbId, 'tt0905372', 'Servarr lookup should not accept result zero or a wrong remake');
+    assert.strictEqual(
+        hooks.selectServarrLookupResult([lookup], { imdbId:'tt0905372', title:'The Thing', year:2011 }, true),
+        null,
+        'library status should require an existing matched item'
+    );
 
     const parsed = hooks.parseMediaServerItems(JSON.stringify({
         Items: [{ Name: 'Alien', ProductionYear: 1979, ProviderIds: { Imdb: 'tt0078748' } }],

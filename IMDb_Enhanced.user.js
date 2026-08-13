@@ -1134,7 +1134,10 @@
             .trim();
     }
     function collectProviderIds(item = {}) {
-        const ids = [item.guid, item.Guid, item.key, item.ratingKey].filter(Boolean);
+        const ids = [
+            item.imdbId, item.imdbID, item.ImdbId,
+            item.guid, item.Guid, item.key, item.ratingKey,
+        ].filter(Boolean);
         const providerIds = item.providerIds || item.ProviderIds;
         if (Array.isArray(providerIds)) ids.push(...providerIds);
         else if (providerIds && typeof providerIds === 'object') ids.push(...Object.values(providerIds));
@@ -1142,7 +1145,8 @@
     }
     function mediaItemMatches(item, ctx) {
         const imdbId = normalizeIMDbProviderId(ctx?.imdbId);
-        if (imdbId && collectProviderIds(item).includes(imdbId)) return true;
+        const itemProviderIds = collectProviderIds(item);
+        if (imdbId && itemProviderIds.length) return itemProviderIds.includes(imdbId);
 
         const itemTitle = normalizeLookupTitle(item?.title || item?.Name || item?.name || item?.OriginalTitle);
         const wantedTitle = normalizeLookupTitle(ctx?.title);
@@ -1150,7 +1154,14 @@
 
         const itemYear = Number(item?.year || item?.ProductionYear || item?.productionYear) || 0;
         const wantedYear = Number(ctx?.year) || 0;
-        return !itemYear || !wantedYear || Math.abs(itemYear - wantedYear) <= 1;
+        return !wantedYear || Boolean(itemYear) && Math.abs(itemYear - wantedYear) <= 1;
+    }
+    function selectServarrLookupResult(items, ctx, requireExisting = false) {
+        if (!Array.isArray(items)) return null;
+        return items.find(item =>
+            (!requireExisting || toPositiveInteger(item?.id, 0) > 0)
+            && mediaItemMatches(item, ctx)
+        ) || null;
     }
     function parsePlexItems(xmlText) {
         try {
@@ -3764,7 +3775,7 @@ section[id*="quote" i] .ipc-list-card { padding: 4px 0 !important; margin: 2px 0
             waitForTitleSurface().then(() => {
                 if (!isCurrent()) return;
                 if (document.getElementById('enh-servarr-actions')) return;
-                const imdbId = getIMDbID(), title = getTitleText();
+                const imdbId = getIMDbID(), title = getTitleText(), year = getTitleYear();
                 if (!imdbId || !title) return;
 
                 const type = getMediaType();
@@ -3816,7 +3827,7 @@ section[id*="quote" i] .ipc-list-card { padding: 4px 0 !important; margin: 2px 0
                             btn.disabled = true;
                             btn.textContent = 'Adding...';
                             try {
-                                await this._add(action.kind, imdbId, title);
+                                await this._add(action.kind, imdbId, title, year);
                                 showToast(`${title} sent to ${action.kind === 'radarr' ? 'Radarr' : 'Sonarr'}`);
                                 btn.textContent = 'Added';
                                 btn.disabled = true;
@@ -3829,22 +3840,22 @@ section[id*="quote" i] .ipc-list-card { padding: 4px 0 !important; margin: 2px 0
                         },
                     }, action.label);
                     bar.appendChild(btn);
-                    this._checkLibrary(action.kind, imdbId, btn, bar, isCurrent);
+                    this._checkLibrary(action.kind, { imdbId, title, year }, btn, bar, isCurrent);
                 });
                 appendTitleStackItem(bar, TITLE_STACK_ORDER.servarrIntegration);
             }).catch(() => {});
         },
-        async _checkLibrary(kind, imdbId, btn, bar, isCurrent) {
+        async _checkLibrary(kind, ctx, btn, bar, isCurrent) {
             try {
                 const path = kind === 'radarr' ? 'movie/lookup' : 'series/lookup';
                 const response = await servarrRequest(kind, path, {
-                    query:{ term: `imdb:${imdbId}` },
+                    query:{ term: `imdb:${ctx.imdbId}` },
                     cancelOnRouteChange:true,
                 });
                 if (!isCurrent()) return;
                 const items = parseJSONResponse(response);
                 if (!Array.isArray(items) || !items.length) return;
-                const found = items.find(item => item.id && item.id > 0);
+                const found = selectServarrLookupResult(items, ctx, true);
                 if (found) {
                     btn.textContent = 'In Library';
                     btn.disabled = true;
@@ -3856,19 +3867,24 @@ section[id*="quote" i] .ipc-list-card { padding: 4px 0 !important; margin: 2px 0
                 }
             } catch { /* library check is best-effort */ }
         },
-        async _lookup(kind, imdbId, title) {
+        async _lookup(kind, ctx) {
             const path = kind === 'radarr' ? 'movie/lookup' : 'series/lookup';
-            const terms = [`imdb:${imdbId}`, `https://www.imdb.com/title/${imdbId}/`, title].filter(Boolean);
+            const terms = [
+                `imdb:${ctx.imdbId}`,
+                `https://www.imdb.com/title/${ctx.imdbId}/`,
+                ctx.title,
+            ].filter(Boolean);
             for (const term of terms) {
                 const response = await servarrRequest(kind, path, { query:{ term } });
                 const items = parseJSONResponse(response);
-                if (Array.isArray(items) && items.length) return items[0];
+                const item = selectServarrLookupResult(items, ctx);
+                if (item) return item;
             }
             throw new Error('No matching title found');
         },
-        async _add(kind, imdbId, title) {
+        async _add(kind, imdbId, title, year) {
             const cfg = getServarrConfig(kind);
-            const item = await this._lookup(kind, imdbId, title);
+            const item = await this._lookup(kind, { imdbId, title, year });
             if (kind === 'radarr') {
                 const body = {
                     ...item,

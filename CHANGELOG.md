@@ -63,6 +63,7 @@
 - Scoped YouTube trailer selection to real video-result titles matching the IMDb title, release-year context, and trailer/teaser intent instead of autoplaying the first video ID anywhere in the search payload; prior trailer caches are invalidated.
 - Made legacy collapsed-section migration unconditional and write-first, so backups/resets see the preference even when the feature is disabled and a failed schema write cannot delete the only durable copy.
 - Canonicalized every JSON export through the current import schema, including legacy watched marks, migrated collapse state, normalized site lists, local URLs, and safe profile IDs, so generated backups are guaranteed to be fully re-importable.
+- Required Servarr lookup/add and local media-library fallback matches to respect IMDb provider IDs plus exact title/year identity, preventing first-result and same-title-remake false positives; missing years no longer match year-qualified titles.
 
 ## 2.5.1 — 2026-08-12
 
