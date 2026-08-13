@@ -91,6 +91,7 @@ function loadScriptTestHooks() {
         getExportSettings,
         SETTINGS_IMPORT_TEXT_LIMIT,
         CACHE_ENTRY_TEXT_LIMIT,
+        SETTING_TEXT_LIMIT,
         mediaServerRequest,
         getServarrConfig,
         isServarrConfigured,
@@ -756,6 +757,11 @@ test('settings imports validate first and roll back partial storage failures', (
         /No valid recognized settings/,
         'credential-bearing service URLs must be rejected'
     );
+    assert.strictEqual(
+        hooks.prepareSettingsImport({ radarrApiKey:'k'.repeat(hooks.SETTING_TEXT_LIMIT + 1) }).entries[0].value.length,
+        hooks.SETTING_TEXT_LIMIT,
+        'imported integration strings should use the same bound as their settings controls'
+    );
 });
 
 test('remembered section state participates in backup and migrates legacy keys', () => {
@@ -1316,6 +1322,7 @@ test('settings preserve host scroll state and complete nested tab keyboard suppo
     assert(!script.includes("site.url || 'https://example.com/search?q={{TITLE}}'"), 'example URLs must remain placeholders rather than live saved destinations');
     assert(script.includes("maxlength:'40'"), 'destination names should enforce their stored length in the editor');
     assert(script.includes('maxlength:String(URL_TEMPLATE_TEXT_LIMIT)'), 'destination URLs should enforce their stored length in the editor');
+    assert(script.includes('{ maxlength:String(SETTING_TEXT_LIMIT) }'), 'integration text and credential fields should expose their storage bound');
     assert(script.includes("const row = makeEl('div', { className:'enh-site-row', role:'group' })"), 'each repeated destination row should expose group context');
     assert(script.includes("row.setAttribute('aria-label', `${destination} in ${title}`)"), 'destination groups should name their row and list');
     assert(script.includes("nameInput.addEventListener('input', updateRowLabel)"), 'destination group names should follow row-name edits');
@@ -1381,6 +1388,11 @@ test('local-service credentials stay out of request URLs', () => {
     assert.strictEqual(hooks.normalizeLocalServiceUrl('http://localhost:32400/library'), 'http://localhost:32400/library');
     assert.strictEqual(hooks.normalizeLocalServiceUrl('http://localhost:32400/?token=secret'), '', 'local base URLs must reject query credentials');
     assert.strictEqual(hooks.normalizeLocalServiceUrl('http://localhost:32400/#secret'), '', 'local base URLs must reject fragments');
+    assert.strictEqual(
+        hooks.normalizeLocalServiceUrl(`http://localhost/${'x'.repeat(hooks.SETTING_TEXT_LIMIT)}`),
+        '',
+        'oversized local service URLs must be rejected before parsing or storage'
+    );
     hooks.mediaServerRequest({
         kind:'plex', label:'Plex', baseUrl:'http://localhost:32400', token:'plex-secret',
     }, '/library/sections', { query:{ type:'movie' } }).catch(() => {});
@@ -1399,6 +1411,9 @@ test('local-service credentials stay out of request URLs', () => {
     hooks.seedStoredSetting('radarrQualityProfileId', '');
     assert.strictEqual(hooks.getServarrConfig('radarr').qualityProfileId, 0, 'a visibly blank profile field must stay unconfigured');
     assert.strictEqual(hooks.isServarrConfigured('radarr'), false, 'blank profile IDs must not silently fall back to profile 1');
+    hooks.seedStoredSetting('radarrUrl', 'https://remote.example.test');
+    hooks.seedStoredSetting('radarrQualityProfileId', '1');
+    assert.strictEqual(hooks.isServarrConfigured('radarr'), false, 'legacy remote service URLs must stay inert even when other fields are complete');
 });
 
 test('media server matching handles provider IDs and title fallback', () => {

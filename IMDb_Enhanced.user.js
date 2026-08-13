@@ -68,6 +68,7 @@
     const LOCAL_RESPONSE_TEXT_LIMIT = 4 * 1024 * 1024;
     const SITE_LIST_LIMIT = 50;
     const URL_TEMPLATE_TEXT_LIMIT = 4096;
+    const SETTING_TEXT_LIMIT = 4096;
     const SETTINGS_IMPORT_TEXT_LIMIT = 4 * 1024 * 1024;
     const URL_TEMPLATE_KEYS = new Set([
         'TITLE', 'TITLE_RAW', 'TITLE_DASH', 'TITLE_SLUG',
@@ -774,7 +775,7 @@
 
     function normalizeLocalServiceUrl(value) {
         const raw = String(value || '').trim();
-        if (!raw) return '';
+        if (!raw || raw.length > SETTING_TEXT_LIMIT) return '';
         const normalized = normalizeServarrBaseUrl(raw);
         return isLocalServiceUrl(normalized) ? normalized : '';
     }
@@ -841,7 +842,7 @@
             };
         }
         if (typeof fallback === 'string') {
-            return typeof value === 'string' ? { key, value:value.slice(0, 4096) } : null;
+            return typeof value === 'string' ? { key, value:value.slice(0, SETTING_TEXT_LIMIT) } : null;
         }
         return null;
     }
@@ -1239,12 +1240,12 @@
     }
     function getServarrConfig(kind) {
         const prefix = kind === 'sonarr' ? 'sonarr' : 'radarr';
-        const baseUrl = normalizeServarrBaseUrl(get(`${prefix}Url`));
+        const baseUrl = normalizeLocalServiceUrl(get(`${prefix}Url`));
         return {
             kind: prefix,
             baseUrl,
-            apiKey: String(get(`${prefix}ApiKey`) || '').trim(),
-            rootFolderPath: String(get(`${prefix}RootFolderPath`) || '').trim(),
+            apiKey: String(get(`${prefix}ApiKey`) || '').trim().slice(0, SETTING_TEXT_LIMIT),
+            rootFolderPath: String(get(`${prefix}RootFolderPath`) || '').trim().slice(0, SETTING_TEXT_LIMIT),
             qualityProfileId: toPositiveInteger(get(`${prefix}QualityProfileId`), 0),
         };
     }
@@ -1294,8 +1295,8 @@
         return {
             kind,
             label: def.label,
-            baseUrl: normalizeServarrBaseUrl(get(def.urlKey)),
-            token: String(get(def.tokenKey) || '').trim(),
+            baseUrl: normalizeLocalServiceUrl(get(def.urlKey)),
+            token: String(get(def.tokenKey) || '').trim().slice(0, SETTING_TEXT_LIMIT),
         };
     }
     function getConfiguredMediaServers() {
@@ -5923,11 +5924,13 @@ section[id*="quote" i] .ipc-list-card { padding: 4px 0 !important; margin: 2px 0
             placeholder,
             autocomplete: type === 'password' ? 'new-password' : 'off',
             spellcheck:'false',
-            ...(type === 'number' ? { min:'1', step:'1' } : {}),
+            ...(type === 'number'
+                ? { min:'1', step:'1' }
+                : { maxlength:String(SETTING_TEXT_LIMIT) }),
         });
-        input.value = get(key) || '';
+        input.value = String(get(key) || '').slice(0, SETTING_TEXT_LIMIT);
         const persist = (notifyFailure = false) => {
-            const raw = input.value.trim();
+            const raw = input.value.trim().slice(0, SETTING_TEXT_LIMIT);
             if (LOCAL_SERVICE_URL_KEYS.has(key)) {
                 const normalized = normalizeLocalServiceUrl(raw);
                 const valid = !raw || Boolean(normalized);
