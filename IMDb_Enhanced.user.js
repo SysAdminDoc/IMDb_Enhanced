@@ -83,6 +83,7 @@
         quickCopyID: 10,
         searchButtons: 20,
         externalLinks: 30,
+        expandedLinkMenu: 31,
         trailerPopover: 32,
         servarrIntegration: 35,
         mediaServerIntegration: 36,
@@ -3216,9 +3217,27 @@ section[id*="quote" i] .ipc-list-card { padding: 4px 0 !important; margin: 2px 0
                     }, link.name));
                 });
                 appendTitleStackItem(bar, TITLE_STACK_ORDER.externalLinks);
+                const trailer = document.getElementById('enh-trailer-btn');
+                const menu = document.getElementById('enh-link-menu-wrap');
+                if (trailer) bar.appendChild(trailer);
+                if (menu) {
+                    menu.classList.remove('enh-link-menu-wrap--standalone');
+                    bar.appendChild(menu);
+                }
             }).catch(() => {});
         },
-        destroy() { document.getElementById('enh-external-links')?.remove(); pruneTitleStack(); }
+        destroy() {
+            const bar = document.getElementById('enh-external-links');
+            const trailer = bar?.querySelector('#enh-trailer-btn');
+            const menu = bar?.querySelector('#enh-link-menu-wrap');
+            if (trailer) appendTitleStackItem(trailer, TITLE_STACK_ORDER.trailerPopover);
+            if (menu) {
+                menu.classList.add('enh-link-menu-wrap--standalone');
+                appendTitleStackItem(menu, TITLE_STACK_ORDER.expandedLinkMenu);
+            }
+            bar?.remove();
+            pruneTitleStack();
+        }
     });
 
     reg({
@@ -3466,8 +3485,9 @@ section[id*="quote" i] .ipc-list-card { padding: 4px 0 !important; margin: 2px 0
         _closeHandler: null,
         init() {
             const isCurrent = createFeatureGuard(this);
-            waitFor('#enh-external-links').then(extBar => {
+            waitForTitleSurface().then(() => {
                 if (!isCurrent()) return;
+                if (document.getElementById('enh-link-menu-wrap')) return;
                 const title = getTitleText(), year = getTitleYear(), imdbId = getIMDbID();
                 if (!title || !imdbId) return;
                 const buildUrl = (tpl) => tpl.replace(/\{\{ID\}\}/g, imdbId)
@@ -3558,7 +3578,12 @@ section[id*="quote" i] .ipc-list-card { padding: 4px 0 !important; margin: 2px 0
 
                 container.appendChild(trigger);
                 container.appendChild(dropdown);
-                extBar.appendChild(container);
+                const extBar = document.getElementById('enh-external-links');
+                if (extBar) extBar.appendChild(container);
+                else {
+                    container.classList.add('enh-link-menu-wrap--standalone');
+                    appendTitleStackItem(container, TITLE_STACK_ORDER.expandedLinkMenu);
+                }
 
                 this._closeHandler = (e) => {
                     if (!e.target.closest('#enh-link-menu-trigger') && !e.target.closest('#enh-link-menu-dropdown')) {
@@ -3572,6 +3597,7 @@ section[id*="quote" i] .ipc-list-card { padding: 4px 0 !important; margin: 2px 0
             if (this._closeHandler) document.removeEventListener('click', this._closeHandler);
             this._closeHandler = null;
             document.getElementById('enh-link-menu-wrap')?.remove();
+            pruneTitleStack();
         }
     });
 
@@ -4767,6 +4793,7 @@ section[id*="quote" i] .ipc-list-card { padding: 4px 0 !important; margin: 2px 0
 
 /* ════ More Links trigger (lives in external-links row) ════ */
 #enh-link-menu-wrap { position: relative; display: inline-flex; margin-left: auto; }
+#enh-link-menu-wrap.enh-link-menu-wrap--standalone { width: auto; margin-left: 0; }
 #enh-link-menu-trigger {
     padding: 4px 11px; border-radius: 6px;
     font: 600 11px/1.5 -apple-system, BlinkMacSystemFont, 'Segoe UI', sans-serif;

@@ -443,6 +443,22 @@ test('secondary interactions expose complete keyboard and toggle semantics', () 
     assert(!script.includes("querySelectorAll('.enh-episode-spoiler, .enh-revealed')"), 'episode cleanup must not mutate another feature\'s revealed state');
 });
 
+test('independent title tools survive external-link toggles', () => {
+    assert(script.includes('expandedLinkMenu: 31'), 'expanded links need their own title-stack position');
+    assert(
+        /const trailer = bar\?\.querySelector\('#enh-trailer-btn'\);[\s\S]*?appendTitleStackItem\(trailer, TITLE_STACK_ORDER\.trailerPopover\)/.test(script),
+        'disabling external links must preserve the independently enabled trailer control'
+    );
+    assert(
+        /const menu = bar\?\.querySelector\('#enh-link-menu-wrap'\);[\s\S]*?appendTitleStackItem\(menu, TITLE_STACK_ORDER\.expandedLinkMenu\)/.test(script),
+        'disabling external links must preserve the independently enabled expanded menu'
+    );
+    assert(
+        /key: 'expandedLinkMenu'[\s\S]*?waitForTitleSurface\(\)[\s\S]*?enh-link-menu-wrap--standalone/.test(script),
+        'expanded links must remain usable without the external-links bar'
+    );
+});
+
 test('all enhancements respect the operating-system reduced-motion preference', () => {
     const hooks = loadScriptTestHooks();
     assert.strictEqual(hooks.getEnhancementScrollBehavior(), 'smooth');

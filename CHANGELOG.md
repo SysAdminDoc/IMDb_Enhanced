@@ -67,6 +67,7 @@
 - Cancelled route-owned Servarr lookups and prevented a completed lookup from starting an add request or updating controls after the user navigates to another IMDb title.
 - Preserved IMDb's search-suggestion live region, which had been incorrectly hidden as an app banner and could silence result-count feedback for screen-reader users.
 - Bound Cineby's controlled-input search handoff to its exact visible URL, so editing that settings row to another site no longer keeps an invisible Cineby-only action.
+- Decoupled the trailer and expanded-links controls from the external-links bar, so toggling that separate setting no longer removes still-enabled tools; the expanded menu can now stand alone.
 
 ## 2.5.1 — 2026-08-12
 
