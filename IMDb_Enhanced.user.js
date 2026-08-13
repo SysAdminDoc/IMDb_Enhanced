@@ -5475,16 +5475,18 @@ section[id*="quote" i] .ipc-list-card { padding: 4px 0 !important; margin: 2px 0
                 className:'enh-site-input',
                 dataset:{ field:'name' },
                 'aria-label': `${title} site name`,
+                placeholder:'Site name',
             });
-            nameInput.value = site.name || 'New site';
+            nameInput.value = site.name || '';
 
             const urlInput = makeEl('input', {
                 type:'url',
                 className:'enh-site-input',
                 dataset:{ field:'url' },
                 'aria-label': `${title} URL template`,
+                placeholder:'https://example.com/search?q={{TITLE}}',
             });
-            urlInput.value = site.url || 'https://example.com/search?q={{TITLE}}';
+            urlInput.value = site.url || '';
 
             const colorInput = makeEl('input', {
                 type:'color',
@@ -5513,12 +5515,17 @@ section[id*="quote" i] .ipc-list-card { padding: 4px 0 !important; margin: 2px 0
             row.appendChild(colorInput);
             row.appendChild(remove);
             rows.appendChild(row);
+            return row;
         };
 
         const add = makeEl('button', {
             type:'button',
             className:'enh-settings-footer-btn',
-            onClick: () => { addRow(); save(); },
+            onClick: () => {
+                const row = addRow();
+                updateCount();
+                row.querySelector('[data-field="name"]')?.focus();
+            },
         }, 'Add');
         const reset = makeEl('button', {
             type:'button',

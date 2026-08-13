@@ -69,6 +69,7 @@
 - Bound Cineby's controlled-input search handoff to its exact visible URL, so editing that settings row to another site no longer keeps an invisible Cineby-only action.
 - Derived Letterboxd's movie-only scope from its visible domain, so replacing that editable row no longer leaves the new destination silently hidden on TV pages.
 - Decoupled the trailer and expanded-links controls from the external-links bar, so toggling that separate setting no longer removes still-enabled tools; the expanded menu can now stand alone.
+- Made Add in the custom-site editors create a focused unsaved draft with real placeholders instead of immediately publishing a fake “New site” link to Example.com.
 
 ## 2.5.1 — 2026-08-12
 

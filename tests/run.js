@@ -870,6 +870,12 @@ test('settings preserve host scroll state and complete nested tab keyboard suppo
     assert(script.includes("if (event.key === 'Home') next = 0;"), 'nested tabs should support Home');
     assert(script.includes("if (event.key === 'End') next = ordered.length - 1;"), 'nested tabs should support End');
     assert(script.includes('enh-site-input--invalid'), 'invalid custom site fields need a visible state');
+    assert(!script.includes("site.name || 'New site'"), 'adding a custom site must not persist a fake destination name');
+    assert(!script.includes("site.url || 'https://example.com/search?q={{TITLE}}'"), 'example URLs must remain placeholders rather than live saved destinations');
+    assert(
+        /onClick: \(\) => \{\s*const row = addRow\(\);\s*updateCount\(\);[\s\S]*?\.focus\(\);\s*\}/.test(script),
+        'Add should create and focus an unsaved draft row'
+    );
 });
 
 test('Greasy Fork distribution guardrails stay intact', () => {
