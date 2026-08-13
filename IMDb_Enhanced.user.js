@@ -6060,15 +6060,15 @@ section[id*="quote" i] .ipc-list-card { padding: 4px 0 !important; margin: 2px 0
                     <p class="enh-settings-subtitle">Cleaner pages. Better controls.</p>
                 </div>
                 <div class="enh-settings-header-actions">
-                    <span class="enh-settings-save-state" id="enh-settings-save-state">Saved locally</span>
+                    <span class="enh-settings-save-state" id="enh-settings-save-state" role="status" aria-live="polite" aria-atomic="true">Saved locally</span>
                     <button type="button" class="enh-settings-close" title="Close settings" aria-label="Close settings">Close</button>
                 </div>
             </div>
             <div class="enh-settings-shell">
                 <nav class="enh-settings-nav" id="enh-settings-nav" role="tablist" aria-label="Settings sections" aria-orientation="vertical"></nav>
-                <main class="enh-settings-main">
+                <div class="enh-settings-main">
                     <div class="enh-settings-body" id="enh-settings-body"></div>
-                </main>
+                </div>
             </div>
             <div class="enh-settings-footer">
                 <span>Version ${VERSION}</span>

@@ -430,6 +430,8 @@ test('settings use six accessible desktop destinations', () => {
     assert(/#enh-settings-overlay\.enh-visible\s*\{[^}]*visibility:\s*visible/s.test(script), 'open settings must restore visibility');
     assert(script.includes("maxlength:'100000'"), 'import size guard missing');
     assert(script.includes('Changes save automatically.'), 'automatic-save status missing');
+    assert(script.includes('id="enh-settings-save-state" role="status" aria-live="polite" aria-atomic="true"'), 'automatic-save feedback should be announced');
+    assert(!script.includes('<main class="enh-settings-main">'), 'settings dialog must not add a second page-level main landmark');
     assert(script.includes('When “Optional keyboard shortcuts” is enabled'), 'disabled-by-default shortcut hints must disclose their prerequisite');
     assert(script.includes('if (!settingsOpen || overlay.contains(event.target)) return'), 'settings should recapture focus that leaves the modal');
     assert(script.includes('createMarksPanel(registerCleanup)'), 'settings-owned document listeners should join the panel cleanup lifecycle');

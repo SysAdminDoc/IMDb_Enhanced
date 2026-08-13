@@ -99,6 +99,7 @@
 - Rejected custom URL templates with unknown/malformed tokens or placeholders in the destination authority, preventing typos from silently disappearing and IMDb page text from choosing the outbound origin.
 - Capped editable destination lists at 50 and URL templates at 4,096 characters across runtime, import, and settings UI; non-canonical backslash-style HTTP URLs are also rejected.
 - Qualified the Tools shortcut legend as optional instead of presenting disabled-by-default keys as immediately active, and aligned the README with the private Seen/Skip terminology.
+- Announced automatic-save feedback through a polite status region and removed the settings dialog's duplicate page-level main landmark.
 
 ## 2.5.1 — 2026-08-12
 
