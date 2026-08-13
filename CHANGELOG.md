@@ -25,6 +25,9 @@
 - Made text and site-editor changes persist immediately and refresh dependent features only after committed changes.
 - Removed the unreliable background favicon probe that contacted every watch-site origin and could treat DNS or TLS failures as healthy; stale probe data is cleaned up automatically.
 - Kept the last valid custom-site list while incomplete URLs are edited, added a visible invalid state, completed nested-tab Home/End behavior, and restored IMDb's prior scroll-lock style when settings close.
+- Cancelled pending DOM and visibility observers during route teardown, aborted route-owned request handles where supported, guarded delayed feature and service callbacks by route generation, and prevented stale score responses from rendering after navigation.
+- Waited for the current rating surface before rendering cached scores and kept third-party rating/availability requests lazy until that surface is near the viewport.
+- Caught both synchronous and asynchronous feature-start failures; settings-triggered failures now surface a recovery toast instead of remaining console-only.
 
 ## 2.5.1 — 2026-08-12
 

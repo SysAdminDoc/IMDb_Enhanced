@@ -33,15 +33,22 @@ function loadScriptTestHooks() {
         getLinkedTitleId,
         getPageSurface,
         shouldInitFeature,
+        createFeatureGuard,
         normalizeUrlTemplate,
         normalizeSite,
+        httpRequest,
+        waitFor,
+        cancelPendingRouteWork,
+        getPendingRouteWorkCount: () => pendingRouteWorkCancels.size,
         setAdRequestBlocking,
-        setTestPath: path => { location.pathname = path; }
+        setTestPath: path => { location.pathname = path; },
+        advanceRouteGeneration: () => { activeRouteGeneration += 1; }
     };
 })();`);
     assert.notStrictEqual(instrumented, script, 'test hook injection failed');
 
-    const location = { hostname: 'example.test', pathname: '/' };
+    const location = { hostname: 'example.test', pathname: '/', search: '' };
+    let sandboxAbortedRequestCount = 0;
     const sandbox = {
         console,
         URL,
@@ -49,19 +56,30 @@ function loadScriptTestHooks() {
         clearTimeout: () => {},
         window: { location, addEventListener: () => {} },
         location,
-        document: { readyState: 'loading' },
+        document: {
+            readyState: 'loading',
+            body: {},
+            documentElement: {},
+            querySelector: () => null,
+        },
         history: {},
+        MutationObserver: class {
+            constructor(callback) { this.callback = callback; }
+            observe() {}
+            disconnect() {}
+        },
         GM_getValue: (_key, fallback) => fallback,
         GM_setValue: () => {},
         GM_addStyle: () => {},
         GM_setClipboard: () => {},
-        GM_xmlhttpRequest: () => {},
+        GM_xmlhttpRequest: () => ({ abort: () => { sandboxAbortedRequestCount += 1; } }),
         GM_listValues: () => [],
         GM_deleteValue: () => {},
         GM_webRequest: rules => { sandbox.webRequestRules = rules; },
     };
     vm.runInNewContext(instrumented, sandbox, { filename: scriptPath });
     sandbox.window.__enhTest.getCapturedWebRequestRules = () => sandbox.webRequestRules || [];
+    sandbox.window.__enhTest.getAbortedRequestCount = () => sandboxAbortedRequestCount;
     return sandbox.window.__enhTest;
 }
 
@@ -144,6 +162,45 @@ test('feature activation is scoped to the current IMDb surface', () => {
 
     hooks.setTestPath('/fr/name/nm0000206/');
     assert.strictEqual(hooks.getPageSurface(), 'name', 'localized name routes should retain secondary-page scoping');
+});
+
+test('async feature guards expire across route changes and route generations', () => {
+    const hooks = loadScriptTestHooks();
+    const feature = { key:'searchButtons', group:'Features' };
+
+    hooks.setTestPath('/title/tt0133093/');
+    const guard = hooks.createFeatureGuard(feature);
+    assert(guard(), 'new title-route feature guard should start active');
+
+    hooks.setTestPath('/name/nm0000206/');
+    assert(!guard(), 'feature guard should expire after the route changes');
+
+    hooks.setTestPath('/title/tt0133093/');
+    assert(guard(), 'same route key remains current until a new route lifecycle begins');
+    hooks.advanceRouteGeneration();
+    assert(!guard(), 'route generation should prevent stale A-to-B-to-A callbacks');
+});
+
+test('pending route work and lazy score lookups are cancellable', () => {
+    const hooks = loadScriptTestHooks();
+    hooks.waitFor('#never-present').catch(() => {});
+    assert.strictEqual(hooks.getPendingRouteWorkCount(), 1, 'missing content should register cancellable route work');
+    hooks.cancelPendingRouteWork();
+    assert.strictEqual(hooks.getPendingRouteWorkCount(), 0, 'route cancellation should release pending DOM work immediately');
+
+    hooks.httpRequest('https://example.test/slow', { cancelOnRouteChange:true }).catch(() => {});
+    assert.strictEqual(hooks.getPendingRouteWorkCount(), 1, 'route-scoped HTTP should register cancellable work');
+    hooks.cancelPendingRouteWork();
+    assert.strictEqual(hooks.getPendingRouteWorkCount(), 0, 'route cancellation should release pending HTTP work');
+    assert.strictEqual(hooks.getAbortedRequestCount(), 1, 'route cancellation should abort manager HTTP when supported');
+
+    assert(script.includes('pendingRouteWorkCancels'), 'pending route-work registry missing');
+    assert(script.includes('cancelPendingRouteWork();'), 'route teardown must cancel pending observers');
+    assert(script.includes('waitForRatingBar(isCurrent)'), 'score widgets should wait for a current rating surface');
+    assert(script.includes('waitUntilVisible(bar, isCurrent)'), 'third-party score requests should remain lazy and route-aware');
+    assert((script.match(/createFeatureGuard\(this\)/g) || []).length >= 15, 'async feature entry points should be route guarded');
+    assert(script.includes("pending.catch(report)"), 'async feature initialization failures should be handled');
+    assert(script.includes("startFeature(feature, { context:'settings', notify:true })"), 'settings-triggered feature failures should be visible');
 });
 
 test('watched marks only decorate canonical title links', () => {

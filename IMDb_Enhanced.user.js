@@ -291,19 +291,41 @@
     // =========================================================================
     //  DOM UTILITIES
     // =========================================================================
-    function waitFor(sel, timeout = 8000) {
+    const pendingRouteWorkCancels = new Set();
+
+    function cancelPendingRouteWork() {
+        [...pendingRouteWorkCancels].forEach(cancel => cancel());
+    }
+
+    function waitForMatch(find, timeout) {
         return new Promise((resolve, reject) => {
-            const el = document.querySelector(sel);
+            const el = find();
             if (el) return resolve(el);
             const root = document.body || document.documentElement;
             if (!root) return reject();
+            let settled = false;
+            let timer = null;
             const obs = new MutationObserver(() => {
-                const el = document.querySelector(sel);
-                if (el) { obs.disconnect(); resolve(el); }
+                const next = find();
+                if (next) finish(resolve, next);
             });
+            const cancel = () => finish(reject, new Error('Route changed'));
+            const finish = (handler, value) => {
+                if (settled) return;
+                settled = true;
+                obs.disconnect();
+                clearTimeout(timer);
+                pendingRouteWorkCancels.delete(cancel);
+                handler(value);
+            };
+            pendingRouteWorkCancels.add(cancel);
             obs.observe(root, { childList: true, subtree: true });
-            setTimeout(() => { obs.disconnect(); reject(); }, timeout);
+            timer = setTimeout(() => finish(reject, new Error('Timed out waiting for page content')), timeout);
         });
+    }
+
+    function waitFor(sel, timeout = 8000) {
+        return waitForMatch(() => document.querySelector(sel), timeout);
     }
 
     function getTitleSurface() {
@@ -356,18 +378,7 @@
     }
 
     function waitForTitleSurface(timeout = 20000) {
-        return new Promise((resolve, reject) => {
-            const found = getTitleSurface();
-            if (found) return resolve(found);
-            const root = document.body || document.documentElement;
-            if (!root) return reject();
-            const obs = new MutationObserver(() => {
-                const next = getTitleSurface();
-                if (next) { obs.disconnect(); resolve(next); }
-            });
-            obs.observe(root, { childList: true, subtree: true });
-            setTimeout(() => { obs.disconnect(); reject(); }, timeout);
-        });
+        return waitForMatch(getTitleSurface, timeout);
     }
 
     const pendingStyles = new Map();
@@ -613,21 +624,46 @@
     // =========================================================================
     function httpRequest(url, opts = {}) {
         return new Promise((resolve, reject) => {
-            const hasBody = opts.body !== undefined;
+            const {
+                body,
+                cancelOnRouteChange = false,
+                headers: providedHeaders = {},
+                ...requestOptions
+            } = opts;
+            const hasBody = body !== undefined;
             const headers = {
                 ...(hasBody ? { 'Content-Type': 'application/json' } : {}),
-                ...(opts.headers || {}),
+                ...providedHeaders,
             };
-            GM_xmlhttpRequest({
-                ...opts,
-                method: opts.method || 'GET',
-                url,
-                timeout: opts.timeout || 10000,
-                headers,
-                data: hasBody ? JSON.stringify(opts.body) : opts.data,
-                onload: (r) => r.status >= 400 ? reject(r) : resolve(r),
-                onerror: reject, ontimeout: reject,
-            });
+            let settled = false;
+            let requestHandle = null;
+            const finish = (handler, value) => {
+                if (settled) return;
+                settled = true;
+                pendingRouteWorkCancels.delete(cancel);
+                handler(value);
+            };
+            const cancel = () => {
+                try { requestHandle?.abort?.(); } catch { /* request still rejects below */ }
+                finish(reject, new Error('Route changed'));
+            };
+            if (cancelOnRouteChange) pendingRouteWorkCancels.add(cancel);
+            try {
+                requestHandle = GM_xmlhttpRequest({
+                    ...requestOptions,
+                    method: requestOptions.method || 'GET',
+                    url,
+                    timeout: requestOptions.timeout || 10000,
+                    headers,
+                    data: hasBody ? JSON.stringify(body) : requestOptions.data,
+                    onload: r => finish(r.status >= 400 ? reject : resolve, r),
+                    onerror: error => finish(reject, error),
+                    ontimeout: error => finish(reject, error),
+                    onabort: error => finish(reject, error || new Error('Request aborted')),
+                });
+            } catch (error) {
+                finish(reject, error);
+            }
         });
     }
     function httpGet(url, opts = {}) {
@@ -700,6 +736,7 @@
             method: opts.method || 'GET',
             body: opts.body,
             timeout: opts.timeout || 15000,
+            cancelOnRouteChange: Boolean(opts.cancelOnRouteChange),
             headers: {
                 Accept: 'application/json',
                 'X-Api-Key': cfg.apiKey,
@@ -799,6 +836,7 @@
         return httpRequest(buildLocalServiceUrl(cfg.baseUrl, path, query), {
             method: opts.method || 'GET',
             timeout: opts.timeout || 12000,
+            cancelOnRouteChange: Boolean(opts.cancelOnRouteChange),
             headers,
         });
     }
@@ -808,6 +846,20 @@
     // =========================================================================
     const features = [];
     function reg(f) { features.push(f); }
+    function startFeature(feature, { context = 'init', notify = false } = {}) {
+        const report = error => {
+            console.warn(`[IMDb Enhanced] ${context} ${feature.key}:`, error);
+            if (notify) showToast(`${feature.name} could not start. Reload and try again.`, 4500);
+        };
+        try {
+            const pending = feature.init();
+            if (pending && typeof pending.catch === 'function') pending.catch(report);
+            return true;
+        } catch (error) {
+            report(error);
+            return false;
+        }
+    }
 
     // #########################################################################
     //
@@ -1644,6 +1696,7 @@ section[id*="quote" i] .ipc-list-card { padding: 4px 0 !important; margin: 2px 0
     reg({
         key: 'ratingColorCoding', name: 'Rating quality labels', group: 'Appearance',
         init() {
+            const isCurrent = createFeatureGuard(this);
             addCSS(`
                 [data-testid="hero-rating-bar__aggregate-rating"].enh-rating-colorized
                 [data-testid="hero-rating-bar__aggregate-rating__score"] span:first-child {
@@ -1664,6 +1717,7 @@ section[id*="quote" i] .ipc-list-card { padding: 4px 0 !important; margin: 2px 0
                 }
             `, 'enh-ratingColor');
             waitFor('[data-testid="hero-rating-bar__aggregate-rating__score"]').then(el => {
+                if (!isCurrent()) return;
                 const rating = getIMDbRating();
                 if (!rating) return;
                 const c = ratingColor(rating);
@@ -1698,12 +1752,26 @@ section[id*="quote" i] .ipc-list-card { padding: 4px 0 !important; margin: 2px 0
     //
     // #########################################################################
 
-    function onceVisible(el, callback) {
-        if (!el || typeof IntersectionObserver === 'undefined') { callback(); return; }
-        const obs = new IntersectionObserver((entries, observer) => {
-            if (entries.some(e => e.isIntersecting)) { observer.disconnect(); callback(); }
-        }, { rootMargin: '200px' });
-        obs.observe(el);
+    function waitUntilVisible(el, isCurrent) {
+        if (!el || !isCurrent()) return Promise.resolve(false);
+        if (typeof IntersectionObserver === 'undefined') return Promise.resolve(true);
+        return new Promise(resolve => {
+            let settled = false;
+            const observer = new IntersectionObserver(entries => {
+                if (!isCurrent()) { finish(false); return; }
+                if (entries.some(entry => entry.isIntersecting)) finish(true);
+            }, { rootMargin: '200px' });
+            const cancel = () => finish(false);
+            const finish = value => {
+                if (settled) return;
+                settled = true;
+                observer.disconnect();
+                pendingRouteWorkCancels.delete(cancel);
+                resolve(value);
+            };
+            pendingRouteWorkCancels.add(cancel);
+            observer.observe(el);
+        });
     }
 
     function findRatingBar() {
@@ -1716,6 +1784,15 @@ section[id*="quote" i] .ipc-list-card { padding: 4px 0 !important; margin: 2px 0
             parent = parent.parentElement;
         }
         return agg.parentElement;
+    }
+
+    async function waitForRatingBar(isCurrent) {
+        const current = findRatingBar();
+        if (current) return current;
+        try {
+            await waitFor('[data-testid="hero-rating-bar__aggregate-rating"]', 12000);
+        } catch { return null; }
+        return isCurrent() ? findRatingBar() : null;
     }
 
     function getHistogramData() {
@@ -1777,33 +1854,39 @@ section[id*="quote" i] .ipc-list-card { padding: 4px 0 !important; margin: 2px 0
     reg({
         key: 'inlineRTScore', name: 'Rotten Tomatoes scores', group: 'Scores',
         async init() {
+            const isCurrent = createFeatureGuard(this);
             const imdbId = getIMDbID(), title = getTitleText();
             if (!imdbId || !title) return;
 
             const cacheKey = 'rt_' + imdbId;
             const cached = cacheGet(cacheKey);
+            const bar = await waitForRatingBar(isCurrent);
+            if (!bar || !isCurrent()) return;
             if (cached) {
                 if (cached.unavailable) this._renderUnavailable();
                 else this._render(cached);
                 return;
             }
-            const bar = findRatingBar();
-            await new Promise(r => onceVisible(bar, r));
+            if (!await waitUntilVisible(bar, isCurrent) || !isCurrent()) return;
             this._renderLoading();
 
             const type = isTVType() ? 'tv' : 'movie';
             const prefix = type === 'tv' ? '/tv/' : '/m/';
             for (const slug of getRTSlugCandidates(title)) {
+                if (!isCurrent()) return;
                 try {
-                    const res = await httpGet('https://www.rottentomatoes.com' + prefix + slug);
+                    const res = await httpGet('https://www.rottentomatoes.com' + prefix + slug, { cancelOnRouteChange:true });
+                    if (!isCurrent()) return;
                     const data = this._parse(res.responseText);
                     if (data) { cacheSet(cacheKey, data); this._render(data); return; }
                 } catch { /* try next slug */ }
             }
 
             // Fallback: search page
+            if (!isCurrent()) return;
             try {
-                const res2 = await httpGet(`https://www.rottentomatoes.com/search?search=${encodeURIComponent(title)}`);
+                const res2 = await httpGet(`https://www.rottentomatoes.com/search?search=${encodeURIComponent(title)}`, { cancelOnRouteChange:true });
+                if (!isCurrent()) return;
                 const tm = res2.responseText.match(/"tomatoScore"\s*:\s*(\d+)/);
                 const au = res2.responseText.match(/"audienceScore"\s*:\s*(\d+)/);
                 if (tm) {
@@ -1812,6 +1895,7 @@ section[id*="quote" i] .ipc-list-card { padding: 4px 0 !important; margin: 2px 0
                     return;
                 }
             } catch { /* handled below */ }
+            if (!isCurrent()) return;
             cacheSetUnavailable(cacheKey);
             this._renderUnavailable();
         },
@@ -1889,24 +1973,27 @@ section[id*="quote" i] .ipc-list-card { padding: 4px 0 !important; margin: 2px 0
     reg({
         key: 'inlineLetterboxdScore', name: 'Letterboxd scores', group: 'Scores',
         async init() {
+            const isCurrent = createFeatureGuard(this);
             if (isTVType()) return;
             const imdbId = getIMDbID();
             if (!imdbId) return;
 
             const cacheKey = 'lb_' + imdbId;
             const cached = cacheGet(cacheKey);
+            const bar = await waitForRatingBar(isCurrent);
+            if (!bar || !isCurrent()) return;
             if (cached) {
                 if (cached.unavailable) this._renderUnavailable();
                 else this._render(cached);
                 return;
             }
-            const bar = findRatingBar();
-            await new Promise(r => onceVisible(bar, r));
+            if (!await waitUntilVisible(bar, isCurrent) || !isCurrent()) return;
             this._renderLoading();
 
             const lookupUrl = `https://letterboxd.com/imdb/${imdbId}/`;
             try {
-                const res = await httpGet(lookupUrl);
+                const res = await httpGet(lookupUrl, { cancelOnRouteChange:true });
+                if (!isCurrent()) return;
                 const data = this._parse(res.responseText, lookupUrl);
                 if (data) {
                     cacheSet(cacheKey, data);
@@ -1915,6 +2002,7 @@ section[id*="quote" i] .ipc-list-card { padding: 4px 0 !important; margin: 2px 0
                 }
             } catch { /* handled below */ }
 
+            if (!isCurrent()) return;
             cacheSetUnavailable(cacheKey);
             this._renderUnavailable();
         },
@@ -2002,25 +2090,28 @@ section[id*="quote" i] .ipc-list-card { padding: 4px 0 !important; margin: 2px 0
     reg({
         key: 'inlineMetacriticScore', name: 'Metacritic scores', group: 'Scores',
         async init() {
+            const isCurrent = createFeatureGuard(this);
             const imdbId = getIMDbID(), title = getTitleText();
             if (!imdbId || !title) return;
 
             const cacheKey = 'mc_' + imdbId;
             const cached = cacheGet(cacheKey);
+            const bar = await waitForRatingBar(isCurrent);
+            if (!bar || !isCurrent()) return;
             if (cached) {
                 if (cached.unavailable) this._renderUnavailable();
                 else this._render(cached);
                 return;
             }
-            const bar = findRatingBar();
-            await new Promise(r => onceVisible(bar, r));
+            if (!await waitUntilVisible(bar, isCurrent) || !isCurrent()) return;
             this._renderLoading();
 
             const type = isTVType() ? '1' : '2';
             const url = `https://backend.metacritic.com/finder/metacritic/search/${encodeURIComponent(title)}/web?componentName=search-tabs&componentDisplayName=Search+Page+Tab+Filters&componentType=FilterConfig&mcoTypeId=${type}&offset=0&limit=5`;
 
             try {
-                const res = await httpGet(url);
+                const res = await httpGet(url, { cancelOnRouteChange:true });
+                if (!isCurrent()) return;
                 const obj = JSON.parse(res.responseText);
                 const items = obj?.data?.items || [];
                 if (items.length > 0) {
@@ -2035,6 +2126,7 @@ section[id*="quote" i] .ipc-list-card { padding: 4px 0 !important; margin: 2px 0
                     return;
                 }
             } catch { /* handled below */ }
+            if (!isCurrent()) return;
             cacheSetUnavailable(cacheKey);
             this._renderUnavailable();
         },
@@ -2087,22 +2179,27 @@ section[id*="quote" i] .ipc-list-card { padding: 4px 0 !important; margin: 2px 0
     reg({
         key: 'streamAvailability', name: 'Streaming availability', group: 'Scores',
         async init() {
+            const isCurrent = createFeatureGuard(this);
             const imdbId = getIMDbID(), title = getTitleText();
             if (!imdbId || !title) return;
 
             const cacheKey = 'jw_' + imdbId;
             const cached = cacheGet(cacheKey);
+            const bar = await waitForRatingBar(isCurrent);
+            if (!bar || !isCurrent()) return;
             if (cached) {
                 if (cached.unavailable) this._renderUnavailable();
                 else this._render(cached);
                 return;
             }
+            if (!await waitUntilVisible(bar, isCurrent) || !isCurrent()) return;
             this._renderLoading();
 
             const headers = { Accept: 'text/html,application/xhtml+xml' };
             const directUrl = getJustWatchDetailUrl(title);
             try {
-                const res = await httpGet(directUrl, { headers, timeout: 12000 });
+                const res = await httpGet(directUrl, { headers, timeout: 12000, cancelOnRouteChange:true });
+                if (!isCurrent()) return;
                 const data = this._parse(res.responseText, directUrl);
                 if (data) {
                     cacheSet(cacheKey, data);
@@ -2113,11 +2210,13 @@ section[id*="quote" i] .ipc-list-card { padding: 4px 0 !important; margin: 2px 0
 
             try {
                 const searchUrl = getJustWatchSearchUrl(title);
-                const searchRes = await httpGet(searchUrl, { headers, timeout: 12000 });
+                const searchRes = await httpGet(searchUrl, { headers, timeout: 12000, cancelOnRouteChange:true });
+                if (!isCurrent()) return;
                 const path = this._firstDetailPath(searchRes.responseText);
                 if (path) {
                     const detailUrl = new URL(path, 'https://www.justwatch.com').href;
-                    const detailRes = await httpGet(detailUrl, { headers, timeout: 12000 });
+                    const detailRes = await httpGet(detailUrl, { headers, timeout: 12000, cancelOnRouteChange:true });
+                    if (!isCurrent()) return;
                     const data = this._parse(detailRes.responseText, detailUrl);
                     if (data) {
                         cacheSet(cacheKey, data);
@@ -2127,6 +2226,7 @@ section[id*="quote" i] .ipc-list-card { padding: 4px 0 !important; margin: 2px 0
                 }
             } catch { /* handled below */ }
 
+            if (!isCurrent()) return;
             cacheSetUnavailable(cacheKey);
             this._renderUnavailable();
         },
@@ -2376,7 +2476,9 @@ section[id*="quote" i] .ipc-list-card { padding: 4px 0 !important; margin: 2px 0
         key: 'searchButtons', name: 'Watch search buttons', group: 'Features',
         init() {
             if (!window.location.hostname.includes('imdb.com')) return;
-            waitForTitleSurface().then(tc => {
+            const isCurrent = createFeatureGuard(this);
+            waitForTitleSurface().then(() => {
+                if (!isCurrent()) return;
                 if (document.getElementById('enh-search-buttons')) return;
                 const title = getTitleText();
                 if (!title) return;
@@ -2422,7 +2524,9 @@ section[id*="quote" i] .ipc-list-card { padding: 4px 0 !important; margin: 2px 0
     reg({
         key: 'externalLinks', name: 'External links bar', group: 'Features',
         init() {
+            const isCurrent = createFeatureGuard(this);
             waitForTitleSurface().then(() => {
+                if (!isCurrent()) return;
                 if (document.getElementById('enh-external-links')) return;
                 const title = getTitleText(), year = getTitleYear(), imdbId = getIMDbID();
                 if (!title || !imdbId) return;
@@ -2449,6 +2553,7 @@ section[id*="quote" i] .ipc-list-card { padding: 4px 0 !important; margin: 2px 0
         _keydown: null,
         init() {
             if (!window.location.hostname.includes('imdb.com')) return;
+            const isCurrent = createFeatureGuard(this);
             const t = getTheme();
             addCSS(`
                 #enh-trailer-btn {
@@ -2494,6 +2599,7 @@ section[id*="quote" i] .ipc-list-card { padding: 4px 0 !important; margin: 2px 0
             `, 'enh-trailerPopover');
 
             waitForTitleSurface().then(() => {
+                if (!isCurrent()) return;
                 if (document.getElementById('enh-trailer-btn')) return;
                 const btn = makeEl('button', {
                     id:'enh-trailer-btn',
@@ -2565,6 +2671,7 @@ section[id*="quote" i] .ipc-list-card { padding: 4px 0 !important; margin: 2px 0
 
             const res = await httpGet(getTrailerSearchUrl(), {
                 timeout: 12000,
+                cancelOnRouteChange: true,
                 headers: { Accept:'text/html,application/xhtml+xml' },
             });
             const videoId = this._parseVideoId(res.responseText);
@@ -2635,7 +2742,9 @@ section[id*="quote" i] .ipc-list-card { padding: 4px 0 !important; margin: 2px 0
         },
         _closeHandler: null,
         init() {
+            const isCurrent = createFeatureGuard(this);
             waitFor('#enh-external-links').then(extBar => {
+                if (!isCurrent()) return;
                 const title = getTitleText(), year = getTitleYear(), imdbId = getIMDbID();
                 if (!title || !imdbId) return;
                 const buildUrl = (tpl) => tpl.replace(/\{\{ID\}\}/g, imdbId)
@@ -2868,7 +2977,9 @@ section[id*="quote" i] .ipc-list-card { padding: 4px 0 !important; margin: 2px 0
         key: 'servarrIntegration', name: 'Servarr quick-add', group: 'Features',
         init() {
             if (!window.location.hostname.includes('imdb.com')) return;
+            const isCurrent = createFeatureGuard(this);
             waitForTitleSurface().then(() => {
+                if (!isCurrent()) return;
                 if (document.getElementById('enh-servarr-actions')) return;
                 const imdbId = getIMDbID(), title = getTitleText();
                 if (!imdbId || !title) return;
@@ -2935,15 +3046,19 @@ section[id*="quote" i] .ipc-list-card { padding: 4px 0 !important; margin: 2px 0
                         },
                     }, action.label);
                     bar.appendChild(btn);
-                    this._checkLibrary(action.kind, imdbId, btn, bar);
+                    this._checkLibrary(action.kind, imdbId, btn, bar, isCurrent);
                 });
                 appendTitleStackItem(bar, TITLE_STACK_ORDER.servarrIntegration);
             }).catch(() => {});
         },
-        async _checkLibrary(kind, imdbId, btn, bar) {
+        async _checkLibrary(kind, imdbId, btn, bar, isCurrent) {
             try {
                 const path = kind === 'radarr' ? 'movie/lookup' : 'series/lookup';
-                const response = await servarrRequest(kind, path, { query:{ term: `imdb:${imdbId}` } });
+                const response = await servarrRequest(kind, path, {
+                    query:{ term: `imdb:${imdbId}` },
+                    cancelOnRouteChange:true,
+                });
+                if (!isCurrent()) return;
                 const items = parseJSONResponse(response);
                 if (!Array.isArray(items) || !items.length) return;
                 const found = items.find(item => item.id && item.id > 0);
@@ -3014,7 +3129,9 @@ section[id*="quote" i] .ipc-list-card { padding: 4px 0 !important; margin: 2px 0
         key: 'mediaServerIntegration', name: 'Plex/Jellyfin/Emby indicator', group: 'Features',
         init() {
             if (!window.location.hostname.includes('imdb.com')) return;
+            const isCurrent = createFeatureGuard(this);
             waitForTitleSurface().then(() => {
+                if (!isCurrent()) return;
                 if (document.getElementById('enh-media-server-status')) return;
                 const imdbId = getIMDbID(), title = getTitleText(), year = getTitleYear();
                 if (!imdbId || !title) return;
@@ -3063,10 +3180,12 @@ section[id*="quote" i] .ipc-list-card { padding: 4px 0 !important; margin: 2px 0
                     );
                     bar.appendChild(pill);
                     this._check(server, ctx).then(found => {
+                        if (!isCurrent()) return;
                         pill.classList.add(found ? 'enh-media-server-pill--found' : 'enh-media-server-pill--missing');
                         state.textContent = found ? 'In Library' : 'Not found';
                         pill.title = `${server.label}: ${found ? 'already in library' : 'not found'}`;
                     }).catch(error => {
+                        if (!isCurrent()) return;
                         pill.classList.add('enh-media-server-pill--error');
                         state.textContent = 'Unavailable';
                         pill.title = `${server.label}: ${getRequestErrorMessage(error)}`;
@@ -3085,7 +3204,7 @@ section[id*="quote" i] .ipc-list-card { padding: 4px 0 !important; margin: 2px 0
                 { query: ctx.title, includeGuids:'1' },
             ];
             for (const query of queries) {
-                const response = await mediaServerRequest(server, '/library/search', { query });
+                const response = await mediaServerRequest(server, '/library/search', { query, cancelOnRouteChange:true });
                 if (parsePlexItems(response.responseText).some(item => mediaItemMatches(item, ctx))) return true;
             }
             return false;
@@ -3102,7 +3221,7 @@ section[id*="quote" i] .ipc-list-card { padding: 4px 0 !important; margin: 2px 0
                 { ...common, SearchTerm:ctx.title },
             ];
             for (const query of queries) {
-                const response = await mediaServerRequest(server, '/Items', { query });
+                const response = await mediaServerRequest(server, '/Items', { query, cancelOnRouteChange:true });
                 if (parseMediaServerItems(response.responseText).some(item => mediaItemMatches(item, ctx))) return true;
             }
             return false;
@@ -3125,6 +3244,7 @@ section[id*="quote" i] .ipc-list-card { padding: 4px 0 !important; margin: 2px 0
         _clickHandler: null,
         init() {
             if (!isTVType() && !/\/title\/tt\d+\/episodes/i.test(location.pathname)) return;
+            const isCurrent = createFeatureGuard(this);
             addCSS(`
                 .enh-episode-spoiler {
                     filter: blur(5px);
@@ -3182,11 +3302,12 @@ section[id*="quote" i] .ipc-list-card { padding: 4px 0 !important; margin: 2px 0
             `, 'enh-tvEpisodeTools');
 
             const run = () => {
+                if (!isCurrent()) return;
                 const episodes = this._collectEpisodes();
                 this._blurPlots(episodes);
                 this._renderBestEpisodes(episodes);
             };
-            waitFor('main, body').then(run).catch(run);
+            waitFor('main, body').then(run).catch(() => { if (isCurrent()) run(); });
 
             this._clickHandler = (e) => {
                 const spoiler = e.target.closest?.('.enh-episode-spoiler');
@@ -3294,6 +3415,7 @@ section[id*="quote" i] .ipc-list-card { padding: 4px 0 !important; margin: 2px 0
         key: 'tvShowEnhancements', name: 'TV show quick links', group: 'TV',
         init() {
             if (!isTVType()) return;
+            const isCurrent = createFeatureGuard(this);
             addCSS(`
                 #enh-tv-bar{display:flex;flex-wrap:wrap;gap:6px;margin:8px 0}
                 .enh-tv-chip{padding:4px 12px;border-radius:8px;
@@ -3305,6 +3427,7 @@ section[id*="quote" i] .ipc-list-card { padding: 4px 0 !important; margin: 2px 0
             `, 'enh-tvShow');
 
             waitForTitleSurface().then(() => {
+                if (!isCurrent()) return;
                 if (document.getElementById('enh-tv-bar')) return;
                 const imdbId = getIMDbID(), title = getTitleText();
                 if (!imdbId) return;
@@ -3326,9 +3449,11 @@ section[id*="quote" i] .ipc-list-card { padding: 4px 0 !important; margin: 2px 0
     reg({
         key: 'subtitleLinks', name: 'Subtitle links', group: 'TV',
         init() {
+            const isCurrent = createFeatureGuard(this);
             const imdbId = getIMDbID(), title = getTitleText();
             if (!imdbId) return;
             waitFor('section[data-testid="Details"]').then(sec => {
+                if (!isCurrent()) return;
                 if (document.getElementById('enh-sub-row')) return;
                 const row = makeEl('div', { id:'enh-sub-row', style: { marginTop:'12px', display:'flex', flexWrap:'wrap', gap:'6px', alignItems:'center' } });
                 row.appendChild(makeEl('span', { style: { color:'#71717a', fontSize:'12px', fontWeight:'600', marginRight:'4px' } }, 'Subtitles:'));
@@ -3492,7 +3617,9 @@ section[id*="quote" i] .ipc-list-card { padding: 4px 0 !important; margin: 2px 0
     reg({
         key: 'quickCopyID', name: 'Quick copy IMDb ID', group: 'Utility',
         init() {
-            waitForTitleSurface().then(titleEl => {
+            const isCurrent = createFeatureGuard(this);
+            waitForTitleSurface().then(() => {
+                if (!isCurrent()) return;
                 if (document.getElementById('enh-copy-id')) return;
                 const imdbId = getIMDbID();
                 if (!imdbId) return;
@@ -4257,8 +4384,8 @@ section[id*="quote" i] .ipc-list-card { padding: 4px 0 !important; margin: 2px 0
 
         try {
             feature.destroy?.();
-            feature.init();
-            if (linkMenu && get('expandedLinkMenu')) linkMenu.init();
+            startFeature(feature, { context:'refresh' });
+            if (linkMenu && get('expandedLinkMenu')) startFeature(linkMenu, { context:'refresh' });
         } catch (e) {
             console.warn(`[IMDb Enhanced] refresh ${key}:`, e);
         }
@@ -4713,7 +4840,7 @@ section[id*="quote" i] .ipc-list-card { padding: 4px 0 !important; margin: 2px 0
             input.addEventListener('change', () => {
                 set(feature.key, input.checked);
                 if (input.checked && shouldInitFeature(feature)) {
-                    try { feature.init(); } catch (e) { console.warn(e); }
+                    startFeature(feature, { context:'settings', notify:true });
                 } else if (!input.checked) {
                     feature.destroy?.();
                 }
@@ -5123,6 +5250,7 @@ section[id*="quote" i] .ipc-list-card { padding: 4px 0 !important; margin: 2px 0
     //  INIT
     // =========================================================================
     let activeRouteKey = null;
+    let activeRouteGeneration = 0;
     let routeInitCount = 0;
     let routerInstalled = false;
     let routeTimer = null;
@@ -5170,7 +5298,17 @@ section[id*="quote" i] .ipc-list-card { padding: 4px 0 !important; margin: 2px 0
         return `${window.location.hostname}${window.location.pathname}${window.location.search}`;
     }
 
+    function createFeatureGuard(feature) {
+        const routeKey = getRouteKey();
+        const routeGeneration = activeRouteGeneration;
+        return () => activeRouteGeneration === routeGeneration
+            && getRouteKey() === routeKey
+            && get(feature.key)
+            && shouldInitFeature(feature);
+    }
+
     function destroyRouteFeatures() {
+        cancelPendingRouteWork();
         features.forEach(f => {
             try { f.destroy?.(); }
             catch (e) { console.warn(`[IMDb Enhanced] destroy ${f.key}:`, e); }
@@ -5217,14 +5355,13 @@ section[id*="quote" i] .ipc-list-card { padding: 4px 0 !important; margin: 2px 0
         if (activeRouteKey === routeKey) return;
         if (activeRouteKey) destroyRouteFeatures();
         activeRouteKey = routeKey;
+        activeRouteGeneration += 1;
         _ldData = null;
         cacheGC();
 
         injectGlobalStyles();
         const enabledFeatures = features.filter(f => get(f.key) && shouldInitFeature(f));
-        enabledFeatures.forEach(f => {
-            try { f.init(); } catch (e) { console.warn(`[IMDb Enhanced] ${f.key}:`, e); }
-        });
+        enabledFeatures.forEach(feature => startFeature(feature, { context:'route' }));
         createSettingsPanel();
         createFAB();
         routeInitCount += 1;
