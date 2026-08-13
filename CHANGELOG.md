@@ -87,6 +87,7 @@
 - Tightened trailer identity matching so short or shared titles such as “It” and “Alien” cannot autoplay a longer, different movie merely because its video title contains the IMDb title as a phrase.
 - Extended list, chart, and watchlist tools to IMDb's live locale-prefixed desktop routes instead of matching only their unprefixed English URLs.
 - Distinguished private Seen/Skip marks from IMDb's newer account-based Watched feature in settings, badges, accessible names, and save feedback without changing existing local mark data.
+- Raised secondary and tertiary text contrast across Dark, OLED, Midnight, and Light themes so settings help, status labels, metadata, and integration notes remain readable on elevated surfaces.
 
 ## 2.5.1 — 2026-08-12
 

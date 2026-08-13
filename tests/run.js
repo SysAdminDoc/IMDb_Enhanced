@@ -60,6 +60,7 @@ function loadScriptTestHooks() {
         getListTitlesFromLinks,
         buildListSearchEntries,
         getEnhancementScrollBehavior,
+        THEMES,
         copyTextToClipboard,
         getFocusableElements,
         prepareSettingsImport,
@@ -514,6 +515,23 @@ test('theme changes repaint feature styles without restarting behavior', () => {
     assert(/key: 'spoilerBlur'[\s\S]*?addThemedCSS\(t =>/.test(script), 'plot reveal chrome should repaint with the active theme');
     assert(/key: 'subtitleLinks'[\s\S]*?addThemedCSS\(t =>[\s\S]*?enh-sub-row__label/.test(script), 'subtitle links should use the active theme instead of fixed dark text');
     assert(script.includes("removeCSS('enh-subtitleLinks')"), 'subtitle theme styles should clean up with the feature');
+});
+
+test('theme text tokens remain readable on elevated surfaces', () => {
+    const hooks = loadScriptTestHooks();
+    const luminance = hex => {
+        const channels = [1, 3, 5].map(index => parseInt(hex.slice(index, index + 2), 16) / 255)
+            .map(value => value <= 0.04045 ? value / 12.92 : ((value + 0.055) / 1.055) ** 2.4);
+        return channels[0] * 0.2126 + channels[1] * 0.7152 + channels[2] * 0.0722;
+    };
+    const contrast = (foreground, background) => {
+        const values = [luminance(foreground), luminance(background)].sort((a, b) => b - a);
+        return (values[0] + 0.05) / (values[1] + 0.05);
+    };
+    Object.entries(hooks.THEMES).forEach(([id, theme]) => {
+        assert(contrast(theme.tx2, theme.sf2) >= 4.5, `${id} secondary text is too faint on elevated surfaces`);
+        assert(contrast(theme.tx3, theme.sf2) >= 4.5, `${id} tertiary text is too faint on elevated surfaces`);
+    });
 });
 
 test('optional keyboard shortcuts do not collide with browser or modal commands', () => {

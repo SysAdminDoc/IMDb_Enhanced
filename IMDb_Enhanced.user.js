@@ -1377,8 +1377,8 @@
             // Text hierarchy
             tx0:    '#f0f0f2',  // primary headings
             tx1:    '#c8c8d0',  // body text
-            tx2:    '#8888a0',  // secondary / muted
-            tx3:    '#55556a',  // disabled / tertiary
+            tx2:    '#aaaab8',  // secondary / muted
+            tx3:    '#9090a2',  // tertiary text
             // Accent palette
             accent: '#f5c518',  // IMDb gold
             accentMuted: 'rgba(245,197,24,0.12)',
@@ -1411,8 +1411,8 @@
             sh3:    '0 12px 40px rgba(0,0,0,0.7), 0 2px 8px rgba(0,0,0,0.5)',
             tx0:    '#e4e4e8',
             tx1:    '#b0b0bc',
-            tx2:    '#6e6e80',
-            tx3:    '#444458',
+            tx2:    '#a0a0b0',
+            tx3:    '#8b8b9c',
             accent: '#f5c518',
             accentMuted: 'rgba(245,197,24,0.10)',
             accentBorder: 'rgba(245,197,24,0.18)',
@@ -1441,8 +1441,8 @@
             sh3:    '0 12px 40px rgba(0,0,20,0.6), 0 2px 8px rgba(0,0,20,0.35)',
             tx0:    '#e4e8f4',
             tx1:    '#b4bcda',
-            tx2:    '#6c78a8',
-            tx3:    '#445080',
+            tx2:    '#a0acce',
+            tx3:    '#939fc5',
             accent: '#f5c518',
             accentMuted: 'rgba(245,197,24,0.10)',
             accentBorder: 'rgba(245,197,24,0.20)',
@@ -1471,8 +1471,8 @@
             sh3:    '0 16px 46px rgba(15,23,42,0.16), 0 4px 14px rgba(15,23,42,0.10)',
             tx0:    '#101827',
             tx1:    '#334155',
-            tx2:    '#64748b',
-            tx3:    '#94a3b8',
+            tx2:    '#475569',
+            tx3:    '#536175',
             accent: '#a76500',
             accentMuted: 'rgba(167,101,0,0.12)',
             accentBorder: 'rgba(167,101,0,0.28)',
