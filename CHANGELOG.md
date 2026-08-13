@@ -75,6 +75,7 @@
 - Removed the obsolete Sonarr language-profile field and payload property; current Sonarr manages language through quality-profile custom formats, and the userscript now cleans the orphaned legacy setting.
 - Stopped blank or invalid Radarr/Sonarr quality-profile fields from silently falling back to profile 1; incomplete integrations now remain inactive until their visible configuration is valid.
 - Added a five-second, two-action confirmation state before clearing every saved title mark, preventing an irreversible one-click loss without using a blocking browser dialog.
+- Cancelled reset/import subflows whenever settings close and cleared pasted backup JSON from the page, so a later reopen cannot resume a stale destructive state or retain copied credentials.
 
 ## 2.5.1 — 2026-08-12
 

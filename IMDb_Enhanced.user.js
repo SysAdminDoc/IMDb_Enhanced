@@ -6147,7 +6147,7 @@ section[id*="quote" i] .ipc-list-card { padding: 4px 0 !important; margin: 2px 0
             )
         );
         dataPage.appendChild(dataSummary);
-        const importPanel = makeEl('div', { className:'enh-import-panel', hidden:'hidden' },
+        const importPanel = makeEl('div', { className:'enh-import-panel', id:'enh-import-panel', hidden:'hidden' },
             makeEl('label', { className:'enh-import-label', for:'enh-import-textarea' }, 'Paste exported settings JSON'),
             makeEl('textarea', {
                 id:'enh-import-textarea', className:'enh-import-textarea', spellcheck:'false', maxlength:'100000',
@@ -6322,6 +6322,12 @@ section[id*="quote" i] .ipc-list-card { padding: 4px 0 !important; margin: 2px 0
             const activeTab = overlay?.querySelector(`.enh-settings-nav-btn[data-settings-page="${activeSettingsPage}"]`);
             setTimeout(() => (activeTab || getFocusableElements(overlay)[0] || panel)?.focus(), 40);
         } else {
+            const importPanel = document.getElementById('enh-import-panel');
+            const resetPanel = document.getElementById('enh-reset-panel');
+            if (importPanel) importPanel.hidden = true;
+            if (resetPanel) resetPanel.hidden = true;
+            const importTextarea = document.getElementById('enh-import-textarea');
+            if (importTextarea) importTextarea.value = '';
             document.documentElement.style.overflow = previousDocumentOverflow;
             lastFocusedElement?.focus?.();
         }

@@ -904,6 +904,10 @@ test('settings preserve host scroll state and complete nested tab keyboard suppo
         /onClick: \(\) => \{\s*const row = addRow\(\);\s*updateCount\(\);[\s\S]*?\.focus\(\);\s*\}/.test(script),
         'Add should create and focus an unsaved draft row'
     );
+    assert(
+        /const importPanel = document\.getElementById\('enh-import-panel'\);[\s\S]*?importPanel\.hidden = true;[\s\S]*?resetPanel\.hidden = true;[\s\S]*?importTextarea\.value = '';/.test(script),
+        'closing settings must clear sensitive import text and cancel destructive subflows'
+    );
 });
 
 test('Greasy Fork distribution guardrails stay intact', () => {
