@@ -50,6 +50,8 @@ function loadScriptTestHooks() {
         startFeature,
         normalizeUrlTemplate,
         normalizeLocalServiceUrl,
+        normalizeCredentialValue,
+        isLocalServiceUrl,
         normalizeTrustedUrl,
         normalizeSite,
         getSiteList,
@@ -810,10 +812,15 @@ test('settings imports validate first and roll back partial storage failures', (
         /No valid recognized settings/,
         'credential-bearing service URLs must be rejected'
     );
-    assert.strictEqual(
-        hooks.prepareSettingsImport({ radarrApiKey:'k'.repeat(hooks.SETTING_TEXT_LIMIT + 1) }).entries[0].value.length,
-        hooks.SETTING_TEXT_LIMIT,
-        'imported integration strings should use the same bound as their settings controls'
+    assert.throws(
+        () => hooks.prepareSettingsImport({ plexToken:'secret\r\nX-Injected: yes' }),
+        /No valid recognized settings/,
+        'credential header values with embedded controls must be rejected'
+    );
+    assert.throws(
+        () => hooks.prepareSettingsImport({ radarrApiKey:'k'.repeat(hooks.SETTING_TEXT_LIMIT + 1) }),
+        /No valid recognized settings/,
+        'oversized credential imports should be rejected instead of silently truncated'
     );
 });
 
@@ -1460,6 +1467,10 @@ test('local-service credentials stay out of request URLs', () => {
     assert.strictEqual(hooks.normalizeLocalServiceUrl('http://localhost:32400/library'), 'http://localhost:32400/library');
     assert.strictEqual(hooks.normalizeLocalServiceUrl('http://localhost:32400/?token=secret'), '', 'local base URLs must reject query credentials');
     assert.strictEqual(hooks.normalizeLocalServiceUrl('http://localhost:32400/#secret'), '', 'local base URLs must reject fragments');
+    assert.strictEqual(hooks.isLocalServiceUrl('ftp://localhost/library'), false, 'request guards must reject non-HTTP localhost URLs');
+    assert.strictEqual(hooks.isLocalServiceUrl('http://user:secret@localhost/library'), false, 'request guards must reject embedded URL credentials');
+    assert.strictEqual(hooks.isLocalServiceUrl('http://localhost/library?token=secret'), false, 'request guards must reject query-bearing base URLs');
+    assert.strictEqual(hooks.normalizeCredentialValue('secret\r\nX-Injected: yes'), '', 'header credentials must reject embedded controls');
     assert.strictEqual(
         hooks.normalizeLocalServiceUrl(`http://localhost/${'x'.repeat(hooks.SETTING_TEXT_LIMIT)}`),
         '',
@@ -1486,6 +1497,9 @@ test('local-service credentials stay out of request URLs', () => {
     hooks.seedStoredSetting('radarrUrl', 'https://remote.example.test');
     hooks.seedStoredSetting('radarrQualityProfileId', '1');
     assert.strictEqual(hooks.isServarrConfigured('radarr'), false, 'legacy remote service URLs must stay inert even when other fields are complete');
+    hooks.seedStoredSetting('radarrUrl', 'http://localhost:7878');
+    hooks.seedStoredSetting('radarrApiKey', 'secret\r\nX-Injected: yes');
+    assert.strictEqual(hooks.isServarrConfigured('radarr'), false, 'malformed stored header credentials must keep the integration inert');
 });
 
 test('media server matching handles provider IDs and title fallback', () => {

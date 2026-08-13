@@ -185,6 +185,9 @@
     const POSITIVE_INTEGER_SETTING_KEYS = new Set([
         'radarrQualityProfileId', 'sonarrQualityProfileId',
     ]);
+    const CREDENTIAL_SETTING_KEYS = new Set([
+        'radarrApiKey', 'sonarrApiKey', 'plexToken', 'jellyfinApiKey', 'embyApiKey',
+    ]);
     const COLLAPSIBLE_SECTION_IDS = [
         'title-cast', 'UserReviews', 'MoreLikeThis', 'Details', 'BoxOffice',
         'TechSpecs', 'DidYouKnow', 'videos-section', 'Photos',
@@ -789,6 +792,12 @@
         return isLocalServiceUrl(normalized) ? normalized : '';
     }
 
+    function normalizeCredentialValue(value) {
+        const credential = String(value || '').trim();
+        if (!credential || credential.length > SETTING_TEXT_LIMIT || /[\u0000-\u001f\u007f]/.test(credential)) return '';
+        return credential;
+    }
+
     function normalizeImportedSetting(key, value) {
         if (!Object.prototype.hasOwnProperty.call(DEFAULTS, key)) return null;
         const fallback = DEFAULTS[key];
@@ -816,6 +825,12 @@
             return Number.isSafeInteger(number) && number > 0
                 ? { key, value:String(number) }
                 : null;
+        }
+        if (CREDENTIAL_SETTING_KEYS.has(key)) {
+            if (typeof value !== 'string') return null;
+            const raw = value.trim();
+            const normalized = normalizeCredentialValue(raw);
+            return !raw || normalized ? { key, value:normalized } : null;
         }
         if (key === 'sectionCollapseState') {
             if (!value || Array.isArray(value) || typeof value !== 'object') return null;
@@ -1250,8 +1265,11 @@
     }
     function isLocalServiceUrl(baseUrl) {
         try {
-            const host = new URL(baseUrl).hostname.toLowerCase();
-            return host === 'localhost' || host === '127.0.0.1';
+            const url = new URL(baseUrl);
+            const host = url.hostname.toLowerCase();
+            return /^https?:$/i.test(url.protocol)
+                && (host === 'localhost' || host === '127.0.0.1')
+                && !url.username && !url.password && !url.search && !url.hash;
         } catch { return false; }
     }
     function isLocalServarrUrl(baseUrl) {
@@ -1267,7 +1285,7 @@
         return {
             kind: prefix,
             baseUrl,
-            apiKey: String(get(`${prefix}ApiKey`) || '').trim().slice(0, SETTING_TEXT_LIMIT),
+            apiKey: normalizeCredentialValue(get(`${prefix}ApiKey`)),
             rootFolderPath: String(get(`${prefix}RootFolderPath`) || '').trim().slice(0, SETTING_TEXT_LIMIT),
             qualityProfileId: toPositiveInteger(get(`${prefix}QualityProfileId`), 0),
         };
@@ -1319,7 +1337,7 @@
             kind,
             label: def.label,
             baseUrl: normalizeLocalServiceUrl(get(def.urlKey)),
-            token: String(get(def.tokenKey) || '').trim().slice(0, SETTING_TEXT_LIMIT),
+            token: normalizeCredentialValue(get(def.tokenKey)),
         };
     }
     function getConfiguredMediaServers() {
@@ -5979,7 +5997,7 @@ section[id*="quote" i] .ipc-list-card { padding: 4px 0 !important; margin: 2px 0
         });
         input.value = String(get(key) || '').slice(0, SETTING_TEXT_LIMIT);
         const persist = (notifyFailure = false) => {
-            const raw = input.value.trim().slice(0, SETTING_TEXT_LIMIT);
+            const raw = input.value.trim();
             if (LOCAL_SERVICE_URL_KEYS.has(key)) {
                 const normalized = normalizeLocalServiceUrl(raw);
                 const valid = !raw || Boolean(normalized);
@@ -6002,9 +6020,20 @@ section[id*="quote" i] .ipc-list-card { padding: 4px 0 !important; margin: 2px 0
                 }
                 return trySaveSetting(key, String(number), { notify:notifyFailure });
             }
+            if (CREDENTIAL_SETTING_KEYS.has(key)) {
+                const normalized = normalizeCredentialValue(raw);
+                const valid = !raw || Boolean(normalized);
+                input.classList.toggle('enh-site-input--invalid', !valid);
+                input.setAttribute('aria-invalid', String(!valid));
+                if (!valid) {
+                    if (notifyFailure) showToast('Credentials must be at most 4,096 characters without control characters');
+                    return false;
+                }
+                return trySaveSetting(key, normalized, { notify:notifyFailure });
+            }
             input.classList.remove('enh-site-input--invalid');
             input.setAttribute('aria-invalid', 'false');
-            return trySaveSetting(key, raw, { notify:notifyFailure });
+            return trySaveSetting(key, raw.slice(0, SETTING_TEXT_LIMIT), { notify:notifyFailure });
         };
         if (LOCAL_SERVICE_URL_KEYS.has(key)) {
             const initial = input.value.trim();
