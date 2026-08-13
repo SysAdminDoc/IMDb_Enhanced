@@ -2100,6 +2100,21 @@ section[id*="quote" i] .ipc-list-card { padding: 4px 0 !important; margin: 2px 0
         const query = [title, year, 'official trailer'].filter(Boolean).join(' ');
         return `https://www.youtube.com/results?search_query=${encodeURIComponent(query)}`;
     }
+    function isTrailerTitleMatch(candidateTitle, title) {
+        const candidate = normalizeLookupTitle(candidateTitle);
+        const wanted = normalizeLookupTitle(title);
+        if (!candidate || !wanted) return false;
+        if (candidate === wanted) return true;
+
+        const descriptor = /^(?:official|trailer|teaser|final|main|original|international|theatrical|red|band|hd|uhd|4k|remaster(?:ed)?|\d{4}|\d+(?:st|nd|rd|th))\b/;
+        if (candidate.startsWith(`${wanted} `)) {
+            return descriptor.test(candidate.slice(wanted.length + 1));
+        }
+        if (candidate.endsWith(` ${wanted}`)) {
+            return /\b(?:trailer|teaser)\b/.test(candidate.slice(0, -(wanted.length + 1)));
+        }
+        return false;
+    }
     function parseYouTubeTrailerVideoId(html, title, year) {
         const wantedTitle = normalizeLookupTitle(title);
         if (!wantedTitle) return '';
@@ -2113,8 +2128,7 @@ section[id*="quote" i] .ipc-list-card { padding: 4px 0 !important; margin: 2px 0
             try { candidateTitle = JSON.parse(`"${match[2]}"`); }
             catch { continue; }
             const normalized = normalizeLookupTitle(candidateTitle);
-            const phraseMatches = ` ${normalized} `.includes(` ${wantedTitle} `);
-            if (!phraseMatches || !/\b(?:trailer|teaser)\b/i.test(candidateTitle)) continue;
+            if (!isTrailerTitleMatch(candidateTitle, title) || !/\b(?:trailer|teaser)\b/i.test(candidateTitle)) continue;
             const candidateYear = Number(yearFromText(candidateTitle)) || 0;
             if (wantedYear && candidateYear && Math.abs(candidateYear - wantedYear) > 1) continue;
             const score = (normalized === wantedTitle || normalized.startsWith(`${wantedTitle} `) ? 4 : 2)

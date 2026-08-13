@@ -84,6 +84,7 @@
 - Kept plot-reveal instructions sharp instead of blurring their own prompt, and moved spoiler/subtitle surfaces onto the active theme tokens for readable Light and High Contrast states.
 - Kept enabled ad-request rules and the zero-gap shell stylesheet active across IMDb SPA route teardown instead of briefly unregistering both before the next route initialized.
 - Rejected credential-bearing URLs at the third-party response-link boundary even when their HTTPS hostname is otherwise trusted.
+- Tightened trailer identity matching so short or shared titles such as “It” and “Alien” cannot autoplay a longer, different movie merely because its video title contains the IMDb title as a phrase.
 
 ## 2.5.1 — 2026-08-12
 

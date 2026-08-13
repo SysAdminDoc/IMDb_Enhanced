@@ -55,6 +55,7 @@ function loadScriptTestHooks() {
         parseJustWatchSearchResult,
         parseJustWatchIdentity,
         collectJustWatchProviderNames,
+        isTrailerTitleMatch,
         parseYouTubeTrailerVideoId,
         getListTitlesFromLinks,
         buildListSearchEntries,
@@ -438,6 +439,13 @@ test('trailer dialog contains focus, restores page state, and ignores stale look
     assert.strictEqual(hooks.parseYouTubeTrailerVideoId(searchHtml, 'The Matrix', 1999), 'vKQi3bBA1y8');
     assert.strictEqual(hooks.parseYouTubeTrailerVideoId(searchHtml, 'Alien', 1979), '', 'unrelated first video IDs must not autoplay');
     assert(!script.includes('_parseVideoId(html)'), 'unscoped first-video parsing should stay removed');
+    assert(!hooks.isTrailerTitleMatch('It Ends with Us Official Trailer', 'It'), 'a generic title must not match a longer movie title');
+    assert(hooks.isTrailerTitleMatch('It (2017) Official Trailer', 'It'), 'release and trailer descriptors should remain valid after an exact title');
+    const genericHtml = [
+        '"videoRenderer":{"videoId":"wrongvideo1","title":{"runs":[{"text":"It Ends with Us Official Trailer"}]}}',
+        '"videoRenderer":{"videoId":"rightvideo1","title":{"runs":[{"text":"It (2017) Official Trailer"}]}}',
+    ].join('');
+    assert.strictEqual(hooks.parseYouTubeTrailerVideoId(genericHtml, 'It', 2017), 'rightvideo1');
 });
 
 test('secondary interactions expose complete keyboard and toggle semantics', () => {
