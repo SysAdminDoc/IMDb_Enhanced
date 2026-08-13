@@ -1977,6 +1977,50 @@ section[id*="quote" i] .ipc-list-card { padding: 4px 0 !important; margin: 2px 0
         return extra > 0 ? `${summary} +${extra}` : summary;
     }
 
+    function getHTMLAttribute(attributes, name) {
+        const escaped = String(name || '').replace(/[.*+?^${}()|[\]\\]/g, '\\$&');
+        const match = String(attributes || '').match(new RegExp(`\\b${escaped}\\s*=\\s*(["'])(.*?)\\1`, 'i'));
+        return match ? decodeHTML(match[2]) : '';
+    }
+
+    function parseRTSearchResult(html, title, year, type = 'movie') {
+        const candidates = [];
+        const rows = String(html || '').matchAll(/<search-page-media-row\b([^>]*)>([\s\S]*?)<\/search-page-media-row>/gi);
+        for (const row of rows) {
+            const titleAnchor = row[2].match(/<a\b([^>]*\bslot\s*=\s*["']title["'][^>]*)>([\s\S]*?)<\/a>/i);
+            if (!titleAnchor) continue;
+            const href = normalizeTrustedUrl(getHTMLAttribute(titleAnchor[1], 'href'), 'rottentomatoes.com', '');
+            if (!href) continue;
+            const path = new URL(href).pathname;
+            if (type === 'tv' ? !path.startsWith('/tv/') : !path.startsWith('/m/')) continue;
+            const candidateTitle = decodeHTML(titleAnchor[2].replace(/<[^>]*>/g, ' ')).replace(/\s+/g, ' ').trim();
+            const score = Number(getHTMLAttribute(row[1], 'tomatometer-score'));
+            if (!candidateTitle || !Number.isFinite(score) || score < 0 || score > 100) continue;
+            const candidateYear = Number(
+                getHTMLAttribute(row[1], 'release-year') || getHTMLAttribute(row[1], 'start-year')
+            ) || 0;
+            candidates.push({
+                title:candidateTitle,
+                year:candidateYear,
+                tomatometer:score,
+                audience:null,
+                consensus:null,
+                url:href,
+            });
+        }
+
+        const wantedTitle = normalizeLookupTitle(title);
+        const exact = candidates.filter(candidate => normalizeLookupTitle(candidate.title) === wantedTitle);
+        const wantedYear = Number(year) || 0;
+        if (wantedYear) {
+            const yearMatch = exact.find(candidate => candidate.year && Math.abs(candidate.year - wantedYear) <= 1);
+            if (yearMatch) return yearMatch;
+            if (exact.length === 1 && !exact[0].year) return exact[0];
+            return null;
+        }
+        return exact.length === 1 ? exact[0] : null;
+    }
+
     reg({
         key: 'ratingColorCoding', name: 'Rating quality labels', group: 'Appearance',
         init() {
@@ -2139,7 +2183,7 @@ section[id*="quote" i] .ipc-list-card { padding: 4px 0 !important; margin: 2px 0
         key: 'inlineRTScore', name: 'Rotten Tomatoes scores', group: 'Scores',
         async init() {
             const isCurrent = createFeatureGuard(this);
-            const imdbId = getIMDbID(), title = getTitleText();
+            const imdbId = getIMDbID(), title = getTitleText(), year = getTitleYear();
             if (!imdbId || !title) return;
 
             const cacheKey = 'rt_' + imdbId;
@@ -2171,11 +2215,9 @@ section[id*="quote" i] .ipc-list-card { padding: 4px 0 !important; margin: 2px 0
             try {
                 const res2 = await httpGet(`https://www.rottentomatoes.com/search?search=${encodeURIComponent(title)}`, { cancelOnRouteChange:true });
                 if (!isCurrent()) return;
-                const tm = res2.responseText.match(/"tomatoScore"\s*:\s*(\d+)/);
-                const au = res2.responseText.match(/"audienceScore"\s*:\s*(\d+)/);
-                if (tm) {
-                    const d = { tomatometer: parseInt(tm[1]), audience: au ? parseInt(au[1]) : null, consensus: null };
-                    cacheSet(cacheKey, d); this._render(d);
+                const result = parseRTSearchResult(res2.responseText, title, year, type);
+                if (result) {
+                    cacheSet(cacheKey, result); this._render(result);
                     return;
                 }
             } catch { /* handled below */ }
@@ -2213,9 +2255,11 @@ section[id*="quote" i] .ipc-list-card { padding: 4px 0 !important; margin: 2px 0
             const hasAudience = Number.isFinite(audience);
             const color = hasScore ? rtColorFn(score) : '#555';
             const consensus = String(data.consensus || '').trim().slice(0, 500);
+            const fallbackUrl = `https://www.rottentomatoes.com/search?search=${encodeURIComponent(getTitleText())}`;
+            const href = normalizeTrustedUrl(data.url, 'rottentomatoes.com', fallbackUrl);
             const w = makeEl('div', { id: 'enh-rt-widget', className: 'enh-score-widget' });
             const scoreLink = makeEl('a', {
-                href:`https://www.rottentomatoes.com/search?search=${encodeURIComponent(getTitleText())}`,
+                href,
                 target:'_blank', rel:'noopener', className:'enh-score-widget__score',
                 style:{ '--score-color':color },
                 ...(consensus ? { title:consensus } : {}),

@@ -37,6 +37,7 @@ function loadScriptTestHooks() {
         normalizeUrlTemplate,
         normalizeTrustedUrl,
         normalizeSite,
+        parseRTSearchResult,
         buildListSearchEntries,
         getEnhancementScrollBehavior,
         getFocusableElements,
@@ -88,6 +89,21 @@ function loadScriptTestHooks() {
             documentElement: {},
             querySelector: () => null,
             dispatchEvent: () => true,
+            createElement: tag => {
+                if (tag !== 'textarea') return {};
+                let value = '';
+                return {
+                    set innerHTML(html) {
+                        value = String(html)
+                            .replace(/&amp;/g, '&')
+                            .replace(/&quot;/g, '"')
+                            .replace(/&#39;|&apos;/g, "'")
+                            .replace(/&lt;/g, '<')
+                            .replace(/&gt;/g, '>');
+                    },
+                    get value() { return value; },
+                };
+            },
         },
         history: {},
         MutationObserver: class {
@@ -488,6 +504,28 @@ test('third-party response links stay on trusted HTTPS domains', () => {
     ['letterboxd.com', 'metacritic.com', 'justwatch.com'].forEach(domain => {
         assert(script.includes(`normalizeTrustedUrl(data.url, '${domain}'`), `${domain} render allowlist missing`);
     });
+});
+
+test('Rotten Tomatoes search fallback requires an exact title and year', () => {
+    const hooks = loadScriptTestHooks();
+    const html = `
+        <search-page-media-row release-year="1999" tomatometer-score="83">
+            <a href="https://www.rottentomatoes.com/m/matrix" slot="title"> The Matrix </a>
+        </search-page-media-row>
+        <search-page-media-row release-year="2021" tomatometer-score="63">
+            <a href="https://www.rottentomatoes.com/m/the_matrix_resurrections" slot="title">The Matrix Resurrections</a>
+        </search-page-media-row>
+        <search-page-media-row start-year="1993" tomatometer-score="55">
+            <a href="https://www.rottentomatoes.com/tv/matrix" slot="title">The Matrix</a>
+        </search-page-media-row>`;
+    const result = hooks.parseRTSearchResult(html, 'The Matrix', 1999, 'movie');
+    assert(result, 'exact movie result should be parsed');
+    assert.strictEqual(result.tomatometer, 83);
+    assert.strictEqual(result.url, 'https://www.rottentomatoes.com/m/matrix');
+    assert.strictEqual(hooks.parseRTSearchResult(html, 'The Matrix', 2021, 'movie'), null, 'a different title must not satisfy a matching year');
+    assert.strictEqual(hooks.parseRTSearchResult(html, 'The Matrix', 1993, 'tv').tomatometer, 55, 'movie and TV results must stay separated');
+    assert.strictEqual(hooks.parseRTSearchResult(html, 'Matrix', 1999, 'movie'), null, 'partial title matches must be rejected');
+    assert(!script.includes('responseText.match(/"tomatoScore"'), 'unscoped first-score fallback should stay removed');
 });
 
 test('list multi-search builds a popup-safe link queue', () => {
