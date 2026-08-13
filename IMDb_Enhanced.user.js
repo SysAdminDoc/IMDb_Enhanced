@@ -2244,50 +2244,78 @@ section[id*="quote" i] .ipc-list-card { padding: 4px 0 !important; margin: 2px 0
         return isCurrent() ? findRatingBar() : null;
     }
 
+    function normalizeHistogramData(value) {
+        if (!Array.isArray(value)) return null;
+        const buckets = new Map();
+        value.slice(0, 100).forEach(bucket => {
+            const rating = Number(bucket?.rating);
+            const votes = Number(bucket?.voteCount ?? bucket?.count);
+            if (!Number.isInteger(rating) || rating < 1 || rating > 10) return;
+            if (!Number.isFinite(votes) || votes < 0) return;
+            buckets.set(rating, Math.round(votes));
+        });
+        if (buckets.size < 2) return null;
+        return Array.from({ length:10 }, (_, index) => ({
+            rating:index + 1,
+            voteCount:buckets.get(index + 1) || 0,
+        }));
+    }
+
+    function findHistogramData(root, maxNodes = 10000) {
+        const queue = [root];
+        for (let index = 0; index < queue.length && index < maxNodes; index++) {
+            const node = queue[index];
+            if (!node || typeof node !== 'object') continue;
+            const direct = normalizeHistogramData(node.histogramData)
+                || normalizeHistogramData(node.ratingsSummary?.histogramData);
+            if (direct) return direct;
+            const remaining = maxNodes - queue.length;
+            if (remaining <= 0) continue;
+            Object.values(node)
+                .filter(value => value && typeof value === 'object')
+                .slice(0, remaining)
+                .forEach(value => queue.push(value));
+        }
+        return null;
+    }
+
     function getHistogramData() {
-        try {
-            const scripts = document.querySelectorAll('script[type="application/json"]');
-            for (const s of scripts) {
-                const text = s.textContent;
-                if (!text.includes('histogramData') && !text.includes('ratingsSummary')) continue;
-                const json = JSON.parse(text);
-                const find = (obj) => {
-                    if (!obj || typeof obj !== 'object') return null;
-                    if (obj.histogramData && Array.isArray(obj.histogramData)) return obj.histogramData;
-                    if (obj.ratingsSummary?.histogramData) return obj.ratingsSummary.histogramData;
-                    for (const v of Object.values(obj)) {
-                        const r = find(v);
-                        if (r) return r;
-                    }
-                    return null;
-                };
-                const data = find(json);
-                if (data?.length) return data;
-            }
-        } catch { /* ignore */ }
+        const scripts = document.querySelectorAll('script[type="application/json"]');
+        for (const script of scripts) {
+            const text = script.textContent || '';
+            if (!text.includes('histogramData') && !text.includes('ratingsSummary')) continue;
+            try {
+                const data = findHistogramData(JSON.parse(text));
+                if (data) return data;
+            } catch { /* inspect the next application-data block */ }
+        }
         return null;
     }
 
     reg({
         key: 'ratingHistogram', name: 'Rating histogram', group: 'Scores',
-        init() {
+        async init() {
+            const isCurrent = createFeatureGuard(this);
             if (document.getElementById('enh-histogram')) return;
+            const bar = await waitForRatingBar(isCurrent);
+            if (!bar || !isCurrent() || document.getElementById('enh-histogram')) return;
             const histogram = getHistogramData();
             if (!histogram?.length) return;
-            const bar = findRatingBar();
-            if (!bar) return;
 
-            const maxVotes = Math.max(...histogram.map(b => b.voteCount || b.count || 0), 1);
-            const t = getTheme();
+            const maxVotes = Math.max(...histogram.map(bucket => bucket.voteCount), 1);
             const w = makeEl('div', { id: 'enh-histogram', className: 'enh-score-widget' });
             const label = makeEl('div', { className: 'enh-score-widget__label' }, 'VOTES');
-            const chart = makeEl('div', { className: 'enh-histogram-chart' });
-            const sorted = [...histogram].sort((a, b) => (a.rating || 0) - (b.rating || 0));
-            sorted.forEach(bucket => {
-                const rating = bucket.rating || 0;
-                const votes = bucket.voteCount || bucket.count || 0;
+            const chart = makeEl('div', {
+                className:'enh-histogram-chart', role:'list',
+                'aria-label':'IMDb vote distribution from 1 to 10',
+            });
+            histogram.forEach(bucket => {
+                const { rating, voteCount:votes } = bucket;
                 const pct = Math.max((votes / maxVotes) * 100, 2);
-                const col = makeEl('div', { className: 'enh-histogram-col', title: `${rating}/10: ${votes.toLocaleString()} votes` },
+                const description = `${rating} out of 10: ${votes.toLocaleString()} votes`;
+                const col = makeEl('div', {
+                    className:'enh-histogram-col', role:'listitem', title:description, 'aria-label':description,
+                },
                     makeEl('div', { className: 'enh-histogram-bar', style: { height: pct + '%' } }),
                     makeEl('div', { className: 'enh-histogram-label' }, String(rating))
                 );

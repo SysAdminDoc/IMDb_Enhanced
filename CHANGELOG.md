@@ -47,6 +47,7 @@
 - Kept focus inside the trailer dialog even when keyboard navigation exits the cross-origin player frame, and restored plot/episode text to its original non-button semantics immediately after a one-way spoiler reveal.
 - Tightened third-party title identity matching so year-qualified IMDb titles reject score or streaming candidates with no release year, while canonical title comparison now tolerates accent variants such as `Amélie`/`Amelie`.
 - Made IMDb title-data extraction skip malformed and unrelated JSON-LD blocks, recognize explicit miniseries schema, and bounded the scan; runtime host checks now require the exact matched IMDb or Cineby hostname instead of substring trust.
+- Bounded and validated rating-histogram discovery, normalized it to a stable 1–10 distribution, waited for the live rating surface before rendering, and exposed each vote bucket to assistive technology.
 
 ## 2.5.1 — 2026-08-12
 

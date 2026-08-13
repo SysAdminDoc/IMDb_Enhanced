@@ -28,6 +28,8 @@ function loadScriptTestHooks() {
         normalizeIMDbProviderId,
         normalizeLookupTitle,
         parseIMDbTitleStructuredData,
+        normalizeHistogramData,
+        findHistogramData,
         collectProviderIds,
         mediaItemMatches,
         parseMediaServerItems,
@@ -181,6 +183,22 @@ test('IMDb title data selection ignores unrelated or malformed structured data',
     assert.strictEqual(selected.name, 'Chernobyl');
     assert.strictEqual(selected['@type'], 'TVMiniSeries');
     assert(script.includes('if (Object.keys(selected).length) _ldData = selected'), 'an early empty scan must not prevent a later structured-data retry');
+});
+
+test('rating histogram extraction is bounded and normalizes a 1-10 distribution', () => {
+    const hooks = loadScriptTestHooks();
+    const raw = Array.from({ length:10 }, (_, index) => ({
+        rating:String(index + 1),
+        count:String((index + 1) * 100),
+    }));
+    raw.push({ rating:11, count:999999 }, { rating:5, count:-1 }, { rating:'bad', count:100 });
+    const histogram = hooks.findHistogramData({ props:{ pageProps:{ ratingsSummary:{ histogramData:raw } } } });
+    assert.strictEqual(histogram.length, 10);
+    assert.strictEqual(histogram[0].rating, 1);
+    assert.strictEqual(histogram[0].voteCount, 100);
+    assert.strictEqual(histogram[9].voteCount, 1000);
+    assert.strictEqual(hooks.findHistogramData({ histogramData:[{ rating:1, count:10 }] }), null, 'one malformed bucket must not become a chart');
+    assert(script.includes("'aria-label':'IMDb vote distribution from 1 to 10'"), 'histogram should expose its meaning to assistive technology');
 });
 
 test('fragile selectors and global Cineby key stay removed', () => {
