@@ -66,7 +66,7 @@ Click the gear icon on any covered IMDb page to open the six-section settings wo
 
 **External Links** - Same customization as watch sites for research/trailer links.
 
-**Cineby** - Preferred Cineby host selector (search handoff via local storage key).
+**Cineby** - Preferred Cineby host selector with a one-time, ten-minute local search handoff that is consumed as soon as Cineby opens.
 
 **Radarr/Sonarr** - URL, API key, root folder, and quality profile for each. Localhost/127.0.0.1 only.
 

@@ -41,6 +41,8 @@ function loadScriptTestHooks() {
         getEnhancementScrollBehavior,
         prepareSettingsImport,
         applySettingsImport,
+        storeCinebyQuery,
+        takeCinebyQuery,
         httpRequest,
         waitFor,
         cancelPendingRouteWork,
@@ -95,7 +97,7 @@ function loadScriptTestHooks() {
         GM_setClipboard: () => {},
         GM_xmlhttpRequest: () => ({ abort: () => { sandboxAbortedRequestCount += 1; } }),
         GM_listValues: () => [],
-        GM_deleteValue: () => {},
+        GM_deleteValue: key => { sandboxValues.delete(key); },
         GM_webRequest: rules => { sandbox.webRequestRules = rules; },
     };
     vm.runInNewContext(instrumented, sandbox, { filename: scriptPath });
@@ -408,7 +410,24 @@ test('cineby uses current domain', () => {
     assert(script.includes('cineby.at'), 'cineby.at should be the active Cineby domain');
     assert(script.includes('// @match        https://www.cineby.at/*'), 'Cineby root route should be matched');
     assert(script.includes("url:'https://www.cineby.at/'"), 'Cineby handoff should target the live root route');
-    assert(script.includes("return /^search$/i.test(label.trim())"), 'Cineby handoff should open the current search control');
+    assert(script.includes("/^search$/i.test(label.trim())"), 'Cineby handoff should open the current search control');
+});
+
+test('Cineby handoffs are short-lived and consumed only once', () => {
+    const hooks = loadScriptTestHooks();
+    assert(hooks.storeCinebyQuery('The Matrix'));
+    const payload = JSON.parse(hooks.getStoredSetting('cineby_query'));
+    assert.strictEqual(payload.title, 'The Matrix');
+    assert(Number.isFinite(payload.ts), 'handoff timestamp missing');
+    assert.strictEqual(hooks.takeCinebyQuery(), 'The Matrix');
+    assert.strictEqual(hooks.getStoredSetting('cineby_query'), undefined, 'consumed handoff should be deleted immediately');
+
+    hooks.seedStoredSetting('cineby_query', JSON.stringify({ title:'Stale title', ts:0 }));
+    assert.strictEqual(hooks.takeCinebyQuery(), '', 'expired handoffs should not fill a later Cineby visit');
+    assert.strictEqual(hooks.getStoredSetting('cineby_query'), undefined, 'expired handoff should also be deleted');
+
+    hooks.seedStoredSetting('cineby_query', '1917');
+    assert.strictEqual(hooks.takeCinebyQuery(), '1917', 'numeric legacy movie titles should survive migration');
 });
 
 test('settings preserve host scroll state and complete nested tab keyboard support', () => {

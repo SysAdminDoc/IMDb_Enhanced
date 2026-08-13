@@ -44,6 +44,7 @@
     const VERSION = '2.6.0';
     const PREFIX  = 'imdb_enh_';
     const CINEBY_QUERY_KEY = PREFIX + 'cineby_query';
+    const CINEBY_QUERY_TTL = 10 * 60 * 1000;
     const CACHE_TTL = 7 * 24 * 60 * 60 * 1000; // 7 days
     const CACHE_UNAVAILABLE_TTL = 24 * 60 * 60 * 1000; // 24 hours
     const CACHE_MAX_ENTRIES = 120;
@@ -503,6 +504,49 @@
     function getCinebyHost() {
         const saved = normalizeUrlTemplate(get('cinebyHost'));
         return CINEBY_HOSTS.some(host => host.url === saved) ? saved : CINEBY_HOSTS[0].url;
+    }
+
+    function clearCinebyQueryKey(key) {
+        try {
+            if (typeof GM_deleteValue === 'function') GM_deleteValue(key);
+            else GM_setValue(key, '');
+        } catch { /* best-effort stale handoff cleanup */ }
+    }
+
+    function storeCinebyQuery(title) {
+        const normalized = String(title || '').trim().slice(0, 200);
+        if (!normalized) return false;
+        try {
+            GM_setValue(CINEBY_QUERY_KEY, JSON.stringify({ title:normalized, ts:Date.now() }));
+            return true;
+        } catch { return false; }
+    }
+
+    function takeCinebyQuery() {
+        const legacyKey = 'movieTitle';
+        let raw = '';
+        try { raw = GM_getValue(CINEBY_QUERY_KEY, '') || GM_getValue(legacyKey, ''); }
+        catch { return ''; }
+        clearCinebyQueryKey(CINEBY_QUERY_KEY);
+        clearCinebyQueryKey(legacyKey);
+        if (!raw) return '';
+
+        let payload = raw;
+        if (typeof raw === 'string') {
+            try {
+                const parsed = JSON.parse(raw);
+                if (!parsed || Array.isArray(parsed) || typeof parsed !== 'object') {
+                    return raw.trim().slice(0, 200);
+                }
+                payload = parsed;
+            }
+            catch { return raw.trim().slice(0, 200); }
+        }
+        if (!payload || Array.isArray(payload) || typeof payload !== 'object') return '';
+        const timestamp = Number(payload.ts);
+        const age = Date.now() - timestamp;
+        if (!Number.isFinite(timestamp) || age < -60000 || age > CINEBY_QUERY_TTL) return '';
+        return String(payload.title || '').trim().slice(0, 200);
     }
 
     function normalizeSite(site, fallbackColor = '#6366f1') {
@@ -2686,7 +2730,7 @@ section[id*="quote" i] .ipc-list-card { padding: 4px 0 !important; margin: 2px 0
                 appendTitleStackItem(wrap, TITLE_STACK_ORDER.searchButtons);
                 wrap.querySelectorAll('.enh-search-btn').forEach(btn => {
                     btn.addEventListener('click', () => {
-                        if (btn.dataset.storeQuery === 'true') GM_setValue(CINEBY_QUERY_KEY, title);
+                        if (btn.dataset.storeQuery === 'true') storeCinebyQuery(title);
                     });
                 });
             }).catch(() => {});
@@ -3819,7 +3863,7 @@ section[id*="quote" i] .ipc-list-card { padding: 4px 0 !important; margin: 2px 0
             target.insertBefore(bar, target.firstElementChild?.nextSibling || null);
         },
         _prepareEntry(site, entry) {
-            if (site.storeQuery) GM_setValue(CINEBY_QUERY_KEY, entry.name);
+            if (site.storeQuery) storeCinebyQuery(entry.name);
         },
         _showQueue(site, trigger) {
             const titles = getListTitles();
@@ -5551,36 +5595,34 @@ section[id*="quote" i] .ipc-list-card { padding: 4px 0 !important; margin: 2px 0
     // =========================================================================
     //  CINEBY AUTO-FILL
     // =========================================================================
-    function handleCineby() {
+    async function handleCineby() {
         if (!window.location.hostname.includes('cineby')) return;
-        const legacyKey = 'movieTitle';
-        const t = GM_getValue(CINEBY_QUERY_KEY, '') || GM_getValue(legacyKey, '');
+        const t = takeCinebyQuery();
         if (!t) return;
-        setTimeout(() => {
-            const fill = input => {
-                const setter = Object.getOwnPropertyDescriptor(HTMLInputElement.prototype, 'value')?.set;
-                if (setter) setter.call(input, t);
-                else input.value = t;
-                input.dispatchEvent(new InputEvent('input', { bubbles:true, inputType:'insertText', data:t }));
-                input.dispatchEvent(new Event('change', { bubbles:true }));
-                input.focus();
-                GM_setValue(CINEBY_QUERY_KEY, '');
-                GM_setValue(legacyKey, '');
-            };
-            const inputs = Array.from(document.querySelectorAll('input[type="search"],input[placeholder*="search" i],input[type="text"]'));
-            const visibleInput = inputs.find(input => input.offsetParent !== null);
-            if (visibleInput) { fill(visibleInput); return; }
+        const findVisibleInput = () => Array.from(document.querySelectorAll(
+            'input[type="search"],input[placeholder*="search" i]'
+        )).find(input => input.offsetParent !== null);
+        const findSearchButton = () => Array.from(document.querySelectorAll('button,[role="button"]')).find(button => {
+            const label = button.getAttribute('aria-label') || button.textContent || '';
+            return button.offsetParent !== null && /^search$/i.test(label.trim());
+        });
+        const fill = input => {
+            const setter = Object.getOwnPropertyDescriptor(HTMLInputElement.prototype, 'value')?.set;
+            if (setter) setter.call(input, t);
+            else input.value = t;
+            input.dispatchEvent(new InputEvent('input', { bubbles:true, inputType:'insertText', data:t }));
+            input.dispatchEvent(new Event('change', { bubbles:true }));
+            input.focus();
+        };
 
-            const searchButton = Array.from(document.querySelectorAll('button,[role="button"]')).find(button => {
-                const label = button.getAttribute('aria-label') || button.textContent || '';
-                return /^search$/i.test(label.trim());
-            });
-            searchButton?.click();
-            waitFor('input[placeholder*="search" i],input[type="search"]', 3000).then(fill).catch(() => {
-                const fallback = document.querySelector('input[type="text"]');
-                if (fallback) fill(fallback);
-            });
-        }, 250);
+        try {
+            const target = await waitForMatch(() => findVisibleInput() || findSearchButton(), 8000);
+            if (target.tagName === 'INPUT') { fill(target); return; }
+            target.click();
+            fill(await waitForMatch(findVisibleInput, 5000));
+        } catch (error) {
+            console.warn('[IMDb Enhanced] Cineby search UI was unavailable; discarded the one-time handoff.', error);
+        }
     }
 
     // =========================================================================
