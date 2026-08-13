@@ -245,6 +245,7 @@ test('appearance styling preserves IMDb account and footer controls', () => {
     assert(!/footer\.imdb-footer\s*\{\s*display:\s*none/i.test(script), 'modern styling must not hide IMDb legal/footer navigation');
     assert(!/div\.nav__userMenu\s*\{\s*display:\s*none/i.test(script), 'modern styling must not hide the sign-in/account menu');
     assert(!/FavoritePeopleCTA[^\n]+display:\s*none/i.test(script), 'modern styling must not hide favorite-person controls');
+    assert(!/tm-box-addtolist-button[^\n]+display:\s*none/i.test(script), 'IMDb list/watchlist controls must not be classified as IMDbPro upsells');
 });
 
 test('feature activation is scoped to the current IMDb surface', () => {

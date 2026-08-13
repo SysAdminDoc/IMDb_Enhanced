@@ -57,6 +57,7 @@
 - Prevented optional single-key shortcuts from reacting to Ctrl/Command/Alt combinations, key repeats, handled events, or keys intended for the trailer/settings dialogs.
 - Replaced recursive JustWatch provider discovery with a bounded iterative scan that deduplicates and caps provider names before rendering.
 - Added a one-minute self-release to offscreen lazy score observers so title pages no longer retain dormant visibility work for an entire long-lived SPA session.
+- Restored IMDb's native “Add title to another list” control, which had been incorrectly hidden by the IMDbPro-upsell cleanup option despite being a signed-in watchlist/list action.
 
 ## 2.5.1 — 2026-08-12
 

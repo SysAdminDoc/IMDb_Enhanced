@@ -1225,8 +1225,7 @@
     reg({
         key: 'removeProUpsell', name: 'Hide IMDbPro upsells', group: 'Cleanup',
         css: `[data-testid="hero-subnav-bar-imdb-pro-link"],[data-testid="hero-proupsell"],
-            a[href*="pro.imdb.com"],[class*="ProUpsell"],[class*="proupsell"],
-            [data-testid="tm-box-addtolist-button"]{display:none!important}`,
+            a[href*="pro.imdb.com"],[class*="ProUpsell"],[class*="proupsell"]{display:none!important}`,
         init() { addCSS(this.css, 'enh-proUpsell'); },
         destroy() { removeCSS('enh-proUpsell'); }
     });
