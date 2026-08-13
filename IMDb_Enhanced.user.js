@@ -328,6 +328,10 @@
         return waitForMatch(() => document.querySelector(sel), timeout);
     }
 
+    function getEnhancementScrollBehavior() {
+        return window.matchMedia?.('(prefers-reduced-motion: reduce)').matches ? 'auto' : 'smooth';
+    }
+
     function getTitleSurface() {
         const explicit = document.querySelector('[data-testid="hero__pageTitle"]');
         if (explicit) return explicit;
@@ -2504,7 +2508,7 @@ section[id*="quote" i] .ipc-list-card { padding: 4px 0 !important; margin: 2px 0
                 nav.appendChild(makeEl('a', {
                     className:'enh-qn-dot', href:'#', dataset:{ label:s.label }, textContent:s.icon,
                     title: s.label, 'aria-label': `Jump to ${s.label}`,
-                    onClick: (e) => { e.preventDefault(); sec.scrollIntoView({behavior:'smooth',block:'start'}); }
+                    onClick: (e) => { e.preventDefault(); sec.scrollIntoView({ behavior:getEnhancementScrollBehavior(), block:'start' }); }
                 }));
             });
             if (nav.children.length) document.body.appendChild(nav);
@@ -3834,8 +3838,8 @@ section[id*="quote" i] .ipc-list-card { padding: 4px 0 !important; margin: 2px 0
                 if (['INPUT','TEXTAREA','SELECT'].includes(e.target.tagName) || e.target.isContentEditable) return;
                 if (e.key === '?') { e.preventDefault(); toggleSettings(); }
                 else if (e.key === 'c' && !e.ctrlKey && !e.metaKey) { const id = getIMDbID(); if (id) { GM_setClipboard(id); showToast(`Copied ${id}`); } }
-                else if (e.key === 'r') { document.querySelector('[data-testid="hero-rating-bar__aggregate-rating"]')?.scrollIntoView({behavior:'smooth',block:'center'}); }
-                else if (e.key === 't') { window.scrollTo({top:0,behavior:'smooth'}); }
+                else if (e.key === 'r') { document.querySelector('[data-testid="hero-rating-bar__aggregate-rating"]')?.scrollIntoView({ behavior:getEnhancementScrollBehavior(), block:'center' }); }
+                else if (e.key === 't') { window.scrollTo({ top:0, behavior:getEnhancementScrollBehavior() }); }
                 else if (e.key === 'Escape') { const o = document.getElementById('enh-settings-overlay'); if (o?.classList.contains('enh-visible')) toggleSettings(); }
             };
             document.addEventListener('keydown', this._h);
@@ -4546,6 +4550,16 @@ section[id*="quote" i] .ipc-list-card { padding: 4px 0 !important; margin: 2px 0
 #enh-settings-fab:focus-visible {
     outline: 2px solid ${t.accent};
     outline-offset: 2px;
+}
+@media (prefers-reduced-motion: reduce) {
+    [id^="enh-"], [id^="enh-"]::before, [id^="enh-"]::after,
+    [class^="enh-"], [class^="enh-"]::before, [class^="enh-"]::after,
+    [class*=" enh-"], [class*=" enh-"]::before, [class*=" enh-"]::after {
+        animation-duration: 0.001ms !important;
+        animation-iteration-count: 1 !important;
+        transition-duration: 0.001ms !important;
+        transition-delay: 0s !important;
+    }
 }
         `, 'enh-global');
     }

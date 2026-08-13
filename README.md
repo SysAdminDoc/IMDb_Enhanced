@@ -80,7 +80,7 @@ Click the gear icon on any covered IMDb page to open the six-section settings wo
 
 | Dark (default) | OLED | Midnight | Light | High Contrast |
 |---|---|---|---|---|
-| Deep charcoal surfaces | True black backgrounds | Navy blue tones | Clean white | WCAG AAA compliant |
+| Deep charcoal surfaces | True black backgrounds | Navy blue tones | Clean white | Maximum-contrast black and yellow |
 
 ## Compatibility
 

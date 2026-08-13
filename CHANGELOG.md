@@ -30,6 +30,7 @@
 - Caught both synchronous and asynchronous feature-start failures; settings-triggered failures now surface a recovery toast instead of remaining console-only.
 - Replaced third-party score-response HTML interpolation with safe DOM construction, numeric checks, bounded text attributes, and HTTPS domain allowlists for Letterboxd, Metacritic, and JustWatch links; custom site templates now reject embedded URL credentials.
 - Replaced the timer-driven list multi-search popup loop—which browsers block after the first tab—with an accessible 20-title link queue, explicit new-tab labels, one-click Open next progress, copy-all, and Cineby-aware title copying.
+- Applied the operating system's reduced-motion preference to every enhancement, including quick navigation and keyboard scrolling, and removed an unsupported WCAG conformance claim from theme documentation.
 
 ## 2.5.1 — 2026-08-12
 

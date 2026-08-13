@@ -38,6 +38,7 @@ function loadScriptTestHooks() {
         normalizeTrustedUrl,
         normalizeSite,
         buildListSearchEntries,
+        getEnhancementScrollBehavior,
         httpRequest,
         waitFor,
         cancelPendingRouteWork,
@@ -50,13 +51,18 @@ function loadScriptTestHooks() {
     assert.notStrictEqual(instrumented, script, 'test hook injection failed');
 
     const location = { hostname: 'example.test', pathname: '/', search: '' };
+    let prefersReducedMotion = false;
     let sandboxAbortedRequestCount = 0;
     const sandbox = {
         console,
         URL,
         setTimeout: () => 0,
         clearTimeout: () => {},
-        window: { location, addEventListener: () => {} },
+        window: {
+            location,
+            addEventListener: () => {},
+            matchMedia: () => ({ matches: prefersReducedMotion }),
+        },
         location,
         document: {
             readyState: 'loading',
@@ -82,6 +88,7 @@ function loadScriptTestHooks() {
     vm.runInNewContext(instrumented, sandbox, { filename: scriptPath });
     sandbox.window.__enhTest.getCapturedWebRequestRules = () => sandbox.webRequestRules || [];
     sandbox.window.__enhTest.getAbortedRequestCount = () => sandboxAbortedRequestCount;
+    sandbox.window.__enhTest.setReducedMotion = value => { prefersReducedMotion = Boolean(value); };
     return sandbox.window.__enhTest;
 }
 
@@ -223,6 +230,18 @@ test('settings use six accessible desktop destinations', () => {
     assert(/#enh-settings-overlay\.enh-visible\s*\{[^}]*visibility:\s*visible/s.test(script), 'open settings must restore visibility');
     assert(script.includes("maxlength:'100000'"), 'import size guard missing');
     assert(script.includes('Changes save automatically.'), 'automatic-save status missing');
+});
+
+test('all enhancements respect the operating-system reduced-motion preference', () => {
+    const hooks = loadScriptTestHooks();
+    assert.strictEqual(hooks.getEnhancementScrollBehavior(), 'smooth');
+    hooks.setReducedMotion(true);
+    assert.strictEqual(hooks.getEnhancementScrollBehavior(), 'auto');
+    assert(script.includes('[id^="enh-"]::before'), 'global enhancement motion override missing');
+    assert(script.includes('transition-delay: 0s !important'), 'reduced-motion transitions should start immediately');
+    assert(!/scrollIntoView\(\{[^}]*behavior:\s*['"]smooth['"]/s.test(script), 'enhancement scrolling must honor reduced motion');
+    assert(!/window\.scrollTo\(\{[^}]*behavior:\s*['"]smooth['"]/s.test(script), 'shortcut scrolling must honor reduced motion');
+    assert(!readme.includes('WCAG AAA compliant'), 'README must not claim unverified conformance');
 });
 
 test('core features remain registered', () => {
