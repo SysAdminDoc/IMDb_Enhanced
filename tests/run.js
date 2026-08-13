@@ -271,6 +271,21 @@ test('trailer dialog contains focus, restores page state, and ignores stale look
     assert(script.includes('generation !== this._modalGeneration || !body.isConnected'), 'closed trailer lookups must not render late results');
 });
 
+test('secondary interactions expose complete keyboard and toggle semantics', () => {
+    assert(script.includes("'aria-haspopup':'menu'"), 'expanded links should identify their menu popup');
+    assert(script.includes("'aria-controls':'enh-link-menu-dropdown'"), 'expanded-link trigger should reference its popup');
+    ['ArrowDown', 'ArrowUp', 'Home', 'End', 'Escape', 'Tab'].forEach(key => {
+        assert(script.includes(`event.key === '${key}'`) || script.includes(`'${key}'`), `expanded links missing ${key} handling`);
+    });
+    assert(script.includes("role:'group', 'aria-label':cat"), 'menu categories should expose labeled groups');
+    assert(script.includes("'aria-pressed': 'false'"), 'watched and skip controls should expose toggle state');
+    assert(script.includes("getUserMark(imdbId) === action ? '' : action"), 'active watched/skip controls should toggle off');
+    assert(script.includes("plotFull.addEventListener('keydown', this._revealKeyHandler)"), 'plot reveal should support keyboard activation');
+    assert(script.includes("document.addEventListener('keydown', this._keydownHandler)"), 'episode reveals should support keyboard activation');
+    assert(script.includes("['Enter', ' '].includes(event.key)"), 'spoiler controls should support Enter and Space');
+    assert(!script.includes("querySelectorAll('.enh-episode-spoiler, .enh-revealed')"), 'episode cleanup must not mutate another feature\'s revealed state');
+});
+
 test('all enhancements respect the operating-system reduced-motion preference', () => {
     const hooks = loadScriptTestHooks();
     assert.strictEqual(hooks.getEnhancementScrollBehavior(), 'smooth');

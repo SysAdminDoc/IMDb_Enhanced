@@ -2621,29 +2621,71 @@ section[id*="quote" i] .ipc-list-card { padding: 4px 0 !important; margin: 2px 0
 
     reg({
         key: 'spoilerBlur', name: 'Spoiler blur on plot', group: 'Layout',
+        _plot: null,
+        _plotAttributes: null,
+        _revealHandler: null,
+        _revealKeyHandler: null,
         init() {
             addCSS(`
                 .enh-blur{filter:blur(6px);transition:filter .3s ease;cursor:pointer;user-select:none;position:relative}
-                .enh-blur::after{content:'Click to reveal';position:absolute;top:50%;left:50%;
+                .enh-blur::after{content:'Click or press Enter to reveal';position:absolute;top:50%;left:50%;
                     transform:translate(-50%,-50%);color:#f5c518;font-weight:600;font-size:12px;
                     background:rgba(0,0,0,0.5);padding:4px 12px;border-radius:6px;pointer-events:none;
                     opacity:1;transition:opacity .3s ease}
-                .enh-blur.enh-revealed{filter:none;cursor:default}
+                .enh-blur:focus-visible{outline:2px solid #f5c518;outline-offset:3px}
+                .enh-blur.enh-revealed{filter:none;cursor:default;user-select:auto}
                 .enh-blur.enh-revealed::after{opacity:0}
             `, 'enh-spoilerBlur');
 
             const plotFull = document.querySelector('[data-testid="plot-l"],[data-testid="plot-xl"]');
             if (plotFull && plotFull.textContent.length > 200) {
+                this._plot = plotFull;
+                this._plotAttributes = new Map(
+                    ['role', 'tabindex', 'aria-pressed', 'aria-label', 'title']
+                        .map(attribute => [attribute, plotFull.getAttribute(attribute)])
+                );
                 plotFull.classList.add('enh-blur');
-                plotFull.addEventListener('click', function h() {
+                plotFull.setAttribute('role', 'button');
+                plotFull.setAttribute('tabindex', '0');
+                plotFull.setAttribute('aria-pressed', 'false');
+                plotFull.setAttribute('aria-label', 'Reveal plot synopsis');
+                plotFull.title = 'Click or press Enter to reveal plot synopsis';
+                const reveal = () => {
+                    if (plotFull.classList.contains('enh-revealed')) return;
                     plotFull.classList.add('enh-revealed');
-                    plotFull.removeEventListener('click', h);
-                });
+                    plotFull.setAttribute('aria-pressed', 'true');
+                    plotFull.setAttribute('aria-label', 'Plot synopsis revealed');
+                    plotFull.title = 'Plot synopsis revealed';
+                    showToast('Plot synopsis revealed');
+                };
+                this._revealHandler = event => {
+                    if (event.target.closest?.('a,button,input,select,textarea')) return;
+                    reveal();
+                };
+                this._revealKeyHandler = event => {
+                    if (event.target !== plotFull || !['Enter', ' '].includes(event.key)) return;
+                    event.preventDefault();
+                    reveal();
+                };
+                plotFull.addEventListener('click', this._revealHandler);
+                plotFull.addEventListener('keydown', this._revealKeyHandler);
             }
         },
         destroy() {
             removeCSS('enh-spoilerBlur');
-            document.querySelectorAll('.enh-blur').forEach(e => e.classList.remove('enh-blur','enh-revealed'));
+            this._plot?.removeEventListener('click', this._revealHandler);
+            this._plot?.removeEventListener('keydown', this._revealKeyHandler);
+            [this._plot].filter(Boolean).forEach(element => {
+                element.classList.remove('enh-blur', 'enh-revealed');
+                this._plotAttributes?.forEach((value, attribute) => {
+                    if (value === null) element.removeAttribute(attribute);
+                    else element.setAttribute(attribute, value);
+                });
+            });
+            this._plot = null;
+            this._plotAttributes = null;
+            this._revealHandler = null;
+            this._revealKeyHandler = null;
         }
     });
 
@@ -3030,28 +3072,84 @@ section[id*="quote" i] .ipc-list-card { padding: 4px 0 !important; margin: 2px 0
                     .replace(/\{\{T\}\}/g, encodeURIComponent(title)).replace(/\{\{Y\}\}/g, year);
 
                 const container = makeEl('div', { id:'enh-link-menu-wrap' });
+                let dropdown = null;
+                const getItems = () => Array.from(dropdown?.querySelectorAll('[role="menuitem"]') || []);
+                const setCurrentItem = item => {
+                    getItems().forEach(candidate => { candidate.tabIndex = candidate === item ? 0 : -1; });
+                };
+                const closeMenu = (focusTrigger = false) => {
+                    dropdown?.classList.remove('enh-visible');
+                    trigger.setAttribute('aria-expanded', 'false');
+                    getItems().forEach(item => { item.tabIndex = -1; });
+                    if (focusTrigger) trigger.focus();
+                };
+                const openMenu = (focusItem = 'none') => {
+                    dropdown?.classList.add('enh-visible');
+                    trigger.setAttribute('aria-expanded', 'true');
+                    const items = getItems();
+                    const item = focusItem === 'last' ? items[items.length - 1] : items[0];
+                    if (item) {
+                        setCurrentItem(item);
+                        if (focusItem !== 'none') item.focus();
+                    }
+                };
                 const trigger = makeEl('button', {
                     id:'enh-link-menu-trigger', type:'button',
                     textContent:'More links',
-                    'aria-haspopup':'true',
+                    'aria-haspopup':'menu',
+                    'aria-controls':'enh-link-menu-dropdown',
                     'aria-expanded':'false',
                     onClick: (e) => {
                         e.stopPropagation();
-                        const visible = dropdown.classList.toggle('enh-visible');
-                        trigger.setAttribute('aria-expanded', String(visible));
+                        if (dropdown.classList.contains('enh-visible')) closeMenu();
+                        else openMenu();
                     }
                 });
+                trigger.addEventListener('keydown', event => {
+                    if (!['ArrowDown', 'ArrowUp'].includes(event.key)) return;
+                    event.preventDefault();
+                    openMenu(event.key === 'ArrowUp' ? 'last' : 'first');
+                });
 
-                const dropdown = makeEl('div', { id:'enh-link-menu-dropdown', className:'enh-link-dropdown', role:'menu' });
+                dropdown = makeEl('div', {
+                    id:'enh-link-menu-dropdown', className:'enh-link-dropdown', role:'menu',
+                    'aria-labelledby':'enh-link-menu-trigger',
+                });
                 for (const [cat, links] of Object.entries(this._DB)) {
                     if (cat === 'TV' && !isTVType()) continue;
                     dropdown.appendChild(makeEl('div', { className:'enh-link-dropdown__cat' }, cat));
-                    const row = makeEl('div', { className:'enh-link-dropdown__row' });
+                    const row = makeEl('div', { className:'enh-link-dropdown__row', role:'group', 'aria-label':cat });
                     links.filter(l => !(l.movieOnly && isTVType())).forEach(l => row.appendChild(makeEl('a', {
-                        href: buildUrl(l.u), target:'_blank', rel:'noopener', className:'enh-link-dropdown__item', role:'menuitem'
+                        href: buildUrl(l.u), target:'_blank', rel:'noopener', className:'enh-link-dropdown__item',
+                        role:'menuitem', tabindex:'-1',
                     }, l.n)));
                     dropdown.appendChild(row);
                 }
+                dropdown.addEventListener('keydown', event => {
+                    const items = getItems();
+                    const current = items.indexOf(document.activeElement);
+                    let next = null;
+                    if (event.key === 'ArrowDown') next = (current + 1) % items.length;
+                    if (event.key === 'ArrowUp') next = (current - 1 + items.length) % items.length;
+                    if (event.key === 'Home') next = 0;
+                    if (event.key === 'End') next = items.length - 1;
+                    if (event.key === 'Escape') {
+                        event.preventDefault();
+                        closeMenu(true);
+                        return;
+                    }
+                    if (event.key === 'Tab') {
+                        closeMenu();
+                        return;
+                    }
+                    if (next === null || !items.length) return;
+                    event.preventDefault();
+                    setCurrentItem(items[next]);
+                    items[next].focus();
+                });
+                dropdown.addEventListener('click', event => {
+                    if (event.target.closest?.('[role="menuitem"]')) closeMenu();
+                });
 
                 container.appendChild(trigger);
                 container.appendChild(dropdown);
@@ -3059,8 +3157,7 @@ section[id*="quote" i] .ipc-list-card { padding: 4px 0 !important; margin: 2px 0
 
                 this._closeHandler = (e) => {
                     if (!e.target.closest('#enh-link-menu-trigger') && !e.target.closest('#enh-link-menu-dropdown')) {
-                        dropdown.classList.remove('enh-visible');
-                        trigger.setAttribute('aria-expanded', 'false');
+                        closeMenu();
                     }
                 };
                 document.addEventListener('click', this._closeHandler);
@@ -3125,7 +3222,7 @@ section[id*="quote" i] .ipc-list-card { padding: 4px 0 !important; margin: 2px 0
                 e.stopPropagation();
                 e.stopImmediatePropagation?.();
                 const action = btn.dataset.enhMarkAction;
-                const state = action === 'clear' ? '' : action;
+                const state = action === 'clear' || getUserMark(imdbId) === action ? '' : action;
                 setUserMark(imdbId, state, card.dataset.enhMarkTitle || getTitleText());
                 this._syncAll();
                 showToast(state ? `Marked ${state}` : 'Mark cleared');
@@ -3190,12 +3287,14 @@ section[id*="quote" i] .ipc-list-card { padding: 4px 0 !important; margin: 2px 0
                         type: 'button',
                         className: 'enh-mark-btn enh-mark-btn--watched',
                         dataset: { enhMarkAction: 'watched' },
+                        'aria-pressed': 'false',
                         'aria-label': `Mark ${title || imdbId} as watched`,
                     }, 'Seen'),
                     makeEl('button', {
                         type: 'button',
                         className: 'enh-mark-btn enh-mark-btn--skip',
                         dataset: { enhMarkAction: 'skip' },
+                        'aria-pressed': 'false',
                         'aria-label': `Mark ${title || imdbId} as skipped`,
                     }, 'Skip'),
                     makeEl('button', {
@@ -3215,7 +3314,18 @@ section[id*="quote" i] .ipc-list-card { padding: 4px 0 !important; margin: 2px 0
             card.classList.toggle('enh-marked--watched', mark === 'watched');
             card.classList.toggle('enh-marked--skip', mark === 'skip');
             card.querySelectorAll('.enh-mark-btn').forEach(btn => {
-                btn.dataset.active = String(btn.dataset.enhMarkAction === mark);
+                const action = btn.dataset.enhMarkAction;
+                const active = action === mark;
+                btn.dataset.active = String(active);
+                if (action === 'watched' || action === 'skip') {
+                    const stateLabel = action === 'watched' ? 'watched' : 'skipped';
+                    btn.setAttribute('aria-pressed', String(active));
+                    btn.setAttribute('aria-label', active
+                        ? `${card.dataset.enhMarkTitle} is marked ${stateLabel}; activate to clear`
+                        : `Mark ${card.dataset.enhMarkTitle} as ${stateLabel}`);
+                } else if (action === 'clear') {
+                    btn.disabled = !mark;
+                }
             });
 
             let badge = Array.from(card.children).find(child => child.classList?.contains('enh-mark-badge'));
@@ -3519,9 +3629,12 @@ section[id*="quote" i] .ipc-list-card { padding: 4px 0 !important; margin: 2px 0
     reg({
         key: 'tvEpisodeTools', name: 'TV episode tools', group: 'TV',
         _clickHandler: null,
+        _keydownHandler: null,
+        _plotAttributes: null,
         init() {
             if (!isTVType() && !/\/title\/tt\d+\/episodes/i.test(location.pathname)) return;
             const isCurrent = createFeatureGuard(this);
+            this._plotAttributes = new Map();
             addCSS(`
                 .enh-episode-spoiler {
                     filter: blur(5px);
@@ -3529,7 +3642,8 @@ section[id*="quote" i] .ipc-list-card { padding: 4px 0 !important; margin: 2px 0
                     transition: filter .18s ease, opacity .18s ease;
                 }
                 .enh-episode-spoiler:hover { opacity: .9; }
-                .enh-episode-spoiler.enh-revealed { filter: none; cursor: text; }
+                .enh-episode-spoiler:focus-visible { outline: 2px solid #facc15; outline-offset: 3px; }
+                .enh-episode-spoiler.enh-revealed { filter: none; cursor: text; user-select: auto; }
                 #enh-best-episodes {
                     margin: 14px 0 18px;
                     padding: 14px;
@@ -3589,9 +3703,17 @@ section[id*="quote" i] .ipc-list-card { padding: 4px 0 !important; margin: 2px 0
             this._clickHandler = (e) => {
                 const spoiler = e.target.closest?.('.enh-episode-spoiler');
                 if (!spoiler) return;
-                spoiler.classList.add('enh-revealed');
+                if (e.target.closest?.('a,button,input,select,textarea')) return;
+                this._revealPlot(spoiler);
+            };
+            this._keydownHandler = event => {
+                const spoiler = event.target.closest?.('.enh-episode-spoiler');
+                if (!spoiler || event.target !== spoiler || !['Enter', ' '].includes(event.key)) return;
+                event.preventDefault();
+                this._revealPlot(spoiler);
             };
             document.addEventListener('click', this._clickHandler);
+            document.addEventListener('keydown', this._keydownHandler);
         },
         _collectEpisodes() {
             const seriesId = getIMDbID();
@@ -3648,10 +3770,28 @@ section[id*="quote" i] .ipc-list-card { padding: 4px 0 !important; margin: 2px 0
             }
             plots.forEach(plot => {
                 if (!plot.classList.contains('enh-revealed')) {
+                    if (!this._plotAttributes.has(plot)) {
+                        this._plotAttributes.set(plot, new Map(
+                            ['role', 'tabindex', 'aria-pressed', 'aria-label', 'title']
+                                .map(attribute => [attribute, plot.getAttribute(attribute)])
+                        ));
+                    }
                     plot.classList.add('enh-episode-spoiler');
-                    plot.title = 'Click to reveal episode synopsis';
+                    plot.setAttribute('role', 'button');
+                    plot.setAttribute('tabindex', '0');
+                    plot.setAttribute('aria-pressed', 'false');
+                    plot.setAttribute('aria-label', 'Reveal episode synopsis');
+                    plot.title = 'Click or press Enter to reveal episode synopsis';
                 }
             });
+        },
+        _revealPlot(plot) {
+            if (!plot || plot.classList.contains('enh-revealed')) return;
+            plot.classList.add('enh-revealed');
+            plot.setAttribute('aria-pressed', 'true');
+            plot.setAttribute('aria-label', 'Episode synopsis revealed');
+            plot.title = 'Episode synopsis revealed';
+            showToast('Episode synopsis revealed');
         },
         _renderBestEpisodes(episodes) {
             document.getElementById('enh-best-episodes')?.remove();
@@ -3679,11 +3819,18 @@ section[id*="quote" i] .ipc-list-card { padding: 4px 0 !important; margin: 2px 0
         destroy() {
             removeCSS('enh-tvEpisodeTools');
             if (this._clickHandler) document.removeEventListener('click', this._clickHandler);
+            if (this._keydownHandler) document.removeEventListener('keydown', this._keydownHandler);
             this._clickHandler = null;
-            document.querySelectorAll('.enh-episode-spoiler, .enh-revealed').forEach(el => {
+            this._keydownHandler = null;
+            this._plotAttributes?.forEach((attributes, el) => {
                 el.classList.remove('enh-episode-spoiler', 'enh-revealed');
-                if (el.title === 'Click to reveal episode synopsis') el.removeAttribute('title');
+                attributes.forEach((value, attribute) => {
+                    if (value === null) el.removeAttribute(attribute);
+                    else el.setAttribute(attribute, value);
+                });
             });
+            this._plotAttributes?.clear();
+            this._plotAttributes = null;
             document.getElementById('enh-best-episodes')?.remove();
         }
     });

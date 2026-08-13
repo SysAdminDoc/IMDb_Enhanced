@@ -28,13 +28,13 @@ Third-party lookup responses are rendered as text and their outbound links are r
 
 **Media Server Indicator** - Optional Plex, Jellyfin, and Emby checks show whether the current title already exists in your local media library. Localhost-only for security.
 
-**Watched Marking** - Local watched/skip marks on title posters and recommendation cards. No IMDb login required.
+**Watched Marking** - Local watched/skip toggle controls on title posters and recommendation cards, with exposed pressed state. No IMDb login required.
 
 **TV Tools** - Episode synopsis blur, highest-rated episode highlighting, TV-specific lookup shortcuts.
 
 **List Page Tools** - Batch IMDb ID copy plus a popup-safe search queue on watchlist, custom list, and chart pages. Prepare up to 20 real new-tab links, open them one gesture at a time, or copy the full link set (a title list for Cineby's local handoff).
 
-**Extras** - Collapsible sections with remembered state, spoiler blur, quick navigation sidebar, wider layout, compact header, subtitle links, copy IMDb ID button, settings import/export.
+**Extras** - Collapsible sections with remembered state, keyboard-revealable spoiler blur, a keyboard-complete expanded-links menu, quick navigation sidebar, wider layout, compact header, subtitle links, copy IMDb ID button, and settings import/export.
 
 ## Install
 

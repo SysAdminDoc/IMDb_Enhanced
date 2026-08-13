@@ -34,6 +34,7 @@
 - Made settings imports transactional: all fields are normalized before persistence, invalid/unknown fields are counted, partial storage failures roll back prior values, and local-service URLs reject remote or credential-bearing origins in both imports and direct editing.
 - Made Cineby title handoffs timestamped, single-use, and bounded to ten minutes; the target page now waits for a visible search control and discards failed handoffs instead of unexpectedly filling a future visit.
 - Completed the trailer dialog lifecycle with focus containment/restoration, explicit expanded state, page-scroll restoration, an accessible visible label and loading status, and guards against late lookup results after close or navigation.
+- Completed keyboard semantics for secondary interactions: the expanded-links menu now supports disclosure and roving-focus keys, watched/skip controls expose and toggle pressed state, and plot/episode spoilers reveal with Enter or Space while cleaning up only their own state.
 
 ## 2.5.1 — 2026-08-12
 
