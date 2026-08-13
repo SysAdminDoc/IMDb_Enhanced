@@ -100,6 +100,7 @@
 - Capped editable destination lists at 50 and URL templates at 4,096 characters across runtime, import, and settings UI; non-canonical backslash-style HTTP URLs are also rejected.
 - Qualified the Tools shortcut legend as optional instead of presenting disabled-by-default keys as immediately active, and aligned the README with the private Seen/Skip terminology.
 - Announced automatic-save feedback through a polite status region and removed the settings dialog's duplicate page-level main landmark.
+- Exposed import/reset disclosure state to assistive technology and made cache clearing report read failures, partial deletion, and the actual remaining count instead of always claiming an empty cache.
 
 ## 2.5.1 — 2026-08-12
 

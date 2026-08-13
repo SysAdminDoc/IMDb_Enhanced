@@ -433,6 +433,11 @@ test('settings use six accessible desktop destinations', () => {
     assert(script.includes('id="enh-settings-save-state" role="status" aria-live="polite" aria-atomic="true"'), 'automatic-save feedback should be announced');
     assert(!script.includes('<main class="enh-settings-main">'), 'settings dialog must not add a second page-level main landmark');
     assert(script.includes('When “Optional keyboard shortcuts” is enabled'), 'disabled-by-default shortcut hints must disclose their prerequisite');
+    assert(script.includes("'aria-controls':'enh-import-panel', 'aria-expanded':'false'"), 'import disclosure state missing');
+    assert(script.includes("'aria-controls':'enh-reset-panel', 'aria-expanded':'false'"), 'reset disclosure state missing');
+    assert(script.includes('const setDataDisclosureState = openPanel =>'), 'data subpanels should share one disclosure-state owner');
+    assert(script.includes("showToast('Cache could not be read or cleared.', 4500)"), 'cache failures should remain visible');
+    assert(script.includes('else if (failed) showToast(`Cleared ${cleared} cached entries; ${failed} could not be removed.`'), 'partial cache deletion must not claim complete success');
     assert(script.includes('if (!settingsOpen || overlay.contains(event.target)) return'), 'settings should recapture focus that leaves the modal');
     assert(script.includes('createMarksPanel(registerCleanup)'), 'settings-owned document listeners should join the panel cleanup lifecycle');
     assert(script.includes("document.removeEventListener('imdb-enhanced:marks-updated', render)"), 'marks listener must be removed when settings are rebuilt');

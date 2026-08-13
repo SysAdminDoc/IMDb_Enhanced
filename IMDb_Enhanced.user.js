@@ -6344,7 +6344,11 @@ section[id*="quote" i] .ipc-list-card { padding: 4px 0 !important; margin: 2px 0
 
         const dataPage = pages.get('data');
         const cacheCount = () => {
-            try { return GM_listValues().filter(key => key.startsWith('cache_')).length; }
+            try {
+                return GM_listValues().filter(key =>
+                    key.startsWith('cache_') && GM_getValue(key, null) !== null
+                ).length;
+            }
             catch { return 0; }
         };
         const dataSummary = makeEl('div', { className:'enh-data-summary' },
@@ -6390,10 +6394,14 @@ section[id*="quote" i] .ipc-list-card { padding: 4px 0 !important; margin: 2px 0
         const backupCard = makeCard('Backup & restore', 'JSON includes preferences, sites, and local integration credentials.');
         backupCard.appendChild(makeEl('div', { className:'enh-data-actions' },
             makeEl('button', { type:'button', className:'enh-settings-footer-btn', id:'enh-export-btn', title:'Copy all settings to clipboard' }, 'Export settings'),
-            makeEl('button', { type:'button', className:'enh-settings-footer-btn', id:'enh-import-btn', title:'Import settings from JSON' }, 'Import settings'),
+            makeEl('button', {
+                type:'button', className:'enh-settings-footer-btn', id:'enh-import-btn', title:'Import settings from JSON',
+                'aria-controls':'enh-import-panel', 'aria-expanded':'false',
+            }, 'Import settings'),
             makeEl('button', {
                 type:'button', className:'enh-settings-footer-btn enh-settings-footer-btn--danger',
                 id:'enh-reset-btn', title:'Reset preferences, title marks, and integration credentials',
+                'aria-controls':'enh-reset-panel', 'aria-expanded':'false',
             }, 'Reset all settings')
         ));
         backupCard.appendChild(importPanel);
@@ -6411,6 +6419,15 @@ section[id*="quote" i] .ipc-list-card { padding: 4px 0 !important; margin: 2px 0
             makeEl('strong', {}, 'Local only'),
             'Nothing is sent to an IMDb Enhanced account or cloud service.'
         ));
+
+        const setDataDisclosureState = openPanel => {
+            const importOpen = openPanel === 'import';
+            const resetOpen = openPanel === 'reset';
+            importPanel.hidden = !importOpen;
+            resetPanel.hidden = !resetOpen;
+            overlay.querySelector('#enh-import-btn').setAttribute('aria-expanded', String(importOpen));
+            overlay.querySelector('#enh-reset-btn').setAttribute('aria-expanded', String(resetOpen));
+        };
 
         overlay.querySelector('.enh-settings-close').addEventListener('click', toggleSettings);
         overlay.addEventListener('click', event => { if (event.target === overlay) toggleSettings(); });
@@ -6447,26 +6464,24 @@ section[id*="quote" i] .ipc-list-card { padding: 4px 0 !important; margin: 2px 0
                 : 'Export copy failed. Check the userscript clipboard permission.', copied ? 2500 : 4500);
         });
         overlay.querySelector('#enh-import-btn').addEventListener('click', () => {
-            resetPanel.hidden = true;
-            importPanel.hidden = false;
+            setDataDisclosureState('import');
             requestAnimationFrame(() => {
                 importPanel.scrollIntoView({ block:'nearest' });
                 overlay.querySelector('#enh-import-textarea').focus();
             });
         });
         overlay.querySelector('#enh-import-cancel').addEventListener('click', () => {
-            importPanel.hidden = true;
+            setDataDisclosureState('');
             overlay.querySelector('#enh-import-textarea').value = '';
             overlay.querySelector('#enh-import-btn').focus();
         });
         overlay.querySelector('#enh-reset-btn').addEventListener('click', () => {
-            importPanel.hidden = true;
+            setDataDisclosureState('reset');
             overlay.querySelector('#enh-import-textarea').value = '';
-            resetPanel.hidden = false;
             requestAnimationFrame(() => overlay.querySelector('#enh-reset-apply').focus());
         });
         overlay.querySelector('#enh-reset-cancel').addEventListener('click', () => {
-            resetPanel.hidden = true;
+            setDataDisclosureState('');
             overlay.querySelector('#enh-reset-btn').focus();
         });
         overlay.querySelector('#enh-reset-apply').addEventListener('click', () => {
@@ -6497,18 +6512,29 @@ section[id*="quote" i] .ipc-list-card { padding: 4px 0 !important; margin: 2px 0
             }
         });
         overlay.querySelector('#enh-clearcache-btn').addEventListener('click', () => {
+            let keys;
+            try { keys = GM_listValues().filter(key => key.startsWith('cache_')); }
+            catch {
+                showToast('Cache could not be read or cleared.', 4500);
+                return;
+            }
             let cleared = 0;
-            try {
-                GM_listValues().forEach(key => {
-                    if (!key.startsWith('cache_')) return;
+            let failed = 0;
+            keys.forEach(key => {
+                try {
                     if (typeof GM_deleteValue === 'function') GM_deleteValue(key);
                     else GM_setValue(key, null);
                     cleared++;
-                });
-            } catch { /* no-op */ }
-            overlay.querySelector('#enh-data-cache-count').textContent = '0 cached entries';
-            overlay.querySelector('#enh-cache-status').textContent = 'No cached entries.';
-            showToast(`Cleared ${cleared} cached entries. Reload to re-fetch.`);
+                } catch { failed++; }
+            });
+            const remaining = cacheCount();
+            overlay.querySelector('#enh-data-cache-count').textContent = `${remaining} cached entries`;
+            overlay.querySelector('#enh-cache-status').textContent = remaining
+                ? `${remaining} entries remain.`
+                : 'No cached entries.';
+            if (!keys.length) showToast('Cache is already empty');
+            else if (failed) showToast(`Cleared ${cleared} cached entries; ${failed} could not be removed.`, 4500);
+            else showToast(`Cleared ${cleared} cached entries. Reload to re-fetch.`);
         });
 
         showPage(activeSettingsPage);
@@ -6549,6 +6575,8 @@ section[id*="quote" i] .ipc-list-card { padding: 4px 0 !important; margin: 2px 0
             const resetPanel = document.getElementById('enh-reset-panel');
             if (importPanel) importPanel.hidden = true;
             if (resetPanel) resetPanel.hidden = true;
+            document.getElementById('enh-import-btn')?.setAttribute('aria-expanded', 'false');
+            document.getElementById('enh-reset-btn')?.setAttribute('aria-expanded', 'false');
             const importTextarea = document.getElementById('enh-import-textarea');
             if (importTextarea) importTextarea.value = '';
             document.documentElement.style.overflow = previousDocumentOverflow;
