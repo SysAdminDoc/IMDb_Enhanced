@@ -39,6 +39,8 @@ function loadScriptTestHooks() {
         normalizeSite,
         buildListSearchEntries,
         getEnhancementScrollBehavior,
+        prepareSettingsImport,
+        applySettingsImport,
         httpRequest,
         waitFor,
         cancelPendingRouteWork,
@@ -52,9 +54,12 @@ function loadScriptTestHooks() {
 
     const location = { hostname: 'example.test', pathname: '/', search: '' };
     let prefersReducedMotion = false;
+    let sandboxWriteCount = 0;
+    let sandboxFailWriteAt = null;
+    const sandboxValues = new Map();
     let sandboxAbortedRequestCount = 0;
     const sandbox = {
-        console,
+        console: { ...console, warn: () => {} },
         URL,
         setTimeout: () => 0,
         clearTimeout: () => {},
@@ -69,6 +74,7 @@ function loadScriptTestHooks() {
             body: {},
             documentElement: {},
             querySelector: () => null,
+            dispatchEvent: () => true,
         },
         history: {},
         MutationObserver: class {
@@ -76,8 +82,15 @@ function loadScriptTestHooks() {
             observe() {}
             disconnect() {}
         },
-        GM_getValue: (_key, fallback) => fallback,
-        GM_setValue: () => {},
+        CustomEvent: class {
+            constructor(type, options = {}) { this.type = type; this.detail = options.detail; }
+        },
+        GM_getValue: (key, fallback) => sandboxValues.has(key) ? sandboxValues.get(key) : fallback,
+        GM_setValue: (key, value) => {
+            sandboxWriteCount += 1;
+            if (sandboxWriteCount === sandboxFailWriteAt) throw new Error('simulated settings write failure');
+            sandboxValues.set(key, value);
+        },
         GM_addStyle: () => {},
         GM_setClipboard: () => {},
         GM_xmlhttpRequest: () => ({ abort: () => { sandboxAbortedRequestCount += 1; } }),
@@ -89,6 +102,9 @@ function loadScriptTestHooks() {
     sandbox.window.__enhTest.getCapturedWebRequestRules = () => sandbox.webRequestRules || [];
     sandbox.window.__enhTest.getAbortedRequestCount = () => sandboxAbortedRequestCount;
     sandbox.window.__enhTest.setReducedMotion = value => { prefersReducedMotion = Boolean(value); };
+    sandbox.window.__enhTest.seedStoredSetting = (key, value) => sandboxValues.set(`imdb_enh_${key}`, value);
+    sandbox.window.__enhTest.getStoredSetting = key => sandboxValues.get(`imdb_enh_${key}`);
+    sandbox.window.__enhTest.failSettingWriteAt = offset => { sandboxFailWriteAt = sandboxWriteCount + offset; };
     return sandbox.window.__enhTest;
 }
 
@@ -242,6 +258,46 @@ test('all enhancements respect the operating-system reduced-motion preference', 
     assert(!/scrollIntoView\(\{[^}]*behavior:\s*['"]smooth['"]/s.test(script), 'enhancement scrolling must honor reduced motion');
     assert(!/window\.scrollTo\(\{[^}]*behavior:\s*['"]smooth['"]/s.test(script), 'shortcut scrolling must honor reduced motion');
     assert(!readme.includes('WCAG AAA compliant'), 'README must not claim unverified conformance');
+});
+
+test('settings imports validate first and roll back partial storage failures', () => {
+    const hooks = loadScriptTestHooks();
+    const prepared = hooks.prepareSettingsImport({
+        modernUI:false,
+        themeVariant:'light',
+        radarrUrl:'http://localhost:7878/',
+        plexUrl:'https://media.example.test/',
+        cinebyHost:'https://example.test/',
+        watchSites:[{ name:'Broken', url:'https://' }],
+        unknownSetting:true,
+    });
+    assert.strictEqual(prepared.entries.length, 3, 'only valid recognized settings should be prepared');
+    assert.strictEqual(prepared.ignored, 4, 'invalid and unknown settings should be reported');
+    assert.strictEqual(
+        prepared.entries.find(entry => entry.key === 'radarrUrl').value,
+        'http://localhost:7878',
+        'local service URLs should be canonicalized before writes'
+    );
+
+    hooks.seedStoredSetting('modernUI', true);
+    hooks.seedStoredSetting('themeVariant', 'dark');
+    hooks.failSettingWriteAt(2);
+    assert.throws(
+        () => hooks.applySettingsImport(prepared.entries.slice(0, 2)),
+        /previous settings were restored/,
+        'partial writes should report successful rollback'
+    );
+    assert.strictEqual(hooks.getStoredSetting('modernUI'), true, 'first partial write was not rolled back');
+    assert.strictEqual(hooks.getStoredSetting('themeVariant'), 'dark', 'failed-key snapshot was not restored');
+
+    assert.strictEqual(hooks.applySettingsImport(prepared.entries.slice(0, 2)), 2);
+    assert.strictEqual(hooks.getStoredSetting('modernUI'), false);
+    assert.strictEqual(hooks.getStoredSetting('themeVariant'), 'light');
+    assert.throws(
+        () => hooks.prepareSettingsImport({ plexUrl:'https://user:secret@localhost:32400/' }),
+        /No valid recognized settings/,
+        'credential-bearing service URLs must be rejected'
+    );
 });
 
 test('core features remain registered', () => {

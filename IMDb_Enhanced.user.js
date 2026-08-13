@@ -146,6 +146,12 @@
         quickCopyID: true, watchlistBatch: true, listMultiSearch: true,
         keyboardShortcuts: false,
     };
+    const LOCAL_SERVICE_URL_KEYS = new Set([
+        'radarrUrl', 'sonarrUrl', 'plexUrl', 'jellyfinUrl', 'embyUrl',
+    ]);
+    const POSITIVE_INTEGER_SETTING_KEYS = new Set([
+        'radarrQualityProfileId', 'sonarrQualityProfileId', 'sonarrLanguageProfileId',
+    ]);
 
     const FEATURE_DETAILS = {
         removeAds: 'Hides current IMDb ad placements, sponsored shells, and tracking pixels as early as userscript timing allows.',
@@ -511,6 +517,123 @@
         };
     }
 
+    function normalizeLocalServiceUrl(value) {
+        const raw = String(value || '').trim();
+        if (!raw) return '';
+        const normalized = normalizeServarrBaseUrl(raw);
+        return isLocalServiceUrl(normalized) ? normalized : '';
+    }
+
+    function normalizeImportedSetting(key, value) {
+        if (!Object.prototype.hasOwnProperty.call(DEFAULTS, key)) return null;
+        const fallback = DEFAULTS[key];
+
+        if (key === 'themeVariant') {
+            return ['dark', 'oled', 'midnight', 'light', 'highContrast'].includes(value)
+                ? { key, value }
+                : null;
+        }
+        if (key === 'cinebyHost') {
+            const normalized = normalizeUrlTemplate(value);
+            return CINEBY_HOSTS.some(host => host.url === normalized)
+                ? { key, value:normalized }
+                : null;
+        }
+        if (LOCAL_SERVICE_URL_KEYS.has(key)) {
+            if (typeof value !== 'string') return null;
+            const raw = value.trim();
+            const normalized = normalizeLocalServiceUrl(raw);
+            return !raw || normalized ? { key, value:normalized } : null;
+        }
+        if (POSITIVE_INTEGER_SETTING_KEYS.has(key)) {
+            if (value === '') return { key, value:'' };
+            const number = Number(value);
+            return Number.isSafeInteger(number) && number > 0
+                ? { key, value:String(number) }
+                : null;
+        }
+        if (key === 'userMarks') {
+            if (!value || Array.isArray(value) || typeof value !== 'object') return null;
+            const normalized = {};
+            Object.entries(value).slice(0, 5000).forEach(([id, record]) => {
+                if (!/^tt\d+$/.test(id) || !record || !['watched', 'skip'].includes(record.state)) return;
+                const timestamp = Number(record.ts);
+                normalized[id] = {
+                    state:record.state,
+                    title:String(record.title || '').slice(0, 200),
+                    ts:Number.isFinite(timestamp) && timestamp >= 0 ? timestamp : Date.now(),
+                };
+            });
+            return { key, value:normalized };
+        }
+        if (typeof fallback === 'boolean') {
+            return typeof value === 'boolean' ? { key, value } : null;
+        }
+        if (Array.isArray(fallback)) {
+            if (!Array.isArray(value)) return null;
+            const limited = value.slice(0, 50);
+            const normalized = limited.map(site => normalizeSite(site)).filter(Boolean);
+            if (normalized.length !== limited.length) return null;
+            return {
+                key,
+                value:normalized,
+            };
+        }
+        if (typeof fallback === 'string') {
+            return typeof value === 'string' ? { key, value:value.slice(0, 4096) } : null;
+        }
+        return null;
+    }
+
+    function prepareSettingsImport(data) {
+        if (!data || Array.isArray(data) || typeof data !== 'object') {
+            throw new Error('Settings JSON must be an object.');
+        }
+        const entries = [];
+        let ignored = 0;
+        Object.entries(data).forEach(([key, value]) => {
+            const normalized = normalizeImportedSetting(key, value);
+            if (normalized) entries.push(normalized);
+            else ignored++;
+        });
+        if (!entries.length) throw new Error('No valid recognized settings were found.');
+        return { entries, ignored };
+    }
+
+    function applySettingsImport(entries) {
+        let snapshots;
+        try {
+            snapshots = new Map(entries.map(({ key }) => [key, get(key)]));
+        } catch {
+            throw new Error('Current settings could not be read; no changes were made.');
+        }
+
+        const touched = [];
+        try {
+            entries.forEach(({ key, value }) => {
+                touched.push(key);
+                GM_setValue(PREFIX + key, value);
+            });
+        } catch (cause) {
+            let rollbackFailed = false;
+            [...touched].reverse().forEach(key => {
+                try { GM_setValue(PREFIX + key, snapshots.get(key)); }
+                catch { rollbackFailed = true; }
+            });
+            console.warn('[IMDb Enhanced] settings import write failed:', cause);
+            throw new Error(rollbackFailed
+                ? 'Import failed and automatic recovery was incomplete. Reload before changing settings.'
+                : 'Import could not be saved; previous settings were restored.');
+        }
+
+        entries.forEach(({ key }) => {
+            try {
+                document.dispatchEvent(new CustomEvent('imdb-enhanced:settings-saved', { detail:{ key } }));
+            } catch { /* persistence succeeded; notification is best-effort */ }
+        });
+        return entries.length;
+    }
+
     function getSiteList(key, defaults) {
         const value = get(key);
         if (Array.isArray(value)) return value.map(site => normalizeSite(site)).filter(Boolean);
@@ -705,7 +828,7 @@
         if (!raw) return '';
         try {
             const url = new URL(raw);
-            if (!/^https?:$/i.test(url.protocol)) return '';
+            if (!/^https?:$/i.test(url.protocol) || url.username || url.password) return '';
             return url.href.replace(/\/+$/, '');
         } catch { return ''; }
     }
@@ -4725,12 +4848,48 @@ section[id*="quote" i] .ipc-list-card { padding: 4px 0 !important; margin: 2px 0
             placeholder,
             autocomplete: type === 'password' ? 'new-password' : 'off',
             spellcheck:'false',
+            ...(type === 'number' ? { min:'1', step:'1' } : {}),
         });
         input.value = get(key) || '';
-        const persist = () => set(key, input.value.trim());
+        const persist = () => {
+            const raw = input.value.trim();
+            if (LOCAL_SERVICE_URL_KEYS.has(key)) {
+                const normalized = normalizeLocalServiceUrl(raw);
+                const valid = !raw || Boolean(normalized);
+                input.classList.toggle('enh-site-input--invalid', !valid);
+                input.setAttribute('aria-invalid', String(!valid));
+                if (!valid) return false;
+                set(key, normalized);
+                return true;
+            }
+            if (POSITIVE_INTEGER_SETTING_KEYS.has(key) && raw) {
+                const number = Number(raw);
+                const valid = Number.isSafeInteger(number) && number > 0;
+                input.classList.toggle('enh-site-input--invalid', !valid);
+                input.setAttribute('aria-invalid', String(!valid));
+                if (!valid) return false;
+                set(key, String(number));
+                return true;
+            }
+            input.classList.remove('enh-site-input--invalid');
+            input.setAttribute('aria-invalid', 'false');
+            set(key, raw);
+            return true;
+        };
+        if (LOCAL_SERVICE_URL_KEYS.has(key)) {
+            const initial = input.value.trim();
+            const valid = !initial || Boolean(normalizeLocalServiceUrl(initial));
+            input.classList.toggle('enh-site-input--invalid', !valid);
+            input.setAttribute('aria-invalid', String(!valid));
+        }
         input.addEventListener('input', persist);
         input.addEventListener('change', () => {
-            persist();
+            if (!persist()) {
+                showToast(LOCAL_SERVICE_URL_KEYS.has(key)
+                    ? 'Use a localhost or 127.0.0.1 HTTP(S) URL without embedded credentials'
+                    : 'Use a positive whole-number profile ID');
+                return;
+            }
             if (refreshKey) refreshFeature(refreshKey);
         });
         return makeEl('div', { className:'enh-servarr-field' + (wide ? ' enh-servarr-field--wide' : '') },
@@ -5324,47 +5483,20 @@ section[id*="quote" i] .ipc-list-card { padding: 4px 0 !important; margin: 2px 0
         overlay.querySelector('#enh-import-apply').addEventListener('click', () => {
             const raw = overlay.querySelector('#enh-import-textarea').value.trim();
             if (!raw) { showToast('Paste settings JSON before importing'); return; }
+            if (raw.length > 100000) { showToast('Import is too large. Use an export under 100 KB.'); return; }
             try {
                 const data = JSON.parse(raw);
-                if (!data || Array.isArray(data) || typeof data !== 'object') throw new Error('Settings must be an object');
-                let imported = 0;
-                for (const [key, value] of Object.entries(data)) {
-                    if (!(key in DEFAULTS)) continue;
-                    const fallback = DEFAULTS[key];
-                    let normalized;
-                    if (key === 'themeVariant') {
-                        if (!['dark', 'oled', 'midnight', 'light', 'highContrast'].includes(value)) continue;
-                        normalized = value;
-                    } else if (typeof fallback === 'boolean') {
-                        if (typeof value !== 'boolean') continue;
-                        normalized = value;
-                    } else if (Array.isArray(fallback)) {
-                        if (!Array.isArray(value)) continue;
-                        normalized = value.slice(0, 50).map(site => normalizeSite(site)).filter(Boolean);
-                    } else if (key === 'userMarks') {
-                        if (!value || Array.isArray(value) || typeof value !== 'object') continue;
-                        normalized = {};
-                        Object.entries(value).slice(0, 5000).forEach(([id, record]) => {
-                            if (!/^tt\d+$/.test(id) || !record || !['watched', 'skip'].includes(record.state)) return;
-                            normalized[id] = {
-                                state:record.state,
-                                title:String(record.title || '').slice(0, 200),
-                                ts:Number.isFinite(Number(record.ts)) ? Number(record.ts) : Date.now(),
-                            };
-                        });
-                    } else if (typeof fallback === 'string') {
-                        if (typeof value !== 'string') continue;
-                        normalized = value.slice(0, 4096);
-                    } else {
-                        continue;
-                    }
-                    set(key, normalized);
-                    imported++;
-                }
-                if (!imported) throw new Error('No recognized settings');
-                showToast(`Imported ${imported} settings. Reloading...`);
+                const { entries, ignored } = prepareSettingsImport(data);
+                const imported = applySettingsImport(entries);
+                const skipped = ignored ? `; skipped ${ignored} invalid or unknown` : '';
+                showToast(`Imported ${imported} settings${skipped}. Reloading...`);
                 setTimeout(() => location.reload(), 1000);
-            } catch { showToast('Import failed. Check the JSON and try again.'); }
+            } catch (error) {
+                const message = error instanceof SyntaxError
+                    ? 'Import failed. Check the JSON syntax and try again.'
+                    : error.message || 'Import failed. No settings were changed.';
+                showToast(message);
+            }
         });
         overlay.querySelector('#enh-clearcache-btn').addEventListener('click', () => {
             let cleared = 0;
