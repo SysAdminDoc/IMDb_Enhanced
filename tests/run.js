@@ -68,6 +68,7 @@ function loadScriptTestHooks() {
         getSectionCollapseState,
         setSectionCollapsed,
         getDefaultSettingsEntries,
+        getExportSettings,
         mediaServerRequest,
         toPositiveInteger,
         httpRequest,
@@ -510,6 +511,21 @@ test('remembered section state participates in backup and migrates legacy keys',
     failingHooks.failSettingWriteAt(1);
     assert.throws(() => failingHooks.getSectionCollapseState(), /simulated settings write failure/);
     assert(failingHooks.getStorageKeys().includes('enh_coll_Details'), 'legacy state must survive a failed schema write');
+});
+
+test('settings exports are canonical and fully re-importable', () => {
+    const hooks = loadScriptTestHooks();
+    hooks.seedStoredSetting('userMarks', { tt0133093:'watched' });
+    hooks.seedRawStorage('enh_coll_Photos', true);
+    hooks.seedStoredSetting('radarrQualityProfileId', '-3');
+    const exported = hooks.getExportSettings();
+    assert.strictEqual(exported.userMarks.tt0133093.state, 'watched', 'legacy marks should export in current schema form');
+    assert.strictEqual(exported.sectionCollapseState.Photos, true, 'legacy section state should be included in export');
+    assert.strictEqual(exported.radarrQualityProfileId, '1', 'invalid legacy values should export as safe defaults');
+    const prepared = hooks.prepareSettingsImport(exported);
+    assert.strictEqual(prepared.ignored, 0, 'a generated export should never contain fields its importer rejects');
+    assert.strictEqual(prepared.entries.length, Object.keys(exported).length, 'every exported setting should be restorable');
+    assert(script.includes('JSON.stringify(getExportSettings(), null, 2)'), 'clipboard export should use canonical schema data');
 });
 
 test('settings reset is explicit, complete, and isolated from live defaults', () => {

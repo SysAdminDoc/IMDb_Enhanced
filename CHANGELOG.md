@@ -62,6 +62,7 @@
 - Recaptured focus if it leaves the open settings dialog through browser or assistive-technology navigation, completing containment beyond first/last Tab wrapping.
 - Scoped YouTube trailer selection to real video-result titles matching the IMDb title, release-year context, and trailer/teaser intent instead of autoplaying the first video ID anywhere in the search payload; prior trailer caches are invalidated.
 - Made legacy collapsed-section migration unconditional and write-first, so backups/resets see the preference even when the feature is disabled and a failed schema write cannot delete the only durable copy.
+- Canonicalized every JSON export through the current import schema, including legacy watched marks, migrated collapse state, normalized site lists, local URLs, and safe profile IDs, so generated backups are guaranteed to be fully re-importable.
 
 ## 2.5.1 — 2026-08-12
 

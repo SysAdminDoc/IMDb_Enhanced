@@ -766,6 +766,20 @@
         return Object.entries(DEFAULTS).map(([key, value]) => ({ key, value:cloneSettingValue(value) }));
     }
 
+    function getExportSettings() {
+        const data = {};
+        Object.keys(DEFAULTS).forEach(key => {
+            let current = get(key);
+            if (key === 'userMarks') current = getUserMarks();
+            else if (key === 'sectionCollapseState') current = getSectionCollapseState();
+            else if (key === 'watchSites') current = getSiteList(key, DEFAULT_WATCH_SITES);
+            else if (key === 'externalSites') current = getSiteList(key, DEFAULT_EXTERNAL_SITES);
+            const normalized = normalizeImportedSetting(key, current);
+            data[key] = cloneSettingValue(normalized ? normalized.value : DEFAULTS[key]);
+        });
+        return data;
+    }
+
     function applySettingsImport(entries) {
         let snapshots;
         try {
@@ -6118,9 +6132,7 @@ section[id*="quote" i] .ipc-list-card { padding: 4px 0 !important; margin: 2px 0
             (activeTab || getFocusableElements(overlay)[0] || panel).focus();
         });
         overlay.querySelector('#enh-export-btn').addEventListener('click', () => {
-            const data = {};
-            for (const key of Object.keys(DEFAULTS)) data[key] = get(key);
-            GM_setClipboard(JSON.stringify(data, null, 2));
+            GM_setClipboard(JSON.stringify(getExportSettings(), null, 2));
             showToast('Settings copied to clipboard');
         });
         overlay.querySelector('#enh-import-btn').addEventListener('click', () => {
