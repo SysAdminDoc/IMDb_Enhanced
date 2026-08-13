@@ -34,6 +34,7 @@ function loadScriptTestHooks() {
         mediaItemMatches,
         selectServarrLookupResult,
         parseMediaServerItems,
+        getRequestErrorMessage,
         getLinkedTitleId,
         isIMDbHost,
         isCinebyHost,
@@ -1026,6 +1027,45 @@ test('media server matching handles provider IDs and title fallback', () => {
     }));
     assert.strictEqual(parsed.length, 1, 'Jellyfin/Emby item parser failed');
     assert(hooks.mediaItemMatches(parsed[0], { imdbId: 'tt0078748', title: 'Alien', year: 1979 }), 'parsed item did not match');
+
+    const oversized = hooks.parseMediaServerItems({
+        Items: Array.from({ length:150 }, (_, index) => ({
+            Name:`Item ${index}`,
+            ProviderIds:Object.fromEntries(Array.from({ length:50 }, (__, idIndex) => [`Provider${idIndex}`, `tt${String(idIndex).padStart(7, '0')}`])),
+        })),
+    });
+    assert.strictEqual(oversized.length, 100, 'local media responses should cap parsed result work');
+    assert(oversized[0].providerIds.length <= 32, 'local media provider IDs should be bounded per result');
+
+    const lateMatch = Array.from({ length:101 }, (_, index) => ({
+        id:index + 1,
+        imdbId:index === 100 ? 'tt0133093' : `tt${String(index).padStart(7, '0')}`,
+        title:index === 100 ? 'The Matrix' : `Item ${index}`,
+        year:index === 100 ? 1999 : 2000,
+    }));
+    assert.strictEqual(
+        hooks.selectServarrLookupResult(lateMatch, { imdbId:'tt0133093', title:'The Matrix', year:1999 }),
+        null,
+        'Servarr matching should not scan an unbounded local response'
+    );
+});
+
+test('local request errors stay concise and text-only', () => {
+    const hooks = loadScriptTestHooks();
+    const longMessage = `  ${'failure '.repeat(80)}\nretry  `;
+    const message = hooks.getRequestErrorMessage({ responseText:JSON.stringify({ message:longMessage }) });
+    assert(message.length <= 240, 'local response errors should be length bounded');
+    assert(!message.includes('\n'), 'local response errors should collapse whitespace');
+    assert.strictEqual(
+        hooks.getRequestErrorMessage({ responseText:JSON.stringify({ error:{ code:'bad' } }), status:503 }),
+        'HTTP 503',
+        'structured error objects should not render as [object Object]'
+    );
+    assert.strictEqual(
+        hooks.getRequestErrorMessage({ status:{ code:500 } }),
+        'Request failed',
+        'non-numeric status values should not be coerced into UI text'
+    );
 });
 
 console.log('All tests passed.');

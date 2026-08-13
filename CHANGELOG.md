@@ -80,6 +80,7 @@
 - Repainted all feature-local theme styles in place instead of restarting feature lifecycles, preventing theme changes from repeating Servarr/media work, dropping list queues, or leaving stale-color controls.
 - Moved quick navigation, collapsible controls, top-episode panels, and TV links from hard-coded dark colors onto the active theme tokens, including visible keyboard focus and tooltips in Light and High Contrast.
 - Exposed the section navigator as a named landmark with real jump buttons, and moved collapse controls to the start of each section's tab order to match their visual position.
+- Bounded local Servarr and media-server result/provider scans, and reduced untrusted local-service errors to concise plain text before placing them in toasts or tooltips.
 
 ## 2.5.1 — 2026-08-12
 

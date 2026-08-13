@@ -50,6 +50,9 @@
     const CACHE_MAX_ENTRIES = 120;
     const CACHE_GC_WRITE_INTERVAL = 10;
     const USER_MARKS_MAX = 5000;
+    const LOCAL_LOOKUP_RESULT_LIMIT = 100;
+    const LOCAL_PROVIDER_ID_LIMIT = 32;
+    const REQUEST_ERROR_TEXT_LIMIT = 240;
     const AD_SHELL_SELECTOR = [
         '.nas-slot',
         '.slot_wrapper',
@@ -1060,18 +1063,27 @@
         try { return JSON.parse(response.responseText || 'null'); }
         catch { throw new Error('Response was not valid JSON'); }
     }
+    function normalizeRequestErrorText(value) {
+        if (typeof value !== 'string' && typeof value !== 'number') return '';
+        return String(value).trim().replace(/\s+/g, ' ').slice(0, REQUEST_ERROR_TEXT_LIMIT);
+    }
     function getRequestErrorMessage(error) {
-        if (error?.responseText) {
+        const responseText = typeof error?.responseText === 'string' ? error.responseText : '';
+        if (responseText && responseText.length <= 100000) {
             try {
-                const body = JSON.parse(error.responseText);
-                if (Array.isArray(body) && body[0]?.errorMessage) return body[0].errorMessage;
-                if (body.message) return body.message;
-                if (body.errorMessage) return body.errorMessage;
-                if (body.error) return body.error;
+                const body = JSON.parse(responseText);
+                const candidates = Array.isArray(body)
+                    ? [body[0]?.errorMessage, body[0]?.message]
+                    : [body?.message, body?.errorMessage, body?.error?.message, body?.error];
+                for (const candidate of candidates) {
+                    const message = normalizeRequestErrorText(candidate);
+                    if (message) return message;
+                }
             } catch { /* use status fallback */ }
         }
-        if (error?.status) return `HTTP ${error.status}`;
-        return error?.message || 'Request failed';
+        const status = Number(error?.status);
+        if (Number.isInteger(status) && status >= 100 && status <= 599) return `HTTP ${status}`;
+        return normalizeRequestErrorText(error?.message) || 'Request failed';
     }
     function normalizeServarrBaseUrl(value) {
         const raw = String(value || '').trim().replace(/\/+$/, '');
@@ -1179,9 +1191,16 @@
             item.guid, item.Guid, item.key, item.ratingKey,
         ].filter(Boolean);
         const providerIds = item.providerIds || item.ProviderIds;
-        if (Array.isArray(providerIds)) ids.push(...providerIds);
-        else if (providerIds && typeof providerIds === 'object') ids.push(...Object.values(providerIds));
-        return ids.map(normalizeIMDbProviderId).filter(Boolean);
+        if (Array.isArray(providerIds)) {
+            ids.push(...providerIds.slice(0, Math.max(0, LOCAL_PROVIDER_ID_LIMIT - ids.length)));
+        } else if (providerIds && typeof providerIds === 'object') {
+            for (const key in providerIds) {
+                if (!Object.prototype.hasOwnProperty.call(providerIds, key)) continue;
+                ids.push(providerIds[key]);
+                if (ids.length >= LOCAL_PROVIDER_ID_LIMIT) break;
+            }
+        }
+        return ids.slice(0, LOCAL_PROVIDER_ID_LIMIT).map(normalizeIMDbProviderId).filter(Boolean);
     }
     function mediaItemMatches(item, ctx) {
         const imdbId = normalizeIMDbProviderId(ctx?.imdbId);
@@ -1198,7 +1217,7 @@
     }
     function selectServarrLookupResult(items, ctx, requireExisting = false) {
         if (!Array.isArray(items)) return null;
-        return items.find(item =>
+        return items.slice(0, LOCAL_LOOKUP_RESULT_LIMIT).find(item =>
             (!requireExisting || toPositiveInteger(item?.id, 0) > 0)
             && mediaItemMatches(item, ctx)
         ) || null;
@@ -1206,24 +1225,28 @@
     function parsePlexItems(xmlText) {
         try {
             const doc = new DOMParser().parseFromString(String(xmlText || ''), 'application/xml');
-            return Array.from(doc.querySelectorAll('Video,Directory')).map(node => ({
-                title: node.getAttribute('title') || node.getAttribute('originalTitle') || '',
-                year: Number(node.getAttribute('year')) || 0,
-                providerIds: [
-                    node.getAttribute('guid') || '',
-                    ...Array.from(node.querySelectorAll('Guid')).map(guid => guid.getAttribute('id') || ''),
-                ],
-            }));
+            return Array.from(doc.querySelectorAll('Video,Directory'))
+                .slice(0, LOCAL_LOOKUP_RESULT_LIMIT)
+                .map(node => ({
+                    title: node.getAttribute('title') || node.getAttribute('originalTitle') || '',
+                    year: Number(node.getAttribute('year')) || 0,
+                    providerIds: [
+                        node.getAttribute('guid') || '',
+                        ...Array.from(node.querySelectorAll('Guid'))
+                            .slice(0, LOCAL_PROVIDER_ID_LIMIT - 1)
+                            .map(guid => guid.getAttribute('id') || ''),
+                    ],
+                }));
         } catch { return []; }
     }
     function parseMediaServerItems(payload) {
         try {
             const data = typeof payload === 'string' ? JSON.parse(payload || '{}') : (payload || {});
             const items = Array.isArray(data) ? data : (Array.isArray(data.Items) ? data.Items : []);
-            return items.map(item => ({
+            return items.slice(0, LOCAL_LOOKUP_RESULT_LIMIT).map(item => ({
                 title: item.Name || item.OriginalTitle || item.SeriesName || '',
                 year: Number(item.ProductionYear) || 0,
-                providerIds: item.ProviderIds || {},
+                providerIds: collectProviderIds(item),
             }));
         } catch { return []; }
     }
