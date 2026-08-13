@@ -71,6 +71,7 @@
 - Decoupled the trailer and expanded-links controls from the external-links bar, so toggling that separate setting no longer removes still-enabled tools; the expanded menu can now stand alone.
 - Made Add in the custom-site editors create a focused unsaved draft with real placeholders instead of immediately publishing a fake “New site” link to Example.com.
 - Prevented poster-only links from consuming a title ID before list multi-search reaches the corresponding text link, restoring titles that were silently omitted from generated queues.
+- Removed IMDb chart/list ordinal prefixes such as “17.” from multi-search title queries so destinations receive the actual title.
 - Removed the obsolete Sonarr language-profile field and payload property; current Sonarr manages language through quality-profile custom formats, and the userscript now cleans the orphaned legacy setting.
 
 ## 2.5.1 — 2026-08-12

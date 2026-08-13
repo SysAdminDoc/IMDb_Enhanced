@@ -4419,7 +4419,8 @@ section[id*="quote" i] .ipc-list-card { padding: 4px 0 !important; margin: 2px 0
             const id = getLinkedTitleId(a.href);
             if (!id || seen.has(id)) return;
             const textEl = a.querySelector('[class*="title"]') || a;
-            const name = (textEl.textContent || '').trim().replace(/\s+/g, ' ').slice(0, 120);
+            const name = (textEl.textContent || '').trim().replace(/\s+/g, ' ')
+                .replace(/^\d+\.\s+/, '').slice(0, 120);
             if (!name) return;
             seen.add(id);
             titles.push({ id, name });
