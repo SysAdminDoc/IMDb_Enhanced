@@ -51,6 +51,7 @@ function loadScriptTestHooks() {
         selectMetacriticResult,
         parseJustWatchSearchResult,
         parseJustWatchIdentity,
+        collectJustWatchProviderNames,
         buildListSearchEntries,
         getEnhancementScrollBehavior,
         getFocusableElements,
@@ -708,7 +709,17 @@ test('JustWatch direct and fallback pages preserve title identity', () => {
     assert.strictEqual(movieIdentity.title, 'The Thing');
     assert.strictEqual(movieIdentity.year, 1982);
     assert.strictEqual(movieIdentity.type, 'movie');
+    const providers = hooks.collectJustWatchProviderNames({ offers:[
+        { offeredBy:{ name:'Netflix' } },
+        { offeredBy:[{ name:'Max' }, { name:'netflix' }] },
+    ] });
+    assert.deepStrictEqual(Array.from(providers), ['Netflix', 'Max']);
+    const excessive = hooks.collectJustWatchProviderNames({
+        offers:Array.from({ length:75 }, (_, index) => ({ offeredBy:{ name:`Provider ${index}` } })),
+    });
+    assert.strictEqual(excessive.length, 50, 'provider traversal should enforce its output budget');
     assert(!script.includes('_firstDetailPath'), 'first-path JustWatch fallback should stay removed');
+    assert(!script.includes('_collectProviderNames'), 'recursive provider traversal should stay removed');
 });
 
 test('list multi-search builds a popup-safe link queue', () => {

@@ -2263,6 +2263,31 @@ section[id*="quote" i] .ipc-list-card { padding: 4px 0 !important; margin: 2px 0
         return null;
     }
 
+    function collectJustWatchProviderNames(root, maxNodes = 2000, maxProviders = 50) {
+        const providers = [];
+        const queue = [root];
+        const add = value => {
+            const name = String(value || '').trim().replace(/\s+/g, ' ').slice(0, 120);
+            if (name && !providers.some(existing => existing.toLowerCase() === name.toLowerCase())) providers.push(name);
+        };
+        for (let index = 0; index < queue.length && index < maxNodes && providers.length < maxProviders; index++) {
+            const node = queue[index];
+            if (!node || typeof node !== 'object') continue;
+            if (Array.isArray(node)) {
+                node.slice(0, Math.max(0, maxNodes - queue.length)).forEach(value => queue.push(value));
+                continue;
+            }
+            const offeredBy = node.offeredBy;
+            if (Array.isArray(offeredBy)) offeredBy.forEach(item => add(item?.name));
+            else add(offeredBy?.name);
+            Object.values(node)
+                .filter(value => value && typeof value === 'object')
+                .slice(0, Math.max(0, maxNodes - queue.length))
+                .forEach(value => queue.push(value));
+        }
+        return providers.slice(0, maxProviders);
+    }
+
     reg({
         key: 'ratingColorCoding', name: 'Rating quality labels', group: 'Appearance',
         init() {
@@ -2836,30 +2861,12 @@ section[id*="quote" i] .ipc-list-card { padding: 4px 0 !important; margin: 2px 0
             const ldScripts = html.matchAll(/<script[^>]+type=["']application\/ld\+json["'][^>]*>\s*([\s\S]*?)<\/script>/gi);
             for (const script of ldScripts) {
                 try {
-                    this._collectProviderNames(JSON.parse(script[1]), providers);
+                    providers.push(...collectJustWatchProviderNames(JSON.parse(script[1])));
                 } catch { /* ignore malformed structured data */ }
             }
 
             const unique = compactProviders(providers, 12).providers;
             return unique.length ? { providers: unique, url } : null;
-        },
-        _collectProviderNames(node, providers) {
-            if (!node) return;
-            if (Array.isArray(node)) {
-                node.forEach(item => this._collectProviderNames(item, providers));
-                return;
-            }
-            if (typeof node !== 'object') return;
-
-            const offeredBy = node.offeredBy;
-            if (Array.isArray(offeredBy)) {
-                offeredBy.forEach(item => {
-                    if (item?.name) providers.push(item.name);
-                });
-            } else if (offeredBy?.name) {
-                providers.push(offeredBy.name);
-            }
-            Object.values(node).forEach(value => this._collectProviderNames(value, providers));
         },
         _render(data) {
             document.getElementById('enh-jw-widget')?.remove();
