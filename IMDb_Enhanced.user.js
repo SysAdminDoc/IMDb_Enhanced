@@ -599,6 +599,21 @@
         return CINEBY_HOSTS.some(host => host.url === saved) ? saved : CINEBY_HOSTS[0].url;
     }
 
+    function isCinebyHandoffUrl(value) {
+        const normalized = normalizeUrlTemplate(value);
+        if (!normalized) return false;
+        try {
+            const candidate = new URL(normalized);
+            return CINEBY_HOSTS.some(host => {
+                const approved = new URL(host.url);
+                return candidate.origin === approved.origin
+                    && candidate.pathname.replace(/\/+$/, '') === approved.pathname.replace(/\/+$/, '')
+                    && !candidate.search
+                    && !candidate.hash;
+            });
+        } catch { return false; }
+    }
+
     function clearCinebyQueryKey(key) {
         try {
             if (typeof GM_deleteValue === 'function') GM_deleteValue(key);
@@ -646,6 +661,7 @@
         const name = String(site?.name || '').trim().slice(0, 40);
         const url = normalizeUrlTemplate(site?.url);
         if (!name || !url) return null;
+        const storeQuery = isCinebyHandoffUrl(url);
         let movieOnly = Boolean(site?.movieOnly);
         try {
             const hostname = new URL(url).hostname.toLowerCase();
@@ -655,7 +671,7 @@
             name,
             url,
             color: normalizeColor(site?.color, fallbackColor),
-            ...(site?.storeQuery ? { storeQuery:true } : {}),
+            ...(storeQuery ? { storeQuery:true } : {}),
             ...(movieOnly ? { movieOnly:true } : {}),
         };
     }
@@ -5399,7 +5415,6 @@ section[id*="quote" i] .ipc-list-card { padding: 4px 0 !important; margin: 2px 0
             name: row.querySelector('[data-field="name"]')?.value || '',
             url: row.querySelector('[data-field="url"]')?.value || '',
             color: row.querySelector('[data-field="color"]')?.value || '#6366f1',
-            storeQuery: row.dataset.storeQuery === 'true',
             movieOnly: row.dataset.movieOnly === 'true',
         }));
 
@@ -5431,7 +5446,6 @@ section[id*="quote" i] .ipc-list-card { padding: 4px 0 !important; margin: 2px 0
             const row = makeEl('div', {
                 className:'enh-site-row',
                 dataset:{
-                    storeQuery:String(Boolean(site.storeQuery)),
                     movieOnly:String(Boolean(site.movieOnly)),
                 },
             });

@@ -612,6 +612,16 @@ test('custom site templates require complete HTTP or HTTPS URLs', () => {
     assert.strictEqual(hooks.normalizeUrlTemplate('file:///tmp/search'), '');
     assert.strictEqual(hooks.normalizeUrlTemplate('https://user:secret@example.com/search'), '');
     assert.strictEqual(hooks.normalizeSite({ name:'Broken', url:'https://' }), null);
+    assert.strictEqual(
+        hooks.normalizeSite({ name:'Edited Cineby', url:'https://example.com/search?q={{TITLE}}', storeQuery:true }).storeQuery,
+        undefined,
+        'editing the Cineby row to another URL must remove its invisible handoff behavior'
+    );
+    assert.strictEqual(
+        hooks.normalizeSite({ name:'Cineby', url:'https://www.cineby.at' }).storeQuery,
+        true,
+        'the exact visible Cineby URL should derive its required controlled-input handoff'
+    );
     const letterboxd = hooks.normalizeSite({ name:'Letterboxd', url:'https://letterboxd.com/imdb/{{IMDB_ID}}/' });
     assert.strictEqual(letterboxd.movieOnly, true, 'Letterboxd custom/default links should remain movie-scoped');
     assert.deepStrictEqual(
