@@ -41,6 +41,7 @@ function loadScriptTestHooks() {
         createFeatureGuard,
         advanceFeatureGeneration,
         normalizeUrlTemplate,
+        normalizeLocalServiceUrl,
         normalizeTrustedUrl,
         normalizeSite,
         filterSitesForMediaType,
@@ -820,6 +821,9 @@ test('media server integration is configurable and local-only', () => {
 
 test('local-service credentials stay out of request URLs', () => {
     const hooks = loadScriptTestHooks();
+    assert.strictEqual(hooks.normalizeLocalServiceUrl('http://localhost:32400/library'), 'http://localhost:32400/library');
+    assert.strictEqual(hooks.normalizeLocalServiceUrl('http://localhost:32400/?token=secret'), '', 'local base URLs must reject query credentials');
+    assert.strictEqual(hooks.normalizeLocalServiceUrl('http://localhost:32400/#secret'), '', 'local base URLs must reject fragments');
     hooks.mediaServerRequest({
         kind:'plex', label:'Plex', baseUrl:'http://localhost:32400', token:'plex-secret',
     }, '/library/sections', { query:{ type:'movie' } }).catch(() => {});

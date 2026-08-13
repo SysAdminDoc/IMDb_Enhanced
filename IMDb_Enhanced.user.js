@@ -1017,7 +1017,7 @@
         if (!raw) return '';
         try {
             const url = new URL(raw);
-            if (!/^https?:$/i.test(url.protocol) || url.username || url.password) return '';
+            if (!/^https?:$/i.test(url.protocol) || url.username || url.password || url.search || url.hash) return '';
             return url.href.replace(/\/+$/, '');
         } catch { return ''; }
     }
