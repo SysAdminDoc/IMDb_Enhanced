@@ -3827,11 +3827,13 @@ section[id*="quote" i] .ipc-list-card { padding: 4px 0 !important; margin: 2px 0
                             btn.disabled = true;
                             btn.textContent = 'Adding...';
                             try {
-                                await this._add(action.kind, imdbId, title, year);
+                                const added = await this._add(action.kind, imdbId, title, year, isCurrent);
+                                if (!added || !isCurrent()) return;
                                 showToast(`${title} sent to ${action.kind === 'radarr' ? 'Radarr' : 'Sonarr'}`);
                                 btn.textContent = 'Added';
                                 btn.disabled = true;
                             } catch (error) {
+                                if (!isCurrent()) return;
                                 console.warn('[IMDb Enhanced] Servarr add failed:', error);
                                 showToast(`${action.kind === 'radarr' ? 'Radarr' : 'Sonarr'} add failed: ${getRequestErrorMessage(error)}`, 4500);
                                 btn.disabled = false;
@@ -3867,7 +3869,7 @@ section[id*="quote" i] .ipc-list-card { padding: 4px 0 !important; margin: 2px 0
                 }
             } catch { /* library check is best-effort */ }
         },
-        async _lookup(kind, ctx) {
+        async _lookup(kind, ctx, isCurrent) {
             const path = kind === 'radarr' ? 'movie/lookup' : 'series/lookup';
             const terms = [
                 `imdb:${ctx.imdbId}`,
@@ -3875,16 +3877,23 @@ section[id*="quote" i] .ipc-list-card { padding: 4px 0 !important; margin: 2px 0
                 ctx.title,
             ].filter(Boolean);
             for (const term of terms) {
-                const response = await servarrRequest(kind, path, { query:{ term } });
+                if (!isCurrent()) return null;
+                const response = await servarrRequest(kind, path, {
+                    query:{ term },
+                    cancelOnRouteChange:true,
+                });
+                if (!isCurrent()) return null;
                 const items = parseJSONResponse(response);
                 const item = selectServarrLookupResult(items, ctx);
                 if (item) return item;
             }
+            if (!isCurrent()) return null;
             throw new Error('No matching title found');
         },
-        async _add(kind, imdbId, title, year) {
+        async _add(kind, imdbId, title, year, isCurrent) {
+            const item = await this._lookup(kind, { imdbId, title, year }, isCurrent);
+            if (!item || !isCurrent()) return false;
             const cfg = getServarrConfig(kind);
-            const item = await this._lookup(kind, { imdbId, title, year });
             if (kind === 'radarr') {
                 const body = {
                     ...item,
@@ -3895,7 +3904,7 @@ section[id*="quote" i] .ipc-list-card { padding: 4px 0 !important; margin: 2px 0
                     addOptions: { ...(item.addOptions || {}), searchForMovie: true },
                 };
                 await servarrRequest('radarr', 'movie', { method:'POST', body });
-                return;
+                return true;
             }
 
             const seasons = Array.isArray(item.seasons)
@@ -3916,6 +3925,7 @@ section[id*="quote" i] .ipc-list-card { padding: 4px 0 !important; margin: 2px 0
                 },
             };
             await servarrRequest('sonarr', 'series', { method:'POST', body });
+            return true;
         },
         destroy() {
             removeCSS('enh-servarrIntegration');

@@ -327,6 +327,18 @@ test('pending route work and lazy score lookups are cancellable', () => {
     assert(script.includes('pending.catch(rejectCurrentGeneration)'), 'async feature initialization failures should invalidate their lifecycle');
     assert(script.includes('stopFeature(feature)'), 'settings refresh and disable paths should invalidate prior feature instances');
     assert(script.includes("startFeature(feature, { context:'settings', notify:true })"), 'settings-triggered feature failures should be visible');
+    assert(
+        /const added = await this\._add\(action\.kind, imdbId, title, year, isCurrent\);\s*if \(!added \|\| !isCurrent\(\)\) return;/.test(script),
+        'Servarr add results must not update a later route'
+    );
+    assert(
+        /async _lookup\(kind, ctx, isCurrent\)[\s\S]*?query:\{ term \},\s*cancelOnRouteChange:true,[\s\S]*?if \(!isCurrent\(\)\) return null;/.test(script),
+        'Servarr lookup requests must be cancellable and route guarded'
+    );
+    assert(
+        /const item = await this\._lookup\(kind, \{ imdbId, title, year \}, isCurrent\);\s*if \(!item \|\| !isCurrent\(\)\) return false;/.test(script),
+        'Servarr must not start an add request after its title route expires'
+    );
 });
 
 test('watched marks only decorate canonical title links', () => {

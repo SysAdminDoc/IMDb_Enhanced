@@ -64,6 +64,7 @@
 - Made legacy collapsed-section migration unconditional and write-first, so backups/resets see the preference even when the feature is disabled and a failed schema write cannot delete the only durable copy.
 - Canonicalized every JSON export through the current import schema, including legacy watched marks, migrated collapse state, normalized site lists, local URLs, and safe profile IDs, so generated backups are guaranteed to be fully re-importable.
 - Required Servarr lookup/add and local media-library fallback matches to respect IMDb provider IDs plus exact title/year identity, preventing first-result and same-title-remake false positives; missing years no longer match year-qualified titles.
+- Cancelled route-owned Servarr lookups and prevented a completed lookup from starting an add request or updating controls after the user navigates to another IMDb title.
 
 ## 2.5.1 — 2026-08-12
 
