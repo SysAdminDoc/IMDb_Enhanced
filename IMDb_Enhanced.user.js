@@ -138,7 +138,7 @@
         radarrUrl: 'http://localhost:7878', radarrApiKey: '',
         radarrRootFolderPath: '', radarrQualityProfileId: '1',
         sonarrUrl: 'http://localhost:8989', sonarrApiKey: '',
-        sonarrRootFolderPath: '', sonarrQualityProfileId: '1', sonarrLanguageProfileId: '1',
+        sonarrRootFolderPath: '', sonarrQualityProfileId: '1',
         mediaServerIntegration: false,
         plexUrl: 'http://localhost:32400', plexToken: '',
         jellyfinUrl: 'http://localhost:8096', jellyfinApiKey: '',
@@ -153,7 +153,7 @@
         'radarrUrl', 'sonarrUrl', 'plexUrl', 'jellyfinUrl', 'embyUrl',
     ]);
     const POSITIVE_INTEGER_SETTING_KEYS = new Set([
-        'radarrQualityProfileId', 'sonarrQualityProfileId', 'sonarrLanguageProfileId',
+        'radarrQualityProfileId', 'sonarrQualityProfileId',
     ]);
     const COLLAPSIBLE_SECTION_IDS = [
         'title-cast', 'UserReviews', 'MoreLikeThis', 'Details', 'BoxOffice',
@@ -248,8 +248,11 @@
         cacheGC._ran = true;
         try {
             const legacySiteHealthKey = PREFIX + 'siteHealth';
-            if (GM_getValue(legacySiteHealthKey, null) !== null && typeof GM_deleteValue === 'function') {
-                GM_deleteValue(legacySiteHealthKey);
+            const legacyStorageKeys = [legacySiteHealthKey, PREFIX + 'sonarrLanguageProfileId'];
+            if (typeof GM_deleteValue === 'function') {
+                legacyStorageKeys.forEach(key => {
+                    if (GM_getValue(key, null) !== null) GM_deleteValue(key);
+                });
             }
             const now = Date.now();
             const live = [];
@@ -1080,7 +1083,6 @@
             apiKey: String(get(`${prefix}ApiKey`) || '').trim(),
             rootFolderPath: String(get(`${prefix}RootFolderPath`) || '').trim(),
             qualityProfileId: toPositiveInteger(get(`${prefix}QualityProfileId`)),
-            languageProfileId: toPositiveInteger(get('sonarrLanguageProfileId')),
         };
     }
     function isServarrConfigured(kind) {
@@ -3957,7 +3959,6 @@ section[id*="quote" i] .ipc-list-card { padding: 4px 0 !important; margin: 2px 0
                 monitored: true,
                 seasonFolder: true,
                 qualityProfileId: cfg.qualityProfileId,
-                languageProfileId: cfg.languageProfileId,
                 rootFolderPath: cfg.rootFolderPath,
                 seasons,
                 addOptions: {
@@ -5710,7 +5711,6 @@ section[id*="quote" i] .ipc-list-card { padding: 4px 0 !important; margin: 2px 0
                     { key:'sonarrApiKey', label:'API key', type:'password', wide:true },
                     { key:'sonarrRootFolderPath', label:'Root folder', wide:true, placeholder:'/tv' },
                     { key:'sonarrQualityProfileId', label:'Quality profile ID', type:'number' },
-                    { key:'sonarrLanguageProfileId', label:'Language profile ID', type:'number' },
                 ],
             },
         ], createSettingsInput, 'servarr');

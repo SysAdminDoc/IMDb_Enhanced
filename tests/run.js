@@ -65,6 +65,7 @@ function loadScriptTestHooks() {
         takeCinebyQuery,
         cacheSet,
         cacheGet,
+        cacheGC,
         getUserMarks,
         setUserMark,
         getSectionCollapseState,
@@ -618,6 +619,19 @@ test('watch links avoid unreliable background origin probes', () => {
     assert(!script.includes('_probeButtons'), 'watch buttons should not launch background health requests');
     assert(!script.includes('/favicon.ico?'), 'watch-site origins must not receive automatic favicon probes');
     assert(script.includes("const legacySiteHealthKey = PREFIX + 'siteHealth'"), 'legacy health cache cleanup missing');
+});
+
+test('current Sonarr integration excludes retired language profiles', () => {
+    const hooks = loadScriptTestHooks();
+    assert.strictEqual(
+        (script.match(/sonarrLanguageProfileId/g) || []).length,
+        1,
+        'the retired Sonarr setting should remain only as an orphaned-storage cleanup key'
+    );
+    assert(!/languageProfileId:\s*cfg\./.test(script), 'current Sonarr add payloads must not send a no-op language profile');
+    hooks.seedRawStorage('imdb_enh_sonarrLanguageProfileId', '7');
+    hooks.cacheGC(true);
+    assert(!hooks.getStorageKeys().includes('imdb_enh_sonarrLanguageProfileId'), 'retired stored language-profile IDs should be cleaned up');
 });
 
 test('custom site templates require complete HTTP or HTTPS URLs', () => {
