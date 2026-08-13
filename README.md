@@ -60,7 +60,7 @@ Click the gear icon on any covered IMDb page to open the six-section settings wo
 
 **Integrations** - Tabbed Radarr/Sonarr and Plex/Jellyfin/Emby local-service configuration with arrow/Home/End keyboard navigation.
 
-**Data** - Local mark review, import validation, export, cache status/clearing, and an explicit two-step reset with backup guidance.
+**Data** - Local mark review, validated JSON backup/restore up to 4 MB, cache status/clearing, and an explicit two-step reset with backup guidance.
 
 **Watch Sites** - Add, remove, reorder, and customize streaming site buttons with name, URL template, and color.
 
@@ -74,7 +74,7 @@ Click the gear icon on any covered IMDb page to open the six-section settings wo
 
 **URL Templates** - Use `{{TITLE}}`, `{{TITLE_DASH}}`, `{{TITLE_SLUG}}`, `{{IMDB_ID}}`, `{{IMDB_NUM}}`, `{{TRAKT_TYPE}}`, `{{YEAR}}` in custom site URLs.
 
-**Import/Export** - Full JSON backup—including remembered section state—and validated, transactional restore. Invalid or unknown fields are skipped; a storage failure restores the prior values before reporting the error.
+**Import/Export** - Full JSON backup—including remembered section state—and validated, transactional restore up to 4 MB. Invalid or unknown fields are skipped; a storage failure restores the prior values before reporting the error.
 
 ## Themes
 

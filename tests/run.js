@@ -83,6 +83,7 @@ function loadScriptTestHooks() {
         setSectionCollapsed,
         getDefaultSettingsEntries,
         getExportSettings,
+        SETTINGS_IMPORT_TEXT_LIMIT,
         mediaServerRequest,
         getServarrConfig,
         isServarrConfigured,
@@ -436,7 +437,9 @@ test('settings use six accessible desktop destinations', () => {
     assert(script.includes("role:'tabpanel'"), 'settings tab panels missing');
     assert(/#enh-settings-overlay\s*\{[^}]*visibility:\s*hidden/s.test(script), 'closed settings must leave the tab order');
     assert(/#enh-settings-overlay\.enh-visible\s*\{[^}]*visibility:\s*visible/s.test(script), 'open settings must restore visibility');
-    assert(script.includes("maxlength:'100000'"), 'import size guard missing');
+    assert(script.includes('maxlength:String(SETTINGS_IMPORT_TEXT_LIMIT)'), 'import size guard missing');
+    assert(script.includes('raw.length > SETTINGS_IMPORT_TEXT_LIMIT'), 'import parser must enforce the same size guard');
+    assert(script.includes('Settings could not be read for export. No backup was copied.'), 'export read failures should remain visible');
     assert(script.includes('Changes save automatically.'), 'automatic-save status missing');
     assert(script.includes('id="enh-settings-save-state" role="status" aria-live="polite" aria-atomic="true"'), 'automatic-save feedback should be announced');
     assert(!script.includes('<main class="enh-settings-main">'), 'settings dialog must not add a second page-level main landmark');
@@ -700,6 +703,35 @@ test('settings exports are canonical and fully re-importable', () => {
     assert.strictEqual(prepared.ignored, 0, 'a generated export should never contain fields its importer rejects');
     assert.strictEqual(prepared.entries.length, Object.keys(exported).length, 'every exported setting should be restorable');
     assert(script.includes('JSON.stringify(getExportSettings(), null, 2)'), 'clipboard export should use canonical schema data');
+
+    const maximumHooks = loadScriptTestHooks();
+    const maximumMarks = {};
+    for (let index = 0; index < 5000; index++) {
+        maximumMarks[`tt${String(index).padStart(7, '0')}`] = {
+            state:index % 2 ? 'watched' : 'skip', title:'T'.repeat(160), ts:index,
+        };
+    }
+    const maximumSites = Array.from({ length:50 }, (_, index) => ({
+        name:`Site ${index}`,
+        url:`https://example.com/${'a'.repeat(4000)}?q={{TITLE}}&i=${index}`,
+        color:'#6366f1',
+    }));
+    maximumHooks.seedStoredSetting('userMarks', maximumMarks);
+    maximumHooks.seedStoredSetting('watchSites', maximumSites);
+    maximumHooks.seedStoredSetting('externalSites', maximumSites);
+    ['radarrApiKey', 'sonarrApiKey', 'plexToken', 'jellyfinApiKey', 'embyApiKey'].forEach(key => {
+        maximumHooks.seedStoredSetting(key, 'k'.repeat(4096));
+    });
+    const maximumExportText = JSON.stringify(maximumHooks.getExportSettings(), null, 2);
+    assert(
+        maximumExportText.length <= maximumHooks.SETTINGS_IMPORT_TEXT_LIMIT,
+        `maximum supported export (${maximumExportText.length}) exceeded import limit (${maximumHooks.SETTINGS_IMPORT_TEXT_LIMIT})`
+    );
+    assert.strictEqual(
+        maximumHooks.prepareSettingsImport(JSON.parse(maximumExportText)).ignored,
+        0,
+        'a maximum supported export should still pass the importer'
+    );
 });
 
 test('settings reset is explicit, complete, and isolated from live defaults', () => {

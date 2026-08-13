@@ -65,6 +65,7 @@
     const LOCAL_RESPONSE_TEXT_LIMIT = 4 * 1024 * 1024;
     const SITE_LIST_LIMIT = 50;
     const URL_TEMPLATE_TEXT_LIMIT = 4096;
+    const SETTINGS_IMPORT_TEXT_LIMIT = 4 * 1024 * 1024;
     const URL_TEMPLATE_KEYS = new Set([
         'TITLE', 'TITLE_RAW', 'TITLE_DASH', 'TITLE_SLUG',
         'IMDB_ID', 'IMDB_NUM', 'TRAKT_TYPE', 'YEAR',
@@ -6392,7 +6393,7 @@ section[id*="quote" i] .ipc-list-card { padding: 4px 0 !important; margin: 2px 0
         const importPanel = makeEl('div', { className:'enh-import-panel', id:'enh-import-panel', hidden:'hidden' },
             makeEl('label', { className:'enh-import-label', for:'enh-import-textarea' }, 'Paste exported settings JSON'),
             makeEl('textarea', {
-                id:'enh-import-textarea', className:'enh-import-textarea', spellcheck:'false', maxlength:'100000',
+                id:'enh-import-textarea', className:'enh-import-textarea', spellcheck:'false', maxlength:String(SETTINGS_IMPORT_TEXT_LIMIT),
                 placeholder:'{ "modernUI": true, "themeVariant": "dark" }',
             }),
             makeEl('div', { className:'enh-import-actions' },
@@ -6481,10 +6482,20 @@ section[id*="quote" i] .ipc-list-card { padding: 4px 0 !important; margin: 2px 0
         document.addEventListener('focusin', containSettingsFocus);
         registerCleanup(() => document.removeEventListener('focusin', containSettingsFocus));
         overlay.querySelector('#enh-export-btn').addEventListener('click', () => {
-            const copied = copyTextToClipboard(JSON.stringify(getExportSettings(), null, 2));
-            showToast(copied
-                ? 'Settings copied to clipboard'
-                : 'Export copy failed. Check the userscript clipboard permission.', copied ? 2500 : 4500);
+            try {
+                const serialized = JSON.stringify(getExportSettings(), null, 2);
+                if (serialized.length > SETTINGS_IMPORT_TEXT_LIMIT) {
+                    showToast('Settings exceed the 4 MB backup limit. Remove stale title marks or oversized destinations first.', 5000);
+                    return;
+                }
+                const copied = copyTextToClipboard(serialized);
+                showToast(copied
+                    ? 'Settings copied to clipboard'
+                    : 'Export copy failed. Check the userscript clipboard permission.', copied ? 2500 : 4500);
+            } catch (error) {
+                console.warn('[IMDb Enhanced] settings export failed:', error);
+                showToast('Settings could not be read for export. No backup was copied.', 4500);
+            }
         });
         overlay.querySelector('#enh-import-btn').addEventListener('click', () => {
             setDataDisclosureState('import');
@@ -6519,7 +6530,7 @@ section[id*="quote" i] .ipc-list-card { padding: 4px 0 !important; margin: 2px 0
         overlay.querySelector('#enh-import-apply').addEventListener('click', () => {
             const raw = overlay.querySelector('#enh-import-textarea').value.trim();
             if (!raw) { showToast('Paste settings JSON before importing'); return; }
-            if (raw.length > 100000) { showToast('Import is too large. Use an export under 100 KB.'); return; }
+            if (raw.length > SETTINGS_IMPORT_TEXT_LIMIT) { showToast('Import is too large. Use a complete export under 4 MB.'); return; }
             try {
                 const data = JSON.parse(raw);
                 const { entries, ignored } = prepareSettingsImport(data);
