@@ -731,6 +731,18 @@
         return { entries, ignored };
     }
 
+    function cloneSettingValue(value) {
+        if (Array.isArray(value)) return value.map(cloneSettingValue);
+        if (value && typeof value === 'object') {
+            return Object.fromEntries(Object.entries(value).map(([key, nested]) => [key, cloneSettingValue(nested)]));
+        }
+        return value;
+    }
+
+    function getDefaultSettingsEntries() {
+        return Object.entries(DEFAULTS).map(([key, value]) => ({ key, value:cloneSettingValue(value) }));
+    }
+
     function applySettingsImport(entries) {
         let snapshots;
         try {
@@ -5767,12 +5779,31 @@ section[id*="quote" i] .ipc-list-card { padding: 4px 0 !important; margin: 2px 0
                 makeEl('button', { type:'button', className:'enh-settings-footer-btn', id:'enh-import-cancel' }, 'Cancel')
             )
         );
+        const resetPanel = makeEl('div', {
+            className:'enh-import-panel', id:'enh-reset-panel', hidden:'hidden', role:'alert',
+        },
+            makeEl('div', { className:'enh-import-label' }, 'Reset every setting?'),
+            makeEl('div', { className:'enh-settings-card-description' },
+                'This clears title marks and local integration credentials. Export a backup first if you may need them.'
+            ),
+            makeEl('div', { className:'enh-import-actions' },
+                makeEl('button', {
+                    type:'button', className:'enh-settings-footer-btn enh-settings-footer-btn--danger', id:'enh-reset-apply',
+                }, 'Reset everything'),
+                makeEl('button', { type:'button', className:'enh-settings-footer-btn', id:'enh-reset-cancel' }, 'Cancel')
+            )
+        );
         const backupCard = makeCard('Backup & restore', 'JSON includes preferences, sites, and local integration credentials.');
         backupCard.appendChild(makeEl('div', { className:'enh-data-actions' },
             makeEl('button', { type:'button', className:'enh-settings-footer-btn', id:'enh-export-btn', title:'Copy all settings to clipboard' }, 'Export settings'),
-            makeEl('button', { type:'button', className:'enh-settings-footer-btn', id:'enh-import-btn', title:'Import settings from JSON' }, 'Import settings')
+            makeEl('button', { type:'button', className:'enh-settings-footer-btn', id:'enh-import-btn', title:'Import settings from JSON' }, 'Import settings'),
+            makeEl('button', {
+                type:'button', className:'enh-settings-footer-btn enh-settings-footer-btn--danger',
+                id:'enh-reset-btn', title:'Reset preferences, title marks, and integration credentials',
+            }, 'Reset all settings')
         ));
         backupCard.appendChild(importPanel);
+        backupCard.appendChild(resetPanel);
         const cacheCard = makeCard('Cached lookups', 'Scores and availability lookups are cached locally for up to seven days.');
         cacheCard.append(
             makeEl('button', { type:'button', className:'enh-settings-footer-btn', id:'enh-clearcache-btn', title:'Clear cached third-party lookups' }, 'Clear cache'),
@@ -5815,6 +5846,7 @@ section[id*="quote" i] .ipc-list-card { padding: 4px 0 !important; margin: 2px 0
             showToast('Settings copied to clipboard');
         });
         overlay.querySelector('#enh-import-btn').addEventListener('click', () => {
+            resetPanel.hidden = true;
             importPanel.hidden = false;
             requestAnimationFrame(() => {
                 importPanel.scrollIntoView({ block:'nearest' });
@@ -5825,6 +5857,25 @@ section[id*="quote" i] .ipc-list-card { padding: 4px 0 !important; margin: 2px 0
             importPanel.hidden = true;
             overlay.querySelector('#enh-import-textarea').value = '';
             overlay.querySelector('#enh-import-btn').focus();
+        });
+        overlay.querySelector('#enh-reset-btn').addEventListener('click', () => {
+            importPanel.hidden = true;
+            overlay.querySelector('#enh-import-textarea').value = '';
+            resetPanel.hidden = false;
+            requestAnimationFrame(() => overlay.querySelector('#enh-reset-apply').focus());
+        });
+        overlay.querySelector('#enh-reset-cancel').addEventListener('click', () => {
+            resetPanel.hidden = true;
+            overlay.querySelector('#enh-reset-btn').focus();
+        });
+        overlay.querySelector('#enh-reset-apply').addEventListener('click', () => {
+            try {
+                const reset = applySettingsImport(getDefaultSettingsEntries());
+                showToast(`Reset ${reset} settings. Reloading...`);
+                setTimeout(() => location.reload(), 1000);
+            } catch (error) {
+                showToast(error.message || 'Reset failed. Previous settings were restored.', 4500);
+            }
         });
         overlay.querySelector('#enh-import-apply').addEventListener('click', () => {
             const raw = overlay.querySelector('#enh-import-textarea').value.trim();

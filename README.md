@@ -60,7 +60,7 @@ Click the gear icon on any covered IMDb page to open the six-section settings wo
 
 **Integrations** - Tabbed Radarr/Sonarr and Plex/Jellyfin/Emby local-service configuration with arrow/Home/End keyboard navigation.
 
-**Data** - Local mark review, import validation, export, cache status, clearing, and reset/recovery actions.
+**Data** - Local mark review, import validation, export, cache status/clearing, and an explicit two-step reset with backup guidance.
 
 **Watch Sites** - Add, remove, reorder, and customize streaming site buttons with name, URL template, and color.
 

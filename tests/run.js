@@ -50,6 +50,7 @@ function loadScriptTestHooks() {
         setUserMark,
         getSectionCollapseState,
         setSectionCollapsed,
+        getDefaultSettingsEntries,
         mediaServerRequest,
         toPositiveInteger,
         httpRequest,
@@ -398,6 +399,27 @@ test('remembered section state participates in backup and migrates legacy keys',
     assert.strictEqual(prepared.entries[0].value.Details, true);
     assert.strictEqual(Object.keys(prepared.entries[0].value).length, 1, 'unknown or non-boolean section states should be ignored');
     assert(script.includes('sectionCollapseState: {}'), 'remembered section state should be included in exported defaults');
+});
+
+test('settings reset is explicit, complete, and isolated from live defaults', () => {
+    const hooks = loadScriptTestHooks();
+    const first = hooks.getDefaultSettingsEntries();
+    const second = hooks.getDefaultSettingsEntries();
+    assert(first.length > 50, 'reset should cover the complete settings schema');
+    first.find(entry => entry.key === 'watchSites').value[0].name = 'Mutated';
+    assert.notStrictEqual(
+        second.find(entry => entry.key === 'watchSites').value[0].name,
+        'Mutated',
+        'reset snapshots must not share nested values with defaults or each other'
+    );
+    const resetMarks = second.find(entry => entry.key === 'userMarks');
+    assert(resetMarks && Object.keys(resetMarks.value).length === 0, 'reset must clear local title marks');
+    ['radarrApiKey', 'sonarrApiKey', 'plexToken', 'jellyfinApiKey', 'embyApiKey'].forEach(key => {
+        assert.strictEqual(second.find(entry => entry.key === key).value, '', `${key} should reset to empty`);
+    });
+    assert(script.includes("id:'enh-reset-panel', hidden:'hidden', role:'alert'"), 'reset should use an explicit inline warning');
+    assert(script.includes('Export a backup first if you may need them.'), 'reset warning should offer recovery guidance');
+    assert(!/\bconfirm\s*\(/.test(script), 'reset must not reintroduce browser confirmation dialogs');
 });
 
 test('core features remain registered', () => {
