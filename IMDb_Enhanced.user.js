@@ -3039,7 +3039,7 @@ section[id*="quote" i] .ipc-list-card { padding: 4px 0 !important; margin: 2px 0
                         setSectionCollapsed(id, now);
                     }
                 });
-                sec.appendChild(btn);
+                sec.insertBefore(btn, sec.firstChild);
             });
         },
         destroy() {
@@ -3132,7 +3132,7 @@ section[id*="quote" i] .ipc-list-card { padding: 4px 0 !important; margin: 2px 0
                     background:${t.sf0};border:1px solid ${t.bd1};
                     color:${t.tx3};font-size:11px;font-weight:800;letter-spacing:.04em;cursor:pointer;
                     display:flex;align-items:center;justify-content:center;transition:background .15s ease,border-color .15s ease,color .15s ease,transform .15s ease;
-                    text-decoration:none;position:relative}
+                    text-decoration:none;position:relative;padding:0;font-family:inherit}
                 .enh-qn-dot:hover,.enh-qn-dot:focus-visible{background:${t.accentMuted};border-color:${t.accentBorder};
                     color:${t.accent};transform:translateX(-2px)}
                 .enh-qn-dot::before{content:attr(data-label);position:absolute;right:calc(100% + 8px);
@@ -3143,14 +3143,14 @@ section[id*="quote" i] .ipc-list-card { padding: 4px 0 !important; margin: 2px 0
                 @media(max-width:1200px){#enh-quicknav{display:none}}
             `, 'enh-quickNav');
 
-            const nav = makeEl('div', { id: 'enh-quicknav' });
+            const nav = makeEl('nav', { id:'enh-quicknav', 'aria-label':'On this page' });
             this._navItems.forEach(s => {
                 const sec = document.querySelector(`section[data-testid="${s.id}"]`);
                 if (!sec) return;
-                nav.appendChild(makeEl('a', {
-                    className:'enh-qn-dot', href:'#', dataset:{ label:s.label }, textContent:s.icon,
+                nav.appendChild(makeEl('button', {
+                    className:'enh-qn-dot', type:'button', dataset:{ label:s.label }, textContent:s.icon,
                     title: s.label, 'aria-label': `Jump to ${s.label}`,
-                    onClick: (e) => { e.preventDefault(); sec.scrollIntoView({ behavior:getEnhancementScrollBehavior(), block:'start' }); }
+                    onClick: () => sec.scrollIntoView({ behavior:getEnhancementScrollBehavior(), block:'start' })
                 }));
             });
             if (nav.children.length) document.body.appendChild(nav);

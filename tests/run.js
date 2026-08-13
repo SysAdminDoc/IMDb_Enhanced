@@ -450,6 +450,9 @@ test('secondary interactions expose complete keyboard and toggle semantics', () 
     assert(script.includes('restoreElementAttributes(plotFull, this._plotAttributes)'), 'revealed plots should restore their original non-button semantics');
     assert(script.includes("plot.classList.remove('enh-episode-spoiler')"), 'revealed episode plots should leave the keyboard tab order');
     assert(!script.includes("querySelectorAll('.enh-episode-spoiler, .enh-revealed')"), 'episode cleanup must not mutate another feature\'s revealed state');
+    assert(script.includes('sec.insertBefore(btn, sec.firstChild)'), 'visually top-aligned collapse controls should also come first in section tab order');
+    assert(script.includes("makeEl('nav', { id:'enh-quicknav', 'aria-label':'On this page' })"), 'quick navigation should expose a named navigation landmark');
+    assert(script.includes("className:'enh-qn-dot', type:'button'"), 'scripted section jumps should use button semantics rather than fake hash links');
 });
 
 test('independent title tools survive external-link toggles', () => {
