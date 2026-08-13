@@ -52,6 +52,7 @@
 - Validated Letterboxd's IMDb-ID response against movie title/year JSON-LD and canonical `/film/` links, and now rechecks Rotten Tomatoes, Letterboxd, and Metacritic score ranges when rendering cached data.
 - Versioned the lookup-cache schema so entries created before the new cross-site identity contracts are discarded and lazily refetched instead of remaining trusted for their old TTL.
 - Removed CineVids from fresh default watch-site lists after repeated direct HTTPS checks timed out while every other generated default destination returned successfully; existing customized lists remain untouched.
+- Hid Letterboxd and the expanded Movie Sites group on TV titles after its current IMDb series route returned “ID Not found”; switched TMDB to its cross-media search and removed the movie-only suffix from Wikipedia queries.
 
 ## 2.5.1 — 2026-08-12
 

@@ -104,10 +104,10 @@
     ];
     const DEFAULT_EXTERNAL_SITES = [
         { name:'Rotten Tomatoes', color:'#fa320a', url:'https://www.rottentomatoes.com/search?search={{TITLE}}' },
-        { name:'Letterboxd', color:'#00d735', url:'https://letterboxd.com/imdb/{{IMDB_ID}}/' },
-        { name:'TMDB', color:'#01b4e4', url:'https://www.themoviedb.org/search/movie?query={{TITLE}}' },
+        { name:'Letterboxd', color:'#00d735', url:'https://letterboxd.com/imdb/{{IMDB_ID}}/', movieOnly:true },
+        { name:'TMDB', color:'#01b4e4', url:'https://www.themoviedb.org/search?query={{TITLE}}' },
         { name:'YouTube', color:'#ff0000', url:'https://www.youtube.com/results?search_query={{TITLE}}%20trailer' },
-        { name:'Wikipedia', color:'#636466', url:'https://en.wikipedia.org/w/index.php?search={{TITLE}}+film' },
+        { name:'Wikipedia', color:'#636466', url:'https://en.wikipedia.org/w/index.php?search={{TITLE}}+{{YEAR}}' },
         { name:'JustWatch', color:'#fbc500', url:'https://www.justwatch.com/us/search?q={{TITLE}}' },
         { name:'Trakt', color:'#ed1c24', url:'https://app.trakt.tv/search?query={{TITLE}}' },
     ];
@@ -641,12 +641,22 @@
         const name = String(site?.name || '').trim().slice(0, 40);
         const url = normalizeUrlTemplate(site?.url);
         if (!name || !url) return null;
+        let movieOnly = Boolean(site?.movieOnly);
+        try {
+            const hostname = new URL(url).hostname.toLowerCase();
+            if (hostname === 'letterboxd.com' || hostname.endsWith('.letterboxd.com')) movieOnly = true;
+        } catch { /* URL validity was already checked above */ }
         return {
             name,
             url,
             color: normalizeColor(site?.color, fallbackColor),
             ...(site?.storeQuery ? { storeQuery:true } : {}),
+            ...(movieOnly ? { movieOnly:true } : {}),
         };
+    }
+
+    function filterSitesForMediaType(sites, tv = isTVType()) {
+        return sites.filter(site => !(tv && site.movieOnly));
     }
 
     function normalizeLocalServiceUrl(value) {
@@ -3138,7 +3148,7 @@ section[id*="quote" i] .ipc-list-card { padding: 4px 0 !important; margin: 2px 0
                 const title = getTitleText(), year = getTitleYear(), imdbId = getIMDbID();
                 if (!title || !imdbId) return;
                 const ctx = getLinkContext(title, imdbId, year);
-                const links = getSiteList('externalSites', DEFAULT_EXTERNAL_SITES);
+                const links = filterSitesForMediaType(getSiteList('externalSites', DEFAULT_EXTERNAL_SITES));
                 const bar = makeEl('div', { id:'enh-external-links' });
                 links.forEach(link => {
                     bar.appendChild(makeEl('a', {
@@ -3466,6 +3476,7 @@ section[id*="quote" i] .ipc-list-card { padding: 4px 0 !important; margin: 2px 0
                 });
                 for (const [cat, links] of Object.entries(this._DB)) {
                     if (cat === 'TV' && !isTVType()) continue;
+                    if (cat === 'Movie Sites' && isTVType()) continue;
                     dropdown.appendChild(makeEl('div', { className:'enh-link-dropdown__cat' }, cat));
                     const row = makeEl('div', { className:'enh-link-dropdown__row', role:'group', 'aria-label':cat });
                     links.filter(l => !(l.movieOnly && isTVType())).forEach(l => row.appendChild(makeEl('a', {
@@ -5340,6 +5351,7 @@ section[id*="quote" i] .ipc-list-card { padding: 4px 0 !important; margin: 2px 0
             url: row.querySelector('[data-field="url"]')?.value || '',
             color: row.querySelector('[data-field="color"]')?.value || '#6366f1',
             storeQuery: row.dataset.storeQuery === 'true',
+            movieOnly: row.dataset.movieOnly === 'true',
         }));
 
         const validateRows = () => {
@@ -5369,7 +5381,10 @@ section[id*="quote" i] .ipc-list-card { padding: 4px 0 !important; margin: 2px 0
         const addRow = (site = {}) => {
             const row = makeEl('div', {
                 className:'enh-site-row',
-                dataset:{ storeQuery:String(Boolean(site.storeQuery)) },
+                dataset:{
+                    storeQuery:String(Boolean(site.storeQuery)),
+                    movieOnly:String(Boolean(site.movieOnly)),
+                },
             });
             const nameInput = makeEl('input', {
                 type:'text',

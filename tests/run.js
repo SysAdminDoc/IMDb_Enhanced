@@ -43,6 +43,7 @@ function loadScriptTestHooks() {
         normalizeUrlTemplate,
         normalizeTrustedUrl,
         normalizeSite,
+        filterSitesForMediaType,
         boundedScore,
         parseRTSearchResult,
         parseRTDetailPage,
@@ -551,6 +552,15 @@ test('custom site templates require complete HTTP or HTTPS URLs', () => {
     assert.strictEqual(hooks.normalizeUrlTemplate('file:///tmp/search'), '');
     assert.strictEqual(hooks.normalizeUrlTemplate('https://user:secret@example.com/search'), '');
     assert.strictEqual(hooks.normalizeSite({ name:'Broken', url:'https://' }), null);
+    const letterboxd = hooks.normalizeSite({ name:'Letterboxd', url:'https://letterboxd.com/imdb/{{IMDB_ID}}/' });
+    assert.strictEqual(letterboxd.movieOnly, true, 'Letterboxd custom/default links should remain movie-scoped');
+    assert.deepStrictEqual(
+        Array.from(hooks.filterSitesForMediaType([letterboxd, { name:'TMDB' }], true), site => site.name),
+        ['TMDB'],
+        'movie-only external sites should stay off TV title pages'
+    );
+    assert(script.includes("if (cat === 'Movie Sites' && isTVType()) continue"), 'expanded movie-only links should stay off TV pages');
+    assert(script.includes("url:'https://www.themoviedb.org/search?query={{TITLE}}'"), 'default TMDB search should cover movies and TV');
 });
 
 test('third-party response links stay on trusted HTTPS domains', () => {
