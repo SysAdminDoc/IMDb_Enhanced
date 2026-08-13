@@ -1620,6 +1620,7 @@
         if (autoInput) autoInput.checked = !!get('themeAuto');
     }
     function applyThemeStyles(options = {}) {
+        if (!isIMDbHost()) return;
         const activeId = getActiveThemeId();
         if (get('modernUI')) addCSS(getThemeCSS(activeId), 'enh-modernUI');
         else {
@@ -1633,7 +1634,7 @@
         updateThemeControls(activeId);
     }
     function setupThemeAutoSync() {
-        if (setupThemeAutoSync._done || typeof window.matchMedia !== 'function') return;
+        if (!isIMDbHost() || setupThemeAutoSync._done || typeof window.matchMedia !== 'function') return;
         setupThemeAutoSync._done = true;
         const media = window.matchMedia('(prefers-color-scheme: light)');
         const onChange = () => {

@@ -110,6 +110,7 @@
 - Kept a visible, announced “Save failed” state after storage errors and surfaced feature refresh failures instead of leaving the settings header or rebuilt controls looking successful.
 - Made transactional import/theme rollback restore previously absent storage keys as absent instead of materializing default-valued keys during recovery.
 - Removed the unused `GM_addStyle` grant now that all styles use the userscript's guarded document-start style host.
+- Kept IMDb theme repainting and operating-system theme listeners off Cineby's handoff-only page, preventing a later system-theme change from injecting IMDb presentation styles into the destination site.
 
 ## 2.5.1 — 2026-08-12
 

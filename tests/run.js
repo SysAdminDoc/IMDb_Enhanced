@@ -65,6 +65,8 @@ function loadScriptTestHooks() {
         getListTitlesFromLinks,
         buildListSearchEntries,
         getEnhancementScrollBehavior,
+        applyThemeStyles,
+        setupThemeAutoSync,
         THEMES,
         getHexLuminance,
         readableTextColor,
@@ -105,6 +107,7 @@ function loadScriptTestHooks() {
     let sandboxWriteCount = 0;
     let sandboxFailWriteAt = null;
     let sandboxClipboardFailure = false;
+    let sandboxMediaListenerCount = 0;
     const sandboxValues = new Map();
     const sandboxRequests = [];
     let sandboxAbortedRequestCount = 0;
@@ -116,7 +119,10 @@ function loadScriptTestHooks() {
         window: {
             location,
             addEventListener: () => {},
-            matchMedia: () => ({ matches: prefersReducedMotion }),
+            matchMedia: () => ({
+                matches: prefersReducedMotion,
+                addEventListener: () => { sandboxMediaListenerCount += 1; },
+            }),
         },
         location,
         document: {
@@ -180,6 +186,8 @@ function loadScriptTestHooks() {
     sandbox.window.__enhTest.setClipboardFailure = value => { sandboxClipboardFailure = Boolean(value); };
     sandbox.window.__enhTest.getStorageKeys = () => [...sandboxValues.keys()];
     sandbox.window.__enhTest.getCapturedRequests = () => [...sandboxRequests];
+    sandbox.window.__enhTest.setTestHostname = hostname => { location.hostname = hostname; };
+    sandbox.window.__enhTest.getMediaListenerCount = () => sandboxMediaListenerCount;
     return sandbox.window.__enhTest;
 }
 
@@ -204,6 +212,21 @@ test('metadata stays distribution-safe', () => {
     assert(!hooks.isIMDbHost('not-imdb.com'), 'IMDb host checks must not use substring trust');
     assert(hooks.isCinebyHost('www.cineby.at'));
     assert(!hooks.isCinebyHost('cineby.example'), 'Cineby host checks must stay exact');
+});
+
+test('IMDb theme work stays off the Cineby handoff surface', () => {
+    const hooks = loadScriptTestHooks();
+    hooks.setTestHostname('www.cineby.at');
+    hooks.setupThemeAutoSync();
+    assert.strictEqual(hooks.getMediaListenerCount(), 0, 'Cineby must not retain an IMDb theme listener');
+    hooks.setTestHostname('www.imdb.com');
+    hooks.setupThemeAutoSync();
+    hooks.setupThemeAutoSync();
+    assert.strictEqual(hooks.getMediaListenerCount(), 1, 'IMDb should install exactly one system-theme listener');
+    assert(
+        /function applyThemeStyles\(options = \{\}\) \{\s*if \(!isIMDbHost\(\)\) return;/.test(script),
+        'theme repainting must reject non-IMDb hosts'
+    );
 });
 
 test('IMDb title data selection ignores unrelated or malformed structured data', () => {
