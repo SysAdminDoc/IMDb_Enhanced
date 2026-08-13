@@ -1,14 +1,14 @@
-[![Version](https://img.shields.io/badge/version-2.5.1-blue)](https://github.com/SysAdminDoc/IMDb_Enhanced)
+[![Version](https://img.shields.io/badge/version-2.6.0-blue)](https://github.com/SysAdminDoc/IMDb_Enhanced)
 [![License](https://img.shields.io/badge/license-MIT-green)](LICENSE)
 [![Platform](https://img.shields.io/badge/platform-Tampermonkey%20%7C%20Violentmonkey-yellow)](https://www.tampermonkey.net/)
 
 # IMDb Enhanced
 
-A premium IMDb overhaul delivered as a single userscript. Cleaner pages, modern themes, aggregated scores from Rotten Tomatoes, Letterboxd, and Metacritic, streaming site quick-search, Radarr/Sonarr integration, Plex/Jellyfin/Emby library indicators, and more.
+A desktop IMDb overhaul delivered as a single userscript. Cleaner pages, modern themes, aggregated scores from Rotten Tomatoes, Letterboxd, and Metacritic, streaming site quick-search, Radarr/Sonarr integration, Plex/Jellyfin/Emby library indicators, and more.
 
 ## Features
 
-**Page Cleanup** - Removes ads, tracking pixels, IMDbPro upsells, news modules, app banners, sponsored content, and contribution prompts.
+**Page Cleanup** - Removes current IMDb ad shells, sticky placements, tracking pixels, IMDbPro upsells, news modules, app prompts, sponsored content, and contribution prompts at `document-start`. Known ad and measurement requests are also cancelled when the userscript manager exposes `GM_webRequest`; Chromium Tampermonkey 5.2+ does not expose that API, so a userscript cannot guarantee network-level blocking there.
 
 **Theme System** - Five themes (Dark, OLED, Midnight, Light, High Contrast) with a full design system: semantic colors, 3-tier elevation, 4px grid spacing, squircle avatars, hover lifts, and smooth transitions. Auto-theme follows OS preference.
 
@@ -36,7 +36,7 @@ A premium IMDb overhaul delivered as a single userscript. Cleaner pages, modern 
 
 ## Install
 
-1. Install [Tampermonkey](https://www.tampermonkey.net/) or [Violentmonkey](https://violentmonkey.github.io/).
+1. On a desktop browser, install [Tampermonkey](https://www.tampermonkey.net/) or [Violentmonkey](https://violentmonkey.github.io/).
 2. [Click here to install the userscript](https://raw.githubusercontent.com/SysAdminDoc/IMDb_Enhanced/main/IMDb_Enhanced.user.js).
 3. Visit any IMDb title page. Open settings with the gear icon.
 
@@ -44,7 +44,21 @@ Updates are delivered automatically via the `@updateURL` metadata.
 
 ## Configuration
 
-Click the gear icon on any IMDb page to open settings. Every feature can be toggled individually.
+Click the gear icon on any covered IMDb page to open the six-section settings workspace. Changes save automatically with visible feedback, the vertical navigation supports arrow/Home/End keys, and the dialog traps focus until it is closed.
+
+![IMDb Enhanced Experience settings](design/mockups/built-experience-1440x900.png)
+
+**Experience** - Theme, cleanup, appearance, and layout controls. Theme choices include a system-following mode.
+
+**Ratings** - Aggregated-score, histogram, and streaming-availability controls with an inline preview.
+
+**Tools** - Title, TV/episode, list, watched-mark, and keyboard-shortcut controls.
+
+**Sites** - Editable watch-search and external-link destinations, URL templates, ordering, colors, and Cineby handoff.
+
+**Integrations** - Tabbed Radarr/Sonarr and Plex/Jellyfin/Emby local-service configuration.
+
+**Data** - Local mark review, import validation, export, cache status, clearing, and reset/recovery actions.
 
 **Watch Sites** - Add, remove, reorder, and customize streaming site buttons with name, URL template, and color.
 
@@ -65,6 +79,12 @@ Click the gear icon on any IMDb page to open settings. Every feature can be togg
 | Dark (default) | OLED | Midnight | Light | High Contrast |
 |---|---|---|---|---|
 | Deep charcoal surfaces | True black backgrounds | Navy blue tones | Clean white | WCAG AAA compliant |
+
+## Compatibility
+
+- Desktop `www.imdb.com` title, person, list/watchlist, chart, and episode-list routes, including localized desktop paths.
+- Desktop Tampermonkey and Violentmonkey. Mobile IMDb domains are intentionally outside the match scope.
+- Full request cancellation is manager-dependent. Visual ad cleanup remains active when `GM_webRequest` is unavailable.
 
 ## License
 

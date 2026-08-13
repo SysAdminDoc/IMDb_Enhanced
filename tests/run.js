@@ -29,7 +29,12 @@ function loadScriptTestHooks() {
         normalizeLookupTitle,
         collectProviderIds,
         mediaItemMatches,
-        parseMediaServerItems
+        parseMediaServerItems,
+        getLinkedTitleId,
+        getPageSurface,
+        shouldInitFeature,
+        setAdRequestBlocking,
+        setTestPath: path => { location.pathname = path; }
     };
 })();`);
     assert.notStrictEqual(instrumented, script, 'test hook injection failed');
@@ -51,8 +56,10 @@ function loadScriptTestHooks() {
         GM_xmlhttpRequest: () => {},
         GM_listValues: () => [],
         GM_deleteValue: () => {},
+        GM_webRequest: rules => { sandbox.webRequestRules = rules; },
     };
     vm.runInNewContext(instrumented, sandbox, { filename: scriptPath });
+    sandbox.window.__enhTest.getCapturedWebRequestRules = () => sandbox.webRequestRules || [];
     return sandbox.window.__enhTest;
 }
 
@@ -63,7 +70,7 @@ test('userscript parses', () => {
 test('metadata stays distribution-safe', () => {
     assert(!/@connect\s+\*/.test(script), 'wildcard @connect should not return');
     assert(/@noframes/.test(script), '@noframes should remain present');
-    assert(!/@match\s+https:\/\/m\.imdb\.com\/\*/.test(script), 'mobile wildcard match should stay scoped');
+    assert(!/@match\s+https:\/\/m\.imdb\.com\//.test(script), 'desktop-only userscript must not match mobile IMDb');
     assert(/@updateURL/.test(script), '@updateURL should be present for update channel');
     assert(/@downloadURL/.test(script), '@downloadURL should be present for update channel');
 });
@@ -71,6 +78,90 @@ test('metadata stays distribution-safe', () => {
 test('fragile selectors and global Cineby key stay removed', () => {
     assert(!/\.sc-|sc-[0-9a-fA-F]+|sc-[a-z0-9]+/.test(script), 'hashed styled-components selectors should stay removed');
     assert(!/GM_setValue\('movieTitle'/.test(script), 'Cineby should not write the global movieTitle key');
+});
+
+test('ad cleanup preserves core media and covers current IMDb shells', () => {
+    assert(!script.includes('[data-testid="inline-video-playback-container"]'), 'native IMDb video must never be treated as an ad');
+    [
+        'AD_SHELL_SELECTOR',
+        'Bottom Sponsored Advertisement',
+        'sis_pixel_sitewide',
+        'cookie_sync_pixel_sitewide',
+        'promoted-partner-bar',
+        'enh-early-ad-shell',
+        'AD_REQUEST_RULES',
+        'GM_webRequest',
+        'advertising.amazon.dev',
+        'scorecardresearch.com',
+    ].forEach(token => assert(script.includes(token), `${token} missing from ad-shell cleanup`));
+    assert(script.indexOf('injectEarlyAdShell();') < script.indexOf("key: 'removeAds'"), 'ad shell should be injected before normal feature initialization');
+    assert(script.includes('const pendingStyles = new Map()'), 'document-start style attachment guard missing');
+
+    const hooks = loadScriptTestHooks();
+    assert(hooks.setAdRequestBlocking(true), 'supported managers should register request rules');
+    const rules = hooks.getCapturedWebRequestRules();
+    assert.strictEqual(rules.length, 1, 'request blocking should register one scoped rule group');
+    const includes = Array.from(rules[0].selector.include);
+    assert(includes.some(pattern => pattern.includes('amazon-adsystem.com')), 'Amazon ad-system request rule missing');
+    assert(includes.some(pattern => pattern.includes('scorecardresearch.com')), 'Comscore request rule missing');
+    assert(hooks.setAdRequestBlocking(false), 'request rules should unregister when cleanup is disabled');
+    assert.strictEqual(hooks.getCapturedWebRequestRules().length, 0, 'request rules should be cleared');
+});
+
+test('appearance styling preserves IMDb account and footer controls', () => {
+    assert(!/footer\.imdb-footer\s*\{\s*display:\s*none/i.test(script), 'modern styling must not hide IMDb legal/footer navigation');
+    assert(!/div\.nav__userMenu\s*\{\s*display:\s*none/i.test(script), 'modern styling must not hide the sign-in/account menu');
+    assert(!/FavoritePeopleCTA[^\n]+display:\s*none/i.test(script), 'modern styling must not hide favorite-person controls');
+});
+
+test('feature activation is scoped to the current IMDb surface', () => {
+    const hooks = loadScriptTestHooks();
+
+    hooks.setTestPath('/name/nm0000206/');
+    assert.strictEqual(hooks.getPageSurface(), 'name');
+    assert(hooks.shouldInitFeature({ key:'removeAds', group:'Cleanup' }), 'cleanup should run on name pages');
+    assert(!hooks.shouldInitFeature({ key:'searchButtons', group:'Features' }), 'title watch buttons should not run on name pages');
+
+    hooks.setTestPath('/chart/top/');
+    assert.strictEqual(hooks.getPageSurface(), 'collection');
+    assert(hooks.shouldInitFeature({ key:'removeAds', group:'Cleanup' }), 'cleanup should run on collection pages');
+    assert(hooks.shouldInitFeature({ key:'listMultiSearch', group:'Utility' }), 'list tools should run on collection pages');
+    assert(!hooks.shouldInitFeature({ key:'trailerPopover', group:'Features' }), 'title trailer tools should not run on collection pages');
+
+    hooks.setTestPath('/title/tt0903747/episodes/');
+    assert.strictEqual(hooks.getPageSurface(), 'episodes');
+    assert(hooks.shouldInitFeature({ key:'tvEpisodeTools', group:'TV' }), 'episode tools should run on episode lists');
+    assert(!hooks.shouldInitFeature({ key:'searchButtons', group:'Features' }), 'series watch buttons should not attach to episode-list headings');
+
+    hooks.setTestPath('/title/tt0133093/');
+    assert.strictEqual(hooks.getPageSurface(), 'title');
+    assert(hooks.shouldInitFeature({ key:'searchButtons', group:'Features' }), 'title tools should run on title pages');
+
+    hooks.setTestPath('/de/title/tt0133093/');
+    assert.strictEqual(hooks.getPageSurface(), 'title', 'localized title routes should retain title features');
+
+    hooks.setTestPath('/fr/name/nm0000206/');
+    assert.strictEqual(hooks.getPageSurface(), 'name', 'localized name routes should retain secondary-page scoping');
+});
+
+test('watched marks only decorate canonical title links', () => {
+    const hooks = loadScriptTestHooks();
+    assert.strictEqual(hooks.getLinkedTitleId('/title/tt0133093/?ref_=home'), 'tt0133093');
+    assert.strictEqual(hooks.getLinkedTitleId('/de/title/tt0133093/'), 'tt0133093');
+    assert.strictEqual(hooks.getLinkedTitleId('/showtimes/title/tt0133093/2026-08-30'), '');
+    assert.strictEqual(hooks.getLinkedTitleId('/title/tt0133093/releaseinfo/'), '');
+});
+
+test('settings use six accessible desktop destinations', () => {
+    ['experience', 'ratings', 'tools', 'sites', 'integrations', 'data'].forEach(page => {
+        assert(script.includes(`id:'${page}'`), `settings page ${page} missing`);
+    });
+    assert(script.includes('role="tablist"'), 'settings navigation tablist missing');
+    assert(script.includes("role:'tabpanel'"), 'settings tab panels missing');
+    assert(/#enh-settings-overlay\s*\{[^}]*visibility:\s*hidden/s.test(script), 'closed settings must leave the tab order');
+    assert(/#enh-settings-overlay\.enh-visible\s*\{[^}]*visibility:\s*visible/s.test(script), 'open settings must restore visibility');
+    assert(script.includes("maxlength:'100000'"), 'import size guard missing');
+    assert(script.includes('Changes save automatically.'), 'automatic-save status missing');
 });
 
 test('core features remain registered', () => {
@@ -101,8 +192,22 @@ test('default watch sites are all live domains', () => {
     });
 });
 
+test('Trakt links use the current web-app search route', () => {
+    assert(script.includes('https://app.trakt.tv/search?query='), 'current Trakt search route missing');
+    assert(!script.includes('trakt.tv/search/imdb/'), 'retired Trakt IMDb route should not return');
+});
+
+test('built-in lookup links do not duplicate IMDb ID prefixes', () => {
+    assert(!/tt\{\{ID\}\}/.test(script), 'built-in templates must not prepend tt to a full IMDb ID');
+    assert(!/tt\$\{imdbId\}/.test(script), 'runtime links must not prepend tt to a full IMDb ID');
+    assert(script.includes("imdbId.replace(/^tt/, '')"), 'numeric-only lookup routes should strip the tt prefix explicitly');
+});
+
 test('cineby uses current domain', () => {
     assert(script.includes('cineby.at'), 'cineby.at should be the active Cineby domain');
+    assert(script.includes('// @match        https://www.cineby.at/*'), 'Cineby root route should be matched');
+    assert(script.includes("url:'https://www.cineby.at/'"), 'Cineby handoff should target the live root route');
+    assert(script.includes("return /^search$/i.test(label.trim())"), 'Cineby handoff should open the current search control');
 });
 
 test('Greasy Fork distribution guardrails stay intact', () => {

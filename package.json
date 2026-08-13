@@ -1,7 +1,7 @@
 {
   "name": "imdb-enhanced",
-  "version": "2.5.1",
-  "description": "Premium IMDb overhaul userscript",
+  "version": "2.6.0",
+  "description": "Desktop IMDb enhancement userscript",
   "private": true,
   "scripts": {
     "test": "node tests/run.js",

@@ -1,5 +1,29 @@
 # Changelog
 
+## 2.6.0 — 2026-08-13
+
+### Added
+
+- Redesigned the complete desktop settings workspace into six accessible destinations: Experience, Ratings, Tools, Sites, Integrations, and Data.
+- Added automatic-save feedback, keyboard-driven vertical tabs, focus containment, validated JSON import, editable local title marks, rating previews, and tabbed local-service configuration; the closed dialog is removed from the keyboard tab order.
+- Added early, scoped ad-request cancellation for userscript managers that expose `GM_webRequest`, plus current IMDb ad-shell, sticky-placement, and tracking-pixel suppression at `document-start`.
+- Added regression coverage for request rules, document-start style attachment, route-scoped features, canonical title links, current external routes, preserved IMDb controls/media, and the settings information architecture.
+
+### Changed
+
+- Scoped the userscript to desktop IMDb routes and made feature activation route-aware across title, localized title/name, person, episode-list, list/watchlist, and chart pages.
+- Updated Cineby search handoff for its current root-page search UI and replaced retired Trakt IMDb links with the current app search route.
+- Increased the desktop settings canvas and reorganized all controls around task-oriented navigation while preserving existing setting keys and defaults.
+
+### Fixed
+
+- Prevented `document-start` style injection from failing before a style host exists.
+- Preserved IMDb's hero trailer player, sign-in/account menu, favorite-person controls, consent boundaries, and legal footer during cleanup and theming.
+- Prevented title tools from appearing on person and collection surfaces, restored cleanup on those routes, and kept SPA reinitialization idempotent.
+- Prevented watched marks from decorating showtime and nested non-title links.
+- Prevented built-in URL templates from duplicating the `tt` prefix in IMDb identifiers.
+- Made text and site-editor changes persist immediately and refresh dependent features only after committed changes.
+
 ## 2.5.1 — 2026-08-12
 
 - Drained the active roadmap while preserving the single-file userscript and version-only npm lifecycle.

@@ -1,7 +1,7 @@
 // ==UserScript==
 // @name         IMDb Enhanced
 // @namespace    https://github.com/SysAdminDoc
-// @version      2.5.1
+// @version      2.6.0
 // @updateURL    https://raw.githubusercontent.com/SysAdminDoc/IMDb_Enhanced/main/IMDb_Enhanced.user.js
 // @downloadURL  https://raw.githubusercontent.com/SysAdminDoc/IMDb_Enhanced/main/IMDb_Enhanced.user.js
 // @description  Premium IMDb overhaul: cleaner pages, modern themes, refined score widgets, media library indicators, quick navigation, richer external links, TV tools, search shortcuts, and polished settings import/export
@@ -13,9 +13,7 @@
 // @match        https://www.imdb.com/user/*/watchlist*
 // @match        https://www.imdb.com/list/*
 // @match        https://www.imdb.com/chart/*
-// @match        https://m.imdb.com/title/*
-// @match        https://m.imdb.com/name/*
-// @match        https://www.cineby.at/search
+// @match        https://www.cineby.at/*
 // @grant        GM_getValue
 // @grant        GM_setValue
 // @grant        GM_addStyle
@@ -23,6 +21,7 @@
 // @grant        GM_xmlhttpRequest
 // @grant        GM_listValues
 // @grant        GM_deleteValue
+// @grant        GM_webRequest
 // @connect      www.rottentomatoes.com
 // @connect      backend.metacritic.com
 // @connect      letterboxd.com
@@ -42,12 +41,41 @@
     // =========================================================================
     //  CONSTANTS & CONFIG
     // =========================================================================
-    const VERSION = '2.5.1';
+    const VERSION = '2.6.0';
     const PREFIX  = 'imdb_enh_';
     const CINEBY_QUERY_KEY = PREFIX + 'cineby_query';
     const CACHE_TTL = 7 * 24 * 60 * 60 * 1000; // 7 days
     const CACHE_UNAVAILABLE_TTL = 24 * 60 * 60 * 1000; // 24 hours
     const CACHE_MAX_ENTRIES = 120;
+    const AD_SHELL_SELECTOR = [
+        '.nas-slot',
+        '.slot_wrapper',
+        '[id^="div-gpt-ad-"]',
+        '[id^="ape_"][id$="_placement"]',
+        '[aria-label="Bottom Sponsored Advertisement"]',
+        'iframe[aria-label="Sponsored Content"]',
+        '.sponsored_label',
+        '.sponsored-content',
+        '#promoted-partner-bar',
+        '#sis_pixel_sitewide',
+        '#cookie_sync_pixel_sitewide',
+        'iframe[src*="amazon-adsystem.com/iu3"]',
+        'iframe[src*="amazon-adsystem.com/iui3"]',
+    ].join(',');
+    const AD_REQUEST_RULES = [{
+        selector: {
+            include: [
+                '*://*.amazon-adsystem.com/*',
+                '*://*.advertising.amazon.dev/*',
+                '*://images-na.ssl-images-amazon.com/images/S/sash/*.html*',
+                '*://sb.scorecardresearch.com/*',
+                '*://fls-na.amazon.com/*',
+                '*://unagi.amazon.com/*',
+                '*://unagi-na.amazon.com/*',
+            ],
+        },
+        action: 'cancel',
+    }];
     const TITLE_STACK_ORDER = {
         quickCopyID: 10,
         searchButtons: 20,
@@ -58,7 +86,7 @@
         tvShowEnhancements: 40,
     };
     const CINEBY_HOSTS = [
-        { label:'Cineby', url:'https://www.cineby.at/search' },
+        { label:'Cineby', url:'https://www.cineby.at/' },
     ];
     const DEFAULT_WATCH_SITES = [
         { name:'Cineby', color:'#6366f1', url:CINEBY_HOSTS[0].url, storeQuery:true },
@@ -78,7 +106,7 @@
         { name:'YouTube', color:'#ff0000', url:'https://www.youtube.com/results?search_query={{TITLE}}%20trailer' },
         { name:'Wikipedia', color:'#636466', url:'https://en.wikipedia.org/w/index.php?search={{TITLE}}+film' },
         { name:'JustWatch', color:'#fbc500', url:'https://www.justwatch.com/us/search?q={{TITLE}}' },
-        { name:'Trakt', color:'#ed1c24', url:'https://trakt.tv/search/imdb/{{IMDB_ID}}?id_type={{TRAKT_TYPE}}' },
+        { name:'Trakt', color:'#ed1c24', url:'https://app.trakt.tv/search?query={{TITLE}}' },
     ];
 
     const DEFAULTS = {
@@ -120,17 +148,17 @@
     };
 
     const FEATURE_DETAILS = {
-        removeAds: 'Removes ad slots, tracking pixels, sponsored media, and injected ad wrappers.',
+        removeAds: 'Hides current IMDb ad placements, sponsored shells, and tracking pixels as early as userscript timing allows.',
         removeProUpsell: 'Hides IMDbPro prompts and add-to-list upsells from title and name pages.',
         removeNewsSection: 'Keeps the page focused by removing IMDb news modules.',
         removeRelatedInterests: 'Hides broad interest recommendations that dilute title and cast pages.',
         removeContribution: 'Removes contribution calls to action from detail pages.',
         removeSponsoredRecs: 'Suppresses sponsored recommendation blocks where IMDb inserts them.',
-        removeAppBanner: 'Hides app-install prompts and mobile app banners.',
+        removeAppBanner: 'Hides app-install prompts shown on desktop pages.',
         modernUI: 'Applies the cohesive dark surface, typography, focus, and component treatment.',
         compactHeader: 'Slims the IMDb header while keeping it readable and stable.',
         enhancedRatingDisplay: 'Elevates IMDb rating and popularity blocks with clearer emphasis.',
-        widerLayout: 'Uses more horizontal room on desktop while preserving mobile readability.',
+        widerLayout: 'Uses more horizontal room across normal desktop window sizes.',
         ratingColorCoding: 'Adds a small quality label beside the IMDb score.',
         collapsibleSections: 'Adds per-section collapse controls and remembers each state.',
         spoilerBlur: 'Softens long plot text until you intentionally reveal it.',
@@ -160,7 +188,10 @@
     //  STORAGE HELPERS
     // =========================================================================
     const get = (k) => GM_getValue(PREFIX + k, DEFAULTS[k]);
-    const set = (k, v) => GM_setValue(PREFIX + k, v);
+    const set = (k, v) => {
+        GM_setValue(PREFIX + k, v);
+        document.dispatchEvent(new CustomEvent('imdb-enhanced:settings-saved', { detail:{ key:k } }));
+    };
 
     function cacheGet(key) {
         try {
@@ -335,15 +366,67 @@
         });
     }
 
+    const pendingStyles = new Map();
+
     function addCSS(css, id) {
-        let s = document.getElementById(id);
+        let s = document.getElementById(id) || pendingStyles.get(id);
         if (s) { s.textContent = css; return s; }
         s = document.createElement('style');
         s.id = id; s.textContent = css;
-        (document.head || document.documentElement).appendChild(s);
+        const attach = () => {
+            const target = document.head || document.documentElement;
+            if (!target) return false;
+            target.appendChild(s);
+            pendingStyles.delete(id);
+            return true;
+        };
+        if (!attach()) {
+            pendingStyles.set(id, s);
+            const observer = new MutationObserver(() => {
+                if (!pendingStyles.has(id)) { observer.disconnect(); return; }
+                if (attach()) observer.disconnect();
+            });
+            observer.observe(document, { childList:true, subtree:true });
+        }
         return s;
     }
-    function removeCSS(id) { document.getElementById(id)?.remove(); }
+    function removeCSS(id) {
+        document.getElementById(id)?.remove();
+        pendingStyles.get(id)?.remove();
+        pendingStyles.delete(id);
+    }
+
+    function injectEarlyAdShell() {
+        if (!window.location.hostname.includes('imdb.com') || !get('removeAds')) return;
+        setAdRequestBlocking(true);
+        addCSS(`${AD_SHELL_SELECTOR} {
+            display: none !important;
+            visibility: hidden !important;
+            width: 0 !important;
+            min-width: 0 !important;
+            max-width: 0 !important;
+            height: 0 !important;
+            min-height: 0 !important;
+            max-height: 0 !important;
+            margin: 0 !important;
+            padding: 0 !important;
+            border: 0 !important;
+            overflow: hidden !important;
+            pointer-events: none !important;
+        }`, 'enh-early-ad-shell');
+    }
+
+    let adRequestRulesRegistered = false;
+    function setAdRequestBlocking(enabled) {
+        if (typeof GM_webRequest !== 'function' || adRequestRulesRegistered === enabled) return false;
+        try {
+            GM_webRequest(enabled ? AD_REQUEST_RULES : [], () => {});
+            adRequestRulesRegistered = enabled;
+            return true;
+        } catch { return false; }
+    }
+
+    injectEarlyAdShell();
 
     function makeEl(tag, attrs = {}, ...children) {
         const e = document.createElement(tag);
@@ -429,6 +512,12 @@
     //  PAGE DATA EXTRACTION
     // =========================================================================
     function getIMDbID()   { return window.location.pathname.match(/\/(tt\d+)/)?.[1] || null; }
+    function getLinkedTitleId(href) {
+        try {
+            const path = new URL(href, location.origin || 'https://www.imdb.com').pathname;
+            return path.match(/^\/(?:[a-z]{2}(?:-[a-z]{2})?\/)?title\/(tt\d+)\/?$/i)?.[1] || '';
+        } catch { return ''; }
+    }
     function getTitleText() {
         return (document.querySelector('[data-testid="hero__primary-text"]') ||
                 document.querySelector('h1'))?.textContent?.trim() || '';
@@ -720,15 +809,12 @@
     // #########################################################################
 
     reg({
-        key: 'removeAds', name: 'Hide ads and tracking', group: 'Cleanup',
-        css: `.nas-slot,.slot_wrapper,[id*="gpt-ad"],[id*="inline20"],[id*="inline50"],
-            [id="sis_pixel_r2"],[id="cookie_sync_pixel"],.inline20-page-background,
-            [class*="AdSlot"],[class*="adslot"],iframe[src*="amazon-adsystem"],
-            .ipc-wrap-background,#ipc-wrap-background-id,.sponsored_label,.sponsored-content,
-            [data-testid="inline-video-playback-container"]
-            {display:none!important;height:0!important;overflow:hidden!important}`,
-        init() { addCSS(this.css, 'enh-removeAds'); },
-        destroy() { removeCSS('enh-removeAds'); }
+        key: 'removeAds', name: 'Hide ads and sponsored shells', group: 'Cleanup',
+        init() { injectEarlyAdShell(); },
+        destroy() {
+            removeCSS('enh-early-ad-shell');
+            setAdRequestBlocking(false);
+        }
     });
 
     reg({
@@ -961,6 +1047,11 @@
     function applyThemeStyles(options = {}) {
         const activeId = getActiveThemeId();
         if (get('modernUI')) addCSS(getThemeCSS(activeId), 'enh-modernUI');
+        else {
+            removeCSS('enh-modernUI');
+            removeCSS('enh-early-shell');
+            delete document.documentElement.dataset.imdbEnhanced;
+        }
         injectGlobalStyles();
         injectEarlyThemeShell();
         if (options.refreshDependent !== false) refreshThemeDependentFeatures();
@@ -1276,15 +1367,6 @@ section[id*="quote" i] .ipc-html-content-inner-div {
 ::-webkit-scrollbar-thumb:hover { background: ${t.sH}; }
 
 /* ════════════════════════════════════════════
-   FOOTER & CHROME CLEANUP
-   ════════════════════════════════════════════ */
-footer.imdb-footer { display: none !important; }
-button.FavoritePeopleCTA_favPeopleCTAOnAvatar__ZQ2LQ { display: none !important; }
-[data-testid="hero-proupsell"],
-[data-testid="tm-box-addtolist-button"] { display: none !important; }
-div.nav__userMenu { display: none !important; }
-
-/* ════════════════════════════════════════════
    SUBTITLE & CUSTOM ROWS
    ════════════════════════════════════════════ */
 #enh-sub-row { color: ${t.blue} !important; }
@@ -1321,7 +1403,7 @@ a:focus-visible, button:focus-visible, .ipc-chip:focus-visible {
     }
 
     function injectEarlyThemeShell() {
-        if (!window.location.hostname.includes('imdb.com')) return;
+        if (!window.location.hostname.includes('imdb.com') || !get('modernUI')) return;
         const t = getTheme();
         document.documentElement.dataset.imdbEnhanced = 'active';
         addCSS(`
@@ -1342,8 +1424,15 @@ html[data-imdb-enhanced="active"] .ipc-page-background {
 
     reg({
         key: 'modernUI', name: 'Modern IMDb skin', group: 'Appearance',
-        init() { applyThemeStyles({ refreshDependent: false }); },
-        destroy() { removeCSS('enh-modernUI'); }
+        init() {
+            injectEarlyThemeShell();
+            applyThemeStyles({ refreshDependent: false });
+        },
+        destroy() {
+            removeCSS('enh-modernUI');
+            removeCSS('enh-early-shell');
+            delete document.documentElement.dataset.imdbEnhanced;
+        }
     });
 
     reg({
@@ -1394,7 +1483,7 @@ html[data-imdb-enhanced="active"] .ipc-page-background {
         destroy() { removeCSS('enh-enhRating'); }
     });
 
-    reg({ key: 'widerLayout', name: 'Wider responsive layout', group: 'Appearance',
+    reg({ key: 'widerLayout', name: 'Wider desktop layout', group: 'Appearance',
         css: `
 /* ── Full-width containers ── */
 .ipc-page-content-container--center { max-width: 100% !important; padding: 0 32px !important; }
@@ -2565,8 +2654,8 @@ section[id*="quote" i] .ipc-list-card { padding: 4px 0 !important; margin: 2px 0
                 { n:'TMDB', u:'https://www.themoviedb.org/search/movie?query={{T}}' },
                 { n:'AllMovie', u:'http://www.allmovie.com/search/movies/{{T}}' },
                 { n:'Box Office Mojo', u:'https://www.boxofficemojo.com/search/?q={{T}}' },
-                { n:'Criticker', u:'https://www.criticker.com/?search=tt{{ID}}' },
-                { n:'Trakt', u:'https://trakt.tv/search/imdb/{{ID}}?id_type={{TRAKT_TYPE}}' },
+                { n:'Criticker', u:'https://www.criticker.com/?search={{ID}}' },
+                { n:'Trakt', u:'https://app.trakt.tv/search?query={{T}}' },
             ],
             'Reviews': [
                 { n:'Rotten Tomatoes', u:'https://www.rottentomatoes.com/search?search={{T}}' },
@@ -2579,18 +2668,18 @@ section[id*="quote" i] .ipc-list-card { padding: 4px 0 !important; margin: 2px 0
                 { n:'Wikipedia', u:'https://en.wikipedia.org/w/index.php?search={{T}}' },
             ],
             'Subtitles': [
-                { n:'OpenSubtitles', u:'https://www.opensubtitles.org/en/search/imdbid-{{ID}}' },
-                { n:'OpenSubs.com', u:'https://www.opensubtitles.com/en/en/search-all/q-tt{{ID}}' },
+                { n:'OpenSubtitles', u:'https://www.opensubtitles.org/en/search/imdbid-{{ID_NUM}}' },
+                { n:'OpenSubs.com', u:'https://www.opensubtitles.com/en/en/search-all/q-{{ID}}' },
                 { n:'SubDL', u:'https://subdl.com/search/{{T}}' },
                 { n:'YIFY-Subs', u:'https://yifysubtitles.ch/movie-imdb/{{ID}}', movieOnly:true },
             ],
             'TV': [
-                { n:'TheTVDB', u:'https://www.thetvdb.com/search?query=tt{{ID}}' },
+                { n:'TheTVDB', u:'https://www.thetvdb.com/search?query={{ID}}' },
                 { n:'TVMaze', u:'https://www.tvmaze.com/search?q={{T}}' },
                 { n:'Ep Calendar', u:'https://episodecalendar.com/en/shows?q%5Bname_cont%5D={{T}}' },
             ],
             'Torrents': [
-                { n:'YTS', u:'https://yts.mx/browse-movies/tt{{ID}}' },
+                { n:'YTS', u:'https://yts.mx/browse-movies/{{ID}}' },
                 { n:'1337x', u:'https://1337x.to/search/{{T}}+{{Y}}/1/' },
             ],
         },
@@ -2600,6 +2689,7 @@ section[id*="quote" i] .ipc-list-card { padding: 4px 0 !important; margin: 2px 0
                 const title = getTitleText(), year = getTitleYear(), imdbId = getIMDbID();
                 if (!title || !imdbId) return;
                 const buildUrl = (tpl) => tpl.replace(/\{\{ID\}\}/g, imdbId)
+                    .replace(/\{\{ID_NUM\}\}/g, imdbId.replace(/^tt/, ''))
                     .replace(/\{\{TRAKT_TYPE\}\}/g, isTVType() ? 'show' : 'movie')
                     .replace(/\{\{T\}\}/g, encodeURIComponent(title)).replace(/\{\{Y\}\}/g, year);
 
@@ -2726,7 +2816,7 @@ section[id*="quote" i] .ipc-list-card { padding: 4px 0 !important; margin: 2px 0
             if (root?.matches?.('a[href*="/title/tt"]')) anchors.push(root);
             root?.querySelectorAll?.('a[href*="/title/tt"]').forEach(a => anchors.push(a));
             anchors.forEach(anchor => {
-                const imdbId = anchor.href?.match(/\/title\/(tt\d+)/)?.[1];
+                const imdbId = getLinkedTitleId(anchor.href);
                 if (!imdbId) return;
                 const card = this._findCard(anchor);
                 if (!card || seen.has(card)) return;
@@ -3271,9 +3361,9 @@ section[id*="quote" i] .ipc-list-card { padding: 4px 0 !important; margin: 2px 0
                 const bar = makeEl('div', { id: 'enh-tv-bar' });
                 [
                     { l:'Episodes List', u:`https://www.imdb.com/title/${imdbId}/episodes/` },
-                    { l:'TheTVDB', u:`https://www.thetvdb.com/search?query=tt${imdbId}` },
+                    { l:'TheTVDB', u:`https://www.thetvdb.com/search?query=${imdbId}` },
                     { l:'TVMaze', u:`https://www.tvmaze.com/search?q=${encodeURIComponent(title)}` },
-                    { l:'Trakt', u:`https://trakt.tv/search/imdb/${imdbId}?id_type=show` },
+                    { l:'Trakt', u:`https://app.trakt.tv/search?query=${encodeURIComponent(title)}` },
                     { l:'Ep Calendar', u:`https://episodecalendar.com/en/shows?q%5Bname_cont%5D=${encodeURIComponent(title)}` },
                 ].forEach(c => bar.appendChild(makeEl('a', { href:c.u, target:'_blank', rel:'noopener', className:'enh-tv-chip' }, c.l)));
 
@@ -3293,8 +3383,8 @@ section[id*="quote" i] .ipc-list-card { padding: 4px 0 !important; margin: 2px 0
                 const row = makeEl('div', { id:'enh-sub-row', style: { marginTop:'12px', display:'flex', flexWrap:'wrap', gap:'6px', alignItems:'center' } });
                 row.appendChild(makeEl('span', { style: { color:'#71717a', fontSize:'12px', fontWeight:'600', marginRight:'4px' } }, 'Subtitles:'));
                 [
-                    { n:'OpenSubtitles', u:`https://www.opensubtitles.org/en/search/imdbid-${imdbId}` },
-                    { n:'OpenSubs.com', u:`https://www.opensubtitles.com/en/en/search-all/q-tt${imdbId}` },
+                    { n:'OpenSubtitles', u:`https://www.opensubtitles.org/en/search/imdbid-${imdbId.replace(/^tt/, '')}` },
+                    { n:'OpenSubs.com', u:`https://www.opensubtitles.com/en/en/search-all/q-${imdbId}` },
                     { n:'SubDL', u:`https://subdl.com/search/${encodeURIComponent(title)}` },
                     { n:'YIFY-Subs', u:`https://yifysubtitles.ch/movie-imdb/${imdbId}`, movieOnly:true },
                     { n:'Addic7ed', u:`https://www.addic7ed.com/search.php?search=${encodeURIComponent(title)}&Submit=Search` },
@@ -3349,7 +3439,7 @@ section[id*="quote" i] .ipc-list-card { padding: 4px 0 !important; margin: 2px 0
         },
         _ids() {
             const ids = Array.from(document.querySelectorAll('a[href*="/title/tt"]'))
-                .map(a => a.href.match(/\/title\/(tt\d+)/)?.[1])
+                .map(a => getLinkedTitleId(a.href))
                 .filter(Boolean);
             return [...new Set(ids)];
         },
@@ -3368,12 +3458,12 @@ section[id*="quote" i] .ipc-list-card { padding: 4px 0 !important; margin: 2px 0
         const seen = new Set();
         const titles = [];
         links.forEach(a => {
-            const idMatch = a.href.match(/\/title\/(tt\d+)/);
-            if (!idMatch || seen.has(idMatch[1])) return;
-            seen.add(idMatch[1]);
+            const id = getLinkedTitleId(a.href);
+            if (!id || seen.has(id)) return;
+            seen.add(id);
             const textEl = a.querySelector('[class*="title"]') || a;
             const name = (textEl.textContent || '').trim().replace(/\s+/g, ' ').slice(0, 120);
-            if (name) titles.push({ id: idMatch[1], name });
+            if (name) titles.push({ id, name });
         });
         return titles;
     }
@@ -3733,24 +3823,28 @@ section[id*="quote" i] .ipc-list-card { padding: 4px 0 !important; margin: 2px 0
 /* ════ Settings Overlay ════ */
 #enh-settings-overlay {
     position: fixed; inset: 0;
-    background: rgba(0,0,0,0.78);
-    z-index: 2147483640; opacity: 0;
-    transition: opacity .3s ease; pointer-events: none;
+    background: rgba(0,0,0,0.82);
+    z-index: 2147483640; opacity: 0; visibility: hidden;
+    transition: opacity .22s ease, visibility 0s linear .22s; pointer-events: none;
 }
-#enh-settings-overlay.enh-visible { opacity: 1; pointer-events: auto; }
+#enh-settings-overlay.enh-visible {
+    opacity: 1; visibility: visible; pointer-events: auto;
+    transition-delay: 0s;
+}
 
 /* ════ Settings Panel ════ */
 #enh-settings-panel {
     position: fixed; top: 50%; left: 50%;
-    transform: translate(-50%, -50%) scale(0.96);
+    transform: translate(-50%, -50%) scale(0.985);
     background: ${t.sf0}; color: ${t.tx1};
     border: 1px solid ${t.bd1};
-    border-radius: 12px; z-index: 2147483641;
-    width: min(560px, calc(100vw - 32px)); max-height: min(82vh, 760px);
+    border-radius: 14px; z-index: 2147483641;
+    width: min(1000px, calc(100vw - 64px));
+    height: min(812px, calc(100vh - 48px));
     box-shadow: ${t.sh3};
     font-family: -apple-system, BlinkMacSystemFont, 'Segoe UI', sans-serif;
     opacity: 0;
-    transition: transform .3s cubic-bezier(.4,0,.2,1), opacity .25s ease;
+    transition: transform .22s cubic-bezier(.4,0,.2,1), opacity .2s ease;
     overflow: hidden; display: flex; flex-direction: column;
 }
 #enh-settings-overlay.enh-visible #enh-settings-panel {
@@ -3758,29 +3852,110 @@ section[id*="quote" i] .ipc-list-card { padding: 4px 0 !important; margin: 2px 0
 }
 .enh-settings-header {
     display: flex; justify-content: space-between; align-items: center;
-    padding: 18px 24px 14px;
+    min-height: 66px;
+    padding: 12px 18px 12px 22px;
     border-bottom: 1px solid ${t.bd0}; flex-shrink: 0;
 }
 .enh-settings-header h2 {
-    font-size: 16px; font-weight: 700; margin: 0;
-    color: ${t.accent}; letter-spacing: -0.02em;
+    font-size: 15px; font-weight: 750; margin: 0;
+    color: ${t.tx0}; letter-spacing: -0.015em;
 }
 .enh-settings-subtitle {
-    margin: 4px 0 0;
+    margin: 3px 0 0;
     color: ${t.tx2};
-    font-size: 12px;
-    line-height: 1.45;
+    font-size: 11px;
+    line-height: 1.35;
+}
+.enh-settings-header-actions {
+    display: flex; align-items: center; gap: 12px;
+}
+.enh-settings-save-state {
+    display: inline-flex; align-items: center; gap: 7px;
+    color: ${t.tx2};
+    font-size: 11px; font-weight: 600;
+}
+.enh-settings-save-state::before {
+    content: ''; width: 7px; height: 7px; border-radius: 50%;
+    background: ${t.green}; box-shadow: 0 0 0 3px color-mix(in srgb, ${t.green} 14%, transparent);
 }
 .enh-settings-close {
     background: ${t.sf1}; border: 1px solid ${t.bd0};
-    width: 32px; height: 32px; border-radius: 8px;
-    color: ${t.tx2}; cursor: pointer; font-size: 18px;
+    min-width: 58px; height: 32px; padding: 0 10px; border-radius: 8px;
+    color: ${t.tx2}; cursor: pointer;
+    font: 650 11px/1 -apple-system, BlinkMacSystemFont, 'Segoe UI', sans-serif;
     display: flex; align-items: center; justify-content: center;
     transition: background .15s ease, border-color .15s ease, color .15s ease;
 }
 .enh-settings-close:hover { background: ${t.sf2}; color: ${t.tx0}; }
 
-.enh-settings-body { padding: 8px 24px 20px; overflow-y: auto; flex: 1; }
+.enh-settings-shell { display: flex; min-height: 0; flex: 1; }
+.enh-settings-nav {
+    width: 210px; flex: 0 0 210px;
+    padding: 14px 10px;
+    background: color-mix(in srgb, ${t.sf1} 48%, ${t.sf0});
+    border-right: 1px solid ${t.bd0};
+}
+.enh-settings-nav-btn {
+    position: relative; width: 100%; min-height: 42px;
+    display: flex; align-items: center;
+    padding: 0 14px; margin: 2px 0;
+    border: 0; border-radius: 8px;
+    background: transparent; color: ${t.tx2}; cursor: pointer;
+    font: 650 13px/1 -apple-system, BlinkMacSystemFont, 'Segoe UI', sans-serif;
+    text-align: left;
+    transition: background .15s ease, color .15s ease;
+}
+.enh-settings-nav-btn:hover { background: ${t.sf1}; color: ${t.tx0}; }
+.enh-settings-nav-btn[aria-selected="true"] {
+    background: ${t.sf2}; color: ${t.tx0};
+}
+.enh-settings-nav-btn[aria-selected="true"]::before {
+    content: ''; position: absolute; left: 0; top: 8px; bottom: 8px;
+    width: 3px; border-radius: 2px; background: ${t.accent};
+}
+.enh-settings-main { min-width: 0; flex: 1; overflow: hidden; }
+.enh-settings-body { height: 100%; padding: 18px 22px; overflow-y: auto; }
+.enh-settings-page[hidden] { display: none !important; }
+.enh-settings-page-header { margin: 0 0 16px; }
+.enh-settings-page-title {
+    margin: 0; color: ${t.tx0};
+    font: 750 22px/1.2 -apple-system, BlinkMacSystemFont, 'Segoe UI', sans-serif;
+    letter-spacing: -.025em;
+}
+.enh-settings-page-description {
+    margin: 5px 0 0; color: ${t.tx2};
+    font: 500 13px/1.4 -apple-system, BlinkMacSystemFont, 'Segoe UI', sans-serif;
+}
+.enh-settings-grid { display: grid; grid-template-columns: repeat(2, minmax(0, 1fr)); gap: 12px; }
+.enh-settings-grid--three { grid-template-columns: repeat(3, minmax(0, 1fr)); }
+.enh-settings-grid--experience { grid-template-columns: minmax(0, 1.05fr) minmax(0, .95fr); align-items: start; }
+.enh-settings-stack { display: flex; flex-direction: column; gap: 12px; }
+.enh-settings-card {
+    min-width: 0; padding: 14px;
+    border: 1px solid ${t.bd1}; border-radius: 11px;
+    background: ${t.sf1};
+}
+.enh-settings-card--flush { padding: 0; overflow: hidden; }
+.enh-settings-card--span { grid-column: 1 / -1; }
+.enh-settings-card-header {
+    display: flex; justify-content: space-between; align-items: flex-start;
+    gap: 12px; margin-bottom: 8px;
+}
+.enh-settings-card-title {
+    color: ${t.tx0};
+    font: 700 14px/1.3 -apple-system, BlinkMacSystemFont, 'Segoe UI', sans-serif;
+}
+.enh-settings-card-description {
+    margin-top: 3px; color: ${t.tx3};
+    font: 500 11px/1.4 -apple-system, BlinkMacSystemFont, 'Segoe UI', sans-serif;
+}
+.enh-settings-card-actions { display: flex; align-items: center; gap: 8px; }
+.enh-settings-route-badge {
+    flex-shrink: 0; padding: 4px 7px; border-radius: 6px;
+    background: ${t.sf2}; color: ${t.tx2};
+    font: 700 9px/1 -apple-system, BlinkMacSystemFont, 'Segoe UI', sans-serif;
+    text-transform: uppercase; letter-spacing: .05em;
+}
 
 .enh-settings-group-label {
     font-size: 10px; font-weight: 700; text-transform: uppercase;
@@ -3789,16 +3964,18 @@ section[id*="quote" i] .ipc-list-card { padding: 4px 0 !important; margin: 2px 0
 }
 .enh-settings-row {
     display: flex; align-items: center; justify-content: space-between;
-    padding: 10px 0; gap: 12px;
+    min-height: 50px; padding: 8px 0; gap: 12px;
     border-bottom: 1px solid ${t.bd0};
 }
 .enh-settings-row:last-child { border-bottom: none; }
-.enh-settings-label { font-size: 13px; font-weight: 500; color: ${t.tx1}; }
+.enh-settings-label { font-size: 13px; font-weight: 650; color: ${t.tx1}; }
 .enh-settings-row-copy { display: flex; flex-direction: column; gap: 3px; min-width: 0; }
-.enh-settings-help { font-size: 11px; line-height: 1.35; color: ${t.tx3}; max-width: 360px; }
+.enh-settings-help { font-size: 10px; line-height: 1.35; color: ${t.tx3}; max-width: 360px; }
+.enh-settings-card--compact .enh-settings-row { min-height: 42px; padding: 6px 0; }
+.enh-settings-card--compact .enh-settings-help { display: none; }
 
 /* Toggle switch */
-.enh-toggle { position: relative; width: 40px; height: 22px; flex-shrink: 0; }
+.enh-toggle { position: relative; width: 42px; height: 24px; flex-shrink: 0; }
 .enh-toggle input { opacity: 0; width: 0; height: 0; position: absolute; }
 .enh-toggle-track {
     position: absolute; inset: 0;
@@ -3807,7 +3984,7 @@ section[id*="quote" i] .ipc-list-card { padding: 4px 0 !important; margin: 2px 0
 }
 .enh-toggle-track::after {
     content: ''; position: absolute; top: 2px; left: 2px;
-    width: 18px; height: 18px;
+    width: 20px; height: 20px;
     background: ${t.tx3}; border-radius: 50%;
     transition: transform .2s cubic-bezier(.4,0,.2,1), background .2s ease;
 }
@@ -3821,9 +3998,10 @@ section[id*="quote" i] .ipc-list-card { padding: 4px 0 !important; margin: 2px 0
 }
 
 /* ════ Theme Swatches ════ */
-.enh-theme-selector { display: flex; gap: 8px; }
+.enh-theme-selector { display: grid; grid-template-columns: repeat(5, minmax(64px, 1fr)); gap: 8px; margin-top: 10px; }
+.enh-theme-option { display: flex; flex-direction: column; gap: 6px; color: ${t.tx2}; font-size: 10px; text-align: center; }
 .enh-theme-swatch {
-    width: 30px; height: 30px; border-radius: 8px; cursor: pointer;
+    width: 100%; height: 48px; border-radius: 9px; cursor: pointer;
     border: 2px solid transparent;
     padding: 0;
     appearance: none;
@@ -3832,33 +4010,61 @@ section[id*="quote" i] .ipc-list-card { padding: 4px 0 !important; margin: 2px 0
 }
 .enh-theme-swatch.active { border-color: ${t.accent}; box-shadow: 0 0 12px ${t.accentMuted}; }
 .enh-theme-swatch:hover { transform: translateY(-1px); }
-.enh-theme-swatch::after {
-    content: attr(data-label); position: absolute; bottom: calc(100% + 6px); left: 50%;
-    transform: translateX(-50%); font-size: 9px; font-weight: 600;
-    color: ${t.tx2}; white-space: nowrap;
-    opacity: 0; transition: opacity .12s ease; pointer-events: none;
+.enh-theme-auto-row { margin-top: 10px; padding-top: 10px; border-top: 1px solid ${t.bd0}; }
+.enh-settings-page--experience .enh-settings-page-header { margin-bottom: 10px; }
+.enh-settings-page--experience .enh-settings-card { padding: 11px 12px; }
+.enh-settings-page--experience .enh-settings-card-header { margin-bottom: 5px; }
+.enh-settings-page--experience .enh-settings-row { min-height: 36px; padding: 3px 0; }
+.enh-settings-page--experience .enh-theme-selector { margin-top: 6px; }
+.enh-settings-page--experience .enh-theme-swatch { height: 38px; }
+.enh-settings-page--experience .enh-theme-auto-row { margin-top: 6px; padding-top: 6px; }
+.enh-settings-page--experience .enh-settings-stack { gap: 8px; }
+.enh-settings-page--experience .enh-settings-grid--experience { gap: 8px; }
+
+.enh-score-preview { display: grid; grid-template-columns: repeat(5, minmax(0, 1fr)); }
+.enh-score-preview-item { padding: 8px 10px; text-align: center; border-right: 1px solid ${t.bd0}; }
+.enh-score-preview-item:last-child { border-right: 0; }
+.enh-score-preview-value { color: ${t.tx0}; font-size: 17px; font-weight: 800; }
+.enh-score-preview-label { margin-top: 4px; color: ${t.tx3}; font-size: 10px; }
+.enh-settings-callout {
+    display: flex; align-items: center; gap: 12px;
+    padding: 11px 13px; border: 1px solid ${t.bd1}; border-radius: 10px;
+    background: ${t.sf1}; color: ${t.tx2}; font-size: 11px; line-height: 1.45;
 }
-.enh-theme-swatch:hover::after { opacity: 1; }
+.enh-settings-callout strong { color: ${t.tx0}; }
+.enh-settings-kbd {
+    display: inline-flex; min-width: 26px; min-height: 26px; align-items: center; justify-content: center;
+    padding: 0 7px; border: 1px solid ${t.bd2}; border-radius: 6px;
+    background: ${t.sf0}; color: ${t.tx1}; font: 700 11px/1 ui-monospace, SFMono-Regular, Consolas, monospace;
+}
+.enh-data-summary { display: grid; grid-template-columns: repeat(3, minmax(0, 1fr)); gap: 12px; margin-bottom: 12px; }
+.enh-data-summary-item { padding: 14px; border: 1px solid ${t.bd1}; border-radius: 10px; background: ${t.sf1}; }
+.enh-data-summary-label { color: ${t.tx0}; font-size: 13px; font-weight: 700; }
+.enh-data-summary-value { margin-top: 4px; color: ${t.tx2}; font-size: 11px; }
 
 /* ════ Settings Footer ════ */
 .enh-settings-footer {
-    padding: 12px 24px; border-top: 1px solid ${t.bd0};
+    min-height: 38px; padding: 8px 20px; border-top: 1px solid ${t.bd0};
     display: flex; justify-content: space-between; align-items: center;
     flex-shrink: 0; gap: 8px;
 }
 .enh-settings-footer span { font-size: 11px; color: ${t.tx3}; }
 .enh-settings-footer-actions { display: flex; gap: 6px; }
 .enh-settings-footer-btn {
-    padding: 5px 14px; border-radius: 6px;
-    font: 500 11px -apple-system, sans-serif;
+    min-height: 32px; padding: 6px 12px; border-radius: 7px;
+    font: 600 11px -apple-system, sans-serif;
     background: ${t.sf1}; border: 1px solid ${t.bd1};
     color: ${t.tx2}; cursor: pointer;
     transition: background .15s ease, border-color .15s ease, color .15s ease, transform .15s cubic-bezier(.4,0,.2,1);
 }
 .enh-settings-footer-btn:hover { background: ${t.sf2}; color: ${t.tx0}; border-color: ${t.bd2}; }
-.enh-settings-footer-note { text-align: right; max-width: 160px; line-height: 1.35; }
+.enh-settings-footer-btn:disabled { opacity: .45; cursor: not-allowed; }
+.enh-settings-footer-btn--danger { color: ${t.red}; }
+.enh-settings-footer-note { text-align: right; line-height: 1.35; }
+.enh-data-actions { display: grid; gap: 8px; }
+.enh-data-actions .enh-settings-footer-btn { width: 100%; text-align: left; }
 .enh-import-panel {
-    margin: 14px 0 4px;
+    margin: 12px 0 0;
     padding: 12px;
     border: 1px solid ${t.bd1};
     border-radius: 10px;
@@ -3886,12 +4092,14 @@ section[id*="quote" i] .ipc-list-card { padding: 4px 0 !important; margin: 2px 0
 .enh-import-actions { display: flex; justify-content: flex-end; gap: 8px; margin-top: 10px; }
 
 /* ════ Site Editors ════ */
+.enh-sites-grid { display: grid; grid-template-columns: repeat(2, minmax(0, 1fr)); gap: 12px; }
 .enh-site-editor {
-    margin: 14px 0 4px;
-    padding: 12px;
+    margin: 0;
+    padding: 14px;
     border: 1px solid ${t.bd1};
-    border-radius: 10px;
+    border-radius: 11px;
     background: ${t.sf1};
+    min-width: 0;
 }
 .enh-site-editor__header {
     display: flex;
@@ -3904,11 +4112,12 @@ section[id*="quote" i] .ipc-list-card { padding: 4px 0 !important; margin: 2px 0
     color: ${t.tx1};
     font: 700 12px/1.3 -apple-system, BlinkMacSystemFont, 'Segoe UI', sans-serif;
 }
+.enh-site-editor__title-wrap { display: flex; align-items: center; gap: 8px; min-width: 0; }
 .enh-site-editor__actions { display: flex; gap: 6px; flex-shrink: 0; }
-.enh-site-editor__rows { display: flex; flex-direction: column; gap: 7px; }
+.enh-site-editor__rows { display: flex; flex-direction: column; gap: 7px; max-height: 312px; overflow: auto; padding-right: 2px; }
 .enh-site-row {
     display: grid;
-    grid-template-columns: minmax(88px, .7fr) minmax(160px, 1.4fr) 34px 30px;
+    grid-template-columns: minmax(76px, .65fr) minmax(140px, 1.35fr) 34px 58px;
     gap: 6px;
     align-items: center;
 }
@@ -3933,14 +4142,14 @@ section[id*="quote" i] .ipc-list-card { padding: 4px 0 !important; margin: 2px 0
     cursor: pointer;
 }
 .enh-site-remove {
-    width: 30px;
+    min-width: 58px;
     height: 30px;
     border-radius: 7px;
     border: 1px solid ${t.bd1};
     background: ${t.sf0};
     color: ${t.tx2};
     cursor: pointer;
-    font: 700 15px/1 -apple-system, BlinkMacSystemFont, 'Segoe UI', sans-serif;
+    font: 650 10px/1 -apple-system, BlinkMacSystemFont, 'Segoe UI', sans-serif;
 }
 .enh-site-remove:hover { background: ${t.sf2}; color: ${t.tx0}; }
 .enh-site-input:focus,
@@ -3951,8 +4160,8 @@ section[id*="quote" i] .ipc-list-card { padding: 4px 0 !important; margin: 2px 0
 
 /* ════ Mark Review Panel ════ */
 .enh-marks-panel {
-    margin: 14px 0 4px;
-    padding: 12px;
+    margin: 0;
+    padding: 14px;
     border: 1px solid ${t.bd1};
     border-radius: 10px;
     background: ${t.sf1};
@@ -3984,17 +4193,39 @@ section[id*="quote" i] .ipc-list-card { padding: 4px 0 !important; margin: 2px 0
     font: 700 11px/1 -apple-system, BlinkMacSystemFont, 'Segoe UI', sans-serif;
 }
 .enh-mark-row__clear {
-    width: 26px; height: 26px; border-radius: 7px;
+    min-width: 58px; height: 28px; padding: 0 8px; border-radius: 7px;
     border: 1px solid ${t.bd1}; background: ${t.sf1}; color: ${t.tx2};
-    cursor: pointer; font: 800 13px/1 -apple-system, BlinkMacSystemFont, 'Segoe UI', sans-serif;
+    cursor: pointer; font: 650 10px/1 -apple-system, BlinkMacSystemFont, 'Segoe UI', sans-serif;
 }
 .enh-mark-row__clear:hover { border-color: ${t.red}; color: ${t.red}; }
 .enh-marks-empty { color: ${t.tx3}; font: 500 11px/1.4 -apple-system, BlinkMacSystemFont, 'Segoe UI', sans-serif; }
 
 /* ════ Servarr Settings ════ */
+.enh-integration-summary { display: grid; grid-template-columns: repeat(2, minmax(0, 1fr)); gap: 12px; }
+.enh-integration-grid { display: grid; grid-template-columns: repeat(2, minmax(0, 1fr)); gap: 12px; align-items: start; }
+.enh-integration-card { min-width: 0; }
+.enh-integration-card > .enh-servarr-panel {
+    margin-top: 8px; padding: 0; border: 0; border-radius: 0; background: transparent;
+}
+.enh-integration-card .enh-servarr-grid { gap: 6px; }
+.enh-integration-card .enh-servarr-section + .enh-servarr-section { margin-top: 10px; padding-top: 10px; }
+.enh-integration-card .enh-servarr-input { height: 28px; }
+.enh-integration-tabs {
+    display: flex; gap: 4px; margin: 0 0 10px; padding-bottom: 8px;
+    border-bottom: 1px solid ${t.bd0};
+}
+.enh-integration-tab {
+    min-height: 30px; padding: 0 10px; border: 0; border-radius: 6px;
+    background: transparent; color: ${t.tx2}; cursor: pointer;
+    font: 650 11px/1 -apple-system, BlinkMacSystemFont, 'Segoe UI', sans-serif;
+}
+.enh-integration-tab:hover { background: ${t.sf2}; color: ${t.tx0}; }
+.enh-integration-tab[aria-selected="true"] {
+    background: ${t.accentMuted}; color: ${t.accent};
+}
 .enh-servarr-panel {
-    margin: 14px 0 4px;
-    padding: 12px;
+    margin: 0;
+    padding: 14px;
     border: 1px solid ${t.bd1};
     border-radius: 10px;
     background: ${t.sf1};
@@ -4043,38 +4274,12 @@ section[id*="quote" i] .ipc-list-card { padding: 4px 0 !important; margin: 2px 0
 .enh-site-remove:focus-visible,
 .enh-servarr-input:focus-visible,
 .enh-settings-footer-btn:focus-visible,
+.enh-settings-nav-btn:focus-visible,
 .enh-settings-close:focus-visible,
 .enh-theme-swatch:focus-visible,
 #enh-settings-fab:focus-visible {
     outline: 2px solid ${t.accent};
     outline-offset: 2px;
-}
-@media (max-width: 640px) {
-    #enh-search-buttons { padding: 10px; }
-    .enh-search-row { grid-template-columns: repeat(2, minmax(0, 1fr)); }
-    #enh-external-links { gap: 6px; }
-    #enh-link-menu-wrap { margin-left: 0; width: 100%; }
-    #enh-link-menu-trigger { width: 100%; text-align: center; }
-    .enh-link-dropdown {
-        position: fixed;
-        left: 16px !important;
-        right: 16px !important;
-        top: auto;
-        bottom: 76px;
-        min-width: 0;
-        max-height: 58vh;
-        overflow: auto;
-    }
-    .enh-settings-header,
-    .enh-settings-footer { padding-left: 16px; padding-right: 16px; }
-    .enh-settings-body { padding-left: 16px; padding-right: 16px; }
-    .enh-settings-footer { align-items: flex-start; flex-direction: column; }
-    .enh-settings-footer-note { text-align: left; max-width: none; }
-    .enh-site-row { grid-template-columns: 1fr 1fr 34px 30px; }
-    .enh-mark-row { grid-template-columns: minmax(0, 1fr) auto auto; }
-    .enh-mark-row__link { display: none; }
-    .enh-servarr-grid { grid-template-columns: 1fr; }
-    .enh-servarr-field--wide { grid-column: auto; }
 }
         `, 'enh-global');
     }
@@ -4086,6 +4291,7 @@ section[id*="quote" i] .ipc-list-card { padding: 4px 0 !important; margin: 2px 0
     // #########################################################################
     let settingsOpen = false;
     let lastFocusedElement = null;
+    let activeSettingsPage = 'experience';
 
     function getSettingsFocusables(root) {
         if (!root) return [];
@@ -4095,7 +4301,7 @@ section[id*="quote" i] .ipc-list-card { padding: 4px 0 !important; margin: 2px 0
 
     function refreshFeature(key) {
         const feature = features.find(f => f.key === key);
-        if (!feature || !get(key)) return;
+        if (!feature || !get(key) || !shouldInitFeature(feature)) return;
 
         const linkMenu = key === 'externalLinks' ? features.find(f => f.key === 'expandedLinkMenu') : null;
         if (linkMenu && get('expandedLinkMenu')) linkMenu.destroy?.();
@@ -4112,6 +4318,11 @@ section[id*="quote" i] .ipc-list-card { padding: 4px 0 !important; margin: 2px 0
     function createSiteEditor({ title, key, defaults, featureKey }) {
         const editor = makeEl('div', { className:'enh-site-editor' });
         const rows = makeEl('div', { className:'enh-site-editor__rows' });
+        const count = makeEl('span', { className:'enh-settings-route-badge' });
+        const updateCount = () => {
+            const total = rows.querySelectorAll('.enh-site-row').length;
+            count.textContent = `${total} ${total === 1 ? 'site' : 'sites'}`;
+        };
 
         const readRows = () => Array.from(rows.querySelectorAll('.enh-site-row')).map(row => ({
             name: row.querySelector('[data-field="name"]')?.value || '',
@@ -4120,9 +4331,10 @@ section[id*="quote" i] .ipc-list-card { padding: 4px 0 !important; margin: 2px 0
             storeQuery: row.dataset.storeQuery === 'true',
         }));
 
-        const save = () => {
+        const save = (refresh = true) => {
             setSiteList(key, readRows());
-            refreshFeature(featureKey);
+            if (refresh) refreshFeature(featureKey);
+            updateCount();
         };
 
         const addRow = (site = {}) => {
@@ -4160,9 +4372,12 @@ section[id*="quote" i] .ipc-list-card { padding: 4px 0 !important; margin: 2px 0
                 title:'Remove site',
                 'aria-label':'Remove site',
                 onClick: () => { row.remove(); save(); },
-            }, 'x');
+            }, 'Remove');
 
-            [nameInput, urlInput, colorInput].forEach(input => input.addEventListener('change', save));
+            [nameInput, urlInput, colorInput].forEach(input => {
+                input.addEventListener('input', () => save(false));
+                input.addEventListener('change', () => save(true));
+            });
             row.appendChild(nameInput);
             row.appendChild(urlInput);
             row.appendChild(colorInput);
@@ -4187,11 +4402,14 @@ section[id*="quote" i] .ipc-list-card { padding: 4px 0 !important; margin: 2px 0
         }, 'Reset');
 
         editor.appendChild(makeEl('div', { className:'enh-site-editor__header' },
-            makeEl('div', { className:'enh-site-editor__title' }, title),
+            makeEl('div', { className:'enh-site-editor__title-wrap' },
+                makeEl('div', { className:'enh-site-editor__title' }, title), count
+            ),
             makeEl('div', { className:'enh-site-editor__actions' }, add, reset)
         ));
 
         getSiteList(key, defaults).forEach(site => addRow(site));
+        updateCount();
         editor.appendChild(rows);
         return editor;
     }
@@ -4208,8 +4426,10 @@ section[id*="quote" i] .ipc-list-card { padding: 4px 0 !important; margin: 2px 0
             spellcheck:'false',
         });
         input.value = get(key) || '';
+        const persist = () => set(key, input.value.trim());
+        input.addEventListener('input', persist);
         input.addEventListener('change', () => {
-            set(key, input.value.trim());
+            persist();
             if (refreshKey) refreshFeature(refreshKey);
         });
         return makeEl('div', { className:'enh-servarr-field' + (wide ? ' enh-servarr-field--wide' : '') },
@@ -4235,97 +4455,118 @@ section[id*="quote" i] .ipc-list-card { padding: 4px 0 !important; margin: 2px 0
         });
         return makeEl('div', { className:'enh-servarr-panel' },
             makeEl('div', { className:'enh-servarr-section' },
-                makeEl('div', { className:'enh-servarr-title' }, 'Cineby'),
+                makeEl('div', { className:'enh-servarr-title' }, 'Cineby destination'),
                 makeEl('div', { className:'enh-servarr-field enh-servarr-field--wide' },
-                    makeEl('label', { for:'enh-cineby-host' }, 'Preferred host'),
+                    makeEl('label', { for:'enh-cineby-host' }, 'Search destination'),
                     select
                 ),
                 makeEl('div', { className:'enh-servarr-note' },
-                    `Search handoff uses the local ${CINEBY_QUERY_KEY} storage key and clears it after auto-fill.`
+                    'Used for the main watch search button and Cineby quick links.'
                 )
             )
         );
     }
 
-    function createServarrSettingsPanel() {
-        const section = ({ title, fields }) => {
-            const grid = makeEl('div', { className:'enh-servarr-grid' }, ...fields.map(createSettingsInput));
-            return makeEl('div', { className:'enh-servarr-section' },
-                makeEl('div', { className:'enh-servarr-title' }, title),
-                grid
-            );
+    function createIntegrationTabs(sections, fieldFactory, namespace) {
+        const panel = makeEl('form', { className:'enh-servarr-panel', autocomplete:'off' });
+        const tabs = makeEl('div', { className:'enh-integration-tabs', role:'tablist', 'aria-label':`${namespace} services` });
+        const panels = new Map();
+        const buttons = new Map();
+        const select = id => {
+            panels.forEach((section, sectionId) => { section.hidden = sectionId !== id; });
+            buttons.forEach((button, buttonId) => {
+                const selected = buttonId === id;
+                button.setAttribute('aria-selected', String(selected));
+                button.tabIndex = selected ? 0 : -1;
+            });
         };
 
-        const panel = makeEl('form', {
-            className:'enh-servarr-panel',
-            autocomplete:'off',
-        },
-            section({
-                title:'Radarr',
-                fields:[
+        sections.forEach((definition, index) => {
+            const tabId = `enh-${namespace}-tab-${definition.id}`;
+            const panelId = `enh-${namespace}-panel-${definition.id}`;
+            const button = makeEl('button', {
+                type:'button', className:'enh-integration-tab', id:tabId, role:'tab',
+                'aria-controls':panelId, 'aria-selected':String(index === 0),
+                onClick:() => select(definition.id),
+            }, definition.title);
+            button.tabIndex = index === 0 ? 0 : -1;
+            button.addEventListener('keydown', event => {
+                const ordered = sections.map(item => item.id);
+                const current = ordered.indexOf(definition.id);
+                let next = null;
+                if (event.key === 'ArrowRight') next = (current + 1) % ordered.length;
+                if (event.key === 'ArrowLeft') next = (current - 1 + ordered.length) % ordered.length;
+                if (next === null) return;
+                event.preventDefault();
+                select(ordered[next]);
+                buttons.get(ordered[next])?.focus();
+            });
+            const section = makeEl('div', {
+                className:'enh-servarr-section', id:panelId, role:'tabpanel', 'aria-labelledby':tabId,
+            }, makeEl('div', { className:'enh-servarr-grid' }, ...definition.fields.map(fieldFactory)));
+            section.hidden = index !== 0;
+            tabs.appendChild(button);
+            buttons.set(definition.id, button);
+            panels.set(definition.id, section);
+        });
+
+        panel.appendChild(tabs);
+        panels.forEach(section => panel.appendChild(section));
+        return panel;
+    }
+
+    function createServarrSettingsPanel() {
+        const panel = createIntegrationTabs([
+            {
+                id:'radarr', title:'Radarr', fields:[
                     { key:'radarrUrl', label:'URL', wide:true, placeholder:'http://localhost:7878' },
                     { key:'radarrApiKey', label:'API key', type:'password', wide:true },
                     { key:'radarrRootFolderPath', label:'Root folder', wide:true, placeholder:'/movies' },
                     { key:'radarrQualityProfileId', label:'Quality profile ID', type:'number' },
                 ],
-            }),
-            section({
-                title:'Sonarr',
-                fields:[
+            },
+            {
+                id:'sonarr', title:'Sonarr', fields:[
                     { key:'sonarrUrl', label:'URL', wide:true, placeholder:'http://localhost:8989' },
                     { key:'sonarrApiKey', label:'API key', type:'password', wide:true },
                     { key:'sonarrRootFolderPath', label:'Root folder', wide:true, placeholder:'/tv' },
                     { key:'sonarrQualityProfileId', label:'Quality profile ID', type:'number' },
                     { key:'sonarrLanguageProfileId', label:'Language profile ID', type:'number' },
                 ],
-            }),
-            makeEl('div', { className:'enh-servarr-note' },
-                'API keys are stored locally in plain text. This build allows userscript requests only to localhost and 127.0.0.1.'
-            )
-        );
+            },
+        ], createSettingsInput, 'servarr');
+        panel.appendChild(makeEl('div', { className:'enh-servarr-note' },
+            'Credentials stay local and requests are limited to localhost or 127.0.0.1.'
+        ));
         panel.addEventListener('submit', e => e.preventDefault());
         return panel;
     }
 
     function createMediaServerSettingsPanel() {
         const mediaField = field => createSettingsInput({ ...field, refreshKey:'mediaServerIntegration' });
-        const section = ({ title, fields }) => {
-            const grid = makeEl('div', { className:'enh-servarr-grid' }, ...fields.map(mediaField));
-            return makeEl('div', { className:'enh-servarr-section' },
-                makeEl('div', { className:'enh-servarr-title' }, title),
-                grid
-            );
-        };
-
-        const panel = makeEl('form', {
-            className:'enh-servarr-panel',
-            autocomplete:'off',
-        },
-            section({
-                title:'Plex',
-                fields:[
+        const panel = createIntegrationTabs([
+            {
+                id:'plex', title:'Plex', fields:[
                     { key:'plexUrl', label:'URL', wide:true, placeholder:'http://localhost:32400' },
                     { key:'plexToken', label:'Token', type:'password', wide:true },
                 ],
-            }),
-            section({
-                title:'Jellyfin',
-                fields:[
+            },
+            {
+                id:'jellyfin', title:'Jellyfin', fields:[
                     { key:'jellyfinUrl', label:'URL', wide:true, placeholder:'http://localhost:8096' },
                     { key:'jellyfinApiKey', label:'API key', type:'password', wide:true },
                 ],
-            }),
-            section({
-                title:'Emby',
-                fields:[
+            },
+            {
+                id:'emby', title:'Emby', fields:[
                     { key:'embyUrl', label:'URL', wide:true, placeholder:'http://localhost:8096' },
                     { key:'embyApiKey', label:'API key', type:'password', wide:true },
                 ],
-            }),
-            makeEl('div', { className:'enh-servarr-note' },
-                'Media server checks use IMDb provider IDs first, then title and year. This build allows userscript requests only to localhost and 127.0.0.1.'
-            )
-        );
+            },
+        ], mediaField, 'media');
+        panel.appendChild(makeEl('div', { className:'enh-servarr-note' },
+            'Checks match IMDb IDs first, then title and year. Credentials stay local.'
+        ));
         panel.addEventListener('submit', e => e.preventDefault());
         return panel;
     }
@@ -4336,7 +4577,7 @@ section[id*="quote" i] .ipc-list-card { padding: 4px 0 !important; margin: 2px 0
         const rows = makeEl('div', { className:'enh-marks-panel__rows' });
         const clearAll = makeEl('button', {
             type:'button',
-            className:'enh-settings-footer-btn',
+            className:'enh-settings-footer-btn enh-settings-footer-btn--danger',
             onClick: () => {
                 const entries = getUserMarkEntries();
                 if (!entries.length) return;
@@ -4350,6 +4591,8 @@ section[id*="quote" i] .ipc-list-card { padding: 4px 0 !important; margin: 2px 0
         const render = () => {
             const entries = getUserMarkEntries();
             count.textContent = `${entries.length} saved`;
+            const summary = document.getElementById('enh-data-marks-count');
+            if (summary) summary.textContent = `${entries.length} ${entries.length === 1 ? 'title' : 'titles'}`;
             clearAll.disabled = entries.length === 0;
             rows.replaceChildren();
             if (!entries.length) {
@@ -4383,7 +4626,7 @@ section[id*="quote" i] .ipc-list-card { padding: 4px 0 !important; margin: 2px 0
                         render();
                         showToast('Mark cleared');
                     },
-                }, 'x');
+                }, 'Remove');
                 rows.appendChild(makeEl('div', { className:'enh-mark-row' }, titleEl, stateEl, open, clear));
             });
         };
@@ -4400,24 +4643,28 @@ section[id*="quote" i] .ipc-list-card { padding: 4px 0 !important; margin: 2px 0
 
     function createSettingsPanel() {
         if (document.getElementById('enh-settings-overlay')) return;
-        const overlay = makeEl('div', { id: 'enh-settings-overlay', 'aria-hidden':'true' });
+        const overlay = makeEl('div', { id:'enh-settings-overlay', 'aria-hidden':'true' });
         overlay.innerHTML = `<div id="enh-settings-panel">
             <div class="enh-settings-header">
                 <div>
                     <h2 id="enh-settings-title">IMDb Enhanced</h2>
-                    <p class="enh-settings-subtitle">Cleaner IMDb pages, calmer controls, and local-only preferences.</p>
+                    <p class="enh-settings-subtitle">Cleaner pages. Better controls.</p>
                 </div>
-                <button type="button" class="enh-settings-close" title="Close settings" aria-label="Close settings">&times;</button>
+                <div class="enh-settings-header-actions">
+                    <span class="enh-settings-save-state" id="enh-settings-save-state">Saved locally</span>
+                    <button type="button" class="enh-settings-close" title="Close settings" aria-label="Close settings">Close</button>
+                </div>
             </div>
-            <div class="enh-settings-body" id="enh-settings-body"></div>
+            <div class="enh-settings-shell">
+                <nav class="enh-settings-nav" id="enh-settings-nav" role="tablist" aria-label="Settings sections" aria-orientation="vertical"></nav>
+                <main class="enh-settings-main">
+                    <div class="enh-settings-body" id="enh-settings-body"></div>
+                </main>
+            </div>
             <div class="enh-settings-footer">
                 <span>Version ${VERSION}</span>
-                <div class="enh-settings-footer-actions">
-                    <button type="button" class="enh-settings-footer-btn" id="enh-export-btn" title="Copy all settings to clipboard">Export</button>
-                    <button type="button" class="enh-settings-footer-btn" id="enh-import-btn" title="Import settings from JSON">Import</button>
-                    <button type="button" class="enh-settings-footer-btn" id="enh-clearcache-btn" title="Clear cached third-party lookups">Clear cache</button>
-                </div>
-                <span class="enh-settings-footer-note">Stored locally in your userscript manager.</span>
+                <span>Changes save automatically.</span>
+                <span class="enh-settings-footer-note">Stored in your userscript manager.</span>
             </div>
         </div>`;
 
@@ -4427,16 +4674,133 @@ section[id*="quote" i] .ipc-list-card { padding: 4px 0 !important; margin: 2px 0
         panel.setAttribute('aria-labelledby', 'enh-settings-title');
         panel.setAttribute('tabindex', '-1');
 
+        const nav = overlay.querySelector('#enh-settings-nav');
         const body = overlay.querySelector('#enh-settings-body');
+        const saveState = overlay.querySelector('#enh-settings-save-state');
+        const pageMeta = [
+            { id:'experience', label:'Experience', title:'Experience', description:'Shape how IMDb looks and feels.' },
+            { id:'ratings', label:'Ratings', title:'Ratings', description:'Bring trusted scores into the title page.' },
+            { id:'tools', label:'Tools', title:'Tools', description:'Choose the shortcuts and title-page utilities you use.' },
+            { id:'sites', label:'Sites', title:'Sites', description:'Control where title searches and research links open.' },
+            { id:'integrations', label:'Integrations', title:'Integrations', description:'Connect the local services you already run.' },
+            { id:'data', label:'Data', title:'Data', description:'Review, back up, or clear what IMDb Enhanced stores locally.' },
+        ];
+        const pages = new Map();
+        let savedTimer = null;
 
-        // Theme Selector
-        body.appendChild(makeEl('div', { className:'enh-settings-group-label' }, 'Theme'));
-        const themeRow = makeEl('div', { className:'enh-settings-row' });
-        const themeCopy = makeEl('div', { className:'enh-settings-row-copy' },
-            makeEl('span', { className:'enh-settings-label' }, 'Theme variant'),
-            makeEl('span', { className:'enh-settings-help' }, 'Choose the tonal base for IMDb Enhanced surfaces.')
+        const markSaved = () => {
+            saveState.textContent = 'Saved';
+            clearTimeout(savedTimer);
+            savedTimer = setTimeout(() => { saveState.textContent = 'Saved locally'; }, 1200);
+        };
+        document.addEventListener('imdb-enhanced:settings-saved', markSaved);
+        const makePage = meta => {
+            const section = makeEl('section', {
+                className:'enh-settings-page',
+                id:`enh-settings-page-${meta.id}`,
+                role:'tabpanel',
+                'aria-labelledby':`enh-settings-tab-${meta.id}`,
+            }, makeEl('div', { className:'enh-settings-page-header' },
+                makeEl('h3', { className:'enh-settings-page-title' }, meta.title),
+                makeEl('p', { className:'enh-settings-page-description' }, meta.description)
+            ));
+            pages.set(meta.id, section);
+            body.appendChild(section);
+            return section;
+        };
+        const showPage = (id, focus = false) => {
+            if (!pages.has(id)) id = 'experience';
+            activeSettingsPage = id;
+            pages.forEach((page, pageId) => { page.hidden = pageId !== id; });
+            nav.querySelectorAll('.enh-settings-nav-btn').forEach(button => {
+                const selected = button.dataset.settingsPage === id;
+                button.setAttribute('aria-selected', String(selected));
+                button.tabIndex = selected ? 0 : -1;
+                if (selected && focus) button.focus();
+            });
+            body.scrollTop = 0;
+        };
+        const makeCard = (title, description = '', badge = '') => makeEl('div', { className:'enh-settings-card' },
+            makeEl('div', { className:'enh-settings-card-header' },
+                makeEl('div', {},
+                    makeEl('div', { className:'enh-settings-card-title' }, title),
+                    description ? makeEl('div', { className:'enh-settings-card-description' }, description) : null
+                ),
+                badge ? makeEl('span', { className:'enh-settings-route-badge' }, badge) : null
+            )
         );
-        themeRow.appendChild(themeCopy);
+        const makeFeatureRow = feature => {
+            const row = makeEl('div', { className:'enh-settings-row' },
+                makeEl('div', { className:'enh-settings-row-copy' },
+                    makeEl('span', { className:'enh-settings-label' }, feature.name),
+                    makeEl('span', { className:'enh-settings-help' }, FEATURE_DETAILS[feature.key] || '')
+                )
+            );
+            const toggle = makeEl('label', { className:'enh-toggle' });
+            const input = makeEl('input', { type:'checkbox', 'aria-label':feature.name });
+            input.checked = get(feature.key);
+            input.addEventListener('change', () => {
+                set(feature.key, input.checked);
+                if (input.checked && shouldInitFeature(feature)) {
+                    try { feature.init(); } catch (e) { console.warn(e); }
+                } else if (!input.checked) {
+                    feature.destroy?.();
+                }
+                markSaved();
+            });
+            toggle.append(input, makeEl('span', { className:'enh-toggle-track' }));
+            row.appendChild(toggle);
+            return row;
+        };
+        const makeFeatureCard = (title, description, badge, keys, compact = false) => {
+            const card = makeCard(title, description, badge);
+            if (compact) card.classList.add('enh-settings-card--compact');
+            keys.map(key => features.find(feature => feature.key === key)).filter(Boolean).forEach(feature => card.appendChild(makeFeatureRow(feature)));
+            return card;
+        };
+        const makeFeatureSummaryCard = (title, description, badge, key) => {
+            const feature = features.find(item => item.key === key);
+            const card = makeCard(title, description, '');
+            const row = makeFeatureRow(feature);
+            const toggle = row.querySelector('.enh-toggle');
+            const actions = makeEl('div', { className:'enh-settings-card-actions' },
+                makeEl('span', { className:'enh-settings-route-badge' }, badge), toggle
+            );
+            card.querySelector('.enh-settings-card-header').appendChild(actions);
+            return card;
+        };
+
+        pageMeta.forEach(meta => {
+            const button = makeEl('button', {
+                type:'button',
+                className:'enh-settings-nav-btn',
+                id:`enh-settings-tab-${meta.id}`,
+                role:'tab',
+                dataset:{ settingsPage:meta.id },
+                'aria-controls':`enh-settings-page-${meta.id}`,
+                'aria-selected':'false',
+                onClick: () => showPage(meta.id),
+            }, meta.label);
+            button.addEventListener('keydown', event => {
+                const buttons = Array.from(nav.querySelectorAll('.enh-settings-nav-btn'));
+                const current = buttons.indexOf(button);
+                let next = null;
+                if (event.key === 'ArrowDown') next = (current + 1) % buttons.length;
+                if (event.key === 'ArrowUp') next = (current - 1 + buttons.length) % buttons.length;
+                if (event.key === 'Home') next = 0;
+                if (event.key === 'End') next = buttons.length - 1;
+                if (next === null) return;
+                event.preventDefault();
+                buttons[next].click();
+                buttons[next].focus();
+            });
+            nav.appendChild(button);
+            makePage(meta);
+        });
+
+        const experiencePage = pages.get('experience');
+        experiencePage.classList.add('enh-settings-page--experience');
+        const themeCard = makeCard('Theme', 'Choose the tonal base for IMDb Enhanced surfaces.');
         const themeSelector = makeEl('div', { className:'enh-theme-selector' });
         const curTheme = getActiveThemeId();
         [
@@ -4445,136 +4809,209 @@ section[id*="quote" i] .ipc-list-card { padding: 4px 0 !important; margin: 2px 0
             { id:'midnight', color:'#0a0e1c', label:'Midnight' },
             { id:'light', color:'#f6f7f9', label:'Light' },
             { id:'highContrast', color:'linear-gradient(135deg,#000 0 42%,#ffd400 42% 62%,#fff 62%)', label:'High contrast' },
-        ].forEach(th => {
-            const sw = makeEl('button', {
+        ].forEach(theme => {
+            const swatch = makeEl('button', {
                 type:'button',
-                className:'enh-theme-swatch' + (curTheme === th.id ? ' active' : ''),
-                style: { background:th.color },
-                dataset: { label:th.label, theme:th.id },
-                title: th.label,
-                'aria-label': `Use ${th.label} theme`,
-                'aria-pressed': String(curTheme === th.id),
+                className:'enh-theme-swatch' + (curTheme === theme.id ? ' active' : ''),
+                style:{ background:theme.color },
+                dataset:{ label:theme.label, theme:theme.id },
+                title:theme.label,
+                'aria-label':`Use ${theme.label} theme`,
+                'aria-pressed':String(curTheme === theme.id),
                 onClick: () => {
                     set('themeAuto', false);
-                    set('themeVariant', th.id);
+                    set('themeVariant', theme.id);
                     applyThemeStyles();
-                }
+                    markSaved();
+                },
             });
-            themeSelector.appendChild(sw);
+            themeSelector.appendChild(makeEl('div', { className:'enh-theme-option' }, swatch, makeEl('span', {}, theme.label)));
         });
-        themeRow.appendChild(themeSelector);
-        body.appendChild(themeRow);
-
-        const autoThemeRow = makeEl('div', { className:'enh-settings-row' });
-        autoThemeRow.appendChild(makeEl('div', { className:'enh-settings-row-copy' },
-            makeEl('span', { className:'enh-settings-label' }, 'Follow system theme'),
-            makeEl('span', { className:'enh-settings-help' }, 'Uses Light for OS light mode and Dark for OS dark mode.')
-        ));
+        themeCard.appendChild(themeSelector);
+        const autoThemeRow = makeEl('div', { className:'enh-settings-row enh-theme-auto-row' },
+            makeEl('div', { className:'enh-settings-row-copy' },
+                makeEl('span', { className:'enh-settings-label' }, 'Follow system theme'),
+                makeEl('span', { className:'enh-settings-help' }, 'Uses Light for OS light mode and Dark for OS dark mode.')
+            )
+        );
         const autoThemeToggle = makeEl('label', { className:'enh-toggle' });
         const autoThemeInput = makeEl('input', { id:'enh-theme-auto', type:'checkbox', 'aria-label':'Follow system theme' });
         autoThemeInput.checked = get('themeAuto');
         autoThemeInput.addEventListener('change', () => {
             set('themeAuto', autoThemeInput.checked);
             applyThemeStyles();
+            markSaved();
         });
-        autoThemeToggle.appendChild(autoThemeInput);
-        autoThemeToggle.appendChild(makeEl('div', { className:'enh-toggle-track' }));
+        autoThemeToggle.append(autoThemeInput, makeEl('span', { className:'enh-toggle-track' }));
         autoThemeRow.appendChild(autoThemeToggle);
-        body.appendChild(autoThemeRow);
+        themeCard.appendChild(autoThemeRow);
+        experiencePage.appendChild(themeCard);
+        const experienceGrid = makeEl('div', { className:'enh-settings-grid enh-settings-grid--experience', style:{ marginTop:'12px' } });
+        experienceGrid.appendChild(makeFeatureCard('Page cleanup', 'Remove noise so you can focus on what matters.', 'All pages', [
+            'removeAds', 'removeProUpsell', 'removeNewsSection', 'removeRelatedInterests',
+            'removeContribution', 'removeSponsoredRecs', 'removeAppBanner',
+        ], true));
+        experienceGrid.appendChild(makeEl('div', { className:'enh-settings-stack' },
+            makeFeatureCard('Appearance', 'Refine how content looks and is presented.', 'Desktop', [
+                'modernUI', 'compactHeader', 'enhancedRatingDisplay', 'widerLayout', 'ratingColorCoding',
+            ], true),
+            makeFeatureCard('Layout', 'Adjust structure and content presentation.', 'Detail pages', [
+                'collapsibleSections', 'spoilerBlur', 'quickNav',
+            ], true)
+        ));
+        experiencePage.appendChild(experienceGrid);
 
-        // Feature Toggles
-        const groups = {};
-        features.forEach(f => { if (!groups[f.group]) groups[f.group] = []; groups[f.group].push(f); });
-        for (const [gName, gFeatures] of Object.entries(groups)) {
-            body.appendChild(makeEl('div', { className:'enh-settings-group-label' }, gName));
-            gFeatures.forEach(f => {
-                const row = makeEl('div', { className:'enh-settings-row' });
-                row.appendChild(makeEl('div', { className:'enh-settings-row-copy' },
-                    makeEl('span', { className:'enh-settings-label' }, f.name),
-                    makeEl('span', { className:'enh-settings-help' }, FEATURE_DETAILS[f.key] || '')
-                ));
-                const toggle = makeEl('label', { className:'enh-toggle' });
-                const input = makeEl('input', { type:'checkbox', 'aria-label': f.name });
-                input.checked = get(f.key);
-                const track = makeEl('div', { className:'enh-toggle-track' });
-                input.addEventListener('change', () => {
-                    set(f.key, input.checked);
-                    if (input.checked) { try { f.init(); } catch(e) { console.warn(e); } }
-                    else f.destroy?.();
-                });
-                toggle.appendChild(input); toggle.appendChild(track);
-                row.appendChild(toggle); body.appendChild(row);
-            });
-        }
+        const ratingsPage = pages.get('ratings');
+        const previewCard = makeCard('At a glance', 'Sample preview of how ratings appear on a title page — not live data.');
+        const preview = makeEl('div', { className:'enh-score-preview' });
+        [
+            ['8.7 /10', 'IMDb'], ['88%', 'Rotten Tomatoes'], ['4.2 /5', 'Letterboxd'], ['73 /100', 'Metacritic'], ['4 services', 'Streaming'],
+        ].forEach(([value, label]) => preview.appendChild(makeEl('div', { className:'enh-score-preview-item' },
+            makeEl('div', { className:'enh-score-preview-value' }, value),
+            makeEl('div', { className:'enh-score-preview-label' }, label)
+        )));
+        previewCard.appendChild(preview);
+        ratingsPage.append(previewCard,
+            makeEl('div', { style:{ marginTop:'12px' } }, makeFeatureCard('Score sources', 'Choose which ratings and availability information to show.', 'Title pages', [
+                'ratingHistogram', 'inlineRTScore', 'inlineLetterboxdScore', 'inlineMetacriticScore', 'streamAvailability',
+            ])),
+            makeEl('div', { className:'enh-settings-callout', style:{ marginTop:'12px' } },
+                makeEl('strong', {}, 'Privacy'),
+                'Fetched only on IMDb title pages. Responses are cached locally.'
+            )
+        );
 
-        body.appendChild(makeEl('div', { className:'enh-settings-group-label' }, 'Link sites'));
-        body.appendChild(createCinebySettingsPanel());
-        body.appendChild(createSiteEditor({
-            title:'Watch search sites',
-            key:'watchSites',
-            defaults:DEFAULT_WATCH_SITES,
-            featureKey:'searchButtons',
-        }));
-        body.appendChild(createSiteEditor({
-            title:'External link sites',
-            key:'externalSites',
-            defaults:DEFAULT_EXTERNAL_SITES,
-            featureKey:'externalLinks',
-        }));
-        body.appendChild(makeEl('div', { className:'enh-settings-group-label' }, 'Servarr'));
-        body.appendChild(createServarrSettingsPanel());
-        body.appendChild(makeEl('div', { className:'enh-settings-group-label' }, 'Media servers'));
-        body.appendChild(createMediaServerSettingsPanel());
-        body.appendChild(makeEl('div', { className:'enh-settings-group-label' }, 'Local marks'));
-        body.appendChild(createMarksPanel());
+        const toolsPage = pages.get('tools');
+        toolsPage.appendChild(makeEl('div', { className:'enh-settings-grid enh-settings-grid--three' },
+            makeFeatureCard('Title tools', 'Actions placed near a movie or show title.', 'Title pages', [
+                'searchButtons', 'externalLinks', 'trailerPopover', 'expandedLinkMenu', 'watchedMarking',
+            ]),
+            makeFeatureCard('TV & episodes', 'Focused tools for series and episode lists.', 'TV', [
+                'tvEpisodeTools', 'tvShowEnhancements', 'subtitleLinks',
+            ]),
+            makeFeatureCard('Lists & shortcuts', 'Batch actions and quick navigation.', 'Lists', [
+                'watchlistBatch', 'listMultiSearch', 'quickCopyID', 'keyboardShortcuts',
+            ])
+        ));
+        toolsPage.appendChild(makeEl('div', { className:'enh-settings-callout', style:{ marginTop:'12px', justifyContent:'center' } },
+            makeEl('span', { className:'enh-settings-kbd' }, '?'), 'Open settings',
+            makeEl('span', { className:'enh-settings-kbd', style:{ marginLeft:'20px' } }, 'C'), 'Copy IMDb ID'
+        ));
 
+        const sitesPage = pages.get('sites');
+        sitesPage.appendChild(createCinebySettingsPanel());
+        const sitesGrid = makeEl('div', { className:'enh-sites-grid', style:{ marginTop:'12px' } },
+            createSiteEditor({ title:'Watch search sites', key:'watchSites', defaults:DEFAULT_WATCH_SITES, featureKey:'searchButtons' }),
+            createSiteEditor({ title:'External link sites', key:'externalSites', defaults:DEFAULT_EXTERNAL_SITES, featureKey:'externalLinks' })
+        );
+        sitesPage.append(sitesGrid, makeEl('div', { className:'enh-settings-callout', style:{ marginTop:'12px' } },
+            makeEl('strong', {}, 'Templates'),
+            'URL templates support {{TITLE}}, {{IMDB_ID}}, {{YEAR}}, and the tokens documented in the README.'
+        ));
+
+        const integrationsPage = pages.get('integrations');
+        integrationsPage.appendChild(makeEl('div', { className:'enh-integration-summary' },
+            makeFeatureSummaryCard('Servarr quick-add', 'Add movies to Radarr and shows to Sonarr.', 'Local', 'servarrIntegration'),
+            makeFeatureSummaryCard('Media server indicator', 'Check Plex, Jellyfin, and Emby libraries.', 'Local', 'mediaServerIntegration')
+        ));
+        integrationsPage.appendChild(makeEl('div', { className:'enh-settings-callout', style:{ marginTop:'12px' } },
+            makeEl('strong', {}, 'Private by design'),
+            'Requests go directly from your browser to the local URLs you provide.'
+        ));
+        const integrationGrid = makeEl('div', { className:'enh-integration-grid', style:{ marginTop:'12px' } });
+        const servarrCard = makeCard('Radarr & Sonarr', 'Configure local quick-add destinations.');
+        servarrCard.classList.add('enh-integration-card');
+        servarrCard.appendChild(createServarrSettingsPanel());
+        const mediaCard = makeCard('Media servers', 'Configure local library checks.');
+        mediaCard.classList.add('enh-integration-card');
+        mediaCard.appendChild(createMediaServerSettingsPanel());
+        integrationGrid.append(servarrCard, mediaCard);
+        integrationsPage.appendChild(integrationGrid);
+
+        const dataPage = pages.get('data');
+        const cacheCount = () => {
+            try { return GM_listValues().filter(key => key.startsWith('cache_')).length; }
+            catch { return 0; }
+        };
+        const dataSummary = makeEl('div', { className:'enh-data-summary' },
+            makeEl('div', { className:'enh-data-summary-item' },
+                makeEl('div', { className:'enh-data-summary-label' }, 'Preferences'),
+                makeEl('div', { className:'enh-data-summary-value' }, 'Stored locally')
+            ),
+            makeEl('div', { className:'enh-data-summary-item' },
+                makeEl('div', { className:'enh-data-summary-label' }, 'Marks'),
+                makeEl('div', { className:'enh-data-summary-value', id:'enh-data-marks-count' }, `${getUserMarkEntries().length} titles`)
+            ),
+            makeEl('div', { className:'enh-data-summary-item' },
+                makeEl('div', { className:'enh-data-summary-label' }, 'Score cache'),
+                makeEl('div', { className:'enh-data-summary-value', id:'enh-data-cache-count' }, `${cacheCount()} cached entries`)
+            )
+        );
+        dataPage.appendChild(dataSummary);
         const importPanel = makeEl('div', { className:'enh-import-panel', hidden:'hidden' },
             makeEl('label', { className:'enh-import-label', for:'enh-import-textarea' }, 'Paste exported settings JSON'),
             makeEl('textarea', {
-                id:'enh-import-textarea',
-                className:'enh-import-textarea',
-                spellcheck:'false',
-                placeholder:'{ "modernUI": true, "themeVariant": "dark" }'
+                id:'enh-import-textarea', className:'enh-import-textarea', spellcheck:'false', maxlength:'100000',
+                placeholder:'{ "modernUI": true, "themeVariant": "dark" }',
             }),
             makeEl('div', { className:'enh-import-actions' },
                 makeEl('button', { type:'button', className:'enh-settings-footer-btn', id:'enh-import-apply' }, 'Apply import'),
                 makeEl('button', { type:'button', className:'enh-settings-footer-btn', id:'enh-import-cancel' }, 'Cancel')
             )
         );
-        body.appendChild(importPanel);
+        const backupCard = makeCard('Backup & restore', 'JSON includes preferences, sites, and local integration credentials.');
+        backupCard.appendChild(makeEl('div', { className:'enh-data-actions' },
+            makeEl('button', { type:'button', className:'enh-settings-footer-btn', id:'enh-export-btn', title:'Copy all settings to clipboard' }, 'Export settings'),
+            makeEl('button', { type:'button', className:'enh-settings-footer-btn', id:'enh-import-btn', title:'Import settings from JSON' }, 'Import settings')
+        ));
+        backupCard.appendChild(importPanel);
+        const cacheCard = makeCard('Cached lookups', 'Scores and availability lookups are cached locally for up to seven days.');
+        cacheCard.append(
+            makeEl('button', { type:'button', className:'enh-settings-footer-btn', id:'enh-clearcache-btn', title:'Clear cached third-party lookups' }, 'Clear cache'),
+            makeEl('div', { className:'enh-settings-card-description', id:'enh-cache-status', style:{ marginTop:'8px' } }, `${cacheCount()} entries currently cached.`)
+        );
+        dataPage.appendChild(makeEl('div', { className:'enh-settings-grid' },
+            createMarksPanel(),
+            makeEl('div', { className:'enh-settings-stack' }, backupCard, cacheCard)
+        ));
+        dataPage.appendChild(makeEl('div', { className:'enh-settings-callout', style:{ marginTop:'12px' } },
+            makeEl('strong', {}, 'Local only'),
+            'Nothing is sent to an IMDb Enhanced account or cloud service.'
+        ));
 
-        // Event handlers
         overlay.querySelector('.enh-settings-close').addEventListener('click', toggleSettings);
-        overlay.addEventListener('click', e => { if (e.target === overlay) toggleSettings(); });
-        overlay.addEventListener('keydown', e => {
-            if (e.key === 'Escape') {
-                e.preventDefault();
+        overlay.addEventListener('click', event => { if (event.target === overlay) toggleSettings(); });
+        overlay.addEventListener('keydown', event => {
+            if (event.key === 'Escape') {
+                event.preventDefault();
                 if (settingsOpen) toggleSettings();
                 return;
             }
-            if (e.key !== 'Tab') return;
+            if (event.key !== 'Tab') return;
             const focusables = getSettingsFocusables(overlay);
             if (!focusables.length) return;
             const first = focusables[0];
             const last = focusables[focusables.length - 1];
-            if (e.shiftKey && document.activeElement === first) {
-                e.preventDefault();
+            if (event.shiftKey && document.activeElement === first) {
+                event.preventDefault();
                 last.focus();
-            } else if (!e.shiftKey && document.activeElement === last) {
-                e.preventDefault();
+            } else if (!event.shiftKey && document.activeElement === last) {
+                event.preventDefault();
                 first.focus();
             }
         });
         overlay.querySelector('#enh-export-btn').addEventListener('click', () => {
             const data = {};
             for (const key of Object.keys(DEFAULTS)) data[key] = get(key);
-            data.themeVariant = get('themeVariant');
             GM_setClipboard(JSON.stringify(data, null, 2));
             showToast('Settings copied to clipboard');
         });
         overlay.querySelector('#enh-import-btn').addEventListener('click', () => {
             importPanel.hidden = false;
-            overlay.querySelector('#enh-import-textarea').focus();
+            requestAnimationFrame(() => {
+                importPanel.scrollIntoView({ block:'nearest' });
+                overlay.querySelector('#enh-import-textarea').focus();
+            });
         });
         overlay.querySelector('#enh-import-cancel').addEventListener('click', () => {
             importPanel.hidden = true;
@@ -4582,32 +5019,66 @@ section[id*="quote" i] .ipc-list-card { padding: 4px 0 !important; margin: 2px 0
             overlay.querySelector('#enh-import-btn').focus();
         });
         overlay.querySelector('#enh-import-apply').addEventListener('click', () => {
-            const input = overlay.querySelector('#enh-import-textarea').value.trim();
-            if (!input) { showToast('Paste settings JSON before importing'); return; }
+            const raw = overlay.querySelector('#enh-import-textarea').value.trim();
+            if (!raw) { showToast('Paste settings JSON before importing'); return; }
             try {
-                const data = JSON.parse(input);
-                for (const [k, v] of Object.entries(data)) {
-                    if (k in DEFAULTS || k === 'themeVariant') set(k, v);
+                const data = JSON.parse(raw);
+                if (!data || Array.isArray(data) || typeof data !== 'object') throw new Error('Settings must be an object');
+                let imported = 0;
+                for (const [key, value] of Object.entries(data)) {
+                    if (!(key in DEFAULTS)) continue;
+                    const fallback = DEFAULTS[key];
+                    let normalized;
+                    if (key === 'themeVariant') {
+                        if (!['dark', 'oled', 'midnight', 'light', 'highContrast'].includes(value)) continue;
+                        normalized = value;
+                    } else if (typeof fallback === 'boolean') {
+                        if (typeof value !== 'boolean') continue;
+                        normalized = value;
+                    } else if (Array.isArray(fallback)) {
+                        if (!Array.isArray(value)) continue;
+                        normalized = value.slice(0, 50).map(site => normalizeSite(site)).filter(Boolean);
+                    } else if (key === 'userMarks') {
+                        if (!value || Array.isArray(value) || typeof value !== 'object') continue;
+                        normalized = {};
+                        Object.entries(value).slice(0, 5000).forEach(([id, record]) => {
+                            if (!/^tt\d+$/.test(id) || !record || !['watched', 'skip'].includes(record.state)) return;
+                            normalized[id] = {
+                                state:record.state,
+                                title:String(record.title || '').slice(0, 200),
+                                ts:Number.isFinite(Number(record.ts)) ? Number(record.ts) : Date.now(),
+                            };
+                        });
+                    } else if (typeof fallback === 'string') {
+                        if (typeof value !== 'string') continue;
+                        normalized = value.slice(0, 4096);
+                    } else {
+                        continue;
+                    }
+                    set(key, normalized);
+                    imported++;
                 }
-                showToast('Settings imported. Reloading...');
+                if (!imported) throw new Error('No recognized settings');
+                showToast(`Imported ${imported} settings. Reloading...`);
                 setTimeout(() => location.reload(), 1000);
             } catch { showToast('Import failed. Check the JSON and try again.'); }
         });
         overlay.querySelector('#enh-clearcache-btn').addEventListener('click', () => {
+            let cleared = 0;
             try {
-                const allKeys = GM_listValues();
-                let cleared = 0;
-                allKeys.forEach(k => {
-                    if (k.startsWith('cache_')) {
-                        if (typeof GM_deleteValue === 'function') GM_deleteValue(k);
-                        else GM_setValue(k, null);
-                        cleared++;
-                    }
+                GM_listValues().forEach(key => {
+                    if (!key.startsWith('cache_')) return;
+                    if (typeof GM_deleteValue === 'function') GM_deleteValue(key);
+                    else GM_setValue(key, null);
+                    cleared++;
                 });
-                showToast(`Cleared ${cleared} cached entries. Reload to re-fetch.`);
-            } catch { showToast('Cache cleared'); }
+            } catch { /* no-op */ }
+            overlay.querySelector('#enh-data-cache-count').textContent = '0 cached entries';
+            overlay.querySelector('#enh-cache-status').textContent = 'No cached entries.';
+            showToast(`Cleared ${cleared} cached entries. Reload to re-fetch.`);
         });
 
+        showPage(activeSettingsPage);
         document.body.appendChild(overlay);
     }
 
@@ -4633,7 +5104,8 @@ section[id*="quote" i] .ipc-list-card { padding: 4px 0 !important; margin: 2px 0
         document.documentElement.style.overflow = settingsOpen ? 'hidden' : '';
         if (settingsOpen) {
             lastFocusedElement = document.activeElement;
-            setTimeout(() => (getSettingsFocusables(overlay)[0] || panel)?.focus(), 40);
+            const activeTab = overlay?.querySelector(`.enh-settings-nav-btn[data-settings-page="${activeSettingsPage}"]`);
+            setTimeout(() => (activeTab || getSettingsFocusables(overlay)[0] || panel)?.focus(), 40);
         } else {
             lastFocusedElement?.focus?.();
         }
@@ -4648,14 +5120,30 @@ section[id*="quote" i] .ipc-list-card { padding: 4px 0 !important; margin: 2px 0
         const t = GM_getValue(CINEBY_QUERY_KEY, '') || GM_getValue(legacyKey, '');
         if (!t) return;
         setTimeout(() => {
-            const input = document.querySelector('input[type="search"],input[type="text"],input[placeholder*="search" i]');
-            if (input) {
-                input.value = t;
-                input.dispatchEvent(new Event('input', { bubbles: true }));
+            const fill = input => {
+                const setter = Object.getOwnPropertyDescriptor(HTMLInputElement.prototype, 'value')?.set;
+                if (setter) setter.call(input, t);
+                else input.value = t;
+                input.dispatchEvent(new InputEvent('input', { bubbles:true, inputType:'insertText', data:t }));
+                input.dispatchEvent(new Event('change', { bubbles:true }));
+                input.focus();
                 GM_setValue(CINEBY_QUERY_KEY, '');
                 GM_setValue(legacyKey, '');
-            }
-        }, 600);
+            };
+            const inputs = Array.from(document.querySelectorAll('input[type="search"],input[placeholder*="search" i],input[type="text"]'));
+            const visibleInput = inputs.find(input => input.offsetParent !== null);
+            if (visibleInput) { fill(visibleInput); return; }
+
+            const searchButton = Array.from(document.querySelectorAll('button,[role="button"]')).find(button => {
+                const label = button.getAttribute('aria-label') || button.textContent || '';
+                return /^search$/i.test(label.trim());
+            });
+            searchButton?.click();
+            waitFor('input[placeholder*="search" i],input[type="search"]', 3000).then(fill).catch(() => {
+                const fallback = document.querySelector('input[type="text"]');
+                if (fallback) fill(fallback);
+            });
+        }, 250);
     }
 
     // =========================================================================
@@ -4671,13 +5159,38 @@ section[id*="quote" i] .ipc-list-card { padding: 4px 0 !important; margin: 2px 0
         return window.location.hostname.includes('imdb.com');
     }
 
-    function isNonTitlePage() {
-        return /\/(watchlist|list\/|chart\/)/i.test(location.pathname);
+    const UNIVERSAL_FEATURE_KEYS = new Set([
+        'modernUI', 'compactHeader', 'widerLayout', 'keyboardShortcuts',
+    ]);
+    const COLLECTION_FEATURE_KEYS = new Set([
+        ...UNIVERSAL_FEATURE_KEYS, 'watchlistBatch', 'listMultiSearch',
+    ]);
+    const SECONDARY_PAGE_FEATURE_KEYS = new Set([
+        ...UNIVERSAL_FEATURE_KEYS, 'collapsibleSections', 'quickNav',
+    ]);
+    const EPISODE_LIST_FEATURE_KEYS = new Set([
+        ...SECONDARY_PAGE_FEATURE_KEYS, 'tvEpisodeTools',
+    ]);
+
+    function getPageSurface() {
+        const path = location.pathname;
+        const locale = '(?:[a-z]{2}(?:-[a-z]{2})?/)?';
+        if (new RegExp(`^/${locale}title/tt\\d+/episodes/?$`, 'i').test(path)) return 'episodes';
+        if (new RegExp(`^/${locale}title/tt\\d+/?$`, 'i').test(path)) return 'title';
+        if (new RegExp(`^/${locale}title/tt\\d+/`, 'i').test(path)) return 'title-subpage';
+        if (new RegExp(`^/${locale}name/nm\\d+`, 'i').test(path)) return 'name';
+        if (/\/(watchlist|list\/|chart\/)/i.test(path)) return 'collection';
+        return 'other';
     }
 
     function shouldInitFeature(feature) {
-        if (!isNonTitlePage()) return true;
-        return ['modernUI', 'compactHeader', 'watchlistBatch', 'listMultiSearch', 'keyboardShortcuts'].includes(feature.key);
+        if (feature.group === 'Cleanup') return true;
+        const surface = getPageSurface();
+        if (surface === 'title') return !['watchlistBatch', 'listMultiSearch'].includes(feature.key);
+        if (surface === 'episodes') return EPISODE_LIST_FEATURE_KEYS.has(feature.key);
+        if (surface === 'collection') return COLLECTION_FEATURE_KEYS.has(feature.key);
+        if (surface === 'name' || surface === 'title-subpage') return SECONDARY_PAGE_FEATURE_KEYS.has(feature.key);
+        return UNIVERSAL_FEATURE_KEYS.has(feature.key);
     }
 
     function getRouteKey() {
