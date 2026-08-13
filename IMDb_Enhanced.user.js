@@ -71,6 +71,8 @@
     const EXTERNAL_RESPONSE_TEXT_LIMIT = 8 * 1024 * 1024;
     const LOCAL_RESPONSE_TEXT_LIMIT = 4 * 1024 * 1024;
     const SITE_LIST_LIMIT = 50;
+    const COLLECTION_LINK_SCAN_LIMIT = 5000;
+    const LIST_SEARCH_TITLE_LIMIT = 20;
     const URL_TEMPLATE_TEXT_LIMIT = 4096;
     const SETTING_TEXT_LIMIT = 4096;
     const SETTINGS_IMPORT_TEXT_LIMIT = 4 * 1024 * 1024;
@@ -4716,10 +4718,7 @@ section[id*="quote" i] .ipc-list-card { padding: 4px 0 !important; margin: 2px 0
             target.insertBefore(btn, target.firstElementChild || null);
         },
         _ids() {
-            const ids = Array.from(document.querySelectorAll('a[href*="/title/tt"]'))
-                .map(a => getLinkedTitleId(a.href))
-                .filter(Boolean);
-            return [...new Set(ids)];
+            return getListTitleIdsFromLinks(document.querySelectorAll('a[href*="/title/tt"]'));
         },
         destroy() {
             removeCSS('enh-watchlistBatch');
@@ -4731,19 +4730,34 @@ section[id*="quote" i] .ipc-list-card { padding: 4px 0 !important; margin: 2px 0
         return /\/(watchlist|list\/|chart\/)/i.test(location.pathname);
     }
 
+    function getListTitleIdsFromLinks(links) {
+        const ids = new Set();
+        let inspected = 0;
+        for (const link of links || []) {
+            if (inspected >= COLLECTION_LINK_SCAN_LIMIT) break;
+            inspected += 1;
+            const id = getLinkedTitleId(link.href);
+            if (id) ids.add(id);
+        }
+        return [...ids];
+    }
+
     function getListTitlesFromLinks(links) {
         const seen = new Set();
         const titles = [];
-        Array.from(links || []).forEach(a => {
-            const id = getLinkedTitleId(a.href);
-            if (!id || seen.has(id)) return;
-            const textEl = a.querySelector('[class*="title"]') || a;
+        let inspected = 0;
+        for (const link of links || []) {
+            if (inspected >= COLLECTION_LINK_SCAN_LIMIT || titles.length >= LIST_SEARCH_TITLE_LIMIT) break;
+            inspected += 1;
+            const id = getLinkedTitleId(link.href);
+            if (!id || seen.has(id)) continue;
+            const textEl = link.querySelector('[class*="title"]') || link;
             const name = (textEl.textContent || '').trim().replace(/\s+/g, ' ')
                 .replace(/^\d+\.\s+/, '').slice(0, 120);
-            if (!name) return;
+            if (!name) continue;
             seen.add(id);
             titles.push({ id, name });
-        });
+        }
         return titles;
     }
 
@@ -4752,7 +4766,7 @@ section[id*="quote" i] .ipc-list-card { padding: 4px 0 !important; margin: 2px 0
     }
 
     function buildListSearchEntries(site, titles) {
-        return titles.slice(0, 20).map(title => ({
+        return titles.slice(0, LIST_SEARCH_TITLE_LIMIT).map(title => ({
             ...title,
             url: site.storeQuery
                 ? getCinebyHost()

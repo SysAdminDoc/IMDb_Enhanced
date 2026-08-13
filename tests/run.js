@@ -66,6 +66,7 @@ function loadScriptTestHooks() {
         isTrailerTitleMatch,
         normalizeYouTubeVideoId,
         parseYouTubeTrailerVideoId,
+        getListTitleIdsFromLinks,
         getListTitlesFromLinks,
         buildListSearchEntries,
         getEnhancementScrollBehavior,
@@ -1290,6 +1291,19 @@ test('list multi-search builds a popup-safe link queue', () => {
         [{ id:'tt0133093', name:'The Matrix' }],
         'an empty poster link must not consume the title ID, and chart rank must not pollute the title query'
     );
+    const manyLinks = Array.from({ length:25 }, (_, index) => ({
+        href:`https://www.imdb.com/title/tt${String(index + 1).padStart(7, '0')}/`,
+        textContent:`Title ${index + 1}`,
+        querySelector:() => null,
+    }));
+    assert.strictEqual(hooks.getListTitlesFromLinks(manyLinks).length, 20, 'title extraction should stop once the queue is full');
+    assert.deepStrictEqual(
+        Array.from(hooks.getListTitleIdsFromLinks(manyLinks.slice(0, 2))),
+        ['tt0000001', 'tt0000002'],
+        'batch ID extraction should preserve first-seen order'
+    );
+    assert(/function getListTitlesFromLinks[\s\S]*?inspected >= COLLECTION_LINK_SCAN_LIMIT/.test(script), 'list title discovery needs a finite link-scan budget');
+    assert(/function getListTitleIdsFromLinks[\s\S]*?inspected >= COLLECTION_LINK_SCAN_LIMIT/.test(script), 'batch ID discovery needs a finite link-scan budget');
     const titles = Array.from({ length: 24 }, (_, index) => ({
         id:`tt${String(index + 1).padStart(7, '0')}`,
         name:`Title ${index + 1}`,
