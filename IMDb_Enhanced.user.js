@@ -6115,6 +6115,11 @@ section[id*="quote" i] .ipc-list-card { padding: 4px 0 !important; margin: 2px 0
                 first.focus();
             }
         });
+        document.addEventListener('focusin', event => {
+            if (!settingsOpen || overlay.contains(event.target)) return;
+            const activeTab = overlay.querySelector(`.enh-settings-nav-btn[data-settings-page="${activeSettingsPage}"]`);
+            (activeTab || getFocusableElements(overlay)[0] || panel).focus();
+        });
         overlay.querySelector('#enh-export-btn').addEventListener('click', () => {
             const data = {};
             for (const key of Object.keys(DEFAULTS)) data[key] = get(key);

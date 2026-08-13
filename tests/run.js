@@ -377,6 +377,7 @@ test('settings use six accessible desktop destinations', () => {
     assert(/#enh-settings-overlay\.enh-visible\s*\{[^}]*visibility:\s*visible/s.test(script), 'open settings must restore visibility');
     assert(script.includes("maxlength:'100000'"), 'import size guard missing');
     assert(script.includes('Changes save automatically.'), 'automatic-save status missing');
+    assert(script.includes('if (!settingsOpen || overlay.contains(event.target)) return'), 'settings should recapture focus that leaves the modal');
 });
 
 test('trailer dialog contains focus, restores page state, and ignores stale lookups', () => {
