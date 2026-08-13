@@ -27,10 +27,13 @@ function loadScriptTestHooks() {
     const instrumented = script.replace(/\}\)\(\);\s*$/, `window.__enhTest = {
         normalizeIMDbProviderId,
         normalizeLookupTitle,
+        parseIMDbTitleStructuredData,
         collectProviderIds,
         mediaItemMatches,
         parseMediaServerItems,
         getLinkedTitleId,
+        isIMDbHost,
+        isCinebyHost,
         getPageSurface,
         shouldInitFeature,
         createFeatureGuard,
@@ -92,6 +95,7 @@ function loadScriptTestHooks() {
             body: {},
             documentElement: {},
             querySelector: () => null,
+            querySelectorAll: () => [],
             dispatchEvent: () => true,
             createElement: tag => {
                 if (tag !== 'textarea') return {};
@@ -157,6 +161,26 @@ test('metadata stays distribution-safe', () => {
     assert(!/@match\s+https:\/\/m\.imdb\.com\//.test(script), 'desktop-only userscript must not match mobile IMDb');
     assert(/@updateURL/.test(script), '@updateURL should be present for update channel');
     assert(/@downloadURL/.test(script), '@downloadURL should be present for update channel');
+    const hooks = loadScriptTestHooks();
+    assert(hooks.isIMDbHost('www.imdb.com'));
+    assert(!hooks.isIMDbHost('not-imdb.com'), 'IMDb host checks must not use substring trust');
+    assert(hooks.isCinebyHost('www.cineby.at'));
+    assert(!hooks.isCinebyHost('cineby.example'), 'Cineby host checks must stay exact');
+});
+
+test('IMDb title data selection ignores unrelated or malformed structured data', () => {
+    const hooks = loadScriptTestHooks();
+    const selected = hooks.parseIMDbTitleStructuredData([
+        '{malformed',
+        JSON.stringify({ '@type':'BreadcrumbList', name:'Breadcrumbs' }),
+        JSON.stringify({ '@graph':[
+            { '@type':'Organization', name:'IMDb' },
+            { '@type':'TVMiniSeries', name:'Chernobyl', datePublished:'2019-05-06', aggregateRating:{ ratingValue:9.3 } },
+        ] }),
+    ]);
+    assert.strictEqual(selected.name, 'Chernobyl');
+    assert.strictEqual(selected['@type'], 'TVMiniSeries');
+    assert(script.includes('if (Object.keys(selected).length) _ldData = selected'), 'an early empty scan must not prevent a later structured-data retry');
 });
 
 test('fragile selectors and global Cineby key stay removed', () => {

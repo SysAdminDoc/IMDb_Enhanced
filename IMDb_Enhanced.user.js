@@ -511,7 +511,7 @@
     }
 
     function injectEarlyAdShell() {
-        if (!window.location.hostname.includes('imdb.com') || !get('removeAds')) return;
+        if (!isIMDbHost() || !get('removeAds')) return;
         setAdRequestBlocking(true);
         addCSS(`${AD_SHELL_SELECTOR} {
             display: none !important;
@@ -830,13 +830,40 @@
                 document.querySelector('h1'))?.textContent?.trim() || '';
     }
 
+    function parseIMDbTitleStructuredData(scriptTexts) {
+        let fallback = null;
+        for (const text of scriptTexts || []) {
+            let parsed;
+            try { parsed = JSON.parse(String(text || '')); }
+            catch { continue; }
+
+            const queue = Array.isArray(parsed) ? [...parsed] : [parsed];
+            let inspected = 0;
+            while (queue.length && inspected < 1000) {
+                const node = queue.shift();
+                inspected += 1;
+                if (!node || typeof node !== 'object') continue;
+                if (Array.isArray(node)) {
+                    queue.push(...node);
+                    continue;
+                }
+                const types = Array.isArray(node['@type']) ? node['@type'] : [node['@type']].filter(Boolean);
+                if (types.some(type => ['Movie', 'TVSeries', 'TVEpisode', 'TVMiniSeries'].includes(type))) return node;
+                if (!fallback && node.name && (node.aggregateRating || node.datePublished || node.startDate)) fallback = node;
+                Object.values(node).forEach(value => {
+                    if (value && typeof value === 'object') queue.push(value);
+                });
+            }
+        }
+        return fallback || {};
+    }
+
     let _ldData = null;
     function getLDData() {
         if (_ldData) return _ldData;
-        try {
-            const s = document.querySelector('script[type="application/ld+json"]');
-            if (s) _ldData = JSON.parse(s.textContent);
-        } catch { /* ignore */ }
+        const scripts = Array.from(document.querySelectorAll('script[type="application/ld+json"]'));
+        const selected = parseIMDbTitleStructuredData(scripts.map(script => script.textContent));
+        if (Object.keys(selected).length) _ldData = selected;
         return _ldData || {};
     }
 
@@ -879,7 +906,8 @@
         const ld = getLDData();
         const types = Array.isArray(ld['@type']) ? ld['@type'] : [ld['@type']];
         if (types.includes('TVEpisode') || ld.partOfSeries || ld.partOfSeason) return 'episode';
-        if (types.includes('TVSeries')) {
+        if (types.includes('TVSeries') || types.includes('TVMiniSeries')) {
+            if (types.includes('TVMiniSeries')) return 'miniseries';
             const text = [ld.name, ld.description, ld.keywords].filter(Boolean).join(' ');
             return /mini[-\s]?series/i.test(text) ? 'miniseries' : 'series';
         }
@@ -1771,7 +1799,7 @@ a:focus-visible, button:focus-visible, .ipc-chip:focus-visible {
     }
 
     function injectEarlyThemeShell() {
-        if (!window.location.hostname.includes('imdb.com') || !get('modernUI')) return;
+        if (!isIMDbHost() || !get('modernUI')) return;
         const t = getTheme();
         document.documentElement.dataset.imdbEnhanced = 'active';
         addCSS(`
@@ -2973,7 +3001,7 @@ section[id*="quote" i] .ipc-list-card { padding: 4px 0 !important; margin: 2px 0
     reg({
         key: 'searchButtons', name: 'Watch search buttons', group: 'Features',
         init() {
-            if (!window.location.hostname.includes('imdb.com')) return;
+            if (!isIMDbHost()) return;
             const isCurrent = createFeatureGuard(this);
             waitForTitleSurface().then(() => {
                 if (!isCurrent()) return;
@@ -3055,7 +3083,7 @@ section[id*="quote" i] .ipc-list-card { padding: 4px 0 !important; margin: 2px 0
         _modalOpen: false,
         _modalGeneration: 0,
         init() {
-            if (!window.location.hostname.includes('imdb.com')) return;
+            if (!isIMDbHost()) return;
             const isCurrent = createFeatureGuard(this);
             const t = getTheme();
             addCSS(`
@@ -3417,7 +3445,7 @@ section[id*="quote" i] .ipc-list-card { padding: 4px 0 !important; margin: 2px 0
         _raf: 0,
         _pendingScanRoots: null,
         init() {
-            if (!window.location.hostname.includes('imdb.com')) return;
+            if (!isIMDbHost()) return;
             const t = getTheme();
             addCSS(`
                 .enh-markable-card{position:relative!important}
@@ -3621,7 +3649,7 @@ section[id*="quote" i] .ipc-list-card { padding: 4px 0 !important; margin: 2px 0
     reg({
         key: 'servarrIntegration', name: 'Servarr quick-add', group: 'Features',
         init() {
-            if (!window.location.hostname.includes('imdb.com')) return;
+            if (!isIMDbHost()) return;
             const isCurrent = createFeatureGuard(this);
             waitForTitleSurface().then(() => {
                 if (!isCurrent()) return;
@@ -3773,7 +3801,7 @@ section[id*="quote" i] .ipc-list-card { padding: 4px 0 !important; margin: 2px 0
     reg({
         key: 'mediaServerIntegration', name: 'Plex/Jellyfin/Emby indicator', group: 'Features',
         init() {
-            if (!window.location.hostname.includes('imdb.com')) return;
+            if (!isIMDbHost()) return;
             const isCurrent = createFeatureGuard(this);
             waitForTitleSurface().then(() => {
                 if (!isCurrent()) return;
@@ -6089,7 +6117,7 @@ section[id*="quote" i] .ipc-list-card { padding: 4px 0 !important; margin: 2px 0
     //  CINEBY AUTO-FILL
     // =========================================================================
     async function handleCineby() {
-        if (!window.location.hostname.includes('cineby')) return;
+        if (!isCinebyHost()) return;
         const t = takeCinebyQuery();
         if (!t) return;
         const findVisibleInput = () => Array.from(document.querySelectorAll(
@@ -6128,8 +6156,12 @@ section[id*="quote" i] .ipc-list-card { padding: 4px 0 !important; margin: 2px 0
     let routeTimer = null;
     let initTimer = null;
 
-    function isIMDbHost() {
-        return window.location.hostname.includes('imdb.com');
+    function isIMDbHost(hostname = window.location.hostname) {
+        return String(hostname || '').toLowerCase() === 'www.imdb.com';
+    }
+
+    function isCinebyHost(hostname = window.location.hostname) {
+        return String(hostname || '').toLowerCase() === 'www.cineby.at';
     }
 
     const UNIVERSAL_FEATURE_KEYS = new Set([
@@ -6222,7 +6254,7 @@ section[id*="quote" i] .ipc-list-card { padding: 4px 0 !important; margin: 2px 0
     }
 
     function init() {
-        if (window.location.hostname.includes('cineby')) { handleCineby(); return; }
+        if (isCinebyHost()) { handleCineby(); return; }
         if (!isIMDbHost()) return;
 
         const routeKey = getRouteKey();
