@@ -525,8 +525,11 @@ test('version strings match', () => {
     assert(readme.includes(`badge/version-${metaVersion}-blue`), 'README version badge must match userscript version');
 });
 
-test('default watch sites are all live domains', () => {
-    const deadDomains = ['popcornmovies.org', 'xprime.su', 'aether.mom', 'rivestream.app', 'cineby.sc', 'cineby.gd', 'cineby.app'];
+test('retired watch-site domains stay removed', () => {
+    const deadDomains = [
+        'popcornmovies.org', 'xprime.su', 'aether.mom', 'rivestream.app',
+        'cineby.sc', 'cineby.gd', 'cineby.app', 'cinevids.site',
+    ];
     deadDomains.forEach(domain => {
         assert(!script.includes(domain), `dead domain ${domain} should be removed`);
     });

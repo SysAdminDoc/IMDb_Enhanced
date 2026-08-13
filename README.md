@@ -18,7 +18,7 @@ A desktop IMDb overhaul delivered as a single userscript. Cleaner pages, modern 
 
 Third-party lookup responses are rendered as text and their outbound links are restricted to the expected HTTPS service domains.
 
-**Watch Site Search** - Quick-search buttons for streaming sites (StreamXTV, LookMovie, CineVids, CinemaOS, LivNet, Flixer, Cine.su, Fmovies+, Cineby). Fully configurable in settings. Destinations are contacted only when you open them; the userscript does not background-probe every site.
+**Watch Site Search** - Quick-search buttons for streaming sites (StreamXTV, LookMovie, CinemaOS, LivNet, Flixer, Cine.su, Fmovies+, Cineby). Fully configurable in settings. Destinations are contacted only when you open them; the userscript does not background-probe every site.
 
 **External Links** - One-click links to Rotten Tomatoes, Letterboxd, TMDB, YouTube trailers, Wikipedia, JustWatch, and Trakt. Configurable.
 

@@ -96,7 +96,6 @@
         { name:'Cineby', color:'#6366f1', url:CINEBY_HOSTS[0].url, storeQuery:true },
         { name:'StreamXTV', color:'#10b981', url:'https://www.streamxtv.tech/search?q={{TITLE}}' },
         { name:'LookMovie', color:'#f59e0b', url:'https://www.lookmovie2.to/movies/search/?q={{TITLE}}' },
-        { name:'CineVids', color:'#8b5cf6', url:'https://cinevids.site/?s={{TITLE}}' },
         { name:'CinemaOS', color:'#ef4444', url:'https://cinemaos.live/search?q={{TITLE}}' },
         { name:'LivNet', color:'#ec4899', url:'https://livnet.pages.dev/search?q={{TITLE}}' },
         { name:'Flixer', color:'#06b6d4', url:'https://flixer.su/search?q={{TITLE}}' },
