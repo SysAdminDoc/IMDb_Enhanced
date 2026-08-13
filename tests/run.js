@@ -457,11 +457,17 @@ test('lookup caches remain bounded and storage failures do not hide fetched resu
     hooks.seedRawStorage('cache_legacy', JSON.stringify({ data:{ score:99 }, ts:Date.now(), ttl:60000 }));
     assert.strictEqual(hooks.cacheGet('legacy'), null, 'pre-validation cache schemas should be invalidated');
     assert(!hooks.getStorageKeys().includes('cache_legacy'), 'invalidated legacy cache entries should be deleted');
+    hooks.seedRawStorage('cache_bad_ttl', JSON.stringify({ data:{ score:99 }, ts:Date.now(), ttl:'forever', schema:3 }));
+    assert.strictEqual(hooks.cacheGet('bad_ttl'), null, 'non-numeric cache lifetimes must not bypass expiry');
+    assert(!hooks.getStorageKeys().includes('cache_bad_ttl'), 'malformed cache lifetimes should be deleted');
+    hooks.seedRawStorage('cache_future', JSON.stringify({ data:{ score:99 }, ts:Date.now() + 120000, ttl:60000, schema:3 }));
+    assert.strictEqual(hooks.cacheGet('future'), null, 'future-dated cache entries must not persist indefinitely');
     for (let index = 0; index < 135; index++) hooks.cacheSet(`test_${index}`, { index });
     const cacheKeys = hooks.getStorageKeys().filter(key => key.startsWith('cache_'));
     assert(cacheKeys.length <= 129, `cache exceeded bounded GC window: ${cacheKeys.length}`);
     assert.strictEqual(hooks.cacheGet('test_134')?.index, 134, 'newest cached result should survive pruning');
     assert(script.includes('CACHE_SCHEMA_VERSION = 3'), 'cache schema invalidation marker missing');
+    assert.strictEqual((script.match(/function parseCacheEntry\(/g) || []).length, 1, 'cache reads and GC should share one envelope validator');
 
     const failingHooks = loadScriptTestHooks();
     failingHooks.failSettingWriteAt(1);

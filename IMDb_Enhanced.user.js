@@ -229,17 +229,31 @@
     let cacheWritesSinceGC = 0;
     let userMarksCache = null;
 
+    function parseCacheEntry(raw, now = Date.now()) {
+        if (typeof raw !== 'string' || !raw) return null;
+        try {
+            const entry = JSON.parse(raw);
+            const ts = Number(entry?.ts);
+            const ttl = Number(entry?.ttl);
+            if (!entry || entry.schema !== CACHE_SCHEMA_VERSION
+                || !Number.isFinite(ts) || ts <= 0 || ts > now + 60000
+                || !Number.isFinite(ttl) || ttl <= 0 || ttl > CACHE_TTL
+                || now - ts > ttl) return null;
+            return { ...entry, ts, ttl };
+        } catch { return null; }
+    }
+
     function cacheGet(key) {
         try {
             const storageKey = 'cache_' + key;
             const raw = GM_getValue(storageKey, null);
             if (!raw) return null;
-            const { data, ts, ttl, schema } = JSON.parse(raw);
-            if (schema !== CACHE_SCHEMA_VERSION || !ts || Date.now() - ts > (ttl || CACHE_TTL)) {
+            const entry = parseCacheEntry(raw);
+            if (!entry) {
                 if (typeof GM_deleteValue === 'function') GM_deleteValue(storageKey);
                 return null;
             }
-            return data;
+            return entry.data;
         } catch {
             try {
                 if (typeof GM_deleteValue === 'function') GM_deleteValue('cache_' + key);
@@ -281,14 +295,12 @@
                 if (!storageKey.startsWith('cache_')) return;
                 try {
                     const raw = GM_getValue(storageKey, null);
-                    const entry = raw ? JSON.parse(raw) : null;
-                    const ts = Number(entry?.ts) || 0;
-                    const ttl = Number(entry?.ttl) || CACHE_TTL;
-                    if (!entry || entry.schema !== CACHE_SCHEMA_VERSION || !ts || now - ts > ttl) {
+                    const entry = parseCacheEntry(raw, now);
+                    if (!entry) {
                         if (typeof GM_deleteValue === 'function') GM_deleteValue(storageKey);
                         return;
                     }
-                    live.push({ storageKey, ts });
+                    live.push({ storageKey, ts:entry.ts });
                 } catch {
                     if (typeof GM_deleteValue === 'function') GM_deleteValue(storageKey);
                 }
