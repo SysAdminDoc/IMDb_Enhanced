@@ -120,6 +120,7 @@
 - Prevented rapid or cross-tab Cineby actions from overwriting a title handoff that has not yet been consumed, with distinct guidance for a pending tab versus storage failure.
 - Canonicalized imported title marks through the runtime schema, retaining legacy string marks while enforcing the 160-character title bound and neutralizing invalid or future timestamps.
 - Refreshed private marks from userscript storage immediately before each individual write so a tab no longer overwrites marks saved by another open IMDb tab from a stale in-memory snapshot.
+- Capped each persisted lookup-cache envelope at 256 KiB, discarding oversized stored values before parsing and refusing oversized writes before they consume userscript storage.
 
 ## 2.5.1 — 2026-08-12
 

@@ -51,6 +51,7 @@
     const CACHE_SCHEMA_VERSION = 3;
     const CACHE_MAX_ENTRIES = 120;
     const CACHE_GC_WRITE_INTERVAL = 10;
+    const CACHE_ENTRY_TEXT_LIMIT = 256 * 1024;
     const USER_MARKS_MAX = 5000;
     const USER_MARK_TITLE_LIMIT = 160;
     const LOCAL_LOOKUP_RESULT_LIMIT = 100;
@@ -231,7 +232,7 @@
     let userMarksCache = null;
 
     function parseCacheEntry(raw, now = Date.now()) {
-        if (typeof raw !== 'string' || !raw) return null;
+        if (typeof raw !== 'string' || !raw || raw.length > CACHE_ENTRY_TEXT_LIMIT) return null;
         try {
             const entry = JSON.parse(raw);
             const ts = Number(entry?.ts);
@@ -264,7 +265,12 @@
     }
     function cacheSet(key, data, ttl = CACHE_TTL) {
         try {
-            GM_setValue('cache_' + key, JSON.stringify({ data, ts: Date.now(), ttl, schema:CACHE_SCHEMA_VERSION }));
+            const serialized = JSON.stringify({ data, ts: Date.now(), ttl, schema:CACHE_SCHEMA_VERSION });
+            if (serialized.length > CACHE_ENTRY_TEXT_LIMIT) {
+                console.warn('[IMDb Enhanced] cache entry exceeded the storage limit');
+                return false;
+            }
+            GM_setValue('cache_' + key, serialized);
             cacheWritesSinceGC += 1;
             if (cacheWritesSinceGC >= CACHE_GC_WRITE_INTERVAL) {
                 cacheWritesSinceGC = 0;

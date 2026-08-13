@@ -89,6 +89,7 @@ function loadScriptTestHooks() {
         getDefaultSettingsEntries,
         getExportSettings,
         SETTINGS_IMPORT_TEXT_LIMIT,
+        CACHE_ENTRY_TEXT_LIMIT,
         mediaServerRequest,
         getServarrConfig,
         isServarrConfigured,
@@ -478,6 +479,15 @@ test('lookup caches remain bounded and storage failures do not hide fetched resu
     assert(!hooks.getStorageKeys().includes('cache_bad_ttl'), 'malformed cache lifetimes should be deleted');
     hooks.seedRawStorage('cache_future', JSON.stringify({ data:{ score:99 }, ts:Date.now() + 120000, ttl:60000, schema:3 }));
     assert.strictEqual(hooks.cacheGet('future'), null, 'future-dated cache entries must not persist indefinitely');
+    hooks.seedRawStorage('cache_oversized', 'x'.repeat(hooks.CACHE_ENTRY_TEXT_LIMIT + 1));
+    assert.strictEqual(hooks.cacheGet('oversized'), null, 'oversized cache text must not reach JSON parsing');
+    assert(!hooks.getStorageKeys().includes('cache_oversized'), 'oversized cache entries should be deleted');
+    assert.strictEqual(
+        hooks.cacheSet('oversized_write', { value:'x'.repeat(hooks.CACHE_ENTRY_TEXT_LIMIT) }),
+        false,
+        'oversized cache values must not be persisted'
+    );
+    assert(!hooks.getStorageKeys().includes('cache_oversized_write'), 'rejected cache writes must not consume storage');
     for (let index = 0; index < 135; index++) hooks.cacheSet(`test_${index}`, { index });
     const cacheKeys = hooks.getStorageKeys().filter(key => key.startsWith('cache_'));
     assert(cacheKeys.length <= 129, `cache exceeded bounded GC window: ${cacheKeys.length}`);
