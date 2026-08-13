@@ -172,13 +172,13 @@
 
     const FEATURE_DETAILS = {
         removeAds: 'Hides current IMDb ad placements, sponsored shells, and tracking pixels as early as userscript timing allows.',
-        removeProUpsell: 'Hides IMDbPro prompts and add-to-list upsells from title and name pages.',
+        removeProUpsell: 'Hides explicit IMDbPro prompts and links from title and name pages while preserving list controls.',
         removeNewsSection: 'Keeps the page focused by removing IMDb news modules.',
         removeRelatedInterests: 'Hides broad interest recommendations that dilute title and cast pages.',
         removeContribution: 'Removes contribution calls to action from detail pages.',
         removeSponsoredRecs: 'Suppresses sponsored recommendation blocks where IMDb inserts them.',
         removeAppBanner: 'Hides app-install prompts shown on desktop pages.',
-        modernUI: 'Applies the cohesive dark surface, typography, focus, and component treatment.',
+        modernUI: 'Applies the selected theme, typography, focus, and component treatment.',
         compactHeader: 'Slims the IMDb header while keeping it readable and stable.',
         enhancedRatingDisplay: 'Elevates IMDb rating and popularity blocks with clearer emphasis.',
         widerLayout: 'Uses more horizontal room across normal desktop window sizes.',
@@ -2060,14 +2060,33 @@ section[id*="quote" i] .ipc-list-card { padding: 4px 0 !important; margin: 2px 0
         init() { addCSS(this.css, 'enh-wider'); }, destroy() { removeCSS('enh-wider'); } });
 
     // ===================== RATING COLOR CODING =====================
+    function getHexLuminance(value) {
+        const match = String(value || '').trim().match(/^#([0-9a-f]{3}|[0-9a-f]{6})$/i);
+        if (!match) return null;
+        const hex = match[1].length === 3
+            ? match[1].split('').map(channel => channel + channel).join('')
+            : match[1];
+        const channels = [0, 2, 4].map(index => parseInt(hex.slice(index, index + 2), 16) / 255)
+            .map(channel => channel <= 0.04045 ? channel / 12.92 : ((channel + 0.055) / 1.055) ** 2.4);
+        return channels[0] * 0.2126 + channels[1] * 0.7152 + channels[2] * 0.0722;
+    }
+    function readableTextColor(background) {
+        const backgroundLuminance = getHexLuminance(background);
+        if (backgroundLuminance === null) return '#fff';
+        const darkLuminance = getHexLuminance('#050505');
+        const darkContrast = (backgroundLuminance + 0.05) / (darkLuminance + 0.05);
+        const lightContrast = 1.05 / (backgroundLuminance + 0.05);
+        return darkContrast >= lightContrast ? '#050505' : '#fff';
+    }
     function ratingColor(val) {
         const n = parseFloat(val);
-        if (isNaN(n)) return { bg:'#555', text:'#ccc', label:'N/A' };
-        if (n >= 8.0) return { bg:'#22c55e', text:'#fff', label:'Great' };
-        if (n >= 7.0) return { bg:'#84cc16', text:'#000', label:'Good' };
-        if (n >= 6.0) return { bg:'#eab308', text:'#000', label:'Average' };
-        if (n >= 5.0) return { bg:'#f97316', text:'#000', label:'Below Avg' };
-        return { bg:'#ef4444', text:'#fff', label:'Poor' };
+        const [bg, label] = isNaN(n) ? ['#555', 'N/A']
+            : n >= 8.0 ? ['#22c55e', 'Great']
+                : n >= 7.0 ? ['#84cc16', 'Good']
+                    : n >= 6.0 ? ['#eab308', 'Average']
+                        : n >= 5.0 ? ['#f97316', 'Below Avg']
+                            : ['#ef4444', 'Poor'];
+        return { bg, text:readableTextColor(bg), label };
     }
     function mcColor(s) { return s >= 75 ? '#6c3' : s >= 50 ? '#ffbd3f' : s >= 25 ? '#ff6874' : '#f00'; }
     function rtColorFn(s) { return s >= 60 ? '#fa320a' : '#6b7280'; }
@@ -2882,7 +2901,7 @@ section[id*="quote" i] .ipc-list-card { padding: 4px 0 !important; margin: 2px 0
                     style:hasScore ? { '--score-color':color } : {},
                 }, makeEl('span', {
                     className:'enh-score-widget__badge' + (hasScore ? '' : ' enh-score-widget__badge--outline'),
-                    style:hasScore ? { background:color, color:score >= 60 ? '#000' : '#fff' } : {},
+                    style:hasScore ? { background:color, color:readableTextColor(color) } : {},
                 }, hasScore ? String(score) : '--'))
             );
             if (hasUserScore) {
@@ -3721,16 +3740,16 @@ section[id*="quote" i] .ipc-list-card { padding: 4px 0 !important; margin: 2px 0
                     cursor:pointer;box-shadow:${t.sh1};white-space:nowrap;
                 }
                 .enh-mark-btn:hover{border-color:${t.accentBorder};color:${t.accent}}
-                .enh-mark-btn[data-active="true"]{background:${t.accent};border-color:${t.accent};color:#050505}
-                .enh-mark-btn--skip[data-active="true"]{background:${t.red};border-color:${t.red};color:#fff}
+                .enh-mark-btn[data-active="true"]{background:${t.accent};border-color:${t.accent};color:${readableTextColor(t.accent)}}
+                .enh-mark-btn--skip[data-active="true"]{background:${t.red};border-color:${t.red};color:${readableTextColor(t.red)}}
                 .enh-mark-badge{
                     position:absolute;left:6px;bottom:6px;z-index:19;
-                    padding:4px 7px;border-radius:6px;background:${t.accent};color:#050505;
+                    padding:4px 7px;border-radius:6px;background:${t.accent};color:${readableTextColor(t.accent)};
                     font:800 10px/1 -apple-system,BlinkMacSystemFont,'Segoe UI',sans-serif;
                     box-shadow:${t.sh1};text-transform:uppercase;letter-spacing:.04em;
                     pointer-events:none;
                 }
-                .enh-mark-badge--skip{background:${t.red};color:#fff}
+                .enh-mark-badge--skip{background:${t.red};color:${readableTextColor(t.red)}}
             `, 'enh-watchedMarking');
 
             this._clickHandler = (e) => {
@@ -4864,7 +4883,7 @@ section[id*="quote" i] .ipc-list-card { padding: 4px 0 !important; margin: 2px 0
     background: color-mix(in srgb, var(--btn-color) 14%, ${t.sf1});
     border: 1px solid color-mix(in srgb, var(--btn-color) 24%, transparent);
     border-radius: 8px;
-    color: color-mix(in srgb, var(--btn-color) 88%, #fff);
+    color: ${t.tx1};
     font: 600 12px/1.2 -apple-system, BlinkMacSystemFont, 'Segoe UI', sans-serif;
     cursor: pointer; transition: background .18s cubic-bezier(.4,0,.2,1), border-color .18s ease, color .18s ease, transform .18s cubic-bezier(.4,0,.2,1), box-shadow .18s ease; outline: none;
     text-decoration: none !important;
@@ -4885,7 +4904,7 @@ section[id*="quote" i] .ipc-list-card { padding: 4px 0 !important; margin: 2px 0
 .enh-ext-link {
     padding: 4px 11px; border-radius: 6px;
     font: 500 11px/1.5 -apple-system, BlinkMacSystemFont, 'Segoe UI', sans-serif;
-    color: color-mix(in srgb, var(--link-color) 78%, ${t.tx1}) !important;
+    color: ${t.tx1} !important;
     background: color-mix(in srgb, var(--link-color) 8%, transparent);
     border: 1px solid color-mix(in srgb, var(--link-color) 14%, transparent);
     text-decoration: none !important;
@@ -4894,7 +4913,7 @@ section[id*="quote" i] .ipc-list-card { padding: 4px 0 !important; margin: 2px 0
 .enh-ext-link:hover {
     background: color-mix(in srgb, var(--link-color) 20%, transparent);
     border-color: color-mix(in srgb, var(--link-color) 32%, transparent);
-    color: #fff !important;
+    color: ${t.tx0} !important;
     transform: translateY(-1px);
 }
 

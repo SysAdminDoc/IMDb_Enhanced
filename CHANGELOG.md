@@ -90,6 +90,8 @@
 - Raised secondary and tertiary text contrast across Dark, OLED, Midnight, and Light themes so settings help, status labels, metadata, and integration notes remain readable on elevated surfaces.
 - Replaced fixed gray and whole-widget opacity on unavailable score links with the active theme's readable secondary text token.
 - Bounded IMDb JSON-LD traversal plus YouTube, Rotten Tomatoes, Letterboxd, Metacritic, and JustWatch response scans so unexpectedly large pages cannot grow parser queues or candidate work without limit.
+- Kept rating, private-mark, watch-site, and external-link labels readable by choosing contrast-safe badge foregrounds and using tested theme text tokens instead of deriving text from arbitrary brand colors.
+- Clarified that the IMDbPro cleanup preserves native list controls and that the modern skin follows the selected theme rather than always applying a dark surface.
 
 ## 2.5.1 — 2026-08-12
 

@@ -61,6 +61,9 @@ function loadScriptTestHooks() {
         buildListSearchEntries,
         getEnhancementScrollBehavior,
         THEMES,
+        getHexLuminance,
+        readableTextColor,
+        ratingColor,
         copyTextToClipboard,
         getFocusableElements,
         prepareSettingsImport,
@@ -550,6 +553,27 @@ test('theme text tokens remain readable on elevated surfaces', () => {
     assert(!script.includes('--score-color:#8888a0'), 'unavailable score links should inherit the current theme instead of fixed dark-theme gray');
     assert(script.includes('.enh-score-widget--muted { --score-color: ${t.tx2}; }'), 'unavailable score links should use the readable secondary token');
     assert(!script.includes('.enh-score-widget--muted { opacity:'), 'muted status widgets should not reduce all text below the theme contrast target');
+});
+
+test('branded controls keep readable text across themes and score states', () => {
+    const hooks = loadScriptTestHooks();
+    const contrast = (foreground, background) => {
+        const values = [hooks.getHexLuminance(foreground), hooks.getHexLuminance(background)].sort((a, b) => b - a);
+        return (values[0] + 0.05) / (values[1] + 0.05);
+    };
+    [4.5, 5.5, 6.5, 7.5, 8.5, NaN].forEach(score => {
+        const state = hooks.ratingColor(score);
+        assert(contrast(state.text, state.bg) >= 4.5, `${state.label} rating badge text is too faint`);
+    });
+    Object.values(hooks.THEMES).forEach(theme => {
+        [theme.accent, theme.red].forEach(background => {
+            const text = hooks.readableTextColor(background);
+            assert(contrast(text, background) >= 4.5, `${background} status badge needs a readable foreground`);
+        });
+    });
+    assert(script.includes('.enh-search-btn {') && script.includes('color: ${t.tx1};'), 'watch buttons should use the tested theme foreground');
+    assert(script.includes('.enh-ext-link:hover') && script.includes('color: ${t.tx0} !important;'), 'external-link hover should retain theme-aware text');
+    assert(!script.includes('color-mix(in srgb, var(--btn-color) 88%, #fff)'), 'brand colors must not define watch-button text contrast');
 });
 
 test('optional keyboard shortcuts do not collide with browser or modal commands', () => {
