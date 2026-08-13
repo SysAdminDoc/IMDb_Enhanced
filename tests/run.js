@@ -189,6 +189,7 @@ test('userscript parses', () => {
 
 test('metadata stays distribution-safe', () => {
     assert(!/@connect\s+\*/.test(script), 'wildcard @connect should not return');
+    assert(!/@grant\s+GM_addStyle/.test(script), 'unused style-injection permission should stay removed');
     assert(/@noframes/.test(script), '@noframes should remain present');
     assert(!/@match\s+https:\/\/m\.imdb\.com\//.test(script), 'desktop-only userscript must not match mobile IMDb');
     assert(/@updateURL/.test(script), '@updateURL should be present for update channel');

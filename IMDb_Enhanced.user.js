@@ -19,7 +19,6 @@
 // @match        https://www.cineby.at/*
 // @grant        GM_getValue
 // @grant        GM_setValue
-// @grant        GM_addStyle
 // @grant        GM_setClipboard
 // @grant        GM_xmlhttpRequest
 // @grant        GM_listValues

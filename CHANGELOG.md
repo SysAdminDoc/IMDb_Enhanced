@@ -109,6 +109,7 @@
 - Prevented Cineby links from opening an unprepared destination when the one-time title handoff cannot be stored; title-page and both list-queue paths now explain the storage failure.
 - Kept a visible, announced “Save failed” state after storage errors and surfaced feature refresh failures instead of leaving the settings header or rebuilt controls looking successful.
 - Made transactional import/theme rollback restore previously absent storage keys as absent instead of materializing default-valued keys during recovery.
+- Removed the unused `GM_addStyle` grant now that all styles use the userscript's guarded document-start style host.
 
 ## 2.5.1 — 2026-08-12
 
