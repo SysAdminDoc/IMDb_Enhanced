@@ -27,6 +27,7 @@ function loadScriptTestHooks() {
     const instrumented = script.replace(/\}\)\(\);\s*$/, `window.__enhTest = {
         normalizeIMDbProviderId,
         normalizeLookupTitle,
+        toBoundedText,
         parseIMDbTitleStructuredData,
         normalizeHistogramData,
         findHistogramData,
@@ -34,6 +35,7 @@ function loadScriptTestHooks() {
         mediaItemMatches,
         selectServarrLookupResult,
         parseMediaServerItems,
+        parseJSONResponse,
         getRequestErrorMessage,
         getLinkedTitleId,
         isIMDbHost,
@@ -963,6 +965,13 @@ test('JustWatch direct and fallback pages preserve title identity', () => {
 
 test('third-party search and structured-data parsers enforce finite scan budgets', () => {
     const hooks = loadScriptTestHooks();
+    assert.strictEqual(hooks.toBoundedText('12345', 4), '', 'oversized text must be rejected before parsing');
+    assert.strictEqual(hooks.toBoundedText('1234', 4), '1234');
+    assert.throws(
+        () => hooks.parseJSONResponse({ responseText:'{"payload":"too large"}' }, 10),
+        /too large/,
+        'oversized local JSON must be rejected before JSON.parse'
+    );
     const rtNoise = Array.from({ length:100 }, (_, index) => `
         <search-page-media-row release-year="2000" tomatometer-score="50">
             <a slot="title" href="https://www.rottentomatoes.com/m/noise_${index}">Noise ${index}</a>
@@ -1006,6 +1015,14 @@ test('third-party search and structured-data parsers enforce finite scan budgets
         null,
         'availability parsing must share the structured-data script budget'
     );
+    [
+        'parseYouTubeTrailerVideoId', 'parseRTSearchResult', 'parseRTDetailPage',
+        'parseLetterboxdDetailPage', 'parseJustWatchSearchResult', 'parseJustWatchIdentity',
+        'parseJustWatchAvailability',
+    ].forEach(name => assert(
+        new RegExp(`function ${name}\\([^)]*\\) \\{[\\s\\S]{0,300}?toBoundedText\\(`).test(script),
+        `${name} must reject oversized response text before regex or JSON work`
+    ));
 });
 
 test('list multi-search builds a popup-safe link queue', () => {

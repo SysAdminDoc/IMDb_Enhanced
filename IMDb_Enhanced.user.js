@@ -60,6 +60,9 @@
     const STRUCTURED_DATA_SCRIPT_LIMIT = 50;
     const STRUCTURED_DATA_NODE_LIMIT = 1000;
     const EXTERNAL_STRUCTURED_DATA_NODE_LIMIT = 100;
+    const STRUCTURED_DATA_TEXT_LIMIT = 2 * 1024 * 1024;
+    const EXTERNAL_RESPONSE_TEXT_LIMIT = 8 * 1024 * 1024;
+    const LOCAL_RESPONSE_TEXT_LIMIT = 4 * 1024 * 1024;
     const AD_SHELL_SELECTOR = [
         '.nas-slot',
         '.slot_wrapper',
@@ -914,6 +917,11 @@
         }
     }
 
+    function toBoundedText(value, limit) {
+        const text = typeof value === 'string' ? value : (value == null ? '' : String(value));
+        return text.length <= limit ? text : '';
+    }
+
     function parseIMDbTitleStructuredData(scriptTexts) {
         let fallback = null;
         let inspectedScripts = 0;
@@ -921,7 +929,11 @@
             if (inspectedScripts >= STRUCTURED_DATA_SCRIPT_LIMIT) break;
             inspectedScripts += 1;
             let parsed;
-            try { parsed = JSON.parse(String(text || '')); }
+            try {
+                const source = toBoundedText(text, STRUCTURED_DATA_TEXT_LIMIT);
+                if (!source) continue;
+                parsed = JSON.parse(source);
+            }
             catch { continue; }
 
             const queue = [parsed];
@@ -1078,8 +1090,10 @@
     function httpGet(url, opts = {}) {
         return httpRequest(url, { ...opts, method: 'GET' });
     }
-    function parseJSONResponse(response) {
-        try { return JSON.parse(response.responseText || 'null'); }
+    function parseJSONResponse(response, maxLength = LOCAL_RESPONSE_TEXT_LIMIT) {
+        const raw = typeof response?.responseText === 'string' ? response.responseText : '';
+        if (raw.length > maxLength) throw new Error('Response was too large');
+        try { return JSON.parse(raw || 'null'); }
         catch { throw new Error('Response was not valid JSON'); }
     }
     function normalizeRequestErrorText(value) {
@@ -1243,7 +1257,9 @@
     }
     function parsePlexItems(xmlText) {
         try {
-            const doc = new DOMParser().parseFromString(String(xmlText || ''), 'application/xml');
+            const source = toBoundedText(xmlText, LOCAL_RESPONSE_TEXT_LIMIT);
+            if (!source) return [];
+            const doc = new DOMParser().parseFromString(source, 'application/xml');
             return Array.from(doc.querySelectorAll('Video,Directory'))
                 .slice(0, LOCAL_LOOKUP_RESULT_LIMIT)
                 .map(node => ({
@@ -1260,7 +1276,9 @@
     }
     function parseMediaServerItems(payload) {
         try {
-            const data = typeof payload === 'string' ? JSON.parse(payload || '{}') : (payload || {});
+            const source = typeof payload === 'string' ? toBoundedText(payload, LOCAL_RESPONSE_TEXT_LIMIT) : null;
+            if (typeof payload === 'string' && !source) return [];
+            const data = source !== null ? JSON.parse(source || '{}') : (payload || {});
             const items = Array.isArray(data) ? data : (Array.isArray(data.Items) ? data.Items : []);
             return items.slice(0, LOCAL_LOOKUP_RESULT_LIMIT).map(item => ({
                 title: item.Name || item.OriginalTitle || item.SeriesName || '',
@@ -2154,9 +2172,11 @@ section[id*="quote" i] .ipc-list-card { padding: 4px 0 !important; margin: 2px 0
     function parseYouTubeTrailerVideoId(html, title, year) {
         const wantedTitle = normalizeLookupTitle(title);
         if (!wantedTitle) return '';
+        const source = toBoundedText(html, EXTERNAL_RESPONSE_TEXT_LIMIT);
+        if (!source) return '';
         const wantedYear = Number(year) || 0;
         const candidates = [];
-        const renderers = String(html || '').matchAll(
+        const renderers = source.matchAll(
             /"videoRenderer":\{"videoId":"([a-zA-Z0-9_-]{11})"[\s\S]{0,4000}?"title":\{"runs":\[\{"text":"((?:\\.|[^"\\])*)"/g
         );
         let inspected = 0;
@@ -2201,8 +2221,10 @@ section[id*="quote" i] .ipc-list-card { padding: 4px 0 !important; margin: 2px 0
     }
 
     function parseRTSearchResult(html, title, year, type = 'movie') {
+        const source = toBoundedText(html, EXTERNAL_RESPONSE_TEXT_LIMIT);
+        if (!source) return null;
         const candidates = [];
-        const rows = String(html || '').matchAll(/<search-page-media-row\b([^>]*)>([\s\S]*?)<\/search-page-media-row>/gi);
+        const rows = source.matchAll(/<search-page-media-row\b([^>]*)>([\s\S]*?)<\/search-page-media-row>/gi);
         let inspected = 0;
         for (const row of rows) {
             if (inspected >= EXTERNAL_RESULT_SCAN_LIMIT) break;
@@ -2264,15 +2286,19 @@ section[id*="quote" i] .ipc-list-card { padding: 4px 0 !important; margin: 2px 0
     }
 
     function parseRTDetailPage(html, title, year, type = 'movie', fallbackUrl = '') {
+        const source = toBoundedText(html, EXTERNAL_RESPONSE_TEXT_LIMIT);
+        if (!source) return null;
         const expectedType = type === 'tv' ? 'tv' : 'movie';
         let detail = null;
-        const scripts = String(html || '').matchAll(/<script[^>]+type=["']application\/ld\+json["'][^>]*>\s*([\s\S]*?)<\/script>/gi);
+        const scripts = source.matchAll(/<script[^>]+type=["']application\/ld\+json["'][^>]*>\s*([\s\S]*?)<\/script>/gi);
         let inspectedScripts = 0;
         for (const script of scripts) {
             if (inspectedScripts >= STRUCTURED_DATA_SCRIPT_LIMIT) break;
             inspectedScripts += 1;
             try {
-                const parsed = JSON.parse(script[1]);
+                const scriptText = toBoundedText(script[1], STRUCTURED_DATA_TEXT_LIMIT);
+                if (!scriptText) continue;
+                const parsed = JSON.parse(scriptText);
                 const queue = [parsed];
                 for (let index = 0; index < queue.length && index < EXTERNAL_STRUCTURED_DATA_NODE_LIMIT; index++) {
                     const item = queue[index];
@@ -2301,17 +2327,17 @@ section[id*="quote" i] .ipc-list-card { padding: 4px 0 !important; margin: 2px 0
 
         const aggregate = boundedScore(detail.aggregateRating?.ratingValue, 100);
         let tomatometer = aggregate === null ? null : Math.round(aggregate);
-        const scoreMatch = String(html || '').match(/tomatometer[^}]*?"value"\s*:\s*(\d+)/i);
+        const scoreMatch = source.match(/tomatometer[^}]*?"value"\s*:\s*(\d+)/i);
         if (tomatometer === null && scoreMatch) {
             const value = boundedScore(scoreMatch[1], 100);
             if (value !== null) tomatometer = value;
         }
         if (tomatometer === null) return null;
 
-        const audienceMatch = String(html || '').match(/audienceScore[^}]*?"value"\s*:\s*(\d+)/i);
+        const audienceMatch = source.match(/audienceScore[^}]*?"value"\s*:\s*(\d+)/i);
         const audience = boundedScore(audienceMatch?.[1], 100);
-        const consensusMatch = String(html || '').match(/critics-consensus[^>]*>([^<]+)</i)
-            || String(html || '').match(/"criticsConsensus"\s*:\s*"([^"\\]*(?:\\.[^"\\]*)*)"/i);
+        const consensusMatch = source.match(/critics-consensus[^>]*>([^<]+)</i)
+            || source.match(/"criticsConsensus"\s*:\s*"([^"\\]*(?:\\.[^"\\]*)*)"/i);
         const consensus = consensusMatch
             ? decodeHTML(consensusMatch[1]).replace(/\\"/g, '"').trim().slice(0, 500)
             : null;
@@ -2323,14 +2349,18 @@ section[id*="quote" i] .ipc-list-card { padding: 4px 0 !important; margin: 2px 0
     }
 
     function parseLetterboxdDetailPage(html, title, year, fallbackUrl) {
+        const source = toBoundedText(html, EXTERNAL_RESPONSE_TEXT_LIMIT);
+        if (!source) return null;
         let detail = null;
-        const scripts = String(html || '').matchAll(/<script[^>]+type=["']application\/ld\+json["'][^>]*>\s*([\s\S]*?)<\/script>/gi);
+        const scripts = source.matchAll(/<script[^>]+type=["']application\/ld\+json["'][^>]*>\s*([\s\S]*?)<\/script>/gi);
         let inspectedScripts = 0;
         for (const script of scripts) {
             if (inspectedScripts >= STRUCTURED_DATA_SCRIPT_LIMIT) break;
             inspectedScripts += 1;
             try {
-                const parsed = JSON.parse(script[1]);
+                const scriptText = toBoundedText(script[1], STRUCTURED_DATA_TEXT_LIMIT);
+                if (!scriptText) continue;
+                const parsed = JSON.parse(scriptText);
                 const queue = [parsed];
                 for (let index = 0; index < queue.length && index < EXTERNAL_STRUCTURED_DATA_NODE_LIMIT; index++) {
                     const item = queue[index];
@@ -2356,7 +2386,7 @@ section[id*="quote" i] .ipc-list-card { padding: 4px 0 !important; margin: 2px 0
 
         let score = boundedScore(detail.aggregateRating?.ratingValue, 5);
         if (score === null) {
-            const meta = String(html || '').match(/<meta[^>]+name=["']twitter:data2["'][^>]+content=["']([^"']+)["']/i);
+            const meta = source.match(/<meta[^>]+name=["']twitter:data2["'][^>]+content=["']([^"']+)["']/i);
             score = boundedScore(parseFloat(meta?.[1]), 5);
         }
         if (score === null) return null;
@@ -2371,8 +2401,10 @@ section[id*="quote" i] .ipc-list-card { padding: 4px 0 !important; margin: 2px 0
     }
 
     function parseJustWatchSearchResult(html, title, year, typePath = 'movie') {
+        const source = toBoundedText(html, EXTERNAL_RESPONSE_TEXT_LIMIT);
+        if (!source) return '';
         const candidates = [];
-        const anchors = String(html || '').matchAll(/<a\b([^>]*\bclass\s*=\s*["'][^"']*title-list-row__column-header[^"']*["'][^>]*)>([\s\S]*?)<\/a>/gi);
+        const anchors = source.matchAll(/<a\b([^>]*\bclass\s*=\s*["'][^"']*title-list-row__column-header[^"']*["'][^>]*)>([\s\S]*?)<\/a>/gi);
         let inspected = 0;
         for (const anchor of anchors) {
             if (inspected >= EXTERNAL_RESULT_SCAN_LIMIT) break;
@@ -2398,13 +2430,17 @@ section[id*="quote" i] .ipc-list-card { padding: 4px 0 !important; margin: 2px 0
     }
 
     function parseJustWatchIdentity(html) {
-        const scripts = String(html || '').matchAll(/<script[^>]+type=["']application\/ld\+json["'][^>]*>\s*([\s\S]*?)<\/script>/gi);
+        const source = toBoundedText(html, EXTERNAL_RESPONSE_TEXT_LIMIT);
+        if (!source) return null;
+        const scripts = source.matchAll(/<script[^>]+type=["']application\/ld\+json["'][^>]*>\s*([\s\S]*?)<\/script>/gi);
         let inspectedScripts = 0;
         for (const script of scripts) {
             if (inspectedScripts >= STRUCTURED_DATA_SCRIPT_LIMIT) break;
             inspectedScripts += 1;
             try {
-                const parsed = JSON.parse(script[1]);
+                const scriptText = toBoundedText(script[1], STRUCTURED_DATA_TEXT_LIMIT);
+                if (!scriptText) continue;
+                const parsed = JSON.parse(scriptText);
                 const roots = Array.isArray(parsed) ? parsed.slice(0, EXTERNAL_RESULT_SCAN_LIMIT) : [parsed];
                 for (const item of roots) {
                     const types = Array.isArray(item?.['@type']) ? item['@type'] : [item?.['@type']];
@@ -2454,7 +2490,8 @@ section[id*="quote" i] .ipc-list-card { padding: 4px 0 !important; margin: 2px 0
 
     function parseJustWatchAvailability(html, url, expected) {
         if (!html) return null;
-        const source = String(html);
+        const source = toBoundedText(html, EXTERNAL_RESPONSE_TEXT_LIMIT);
+        if (!source) return null;
         const identity = parseJustWatchIdentity(source);
         if (!identity || identity.type !== expected.typePath || !isMatchingTitleIdentity(identity, expected.title, expected.year)) {
             return null;
@@ -2487,7 +2524,9 @@ section[id*="quote" i] .ipc-list-card { padding: 4px 0 !important; margin: 2px 0
             if (inspectedScripts >= STRUCTURED_DATA_SCRIPT_LIMIT || providers.length >= 50) break;
             inspectedScripts += 1;
             try {
-                addProviders(collectJustWatchProviderNames(JSON.parse(script[1]), 2000, 50 - providers.length));
+                const scriptText = toBoundedText(script[1], STRUCTURED_DATA_TEXT_LIMIT);
+                if (!scriptText) continue;
+                addProviders(collectJustWatchProviderNames(JSON.parse(scriptText), 2000, 50 - providers.length));
             } catch { /* ignore malformed structured data */ }
         }
 
@@ -2899,7 +2938,9 @@ section[id*="quote" i] .ipc-list-card { padding: 4px 0 !important; margin: 2px 0
             try {
                 const res = await httpGet(url, { cancelOnRouteChange:true });
                 if (!isCurrent()) return;
-                const obj = JSON.parse(res.responseText);
+                const source = toBoundedText(res.responseText, EXTERNAL_RESPONSE_TEXT_LIMIT);
+                if (!source) throw new Error('Response was too large or empty');
+                const obj = JSON.parse(source);
                 const items = obj?.data?.items || [];
                 const best = selectMetacriticResult(items, title, year, mediaType);
                 if (best) {
