@@ -86,6 +86,7 @@
 - Rejected credential-bearing URLs at the third-party response-link boundary even when their HTTPS hostname is otherwise trusted.
 - Tightened trailer identity matching so short or shared titles such as “It” and “Alien” cannot autoplay a longer, different movie merely because its video title contains the IMDb title as a phrase.
 - Extended list, chart, and watchlist tools to IMDb's live locale-prefixed desktop routes instead of matching only their unprefixed English URLs.
+- Distinguished private Seen/Skip marks from IMDb's newer account-based Watched feature in settings, badges, accessible names, and save feedback without changing existing local mark data.
 
 ## 2.5.1 — 2026-08-12
 

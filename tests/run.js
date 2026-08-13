@@ -368,6 +368,8 @@ test('watched marks only decorate canonical title links', () => {
     assert.strictEqual(hooks.getLinkedTitleId('/de/title/tt0133093/'), 'tt0133093');
     assert.strictEqual(hooks.getLinkedTitleId('/showtimes/title/tt0133093/2026-08-30'), '');
     assert.strictEqual(hooks.getLinkedTitleId('/title/tt0133093/releaseinfo/'), '');
+    assert(script.includes('IMDb Watched was not changed'), 'local mark feedback should distinguish itself from IMDb\'s native Watched state');
+    assert(script.includes("badge.textContent = mark === 'watched' ? 'Local seen' : 'Local skip'"), 'visible local badges should not impersonate native IMDb Watched');
 });
 
 test('local marks are cached and bounded while DOM rescans stay mutation-scoped', () => {

@@ -191,7 +191,7 @@
         externalLinks: 'Adds trusted research and trailer links near the title.',
         expandedLinkMenu: 'Groups additional movie, review, subtitle, and TV lookup links.',
         trailerPopover: 'Adds an in-page trailer modal backed by a click-to-fetch YouTube lookup.',
-        watchedMarking: 'Adds local Watched and Skip marks to title posters and recommendation cards.',
+        watchedMarking: 'Adds private Seen and Skip marks that stay in this userscript and do not change IMDb Watched.',
         servarrIntegration: 'Adds optional local Radarr/Sonarr quick-add buttons with library status indicator when API settings are configured.',
         mediaServerIntegration: 'Checks configured local Plex, Jellyfin, and Emby servers and shows whether the title is already in your library.',
         tvEpisodeTools: 'Blurs episode synopses and surfaces the highest-rated episodes where episode data is present.',
@@ -3663,7 +3663,7 @@ section[id*="quote" i] .ipc-list-card { padding: 4px 0 !important; margin: 2px 0
     });
 
     reg({
-        key: 'watchedMarking', name: 'Watched / skip marks', group: 'Features',
+        key: 'watchedMarking', name: 'Private seen / skip marks', group: 'Features',
         _observer: null,
         _clickHandler: null,
         _raf: 0,
@@ -3717,7 +3717,9 @@ section[id*="quote" i] .ipc-list-card { padding: 4px 0 !important; margin: 2px 0
                 const state = action === 'clear' || getUserMark(imdbId) === action ? '' : action;
                 setUserMark(imdbId, state, card.dataset.enhMarkTitle || getTitleText());
                 this._syncAll();
-                showToast(state ? `Marked ${state}` : 'Mark cleared');
+                showToast(state
+                    ? `Saved locally as ${state === 'watched' ? 'Seen' : 'Skip'} — IMDb Watched was not changed`
+                    : 'Local mark cleared');
             };
             document.body.addEventListener('click', this._clickHandler, true);
 
@@ -3795,14 +3797,16 @@ section[id*="quote" i] .ipc-list-card { padding: 4px 0 !important; margin: 2px 0
                         className: 'enh-mark-btn enh-mark-btn--watched',
                         dataset: { enhMarkAction: 'watched' },
                         'aria-pressed': 'false',
-                        'aria-label': `Mark ${title || imdbId} as watched`,
+                        title: 'Save a private local Seen mark',
+                        'aria-label': `Save a private Seen mark for ${title || imdbId}; does not change IMDb Watched`,
                     }, 'Seen'),
                     makeEl('button', {
                         type: 'button',
                         className: 'enh-mark-btn enh-mark-btn--skip',
                         dataset: { enhMarkAction: 'skip' },
                         'aria-pressed': 'false',
-                        'aria-label': `Mark ${title || imdbId} as skipped`,
+                        title: 'Save a private local Skip mark',
+                        'aria-label': `Save a private Skip mark for ${title || imdbId}; does not change IMDb Watched`,
                     }, 'Skip'),
                     makeEl('button', {
                         type: 'button',
@@ -3828,8 +3832,8 @@ section[id*="quote" i] .ipc-list-card { padding: 4px 0 !important; margin: 2px 0
                     const stateLabel = action === 'watched' ? 'watched' : 'skipped';
                     btn.setAttribute('aria-pressed', String(active));
                     btn.setAttribute('aria-label', active
-                        ? `${card.dataset.enhMarkTitle} is marked ${stateLabel}; activate to clear`
-                        : `Mark ${card.dataset.enhMarkTitle} as ${stateLabel}`);
+                        ? `${card.dataset.enhMarkTitle} has a private local ${stateLabel} mark; activate to clear`
+                        : `Save a private ${stateLabel} mark for ${card.dataset.enhMarkTitle}; does not change IMDb Watched`);
                 } else if (action === 'clear') {
                     btn.disabled = !mark;
                 }
@@ -3844,7 +3848,7 @@ section[id*="quote" i] .ipc-list-card { padding: 4px 0 !important; margin: 2px 0
                 badge = makeEl('div', { className: 'enh-mark-badge' });
                 card.appendChild(badge);
             }
-            badge.textContent = mark === 'watched' ? 'Watched' : 'Skip';
+            badge.textContent = mark === 'watched' ? 'Local seen' : 'Local skip';
             badge.classList.toggle('enh-mark-badge--skip', mark === 'skip');
         },
         _syncAll() {
@@ -5872,7 +5876,7 @@ section[id*="quote" i] .ipc-list-card { padding: 4px 0 !important; margin: 2px 0
             }
             entries.forEach(([id, record]) => {
                 const title = record.title || id;
-                const state = record.state === 'watched' ? 'Watched' : 'Skip';
+                const state = record.state === 'watched' ? 'Local seen' : 'Local skip';
                 const titleEl = makeEl('div', { className:'enh-mark-row__title', title },
                     title,
                     record.title ? makeEl('span', { className:'enh-mark-row__id' }, id) : ''
@@ -5903,7 +5907,7 @@ section[id*="quote" i] .ipc-list-card { padding: 4px 0 !important; margin: 2px 0
         };
 
         panel.appendChild(makeEl('div', { className:'enh-marks-panel__header' },
-            makeEl('div', { className:'enh-marks-panel__title' }, 'My title marks'),
+            makeEl('div', { className:'enh-marks-panel__title' }, 'My private title marks'),
             makeEl('div', { className:'enh-site-editor__actions' }, count, clearAll)
         ));
         panel.appendChild(rows);
