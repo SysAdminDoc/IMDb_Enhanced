@@ -46,7 +46,7 @@
     const CINEBY_QUERY_TTL = 10 * 60 * 1000;
     const CACHE_TTL = 7 * 24 * 60 * 60 * 1000; // 7 days
     const CACHE_UNAVAILABLE_TTL = 24 * 60 * 60 * 1000; // 24 hours
-    const CACHE_SCHEMA_VERSION = 2;
+    const CACHE_SCHEMA_VERSION = 3;
     const CACHE_MAX_ENTRIES = 120;
     const CACHE_GC_WRITE_INTERVAL = 10;
     const USER_MARKS_MAX = 5000;
@@ -2008,6 +2008,32 @@ section[id*="quote" i] .ipc-list-card { padding: 4px 0 !important; margin: 2px 0
         const query = [title, year, 'official trailer'].filter(Boolean).join(' ');
         return `https://www.youtube.com/results?search_query=${encodeURIComponent(query)}`;
     }
+    function parseYouTubeTrailerVideoId(html, title, year) {
+        const wantedTitle = normalizeLookupTitle(title);
+        if (!wantedTitle) return '';
+        const wantedYear = Number(year) || 0;
+        const candidates = [];
+        const renderers = String(html || '').matchAll(
+            /"videoRenderer":\{"videoId":"([a-zA-Z0-9_-]{11})"[\s\S]{0,4000}?"title":\{"runs":\[\{"text":"((?:\\.|[^"\\])*)"/g
+        );
+        for (const match of renderers) {
+            let candidateTitle = '';
+            try { candidateTitle = JSON.parse(`"${match[2]}"`); }
+            catch { continue; }
+            const normalized = normalizeLookupTitle(candidateTitle);
+            const phraseMatches = ` ${normalized} `.includes(` ${wantedTitle} `);
+            if (!phraseMatches || !/\b(?:trailer|teaser)\b/i.test(candidateTitle)) continue;
+            const candidateYear = Number(yearFromText(candidateTitle)) || 0;
+            if (wantedYear && candidateYear && Math.abs(candidateYear - wantedYear) > 1) continue;
+            const score = (normalized === wantedTitle || normalized.startsWith(`${wantedTitle} `) ? 4 : 2)
+                + (wantedYear && candidateYear ? 3 : 0)
+                + (/\bofficial\b/i.test(candidateTitle) ? 2 : 0)
+                + (/\btrailer\b/i.test(candidateTitle) ? 1 : 0);
+            candidates.push({ videoId:match[1], score });
+        }
+        candidates.sort((a, b) => b.score - a.score);
+        return candidates[0]?.videoId || '';
+    }
     function compactProviders(providers, limit = 2) {
         const clean = [];
         providers.forEach(provider => {
@@ -3337,23 +3363,13 @@ section[id*="quote" i] .ipc-list-card { padding: 4px 0 !important; margin: 2px 0
                 cancelOnRouteChange: true,
                 headers: { Accept:'text/html,application/xhtml+xml' },
             });
-            const videoId = this._parseVideoId(res.responseText);
+            const videoId = parseYouTubeTrailerVideoId(res.responseText, getTitleText(), getTitleYear());
             if (!videoId) {
                 if (cacheKey) cacheSetUnavailable(cacheKey);
                 throw new Error('Trailer unavailable');
             }
             if (cacheKey) cacheSet(cacheKey, { videoId });
             return videoId;
-        },
-        _parseVideoId(html) {
-            const seen = new Set();
-            const matches = String(html || '').matchAll(/"videoId":"([a-zA-Z0-9_-]{11})"/g);
-            for (const match of matches) {
-                if (seen.has(match[1])) continue;
-                seen.add(match[1]);
-                return match[1];
-            }
-            return '';
         },
         destroy() {
             this._closeModal(false);

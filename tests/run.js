@@ -53,6 +53,7 @@ function loadScriptTestHooks() {
         parseJustWatchSearchResult,
         parseJustWatchIdentity,
         collectJustWatchProviderNames,
+        parseYouTubeTrailerVideoId,
         buildListSearchEntries,
         getEnhancementScrollBehavior,
         getFocusableElements,
@@ -360,7 +361,7 @@ test('lookup caches remain bounded and storage failures do not hide fetched resu
     const cacheKeys = hooks.getStorageKeys().filter(key => key.startsWith('cache_'));
     assert(cacheKeys.length <= 129, `cache exceeded bounded GC window: ${cacheKeys.length}`);
     assert.strictEqual(hooks.cacheGet('test_134')?.index, 134, 'newest cached result should survive pruning');
-    assert(script.includes('CACHE_SCHEMA_VERSION = 2'), 'cache schema invalidation marker missing');
+    assert(script.includes('CACHE_SCHEMA_VERSION = 3'), 'cache schema invalidation marker missing');
 
     const failingHooks = loadScriptTestHooks();
     failingHooks.failSettingWriteAt(1);
@@ -400,6 +401,14 @@ test('trailer dialog contains focus, restores page state, and ignores stale look
     assert(script.includes('generation !== this._modalGeneration || !body.isConnected'), 'closed trailer lookups must not render late results');
     assert(script.includes("document.addEventListener('focusin', this._focusin)"), 'iframe focus exits should be returned to the trailer dialog');
     assert(script.includes("document.removeEventListener('focusin', this._focusin)"), 'trailer focus containment should be cleaned up on close');
+
+    const searchHtml = `
+        {"videoId":"AAAAAAAAAAA"},
+        {"videoRenderer":{"videoId":"BBBBBBBBBBB","title":{"runs":[{"text":"The Matrix Reloaded (2003) Official Trailer"}]}}},
+        {"videoRenderer":{"videoId":"vKQi3bBA1y8","title":{"runs":[{"text":"The Matrix (1999) Official Trailer #1"}]}}}`;
+    assert.strictEqual(hooks.parseYouTubeTrailerVideoId(searchHtml, 'The Matrix', 1999), 'vKQi3bBA1y8');
+    assert.strictEqual(hooks.parseYouTubeTrailerVideoId(searchHtml, 'Alien', 1979), '', 'unrelated first video IDs must not autoplay');
+    assert(!script.includes('_parseVideoId(html)'), 'unscoped first-video parsing should stay removed');
 });
 
 test('secondary interactions expose complete keyboard and toggle semantics', () => {
