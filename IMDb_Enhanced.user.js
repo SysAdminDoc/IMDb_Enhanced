@@ -53,6 +53,7 @@
     const CACHE_GC_WRITE_INTERVAL = 10;
     const CACHE_ENTRY_TEXT_LIMIT = 256 * 1024;
     const USER_MARKS_MAX = 5000;
+    const USER_MARKS_SCAN_LIMIT = USER_MARKS_MAX * 2;
     const USER_MARK_TITLE_LIMIT = 160;
     const LOCAL_LOOKUP_RESULT_LIMIT = 100;
     const LOCAL_PROVIDER_ID_LIMIT = 32;
@@ -335,6 +336,21 @@
             ts:Number.isFinite(timestamp) && timestamp >= 0 && timestamp <= Date.now() + 60000 ? timestamp : 0,
         };
     }
+    function normalizeUserMarkEntries(source) {
+        const entries = [];
+        let inspected = 0;
+        for (const id in source) {
+            if (!Object.prototype.hasOwnProperty.call(source, id)) continue;
+            if (inspected >= USER_MARKS_SCAN_LIMIT) break;
+            inspected += 1;
+            if (!/^tt\d+$/.test(id)) continue;
+            const normalized = normalizeUserMark(source[id]);
+            if (normalized) entries.push([id, normalized]);
+        }
+        return entries
+            .sort((a, b) => (b[1].ts || 0) - (a[1].ts || 0))
+            .slice(0, USER_MARKS_MAX);
+    }
     function getUserMarks(forceRefresh = false) {
         if (forceRefresh) userMarksCache = null;
         if (userMarksCache) return userMarksCache;
@@ -343,24 +359,12 @@
             userMarksCache = {};
             return userMarksCache;
         }
-        const entries = [];
-        Object.entries(raw).forEach(([id, record]) => {
-            if (!/^tt\d+$/.test(id)) return;
-            const normalized = normalizeUserMark(record);
-            if (normalized) entries.push([id, normalized]);
-        });
-        entries.sort((a, b) => (b[1].ts || 0) - (a[1].ts || 0));
-        userMarksCache = Object.fromEntries(entries.slice(0, USER_MARKS_MAX));
+        userMarksCache = Object.fromEntries(normalizeUserMarkEntries(raw));
         return userMarksCache;
     }
     function setUserMarks(marks, notifyFailure = true) {
         const source = marks && typeof marks === 'object' && !Array.isArray(marks) ? marks : {};
-        const entries = Object.entries(source)
-            .map(([id, record]) => [id, normalizeUserMark(record)])
-            .filter(([id, record]) => /^tt\d+$/.test(id) && record)
-            .sort((a, b) => (b[1].ts || 0) - (a[1].ts || 0))
-            .slice(0, USER_MARKS_MAX);
-        const normalized = Object.fromEntries(entries);
+        const normalized = Object.fromEntries(normalizeUserMarkEntries(source));
         if (!trySaveSetting('userMarks', normalized, { notify:notifyFailure })) return false;
         userMarksCache = normalized;
         return true;
@@ -817,16 +821,7 @@
         }
         if (key === 'userMarks') {
             if (!value || Array.isArray(value) || typeof value !== 'object') return null;
-            const normalized = {};
-            let inspected = 0;
-            for (const id in value) {
-                if (!Object.prototype.hasOwnProperty.call(value, id)) continue;
-                if (inspected >= USER_MARKS_MAX) break;
-                inspected += 1;
-                const record = normalizeUserMark(value[id]);
-                if (/^tt\d+$/.test(id) && record) normalized[id] = record;
-            }
-            return { key, value:normalized };
+            return { key, value:Object.fromEntries(normalizeUserMarkEntries(value)) };
         }
         if (typeof fallback === 'boolean') {
             return typeof value === 'boolean' ? { key, value } : null;

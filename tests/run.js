@@ -85,6 +85,8 @@ function loadScriptTestHooks() {
         cacheGC,
         getUserMarks,
         setUserMark,
+        normalizeUserMarkEntries,
+        USER_MARKS_SCAN_LIMIT,
         getSectionCollapseState,
         setSectionCollapsed,
         getDefaultSettingsEntries,
@@ -453,6 +455,16 @@ test('local marks are cached and bounded while DOM rescans stay mutation-scoped'
     assert.strictEqual(Object.keys(normalized).length, 5000, 'normal use should retain at most 5,000 local marks');
     assert(!normalized.tt0000000, 'oldest excess marks should be discarded first');
     assert(normalized.tt0005002, 'newest marks should be retained');
+    const oversizedMarks = {};
+    for (let index = 0; index <= hooks.USER_MARKS_SCAN_LIMIT; index++) {
+        oversizedMarks[`tt${String(index).padStart(7, '0')}`] = { state:'watched', title:`Title ${index}`, ts:index };
+    }
+    const boundedEntries = hooks.normalizeUserMarkEntries(oversizedMarks);
+    assert.strictEqual(boundedEntries.length, 5000, 'mark normalization should retain only the configured maximum');
+    assert(boundedEntries.some(([id]) => id === 'tt0009999'), 'newest records inside the scan budget should survive');
+    assert(!boundedEntries.some(([id]) => id === 'tt0010000'), 'records outside the finite scan budget should not be inspected');
+    assert(!script.includes('Object.entries(raw).forEach'), 'stored mark reads must not materialize an unbounded entry array');
+    assert(!script.includes('Object.entries(source)\n            .map'), 'mark writes must not materialize an unbounded entry array');
     hooks.setUserMark('tt9999999', 'watched', 'Newest');
     assert.strictEqual(Object.keys(hooks.getStoredSetting('userMarks')).length, 5000, 'new writes should preserve the mark bound');
     const failingHooks = loadScriptTestHooks();
