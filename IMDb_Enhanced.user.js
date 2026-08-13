@@ -3774,8 +3774,8 @@ section[id*="quote" i] .ipc-list-card { padding: 4px 0 !important; margin: 2px 0
             if (!isIMDbHost()) return;
             addThemedCSS(t => `
                 .enh-markable-card{position:relative!important}
-                .enh-markable-card.enh-marked{opacity:.72;filter:saturate(.58);transition:opacity .15s ease,filter .15s ease}
-                .enh-markable-card.enh-marked:hover,.enh-markable-card.enh-marked:focus-within{opacity:1;filter:none}
+                .enh-markable-card.enh-marked img{opacity:.72;filter:saturate(.58);transition:opacity .15s ease,filter .15s ease}
+                .enh-markable-card.enh-marked:hover img,.enh-markable-card.enh-marked:focus-within img{opacity:1;filter:none}
                 .enh-mark-controls{
                     position:absolute;top:6px;left:6px;right:6px;z-index:20;
                     display:flex;gap:4px;align-items:center;justify-content:center;
@@ -4672,7 +4672,8 @@ section[id*="quote" i] .ipc-list-card { padding: 4px 0 !important; margin: 2px 0
                 .enh-multi-search-queue__item {
                     min-width: 0; border: 1px solid ${t.bd0}; border-radius: 8px; background: ${t.sf1};
                 }
-                .enh-multi-search-queue__item--opened { opacity: .56; }
+                .enh-multi-search-queue__item--opened { background: ${t.sf0}; border-color: ${t.bd1}; }
+                .enh-multi-search-queue__item--opened .enh-multi-search-queue__link { color: ${t.tx3} !important; }
                 .enh-multi-search-queue__link {
                     min-height: 40px; display: flex; align-items: center; justify-content: space-between; gap: 10px;
                     padding: 7px 9px; color: ${t.tx1} !important; text-decoration: none !important;

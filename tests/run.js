@@ -583,6 +583,10 @@ test('branded controls keep readable text across themes and score states', () =>
     assert(script.includes('.enh-search-btn {') && script.includes('color: ${t.tx1};'), 'watch buttons should use the tested theme foreground');
     assert(script.includes('.enh-ext-link:hover') && script.includes('color: ${t.tx0} !important;'), 'external-link hover should retain theme-aware text');
     assert(!script.includes('color-mix(in srgb, var(--btn-color) 88%, #fff)'), 'brand colors must not define watch-button text contrast');
+    assert(!script.includes('.enh-markable-card.enh-marked{opacity:'), 'mark state must not fade an entire interactive card');
+    assert(script.includes('.enh-markable-card.enh-marked img{opacity:'), 'mark state may distinguish poster imagery without fading controls or text');
+    assert(!script.includes('.enh-multi-search-queue__item--opened { opacity:'), 'opened queue links must remain readable and interactive');
+    assert(script.includes('.enh-multi-search-queue__item--opened .enh-multi-search-queue__link { color: ${t.tx3} !important; }'), 'opened queue links should use a tested semantic text token');
 });
 
 test('optional keyboard shortcuts do not collide with browser or modal commands', () => {
