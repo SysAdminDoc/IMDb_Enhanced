@@ -1404,7 +1404,11 @@ test('settings preserve host scroll state and complete nested tab keyboard suppo
     assert(script.includes('{ maxlength:String(SETTING_TEXT_LIMIT) }'), 'integration text and credential fields should expose their storage bound');
     assert(script.includes("const row = makeEl('div', { className:'enh-site-row', role:'group' })"), 'each repeated destination row should expose group context');
     assert(script.includes("row.setAttribute('aria-label', `${destination} in ${title}`)"), 'destination groups should name their row and list');
+    assert(script.includes("remove.setAttribute('aria-label', `Remove ${destination} from ${title}`)"), 'remove controls should follow edited destination names');
     assert(script.includes("nameInput.addEventListener('input', updateRowLabel)"), 'destination group names should follow row-name edits');
+    assert(/className:'enh-settings-route-badge', role:'status', 'aria-live':'polite'/.test(script), 'destination counts should announce list changes');
+    assert(script.includes("previous?.querySelector?.('[data-field=\"name\"]')"), 'successful destination removal should move focus to a surviving row');
+    assert(script.includes('remove.focus();'), 'failed destination removal should restore focus to the reinserted control');
     assert(
         /onClick: \(\) => \{[\s\S]*?rows\.children\.length >= SITE_LIST_LIMIT[\s\S]*?const row = addRow\(\);\s*updateCount\(\);[\s\S]*?\.focus\(\);\s*\}/.test(script),
         'Add should create and focus an unsaved draft row'

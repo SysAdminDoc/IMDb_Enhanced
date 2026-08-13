@@ -129,6 +129,7 @@
 - Reworked collection-page title discovery to stop after 5,000 inspected links, with the multi-search path ending as soon as its 20-title queue is full instead of materializing every title anchor first.
 - Revalidated cached JustWatch provider lists at render time, inspecting at most 50 primitive labels, bounding each to 120 characters, and replacing repeated linear duplicate scans with a normalized set.
 - Hardened local-integration request guards to require credential-free HTTP(S) localhost base URLs without query/fragment state, and rejected API header credentials containing control characters across UI, import, and runtime reads.
+- Improved destination-list editing with live count announcements, remove labels that follow the edited site name, focus recovery after successful or rolled-back removal, and explicit removal feedback.
 
 ## 2.5.1 — 2026-08-12
 

@@ -5823,7 +5823,9 @@ section[id*="quote" i] .ipc-list-card { padding: 4px 0 !important; margin: 2px 0
     function createSiteEditor({ title, key, defaults, featureKey }) {
         const editor = makeEl('div', { className:'enh-site-editor' });
         const rows = makeEl('div', { className:'enh-site-editor__rows' });
-        const count = makeEl('span', { className:'enh-settings-route-badge' });
+        const count = makeEl('span', {
+            className:'enh-settings-route-badge', role:'status', 'aria-live':'polite', 'aria-atomic':'true',
+        });
         let add = null;
         let lastSaveFailure = '';
         const updateCount = () => {
@@ -5906,10 +5908,20 @@ section[id*="quote" i] .ipc-list-card { padding: 4px 0 !important; margin: 2px 0
                 'aria-label':'Remove destination',
                 onClick: () => {
                     const next = row.nextSibling;
+                    const previous = row.previousSibling;
+                    const destination = nameInput.value.trim() || 'Destination';
                     row.remove();
-                    if (save()) return;
+                    if (save()) {
+                        const focusTarget = next?.querySelector?.('[data-field="name"]')
+                            || previous?.querySelector?.('[data-field="name"]')
+                            || add;
+                        focusTarget?.focus();
+                        showToast(`${destination} removed from ${title}`);
+                        return;
+                    }
                     rows.insertBefore(row, next?.parentNode === rows ? next : null);
                     updateCount();
+                    remove.focus();
                     if (lastSaveFailure === 'validation') {
                         showToast('Finish or remove the incomplete site row before changing the list');
                     }
@@ -5919,6 +5931,7 @@ section[id*="quote" i] .ipc-list-card { padding: 4px 0 !important; margin: 2px 0
             const updateRowLabel = () => {
                 const destination = nameInput.value.trim() || 'new destination';
                 row.setAttribute('aria-label', `${destination} in ${title}`);
+                remove.setAttribute('aria-label', `Remove ${destination} from ${title}`);
             };
             nameInput.addEventListener('input', updateRowLabel);
 
