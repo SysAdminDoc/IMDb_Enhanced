@@ -50,6 +50,7 @@
 - Bounded and validated rating-histogram discovery, normalized it to a stable 1–10 distribution, waited for the live rating surface before rendering, and exposed each vote bucket to assistive technology.
 - Required Rotten Tomatoes' guessed direct slugs to pass the same JSON-LD title/type/year identity contract as search results before caching, with bounded score values and trusted canonical links.
 - Validated Letterboxd's IMDb-ID response against movie title/year JSON-LD and canonical `/film/` links, and now rechecks Rotten Tomatoes, Letterboxd, and Metacritic score ranges when rendering cached data.
+- Versioned the lookup-cache schema so entries created before the new cross-site identity contracts are discarded and lazily refetched instead of remaining trusted for their old TTL.
 
 ## 2.5.1 — 2026-08-12
 

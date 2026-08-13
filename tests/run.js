@@ -348,10 +348,14 @@ test('local marks are cached and bounded while DOM rescans stay mutation-scoped'
 
 test('lookup caches remain bounded and storage failures do not hide fetched results', () => {
     const hooks = loadScriptTestHooks();
+    hooks.seedRawStorage('cache_legacy', JSON.stringify({ data:{ score:99 }, ts:Date.now(), ttl:60000 }));
+    assert.strictEqual(hooks.cacheGet('legacy'), null, 'pre-validation cache schemas should be invalidated');
+    assert(!hooks.getStorageKeys().includes('cache_legacy'), 'invalidated legacy cache entries should be deleted');
     for (let index = 0; index < 135; index++) hooks.cacheSet(`test_${index}`, { index });
     const cacheKeys = hooks.getStorageKeys().filter(key => key.startsWith('cache_'));
     assert(cacheKeys.length <= 129, `cache exceeded bounded GC window: ${cacheKeys.length}`);
     assert.strictEqual(hooks.cacheGet('test_134')?.index, 134, 'newest cached result should survive pruning');
+    assert(script.includes('CACHE_SCHEMA_VERSION = 2'), 'cache schema invalidation marker missing');
 
     const failingHooks = loadScriptTestHooks();
     failingHooks.failSettingWriteAt(1);

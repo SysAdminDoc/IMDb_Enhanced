@@ -47,6 +47,7 @@
     const CINEBY_QUERY_TTL = 10 * 60 * 1000;
     const CACHE_TTL = 7 * 24 * 60 * 60 * 1000; // 7 days
     const CACHE_UNAVAILABLE_TTL = 24 * 60 * 60 * 1000; // 24 hours
+    const CACHE_SCHEMA_VERSION = 2;
     const CACHE_MAX_ENTRIES = 120;
     const CACHE_GC_WRITE_INTERVAL = 10;
     const USER_MARKS_MAX = 5000;
@@ -213,8 +214,8 @@
             const storageKey = 'cache_' + key;
             const raw = GM_getValue(storageKey, null);
             if (!raw) return null;
-            const { data, ts, ttl } = JSON.parse(raw);
-            if (!ts || Date.now() - ts > (ttl || CACHE_TTL)) {
+            const { data, ts, ttl, schema } = JSON.parse(raw);
+            if (schema !== CACHE_SCHEMA_VERSION || !ts || Date.now() - ts > (ttl || CACHE_TTL)) {
                 if (typeof GM_deleteValue === 'function') GM_deleteValue(storageKey);
                 return null;
             }
@@ -228,7 +229,7 @@
     }
     function cacheSet(key, data, ttl = CACHE_TTL) {
         try {
-            GM_setValue('cache_' + key, JSON.stringify({ data, ts: Date.now(), ttl }));
+            GM_setValue('cache_' + key, JSON.stringify({ data, ts: Date.now(), ttl, schema:CACHE_SCHEMA_VERSION }));
             cacheWritesSinceGC += 1;
             if (cacheWritesSinceGC >= CACHE_GC_WRITE_INTERVAL) {
                 cacheWritesSinceGC = 0;
@@ -260,7 +261,7 @@
                     const entry = raw ? JSON.parse(raw) : null;
                     const ts = Number(entry?.ts) || 0;
                     const ttl = Number(entry?.ttl) || CACHE_TTL;
-                    if (!entry || !ts || now - ts > ttl) {
+                    if (!entry || entry.schema !== CACHE_SCHEMA_VERSION || !ts || now - ts > ttl) {
                         if (typeof GM_deleteValue === 'function') GM_deleteValue(storageKey);
                         return;
                     }
