@@ -1418,7 +1418,11 @@
             if (notify) showToast(`${feature.name} could not start. Reload and try again.`, 4500);
         };
         const rejectCurrentGeneration = error => {
-            if (featureGenerations.get(feature) === generation) advanceFeatureGeneration(feature);
+            if (featureGenerations.get(feature) === generation) {
+                advanceFeatureGeneration(feature);
+                try { feature.destroy?.(); }
+                catch (cleanupError) { console.warn(`[IMDb Enhanced] cleanup ${feature.key}:`, cleanupError); }
+            }
             report(error);
         };
         try {

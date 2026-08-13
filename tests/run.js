@@ -46,6 +46,7 @@ function loadScriptTestHooks() {
         shouldInitFeature,
         createFeatureGuard,
         advanceFeatureGeneration,
+        startFeature,
         normalizeUrlTemplate,
         normalizeLocalServiceUrl,
         normalizeTrustedUrl,
@@ -417,6 +418,24 @@ test('pending route work and lazy score lookups are cancellable', () => {
     assert(script.includes('timer = setTimeout(() => finish(false), 60000)'), 'offscreen visibility waits should release themselves after a bounded interval');
     assert((script.match(/createFeatureGuard\(this\)/g) || []).length >= 15, 'async feature entry points should be route guarded');
     assert(script.includes('pending.catch(rejectCurrentGeneration)'), 'async feature initialization failures should invalidate their lifecycle');
+    let failedDestroyCount = 0;
+    assert.strictEqual(hooks.startFeature({
+        key:'brokenFeature', name:'Broken feature',
+        init() { throw new Error('simulated init failure'); },
+        destroy() { failedDestroyCount += 1; },
+    }), false, 'synchronous feature startup failures should be reported');
+    assert.strictEqual(failedDestroyCount, 1, 'a partially initialized feature should clean itself up after failure');
+    let staleReject;
+    let staleDestroyCount = 0;
+    const staleFeature = {
+        key:'staleFeature', name:'Stale feature',
+        init:() => ({ catch:handler => { staleReject = handler; } }),
+        destroy() { staleDestroyCount += 1; },
+    };
+    assert(hooks.startFeature(staleFeature));
+    hooks.advanceFeatureGeneration(staleFeature);
+    staleReject(new Error('late rejection'));
+    assert.strictEqual(staleDestroyCount, 0, 'an old rejection must not destroy a newer feature generation');
     assert(script.includes('stopFeature(feature)'), 'settings refresh and disable paths should invalidate prior feature instances');
     assert(script.includes("startFeature(feature, { context:'settings', notify:true })"), 'settings-triggered feature failures should be visible');
     assert(script.includes("startFeature(feature, { context:'refresh', notify:true })"), 'settings-triggered feature refresh failures should be visible');

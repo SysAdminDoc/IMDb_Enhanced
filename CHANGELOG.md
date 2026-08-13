@@ -124,6 +124,7 @@
 - Bounded title-year extraction to the first 50 structured release events and 100 inline release links, avoiding full traversal of oversized page-provided collections while retaining primary publication dates first.
 - Matched integration text, credential, folder, and localhost URL controls to the 4,096-character settings schema; runtime configuration now also rejects legacy remote URLs and bounds directly edited stored credentials.
 - Centralized private-mark normalization behind a 10,000-record scan budget and 5,000-record retained limit, so reads, writes, and imports no longer materialize every directly edited storage entry before pruning.
+- Cleaned up the current feature generation when synchronous or asynchronous startup fails, while preventing a late rejection from tearing down a newer refresh of the same feature.
 
 ## 2.5.1 — 2026-08-12
 
