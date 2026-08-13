@@ -73,6 +73,8 @@ function loadScriptTestHooks() {
         getDefaultSettingsEntries,
         getExportSettings,
         mediaServerRequest,
+        getServarrConfig,
+        isServarrConfigured,
         toPositiveInteger,
         httpRequest,
         waitFor,
@@ -944,6 +946,13 @@ test('local-service credentials stay out of request URLs', () => {
     assert.strictEqual(new URL(request.url).searchParams.get('type'), 'movie');
     assert.strictEqual(hooks.toPositiveInteger('-4'), 1, 'legacy negative profile IDs should fall back safely');
     assert.strictEqual(hooks.toPositiveInteger('7'), 7);
+
+    hooks.seedStoredSetting('radarrUrl', 'http://localhost:7878');
+    hooks.seedStoredSetting('radarrApiKey', 'radarr-secret');
+    hooks.seedStoredSetting('radarrRootFolderPath', '/movies');
+    hooks.seedStoredSetting('radarrQualityProfileId', '');
+    assert.strictEqual(hooks.getServarrConfig('radarr').qualityProfileId, 0, 'a visibly blank profile field must stay unconfigured');
+    assert.strictEqual(hooks.isServarrConfigured('radarr'), false, 'blank profile IDs must not silently fall back to profile 1');
 });
 
 test('media server matching handles provider IDs and title fallback', () => {

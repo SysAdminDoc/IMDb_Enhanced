@@ -73,6 +73,7 @@
 - Prevented poster-only links from consuming a title ID before list multi-search reaches the corresponding text link, restoring titles that were silently omitted from generated queues.
 - Removed IMDb chart/list ordinal prefixes such as “17.” from multi-search title queries so destinations receive the actual title.
 - Removed the obsolete Sonarr language-profile field and payload property; current Sonarr manages language through quality-profile custom formats, and the userscript now cleans the orphaned legacy setting.
+- Stopped blank or invalid Radarr/Sonarr quality-profile fields from silently falling back to profile 1; incomplete integrations now remain inactive until their visible configuration is valid.
 
 ## 2.5.1 — 2026-08-12
 

@@ -1082,7 +1082,7 @@
             baseUrl,
             apiKey: String(get(`${prefix}ApiKey`) || '').trim(),
             rootFolderPath: String(get(`${prefix}RootFolderPath`) || '').trim(),
-            qualityProfileId: toPositiveInteger(get(`${prefix}QualityProfileId`)),
+            qualityProfileId: toPositiveInteger(get(`${prefix}QualityProfileId`), 0),
         };
     }
     function isServarrConfigured(kind) {
