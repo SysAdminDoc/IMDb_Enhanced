@@ -1278,7 +1278,7 @@
         init() { addCSS(this.css, 'enh-sponsRecs'); }, destroy() { removeCSS('enh-sponsRecs'); } });
 
     reg({ key: 'removeAppBanner', name: 'Hide app banners', group: 'Cleanup',
-        css: `.footer__app,.imdb-footer__open-in-app-button,[class*="AppBanner"],#announcement-text{display:none!important}`,
+        css: `.footer__app,.imdb-footer__open-in-app-button,[class*="AppBanner"]{display:none!important}`,
         init() { addCSS(this.css, 'enh-appBanner'); }, destroy() { removeCSS('enh-appBanner'); } });
 
     // #########################################################################
