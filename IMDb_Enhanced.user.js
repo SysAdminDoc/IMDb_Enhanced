@@ -3385,8 +3385,10 @@ section[id*="quote" i] .ipc-list-card { padding: 4px 0 !important; margin: 2px 0
                 wrap.appendChild(row);
                 appendTitleStackItem(wrap, TITLE_STACK_ORDER.searchButtons);
                 wrap.querySelectorAll('.enh-search-btn').forEach(btn => {
-                    btn.addEventListener('click', () => {
-                        if (btn.dataset.storeQuery === 'true') storeCinebyQuery(title);
+                    btn.addEventListener('click', event => {
+                        if (btn.dataset.storeQuery !== 'true' || storeCinebyQuery(title)) return;
+                        event.preventDefault();
+                        showToast('Could not prepare the Cineby title handoff. Check userscript storage permissions or quota.', 4500);
                     });
                 });
             }).catch(() => {});
@@ -4739,7 +4741,9 @@ section[id*="quote" i] .ipc-list-card { padding: 4px 0 !important; margin: 2px 0
             target.insertBefore(bar, target.firstElementChild?.nextSibling || null);
         },
         _prepareEntry(site, entry) {
-            if (site.storeQuery) storeCinebyQuery(entry.name);
+            if (!site.storeQuery || storeCinebyQuery(entry.name)) return true;
+            showToast('Could not prepare the Cineby title handoff. Check userscript storage permissions or quota.', 4500);
+            return false;
         },
         _showQueue(site, trigger) {
             const titles = getListTitles();
@@ -4793,8 +4797,11 @@ section[id*="quote" i] .ipc-list-card { padding: 4px 0 !important; margin: 2px 0
                     makeEl('span', {}, entry.name),
                     makeEl('span', { className:'enh-multi-search-queue__link-meta' }, `${entry.id} · New tab`)
                 );
-                link.addEventListener('click', () => {
-                    this._prepareEntry(site, entry);
+                link.addEventListener('click', event => {
+                    if (!this._prepareEntry(site, entry)) {
+                        event.preventDefault();
+                        return;
+                    }
                     setTimeout(() => markOpened(index), 0);
                 });
                 list.appendChild(makeEl('li', { className:'enh-multi-search-queue__item' }, link));
@@ -4804,7 +4811,10 @@ section[id*="quote" i] .ipc-list-card { padding: 4px 0 !important; margin: 2px 0
                 const entry = entries[nextIndex];
                 if (!entry) { event.preventDefault(); return; }
                 const index = nextIndex;
-                this._prepareEntry(site, entry);
+                if (!this._prepareEntry(site, entry)) {
+                    event.preventDefault();
+                    return;
+                }
                 setTimeout(() => markOpened(index), 0);
             });
 

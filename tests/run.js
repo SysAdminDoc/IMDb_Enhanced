@@ -1190,6 +1190,12 @@ test('Cineby handoffs are short-lived and consumed only once', () => {
 
     hooks.seedStoredSetting('cineby_query', '1917');
     assert.strictEqual(hooks.takeCinebyQuery(), '1917', 'numeric legacy movie titles should survive migration');
+
+    const failingHooks = loadScriptTestHooks();
+    failingHooks.failSettingWriteAt(1);
+    assert.strictEqual(failingHooks.storeCinebyQuery('The Matrix'), false, 'handoff writes should report storage failure');
+    assert(script.includes("if (btn.dataset.storeQuery !== 'true' || storeCinebyQuery(title)) return"), 'title-page Cineby navigation should stop after a failed handoff write');
+    assert((script.match(/if \(!this\._prepareEntry\(site, entry\)\)/g) || []).length === 2, 'both list-queue navigation paths should stop after a failed handoff write');
 });
 
 test('settings preserve host scroll state and complete nested tab keyboard support', () => {

@@ -106,6 +106,7 @@
 - Restored destination rows after failed Remove or Reset writes and stopped reporting storage failures as URL-validation errors.
 - Raised the bounded settings-import path from 100 KB to 4 MB so a supported 5,000-mark/100-destination export remains re-importable, and made export read/size failures explicit.
 - Bounded IMDb histogram discovery by script count, script size, queue growth, and node count before parsing embedded application data.
+- Prevented Cineby links from opening an unprepared destination when the one-time title handoff cannot be stored; title-page and both list-queue paths now explain the storage failure.
 
 ## 2.5.1 — 2026-08-12
 
