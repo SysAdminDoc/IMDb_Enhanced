@@ -124,7 +124,7 @@
         themeVariant: 'dark', // dark | oled | midnight | light | highContrast
         themeAuto: false,
         // Sections
-        collapsibleSections: true, spoilerBlur: true, quickNav: true,
+        collapsibleSections: true, sectionCollapseState: {}, spoilerBlur: true, quickNav: true,
         // Scores
         inlineRTScore: true, inlineLetterboxdScore: true, inlineMetacriticScore: true,
         ratingHistogram: true, streamAvailability: true,
@@ -155,6 +155,10 @@
     const POSITIVE_INTEGER_SETTING_KEYS = new Set([
         'radarrQualityProfileId', 'sonarrQualityProfileId', 'sonarrLanguageProfileId',
     ]);
+    const COLLAPSIBLE_SECTION_IDS = [
+        'title-cast', 'UserReviews', 'MoreLikeThis', 'Details', 'BoxOffice',
+        'TechSpecs', 'DidYouKnow', 'videos-section', 'Photos',
+    ];
 
     const FEATURE_DETAILS = {
         removeAds: 'Hides current IMDb ad placements, sponsored shells, and tracking pixels as early as userscript timing allows.',
@@ -328,6 +332,38 @@
     }
     function getUserMarkEntries() {
         return Object.entries(getUserMarks()).sort((a, b) => (b[1].ts || 0) - (a[1].ts || 0));
+    }
+    function normalizeSectionCollapseState(value) {
+        if (!value || Array.isArray(value) || typeof value !== 'object') return {};
+        const state = {};
+        COLLAPSIBLE_SECTION_IDS.forEach(id => {
+            if (typeof value[id] === 'boolean') state[id] = value[id];
+        });
+        return state;
+    }
+    function getSectionCollapseState() {
+        const state = normalizeSectionCollapseState(get('sectionCollapseState'));
+        let migrated = false;
+        COLLAPSIBLE_SECTION_IDS.forEach(id => {
+            const legacyKey = 'enh_coll_' + id;
+            try {
+                const legacy = GM_getValue(legacyKey, null);
+                if (typeof legacy === 'boolean' && !(id in state)) {
+                    state[id] = legacy;
+                    migrated = true;
+                }
+                if (legacy !== null && typeof GM_deleteValue === 'function') GM_deleteValue(legacyKey);
+            } catch { /* best-effort legacy migration */ }
+        });
+        if (migrated) set('sectionCollapseState', state);
+        return state;
+    }
+    function setSectionCollapsed(id, collapsed) {
+        if (!COLLAPSIBLE_SECTION_IDS.includes(id)) return false;
+        const state = getSectionCollapseState();
+        state[id] = Boolean(collapsed);
+        set('sectionCollapseState', state);
+        return true;
     }
 
     // =========================================================================
@@ -639,6 +675,13 @@
             return Number.isSafeInteger(number) && number > 0
                 ? { key, value:String(number) }
                 : null;
+        }
+        if (key === 'sectionCollapseState') {
+            if (!value || Array.isArray(value) || typeof value !== 'object') return null;
+            const normalized = normalizeSectionCollapseState(value);
+            return Object.keys(value).length && !Object.keys(normalized).length
+                ? null
+                : { key, value:normalized };
         }
         if (key === 'userMarks') {
             if (!value || Array.isArray(value) || typeof value !== 'object') return null;
@@ -2614,7 +2657,7 @@ section[id*="quote" i] .ipc-list-card { padding: 4px 0 !important; margin: 2px 0
 
     reg({
         key: 'collapsibleSections', name: 'Collapsible sections', group: 'Layout',
-        _ids: ['title-cast','UserReviews','MoreLikeThis','Details','BoxOffice','TechSpecs','DidYouKnow','videos-section','Photos'],
+        _ids: COLLAPSIBLE_SECTION_IDS,
         init() {
             addCSS(`
                 .enh-collapse-btn{position:absolute;top:12px;right:12px;width:28px;height:28px;
@@ -2628,10 +2671,11 @@ section[id*="quote" i] .ipc-list-card { padding: 4px 0 !important; margin: 2px 0
                 section[data-testid]{position:relative}
             `, 'enh-collapsible');
 
+            const collapseState = getSectionCollapseState();
             this._ids.forEach(id => {
                 const sec = document.querySelector(`section[data-testid="${id}"]`);
                 if (!sec || sec.querySelector('.enh-collapse-btn')) return;
-                const collapsed = GM_getValue('enh_coll_' + id, false);
+                const collapsed = Boolean(collapseState[id]);
                 if (collapsed) sec.classList.add('enh-section--collapsed');
                 const sectionLabel = sec.querySelector('.ipc-title__text, h2, h3')?.textContent?.trim() || id;
                 const btn = makeEl('button', {
@@ -2645,7 +2689,7 @@ section[id*="quote" i] .ipc-list-card { padding: 4px 0 !important; margin: 2px 0
                         btn.title = now ? 'Expand section' : 'Collapse section';
                         btn.setAttribute('aria-expanded', String(!now));
                         btn.setAttribute('aria-label', `${now ? 'Expand' : 'Collapse'} ${sectionLabel}`);
-                        GM_setValue('enh_coll_' + id, now);
+                        setSectionCollapsed(id, now);
                     }
                 });
                 sec.appendChild(btn);

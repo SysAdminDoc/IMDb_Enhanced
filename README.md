@@ -74,7 +74,7 @@ Click the gear icon on any covered IMDb page to open the six-section settings wo
 
 **URL Templates** - Use `{{TITLE}}`, `{{TITLE_DASH}}`, `{{TITLE_SLUG}}`, `{{IMDB_ID}}`, `{{IMDB_NUM}}`, `{{TRAKT_TYPE}}`, `{{YEAR}}` in custom site URLs.
 
-**Import/Export** - Full JSON backup and validated, transactional restore. Invalid or unknown fields are skipped; a storage failure restores the prior values before reporting the error.
+**Import/Export** - Full JSON backup—including remembered section state—and validated, transactional restore. Invalid or unknown fields are skipped; a storage failure restores the prior values before reporting the error.
 
 ## Themes
 

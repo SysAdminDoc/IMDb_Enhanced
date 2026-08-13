@@ -48,6 +48,8 @@ function loadScriptTestHooks() {
         cacheGet,
         getUserMarks,
         setUserMark,
+        getSectionCollapseState,
+        setSectionCollapsed,
         mediaServerRequest,
         toPositiveInteger,
         httpRequest,
@@ -116,6 +118,7 @@ function loadScriptTestHooks() {
     sandbox.window.__enhTest.getAbortedRequestCount = () => sandboxAbortedRequestCount;
     sandbox.window.__enhTest.setReducedMotion = value => { prefersReducedMotion = Boolean(value); };
     sandbox.window.__enhTest.seedStoredSetting = (key, value) => sandboxValues.set(`imdb_enh_${key}`, value);
+    sandbox.window.__enhTest.seedRawStorage = (key, value) => sandboxValues.set(key, value);
     sandbox.window.__enhTest.getStoredSetting = key => sandboxValues.get(`imdb_enh_${key}`);
     sandbox.window.__enhTest.failSettingWriteAt = offset => { sandboxFailWriteAt = sandboxWriteCount + offset; };
     sandbox.window.__enhTest.getStorageKeys = () => [...sandboxValues.keys()];
@@ -377,6 +380,24 @@ test('settings imports validate first and roll back partial storage failures', (
         /No valid recognized settings/,
         'credential-bearing service URLs must be rejected'
     );
+});
+
+test('remembered section state participates in backup and migrates legacy keys', () => {
+    const hooks = loadScriptTestHooks();
+    hooks.seedRawStorage('enh_coll_Details', true);
+    const migrated = hooks.getSectionCollapseState();
+    assert.strictEqual(migrated.Details, true);
+    assert.strictEqual(hooks.getStorageKeys().includes('enh_coll_Details'), false, 'legacy section key should be removed');
+    assert.strictEqual(hooks.getStoredSetting('sectionCollapseState').Details, true, 'migrated state should use normal settings storage');
+    assert(hooks.setSectionCollapsed('Details', false));
+    assert.strictEqual(hooks.getStoredSetting('sectionCollapseState').Details, false);
+
+    const prepared = hooks.prepareSettingsImport({
+        sectionCollapseState:{ Details:true, Unknown:true, Photos:'yes' },
+    });
+    assert.strictEqual(prepared.entries[0].value.Details, true);
+    assert.strictEqual(Object.keys(prepared.entries[0].value).length, 1, 'unknown or non-boolean section states should be ignored');
+    assert(script.includes('sectionCollapseState: {}'), 'remembered section state should be included in exported defaults');
 });
 
 test('core features remain registered', () => {
