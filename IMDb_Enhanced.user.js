@@ -48,6 +48,8 @@
     const CACHE_TTL = 7 * 24 * 60 * 60 * 1000; // 7 days
     const CACHE_UNAVAILABLE_TTL = 24 * 60 * 60 * 1000; // 24 hours
     const CACHE_MAX_ENTRIES = 120;
+    const CACHE_GC_WRITE_INTERVAL = 10;
+    const USER_MARKS_MAX = 5000;
     const AD_SHELL_SELECTOR = [
         '.nas-slot',
         '.slot_wrapper',
@@ -199,6 +201,8 @@
         GM_setValue(PREFIX + k, v);
         document.dispatchEvent(new CustomEvent('imdb-enhanced:settings-saved', { detail:{ key:k } }));
     };
+    let cacheWritesSinceGC = 0;
+    let userMarksCache = null;
 
     function cacheGet(key) {
         try {
@@ -211,16 +215,32 @@
                 return null;
             }
             return data;
-        } catch { return null; }
+        } catch {
+            try {
+                if (typeof GM_deleteValue === 'function') GM_deleteValue('cache_' + key);
+            } catch { /* best-effort malformed cache cleanup */ }
+            return null;
+        }
     }
     function cacheSet(key, data, ttl = CACHE_TTL) {
-        GM_setValue('cache_' + key, JSON.stringify({ data, ts: Date.now(), ttl }));
+        try {
+            GM_setValue('cache_' + key, JSON.stringify({ data, ts: Date.now(), ttl }));
+            cacheWritesSinceGC += 1;
+            if (cacheWritesSinceGC >= CACHE_GC_WRITE_INTERVAL) {
+                cacheWritesSinceGC = 0;
+                cacheGC(true);
+            }
+            return true;
+        } catch (error) {
+            console.warn('[IMDb Enhanced] cache write failed:', error);
+            return false;
+        }
     }
     function cacheSetUnavailable(key) {
         cacheSet(key, { unavailable: true }, CACHE_UNAVAILABLE_TTL);
     }
-    function cacheGC() {
-        if (cacheGC._ran) return;
+    function cacheGC(force = false) {
+        if (cacheGC._ran && !force) return;
         cacheGC._ran = true;
         try {
             const legacySiteHealthKey = PREFIX + 'siteHealth';
@@ -265,25 +285,40 @@
         };
     }
     function getUserMarks() {
+        if (userMarksCache) return userMarksCache;
         const raw = get('userMarks');
-        if (!raw || typeof raw !== 'object' || Array.isArray(raw)) return {};
-        const marks = {};
+        if (!raw || typeof raw !== 'object' || Array.isArray(raw)) {
+            userMarksCache = {};
+            return userMarksCache;
+        }
+        const entries = [];
         Object.entries(raw).forEach(([id, record]) => {
             if (!/^tt\d+$/.test(id)) return;
             const normalized = normalizeUserMark(record);
-            if (normalized) marks[id] = normalized;
+            if (normalized) entries.push([id, normalized]);
         });
-        return marks;
+        entries.sort((a, b) => (b[1].ts || 0) - (a[1].ts || 0));
+        userMarksCache = Object.fromEntries(entries.slice(0, USER_MARKS_MAX));
+        return userMarksCache;
     }
     function setUserMarks(marks) {
-        set('userMarks', marks && typeof marks === 'object' && !Array.isArray(marks) ? marks : {});
+        const source = marks && typeof marks === 'object' && !Array.isArray(marks) ? marks : {};
+        const entries = Object.entries(source)
+            .map(([id, record]) => [id, normalizeUserMark(record)])
+            .filter(([id, record]) => /^tt\d+$/.test(id) && record)
+            .sort((a, b) => (b[1].ts || 0) - (a[1].ts || 0))
+            .slice(0, USER_MARKS_MAX);
+        const normalized = Object.fromEntries(entries);
+        set('userMarks', normalized);
+        userMarksCache = normalized;
+        return true;
     }
     function getUserMark(imdbId) {
         return getUserMarks()[imdbId]?.state || '';
     }
     function setUserMark(imdbId, state, title = '') {
         if (!/^tt\d+$/.test(imdbId || '')) return;
-        const marks = getUserMarks();
+        const marks = { ...getUserMarks() };
         if (state === 'watched' || state === 'skip') {
             marks[imdbId] = { state, title: String(title || '').trim().slice(0, 160), ts: Date.now() };
         } else {
@@ -608,7 +643,7 @@
         if (key === 'userMarks') {
             if (!value || Array.isArray(value) || typeof value !== 'object') return null;
             const normalized = {};
-            Object.entries(value).slice(0, 5000).forEach(([id, record]) => {
+            Object.entries(value).slice(0, USER_MARKS_MAX).forEach(([id, record]) => {
                 if (!/^tt\d+$/.test(id) || !record || !['watched', 'skip'].includes(record.state)) return;
                 const timestamp = Number(record.ts);
                 normalized[id] = {
@@ -680,6 +715,7 @@
         }
 
         entries.forEach(({ key }) => {
+            if (key === 'userMarks') userMarksCache = null;
             try {
                 document.dispatchEvent(new CustomEvent('imdb-enhanced:settings-saved', { detail:{ key } }));
             } catch { /* persistence succeeded; notification is best-effort */ }
@@ -3175,6 +3211,7 @@ section[id*="quote" i] .ipc-list-card { padding: 4px 0 !important; margin: 2px 0
         _observer: null,
         _clickHandler: null,
         _raf: 0,
+        _pendingScanRoots: null,
         init() {
             if (!window.location.hostname.includes('imdb.com')) return;
             const t = getTheme();
@@ -3230,9 +3267,24 @@ section[id*="quote" i] .ipc-list-card { padding: 4px 0 !important; margin: 2px 0
             document.body.addEventListener('click', this._clickHandler, true);
 
             this._scan(document);
-            this._observer = new MutationObserver(() => {
+            this._pendingScanRoots = new Set();
+            this._observer = new MutationObserver(mutations => {
+                mutations.forEach(mutation => mutation.addedNodes.forEach(node => {
+                    if (node?.matches || node?.querySelectorAll) this._pendingScanRoots.add(node);
+                }));
+                if (!this._pendingScanRoots.size) return;
+                if (this._pendingScanRoots.size > 50) {
+                    this._pendingScanRoots.clear();
+                    this._pendingScanRoots.add(document);
+                }
                 cancelAnimationFrame(this._raf);
-                this._raf = requestAnimationFrame(() => this._scan(document));
+                this._raf = requestAnimationFrame(() => {
+                    const roots = [...this._pendingScanRoots];
+                    this._pendingScanRoots.clear();
+                    roots.forEach(root => {
+                        if (root === document || root.isConnected !== false) this._scan(root);
+                    });
+                });
             });
             this._observer.observe(document.body, { childList: true, subtree: true });
         },
@@ -3351,6 +3403,8 @@ section[id*="quote" i] .ipc-list-card { padding: 4px 0 !important; margin: 2px 0
             this._observer?.disconnect();
             this._observer = null;
             cancelAnimationFrame(this._raf);
+            this._pendingScanRoots?.clear();
+            this._pendingScanRoots = null;
             document.querySelectorAll('.enh-markable-card').forEach(card => {
                 card.classList.remove('enh-markable-card', 'enh-marked', 'enh-marked--watched', 'enh-marked--skip');
                 delete card.dataset.enhMarkId;

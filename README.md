@@ -28,7 +28,7 @@ Third-party lookup responses are rendered as text and their outbound links are r
 
 **Media Server Indicator** - Optional Plex, Jellyfin, and Emby checks show whether the current title already exists in your local media library. Localhost-only for security.
 
-**Watched Marking** - Local watched/skip toggle controls on title posters and recommendation cards, with exposed pressed state. No IMDb login required.
+**Watched Marking** - Local watched/skip toggle controls on title posters and recommendation cards, with exposed pressed state and a newest-first 5,000-title storage bound. No IMDb login required.
 
 **TV Tools** - Episode synopsis blur, highest-rated episode highlighting, TV-specific lookup shortcuts.
 

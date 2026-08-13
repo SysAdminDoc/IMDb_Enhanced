@@ -44,6 +44,10 @@ function loadScriptTestHooks() {
         applySettingsImport,
         storeCinebyQuery,
         takeCinebyQuery,
+        cacheSet,
+        cacheGet,
+        getUserMarks,
+        setUserMark,
         httpRequest,
         waitFor,
         cancelPendingRouteWork,
@@ -97,7 +101,7 @@ function loadScriptTestHooks() {
         GM_addStyle: () => {},
         GM_setClipboard: () => {},
         GM_xmlhttpRequest: () => ({ abort: () => { sandboxAbortedRequestCount += 1; } }),
-        GM_listValues: () => [],
+        GM_listValues: () => [...sandboxValues.keys()],
         GM_deleteValue: key => { sandboxValues.delete(key); },
         GM_webRequest: rules => { sandbox.webRequestRules = rules; },
     };
@@ -108,6 +112,7 @@ function loadScriptTestHooks() {
     sandbox.window.__enhTest.seedStoredSetting = (key, value) => sandboxValues.set(`imdb_enh_${key}`, value);
     sandbox.window.__enhTest.getStoredSetting = key => sandboxValues.get(`imdb_enh_${key}`);
     sandbox.window.__enhTest.failSettingWriteAt = offset => { sandboxFailWriteAt = sandboxWriteCount + offset; };
+    sandbox.window.__enhTest.getStorageKeys = () => [...sandboxValues.keys()];
     return sandbox.window.__enhTest;
 }
 
@@ -237,6 +242,35 @@ test('watched marks only decorate canonical title links', () => {
     assert.strictEqual(hooks.getLinkedTitleId('/de/title/tt0133093/'), 'tt0133093');
     assert.strictEqual(hooks.getLinkedTitleId('/showtimes/title/tt0133093/2026-08-30'), '');
     assert.strictEqual(hooks.getLinkedTitleId('/title/tt0133093/releaseinfo/'), '');
+});
+
+test('local marks are cached and bounded while DOM rescans stay mutation-scoped', () => {
+    const hooks = loadScriptTestHooks();
+    const marks = {};
+    for (let index = 0; index < 5003; index++) {
+        marks[`tt${String(index).padStart(7, '0')}`] = { state:'watched', title:`Title ${index}`, ts:index };
+    }
+    hooks.seedStoredSetting('userMarks', marks);
+    const normalized = hooks.getUserMarks();
+    assert.strictEqual(Object.keys(normalized).length, 5000, 'normal use should retain at most 5,000 local marks');
+    assert(!normalized.tt0000000, 'oldest excess marks should be discarded first');
+    assert(normalized.tt0005002, 'newest marks should be retained');
+    hooks.setUserMark('tt9999999', 'watched', 'Newest');
+    assert.strictEqual(Object.keys(hooks.getStoredSetting('userMarks')).length, 5000, 'new writes should preserve the mark bound');
+    assert(script.includes('mutation.addedNodes.forEach'), 'watched-mark observer should scan added subtrees');
+    assert(script.includes('this._pendingScanRoots.size > 50'), 'large mutation batches should retain a bounded full-scan fallback');
+});
+
+test('lookup caches remain bounded and storage failures do not hide fetched results', () => {
+    const hooks = loadScriptTestHooks();
+    for (let index = 0; index < 135; index++) hooks.cacheSet(`test_${index}`, { index });
+    const cacheKeys = hooks.getStorageKeys().filter(key => key.startsWith('cache_'));
+    assert(cacheKeys.length <= 129, `cache exceeded bounded GC window: ${cacheKeys.length}`);
+    assert.strictEqual(hooks.cacheGet('test_134')?.index, 134, 'newest cached result should survive pruning');
+
+    const failingHooks = loadScriptTestHooks();
+    failingHooks.failSettingWriteAt(1);
+    assert.strictEqual(failingHooks.cacheSet('quota', { value:true }), false, 'cache write errors should be non-fatal');
 });
 
 test('settings use six accessible desktop destinations', () => {

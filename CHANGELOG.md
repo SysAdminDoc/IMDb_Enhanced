@@ -35,6 +35,7 @@
 - Made Cineby title handoffs timestamped, single-use, and bounded to ten minutes; the target page now waits for a visible search control and discards failed handoffs instead of unexpectedly filling a future visit.
 - Completed the trailer dialog lifecycle with focus containment/restoration, explicit expanded state, page-scroll restoration, an accessible visible label and loading status, and guards against late lookup results after close or navigation.
 - Completed keyboard semantics for secondary interactions: the expanded-links menu now supports disclosure and roving-focus keys, watched/skip controls expose and toggle pressed state, and plot/episode spoilers reveal with Enter or Space while cleaning up only their own state.
+- Bounded local marks to the newest 5,000 entries, cached the normalized mark index for constant-time card updates, limited continuous DOM observation to added subtrees with a burst fallback, and made cache writes non-fatal while enforcing the 120-entry cap during long SPA sessions.
 
 ## 2.5.1 — 2026-08-12
 
