@@ -16,7 +16,7 @@ A desktop IMDb overhaul delivered as a single userscript. Cleaner pages, modern 
 
 **Streaming Availability** - JustWatch integration shows which streaming services carry the title, using the same lazy, route-aware lookup lifecycle and exact title/type/year identity checks on direct and search-fallback pages.
 
-Third-party lookups omit destination cookies. Responses are rendered as text, and their outbound links are restricted to the expected HTTPS service domains.
+Third-party lookups omit destination cookies. Responses are rendered as text, outbound links suppress opener/referrer data, and response-provided URLs are restricted to the expected HTTPS service domains.
 
 **Watch Site Search** - Quick-search buttons for streaming sites (StreamXTV, LookMovie, CinemaOS, LivNet, Flixer, Cine.su, Fmovies+, Cineby). Fully configurable in settings. Destinations are contacted only when you open them; the userscript does not background-probe every site.
 

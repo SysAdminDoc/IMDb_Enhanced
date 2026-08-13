@@ -2843,7 +2843,7 @@ section[id*="quote" i] .ipc-list-card { padding: 4px 0 !important; margin: 2px 0
             const w = makeEl('div', { id: 'enh-rt-widget', className: 'enh-score-widget' });
             const scoreLink = makeEl('a', {
                 href,
-                target:'_blank', rel:'noopener', className:'enh-score-widget__score',
+                target:'_blank', rel:'noopener noreferrer', className:'enh-score-widget__score',
                 style:hasScore ? { '--score-color':color } : {},
                 ...(consensus ? { title:consensus } : {}),
             },
@@ -2873,7 +2873,7 @@ section[id*="quote" i] .ipc-list-card { padding: 4px 0 !important; margin: 2px 0
             w.innerHTML = `
                 <div class="enh-score-widget__label">TOMATOMETER</div>
                 <a href="https://www.rottentomatoes.com/search?search=${encodeURIComponent(getTitleText())}"
-                   target="_blank" rel="noopener" class="enh-score-widget__score">
+                   target="_blank" rel="noopener noreferrer" class="enh-score-widget__score">
                     <span class="enh-score-widget__badge enh-score-widget__badge--outline">RT</span>
                     <span class="enh-score-widget__value">Open</span>
                 </a>
@@ -2935,7 +2935,7 @@ section[id*="quote" i] .ipc-list-card { padding: 4px 0 !important; margin: 2px 0
             w.append(
                 makeEl('div', { className:'enh-score-widget__label' }, 'LETTERBOXD'),
                 makeEl('a', {
-                    href, target:'_blank', rel:'noopener', className:'enh-score-widget__score',
+                    href, target:'_blank', rel:'noopener noreferrer', className:'enh-score-widget__score',
                     style:{ '--score-color':color },
                 },
                     makeEl('span', { className:'enh-score-widget__badge enh-score-widget__badge--outline' }, 'LB'),
@@ -2964,7 +2964,7 @@ section[id*="quote" i] .ipc-list-card { padding: 4px 0 !important; margin: 2px 0
             w.innerHTML = `
                 <div class="enh-score-widget__label">LETTERBOXD</div>
                 <a href="https://letterboxd.com/imdb/${getIMDbID()}/"
-                   target="_blank" rel="noopener" class="enh-score-widget__score">
+                   target="_blank" rel="noopener noreferrer" class="enh-score-widget__score">
                     <span class="enh-score-widget__badge enh-score-widget__badge--outline">LB</span>
                     <span class="enh-score-widget__value">Open</span>
                 </a>
@@ -3044,7 +3044,7 @@ section[id*="quote" i] .ipc-list-card { padding: 4px 0 !important; margin: 2px 0
             w.append(
                 makeEl('div', { className:'enh-score-widget__label' }, 'METASCORE'),
                 makeEl('a', {
-                    href, target:'_blank', rel:'noopener', className:'enh-score-widget__score',
+                    href, target:'_blank', rel:'noopener noreferrer', className:'enh-score-widget__score',
                     style:hasScore ? { '--score-color':color } : {},
                 }, makeEl('span', {
                     className:'enh-score-widget__badge' + (hasScore ? '' : ' enh-score-widget__badge--outline'),
@@ -3075,7 +3075,7 @@ section[id*="quote" i] .ipc-list-card { padding: 4px 0 !important; margin: 2px 0
             w.innerHTML = `
                 <div class="enh-score-widget__label">METASCORE</div>
                 <a href="https://www.metacritic.com/search/${encodeURIComponent(getTitleText())}/"
-                   target="_blank" rel="noopener" class="enh-score-widget__score">
+                   target="_blank" rel="noopener noreferrer" class="enh-score-widget__score">
                     <span class="enh-score-widget__badge enh-score-widget__badge--outline">MC</span>
                     <span class="enh-score-widget__value">Open</span>
                 </a>
@@ -3160,7 +3160,7 @@ section[id*="quote" i] .ipc-list-card { padding: 4px 0 !important; margin: 2px 0
                 makeEl('a', {
                     href,
                     target: '_blank',
-                    rel: 'noopener',
+                    rel: 'noopener noreferrer',
                     className: 'enh-score-widget__score enh-score-widget__score--availability',
                     style: { '--score-color': '#fbc500' },
                 },
@@ -3191,7 +3191,7 @@ section[id*="quote" i] .ipc-list-card { padding: 4px 0 !important; margin: 2px 0
                 makeEl('a', {
                     href: getJustWatchSearchUrl(),
                     target: '_blank',
-                    rel: 'noopener',
+                    rel: 'noopener noreferrer',
                     className: 'enh-score-widget__score enh-score-widget__score--availability',
                 },
                     makeEl('span', { className: 'enh-score-widget__badge enh-score-widget__badge--outline' }, 'JW'),
@@ -3401,7 +3401,7 @@ section[id*="quote" i] .ipc-list-card { padding: 4px 0 !important; margin: 2px 0
                     const btn = makeEl('a', {
                         href:url,
                         target:'_blank',
-                        rel:'noopener',
+                        rel:'noopener noreferrer',
                         className:'enh-search-btn',
                         dataset:{ url, storeQuery:String(Boolean(site.storeQuery)) },
                         style:{ '--btn-color':site.color },
@@ -3441,7 +3441,7 @@ section[id*="quote" i] .ipc-list-card { padding: 4px 0 !important; margin: 2px 0
                     bar.appendChild(makeEl('a', {
                         href: applyLinkTemplate(link.url, ctx),
                         target:'_blank',
-                        rel:'noopener',
+                        rel:'noopener noreferrer',
                         className:'enh-ext-link',
                         style:{ '--link-color':link.color },
                     }, link.name));
@@ -3560,7 +3560,7 @@ section[id*="quote" i] .ipc-list-card { padding: 4px 0 !important; margin: 2px 0
                 body.replaceChildren(makeEl('a', {
                     href:url,
                     target:'_blank',
-                    rel:'noopener',
+                    rel:'noopener noreferrer',
                     className:'enh-trailer-fallback',
                 }, 'Open trailer search on YouTube'));
             }
@@ -3776,7 +3776,7 @@ section[id*="quote" i] .ipc-list-card { padding: 4px 0 !important; margin: 2px 0
                     dropdown.appendChild(makeEl('div', { className:'enh-link-dropdown__cat' }, cat));
                     const row = makeEl('div', { className:'enh-link-dropdown__row', role:'group', 'aria-label':cat });
                     links.filter(l => !(l.movieOnly && isTVType())).forEach(l => row.appendChild(makeEl('a', {
-                        href: buildUrl(l.u), target:'_blank', rel:'noopener', className:'enh-link-dropdown__item',
+                        href: buildUrl(l.u), target:'_blank', rel:'noopener noreferrer', className:'enh-link-dropdown__item',
                         role:'menuitem', tabindex:'-1',
                     }, l.n)));
                     dropdown.appendChild(row);
@@ -4566,7 +4566,7 @@ section[id*="quote" i] .ipc-list-card { padding: 4px 0 !important; margin: 2px 0
                     { l:'TVMaze', u:`https://www.tvmaze.com/search?q=${encodeURIComponent(title)}` },
                     { l:'Trakt', u:`https://app.trakt.tv/search?query=${encodeURIComponent(title)}` },
                     { l:'Ep Calendar', u:`https://episodecalendar.com/en/shows?q%5Bname_cont%5D=${encodeURIComponent(title)}` },
-                ].forEach(c => bar.appendChild(makeEl('a', { href:c.u, target:'_blank', rel:'noopener', className:'enh-tv-chip' }, c.l)));
+                ].forEach(c => bar.appendChild(makeEl('a', { href:c.u, target:'_blank', rel:'noopener noreferrer', className:'enh-tv-chip' }, c.l)));
 
                 appendTitleStackItem(bar, TITLE_STACK_ORDER.tvShowEnhancements);
             }).catch(() => {});
@@ -4597,7 +4597,7 @@ section[id*="quote" i] .ipc-list-card { padding: 4px 0 !important; margin: 2px 0
                     { n:'YIFY-Subs', u:`https://yifysubtitles.ch/movie-imdb/${imdbId}`, movieOnly:true },
                     { n:'Addic7ed', u:`https://www.addic7ed.com/search.php?search=${encodeURIComponent(title)}&Submit=Search` },
                 ].filter(s => !(s.movieOnly && isTVType())).forEach(s => row.appendChild(makeEl('a', {
-                    href:s.u, target:'_blank', rel:'noopener', className:'enh-ext-link enh-sub-link'
+                    href:s.u, target:'_blank', rel:'noopener noreferrer', className:'enh-ext-link enh-sub-link'
                 }, s.n)));
                 sec.appendChild(row);
             }).catch(() => {});
@@ -4807,7 +4807,7 @@ section[id*="quote" i] .ipc-list-card { padding: 4px 0 !important; margin: 2px 0
             }, `0 of ${entries.length} opened`);
             const list = makeEl('ol', { className:'enh-multi-search-queue__list' });
             const openNext = makeEl('a', {
-                className:'enh-multi-search-queue__action', target:'_blank', rel:'noopener',
+                className:'enh-multi-search-queue__action', target:'_blank', rel:'noopener noreferrer',
             });
 
             const updateNext = () => {
@@ -4835,7 +4835,7 @@ section[id*="quote" i] .ipc-list-card { padding: 4px 0 !important; margin: 2px 0
 
             entries.forEach((entry, index) => {
                 const link = makeEl('a', {
-                    href:entry.url, target:'_blank', rel:'noopener',
+                    href:entry.url, target:'_blank', rel:'noopener noreferrer',
                     className:'enh-multi-search-queue__link',
                     'aria-label':`Open ${entry.name} on ${site.name} in a new tab`,
                 },
@@ -6094,7 +6094,7 @@ section[id*="quote" i] .ipc-list-card { padding: 4px 0 !important; margin: 2px 0
                 const open = makeEl('a', {
                     href:`https://www.imdb.com/title/${id}/`,
                     target:'_blank',
-                    rel:'noopener',
+                    rel:'noopener noreferrer',
                     className:'enh-mark-row__link',
                 }, 'Open');
                 const clear = makeEl('button', {

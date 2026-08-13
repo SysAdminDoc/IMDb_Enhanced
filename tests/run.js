@@ -952,6 +952,13 @@ test('third-party response links stay on trusted HTTPS domains', () => {
     });
 });
 
+test('new-tab handoffs suppress opener and referrer data', () => {
+    assert(!script.includes("rel:'noopener'"), 'compact code-built links should include noreferrer');
+    assert(!script.includes("rel: 'noopener'"), 'spaced code-built links should include noreferrer');
+    assert(!script.includes('rel="noopener"'), 'HTML-built links should include noreferrer');
+    assert((script.match(/noopener noreferrer/g) || []).length >= 15, 'external handoffs should use the shared privacy relationship');
+});
+
 test('Rotten Tomatoes search fallback requires an exact title and year', () => {
     const hooks = loadScriptTestHooks();
     const html = `
@@ -1197,7 +1204,7 @@ test('list multi-search builds a popup-safe link queue', () => {
         'Browsers allow one new tab per click.',
         'Copy all links',
         'Open next',
-        "target:'_blank', rel:'noopener'",
+        "target:'_blank', rel:'noopener noreferrer'",
     ].forEach(token => assert(script.includes(token), `${token} missing from popup-safe queue`));
 });
 

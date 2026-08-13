@@ -116,6 +116,7 @@
 - Announced asynchronous Servarr and media-server state, exposed pending adds as busy, and kept each button's accessible name aligned with its visible Adding, Added, or In Library state.
 - Grouped every repeated destination-editor row under a name that follows its edits, and enforced the same name/URL length limits in the visible inputs as in storage.
 - Unified cache-read and garbage-collection validation so malformed, overlong, expired, or future-dated cache envelopes are removed instead of bypassing expiry through invalid metadata.
+- Suppressed both opener access and IMDb referrer data on every enhancement-created new-tab handoff, including configurable destinations and fallback searches.
 
 ## 2.5.1 — 2026-08-12
 
