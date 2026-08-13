@@ -1536,6 +1536,9 @@ test('local-service credentials stay out of request URLs', () => {
 test('media server matching handles provider IDs and title fallback', () => {
     const hooks = loadScriptTestHooks();
     assert.strictEqual(hooks.normalizeIMDbProviderId('imdb://tt0133093'), 'tt0133093');
+    assert.strictEqual(hooks.normalizeIMDbProviderId(`imdb://${'x'.repeat(300)}tt0133093`), '', 'oversized provider IDs should be rejected before regex work');
+    assert.strictEqual(hooks.normalizeLookupTitle('The Matrix'), 'the matrix');
+    assert.strictEqual(hooks.normalizeLookupTitle('x'.repeat(501)), '', 'oversized identity titles should be rejected before Unicode normalization');
     assert(hooks.mediaItemMatches(
         { providerIds: ['imdb://tt0133093'] },
         { imdbId: 'tt0133093', title: 'The Matrix', year: 1999 }
@@ -1573,6 +1576,11 @@ test('media server matching handles provider IDs and title fallback', () => {
     }));
     assert.strictEqual(parsed.length, 1, 'Jellyfin/Emby item parser failed');
     assert(hooks.mediaItemMatches(parsed[0], { imdbId: 'tt0078748', title: 'Alien', year: 1979 }), 'parsed item did not match');
+    assert.strictEqual(
+        hooks.parseMediaServerItems({ Items:[{ Name:'x'.repeat(501) }] })[0].title,
+        '',
+        'oversized local response titles should not survive parser normalization'
+    );
 
     const oversized = hooks.parseMediaServerItems({
         Items: Array.from({ length:150 }, (_, index) => ({
@@ -1582,6 +1590,9 @@ test('media server matching handles provider IDs and title fallback', () => {
     });
     assert.strictEqual(oversized.length, 100, 'local media responses should cap parsed result work');
     assert(oversized[0].providerIds.length <= 32, 'local media provider IDs should be bounded per result');
+    const plexParserSource = script.slice(script.indexOf('function parsePlexItems'), script.indexOf('function parseMediaServerItems'));
+    assert(/for \(let index = 0; index < nodes\.length && index < LOCAL_LOOKUP_RESULT_LIMIT; index\+\+\)/.test(plexParserSource), 'Plex parsing should iterate only the retained result budget');
+    assert(!plexParserSource.includes('Array.from'), 'Plex parsing should not materialize every matching XML node');
 
     const lateMatch = Array.from({ length:101 }, (_, index) => ({
         id:index + 1,

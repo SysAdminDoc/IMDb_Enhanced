@@ -57,6 +57,8 @@
     const USER_MARK_TITLE_LIMIT = 160;
     const LOCAL_LOOKUP_RESULT_LIMIT = 100;
     const LOCAL_PROVIDER_ID_LIMIT = 32;
+    const LOOKUP_TITLE_TEXT_LIMIT = 500;
+    const PROVIDER_ID_TEXT_LIMIT = 256;
     const SERVARR_SEASON_LIMIT = 500;
     const REQUEST_ERROR_TEXT_LIMIT = 240;
     const EXTERNAL_RESULT_SCAN_LIMIT = 100;
@@ -1384,10 +1386,13 @@
             .filter(cfg => cfg?.baseUrl && cfg.token);
     }
     function normalizeIMDbProviderId(value) {
-        return String(value || '').match(/tt\d+/i)?.[0]?.toLowerCase() || '';
+        const source = toBoundedText(value, PROVIDER_ID_TEXT_LIMIT);
+        return source.match(/tt\d+/i)?.[0]?.toLowerCase() || '';
     }
     function normalizeLookupTitle(value) {
-        return String(value || '')
+        const source = toBoundedText(value, LOOKUP_TITLE_TEXT_LIMIT);
+        if (!source) return '';
+        return source
             .normalize('NFKD')
             .replace(/[\u0300-\u036f]/g, '')
             .toLowerCase()
@@ -1437,18 +1442,25 @@
             const source = toBoundedText(xmlText, LOCAL_RESPONSE_TEXT_LIMIT);
             if (!source) return [];
             const doc = new DOMParser().parseFromString(source, 'application/xml');
-            return Array.from(doc.querySelectorAll('Video,Directory'))
-                .slice(0, LOCAL_LOOKUP_RESULT_LIMIT)
-                .map(node => ({
-                    title: node.getAttribute('title') || node.getAttribute('originalTitle') || '',
+            const nodes = doc.querySelectorAll('Video,Directory');
+            const items = [];
+            for (let index = 0; index < nodes.length && index < LOCAL_LOOKUP_RESULT_LIMIT; index++) {
+                const node = nodes[index];
+                const providerIds = [toBoundedText(node.getAttribute('guid'), PROVIDER_ID_TEXT_LIMIT)];
+                const guids = node.querySelectorAll('Guid');
+                for (let guidIndex = 0; guidIndex < guids.length && guidIndex < LOCAL_PROVIDER_ID_LIMIT - 1; guidIndex++) {
+                    providerIds.push(toBoundedText(guids[guidIndex].getAttribute('id'), PROVIDER_ID_TEXT_LIMIT));
+                }
+                items.push({
+                    title:toBoundedText(
+                        node.getAttribute('title') || node.getAttribute('originalTitle'),
+                        LOOKUP_TITLE_TEXT_LIMIT
+                    ),
                     year: Number(node.getAttribute('year')) || 0,
-                    providerIds: [
-                        node.getAttribute('guid') || '',
-                        ...Array.from(node.querySelectorAll('Guid'))
-                            .slice(0, LOCAL_PROVIDER_ID_LIMIT - 1)
-                            .map(guid => guid.getAttribute('id') || ''),
-                    ],
-                }));
+                    providerIds,
+                });
+            }
+            return items;
         } catch { return []; }
     }
     function parseMediaServerItems(payload) {
@@ -1458,7 +1470,7 @@
             const data = source !== null ? JSON.parse(source || '{}') : (payload || {});
             const items = Array.isArray(data) ? data : (Array.isArray(data.Items) ? data.Items : []);
             return items.slice(0, LOCAL_LOOKUP_RESULT_LIMIT).map(item => ({
-                title: item.Name || item.OriginalTitle || item.SeriesName || '',
+                title:toBoundedText(item.Name || item.OriginalTitle || item.SeriesName, LOOKUP_TITLE_TEXT_LIMIT),
                 year: Number(item.ProductionYear) || 0,
                 providerIds: collectProviderIds(item),
             }));

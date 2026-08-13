@@ -132,6 +132,7 @@
 - Improved destination-list editing with live count announcements, remove labels that follow the edited site name, focus recovery after successful or rolled-back removal, and explicit removal feedback.
 - Applied the same finite JSON-LD type-list classification used for IMDb data to Rotten Tomatoes, Letterboxd, and JustWatch detail parsing.
 - Normalized Servarr add payload construction, limiting Sonarr lookup results to 500 object-valued seasons and refusing array-valued `addOptions` before request bodies are assembled.
+- Bounded lookup identity titles and provider-ID text before Unicode/regex normalization, and changed Plex XML extraction to iterate only the first 100 items and 32 GUIDs without full intermediate arrays.
 
 ## 2.5.1 — 2026-08-12
 
