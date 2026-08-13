@@ -1247,6 +1247,11 @@ test('settings preserve host scroll state and complete nested tab keyboard suppo
     assert(script.includes('enh-site-input--invalid'), 'invalid custom site fields need a visible state');
     assert(!script.includes("site.name || 'New site'"), 'adding a custom site must not persist a fake destination name');
     assert(!script.includes("site.url || 'https://example.com/search?q={{TITLE}}'"), 'example URLs must remain placeholders rather than live saved destinations');
+    assert(script.includes("maxlength:'40'"), 'destination names should enforce their stored length in the editor');
+    assert(script.includes('maxlength:String(URL_TEMPLATE_TEXT_LIMIT)'), 'destination URLs should enforce their stored length in the editor');
+    assert(script.includes("const row = makeEl('div', { className:'enh-site-row', role:'group' })"), 'each repeated destination row should expose group context');
+    assert(script.includes("row.setAttribute('aria-label', `${destination} in ${title}`)"), 'destination groups should name their row and list');
+    assert(script.includes("nameInput.addEventListener('input', updateRowLabel)"), 'destination group names should follow row-name edits');
     assert(
         /onClick: \(\) => \{[\s\S]*?rows\.children\.length >= SITE_LIST_LIMIT[\s\S]*?const row = addRow\(\);\s*updateCount\(\);[\s\S]*?\.focus\(\);\s*\}/.test(script),
         'Add should create and focus an unsaved draft row'

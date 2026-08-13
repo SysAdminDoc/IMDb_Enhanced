@@ -5748,13 +5748,14 @@ section[id*="quote" i] .ipc-list-card { padding: 4px 0 !important; margin: 2px 0
         };
 
         const addRow = (site = {}) => {
-            const row = makeEl('div', { className:'enh-site-row' });
+            const row = makeEl('div', { className:'enh-site-row', role:'group' });
             const nameInput = makeEl('input', {
                 type:'text',
                 className:'enh-site-input',
                 dataset:{ field:'name' },
-                'aria-label': `${title} site name`,
+                'aria-label':'Destination name',
                 placeholder:'Site name',
+                maxlength:'40',
             });
             nameInput.value = site.name || '';
 
@@ -5762,8 +5763,9 @@ section[id*="quote" i] .ipc-list-card { padding: 4px 0 !important; margin: 2px 0
                 type:'url',
                 className:'enh-site-input',
                 dataset:{ field:'url' },
-                'aria-label': `${title} URL template`,
+                'aria-label':'URL template',
                 placeholder:'https://example.com/search?q={{TITLE}}',
+                maxlength:String(URL_TEMPLATE_TEXT_LIMIT),
             });
             urlInput.value = site.url || '';
 
@@ -5771,7 +5773,7 @@ section[id*="quote" i] .ipc-list-card { padding: 4px 0 !important; margin: 2px 0
                 type:'color',
                 className:'enh-site-color',
                 dataset:{ field:'color' },
-                'aria-label': `${title} color`,
+                'aria-label':'Destination color',
             });
             colorInput.value = normalizeColor(site.color);
 
@@ -5779,7 +5781,7 @@ section[id*="quote" i] .ipc-list-card { padding: 4px 0 !important; margin: 2px 0
                 type:'button',
                 className:'enh-site-remove',
                 title:'Remove site',
-                'aria-label':'Remove site',
+                'aria-label':'Remove destination',
                 onClick: () => {
                     const next = row.nextSibling;
                     row.remove();
@@ -5791,6 +5793,12 @@ section[id*="quote" i] .ipc-list-card { padding: 4px 0 !important; margin: 2px 0
                     }
                 },
             }, 'Remove');
+
+            const updateRowLabel = () => {
+                const destination = nameInput.value.trim() || 'new destination';
+                row.setAttribute('aria-label', `${destination} in ${title}`);
+            };
+            nameInput.addEventListener('input', updateRowLabel);
 
             [nameInput, urlInput, colorInput].forEach(input => {
                 input.addEventListener('input', () => save(false));
@@ -5805,6 +5813,7 @@ section[id*="quote" i] .ipc-list-card { padding: 4px 0 !important; margin: 2px 0
             row.appendChild(colorInput);
             row.appendChild(remove);
             rows.appendChild(row);
+            updateRowLabel();
             return row;
         };
 

@@ -114,6 +114,7 @@
 - Made all shared cross-origin requests anonymous so public score, availability, trailer, and token-authenticated local-service lookups do not send destination cookies.
 - Revalidated cached YouTube video IDs at both cache-read and embed boundaries so malformed local cache data cannot alter the trailer embed path.
 - Announced asynchronous Servarr and media-server state, exposed pending adds as busy, and kept each button's accessible name aligned with its visible Adding, Added, or In Library state.
+- Grouped every repeated destination-editor row under a name that follows its edits, and enforced the same name/URL length limits in the visible inputs as in storage.
 
 ## 2.5.1 — 2026-08-12
 
