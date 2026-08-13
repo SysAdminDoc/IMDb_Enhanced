@@ -428,6 +428,12 @@ test('settings use six accessible desktop destinations', () => {
     assert(script.includes("maxlength:'100000'"), 'import size guard missing');
     assert(script.includes('Changes save automatically.'), 'automatic-save status missing');
     assert(script.includes('if (!settingsOpen || overlay.contains(event.target)) return'), 'settings should recapture focus that leaves the modal');
+    assert(script.includes('createMarksPanel(registerCleanup)'), 'settings-owned document listeners should join the panel cleanup lifecycle');
+    assert(script.includes("document.removeEventListener('imdb-enhanced:marks-updated', render)"), 'marks listener must be removed when settings are rebuilt');
+    assert(script.includes("document.removeEventListener('imdb-enhanced:settings-saved', markSaved)"), 'save listener must be removed when settings are rebuilt');
+    assert(script.includes("document.removeEventListener('focusin', containSettingsFocus)"), 'focus containment listener must be removed when settings are rebuilt');
+    assert(/function destroyRouteFeatures\(\)[\s\S]*?destroySettingsChrome\(\);/.test(script), 'route teardown should rebuild settings without retaining document listeners');
+    assert(/function destroySettingsChrome\(\)[\s\S]*?document\.documentElement\.style\.overflow = previousDocumentOverflow/.test(script), 'route teardown must restore scroll if settings were open');
 });
 
 test('trailer dialog contains focus, restores page state, and ignores stale lookups', () => {

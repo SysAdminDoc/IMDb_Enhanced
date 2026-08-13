@@ -5555,6 +5555,7 @@ section[id*="quote" i] .ipc-list-card { padding: 4px 0 !important; margin: 2px 0
     let lastFocusedElement = null;
     let previousDocumentOverflow = '';
     let activeSettingsPage = 'experience';
+    let settingsPanelCleanup = null;
 
     function refreshFeature(key) {
         const feature = features.find(f => f.key === key);
@@ -5888,7 +5889,7 @@ section[id*="quote" i] .ipc-list-card { padding: 4px 0 !important; margin: 2px 0
         return panel;
     }
 
-    function createMarksPanel() {
+    function createMarksPanel(registerCleanup = () => {}) {
         const panel = makeEl('div', { className:'enh-marks-panel' });
         const count = makeEl('div', { className:'enh-marks-panel__count' });
         const rows = makeEl('div', { className:'enh-marks-panel__rows' });
@@ -5973,12 +5974,18 @@ section[id*="quote" i] .ipc-list-card { padding: 4px 0 !important; margin: 2px 0
         ));
         panel.appendChild(rows);
         document.addEventListener('imdb-enhanced:marks-updated', render);
+        registerCleanup(() => {
+            document.removeEventListener('imdb-enhanced:marks-updated', render);
+            clearTimeout(clearAllTimer);
+        });
         render();
         return panel;
     }
 
     function createSettingsPanel() {
         if (document.getElementById('enh-settings-overlay')) return;
+        const cleanupTasks = [];
+        const registerCleanup = cleanup => cleanupTasks.push(cleanup);
         const overlay = makeEl('div', { id:'enh-settings-overlay', 'aria-hidden':'true' });
         overlay.innerHTML = `<div id="enh-settings-panel">
             <div class="enh-settings-header">
@@ -6030,6 +6037,10 @@ section[id*="quote" i] .ipc-list-card { padding: 4px 0 !important; margin: 2px 0
             savedTimer = setTimeout(() => { saveState.textContent = 'Saved locally'; }, 1200);
         };
         document.addEventListener('imdb-enhanced:settings-saved', markSaved);
+        registerCleanup(() => {
+            document.removeEventListener('imdb-enhanced:settings-saved', markSaved);
+            clearTimeout(savedTimer);
+        });
         const makePage = meta => {
             const section = makeEl('section', {
                 className:'enh-settings-page',
@@ -6326,7 +6337,7 @@ section[id*="quote" i] .ipc-list-card { padding: 4px 0 !important; margin: 2px 0
             makeEl('div', { className:'enh-settings-card-description', id:'enh-cache-status', style:{ marginTop:'8px' } }, `${cacheCount()} entries currently cached.`)
         );
         dataPage.appendChild(makeEl('div', { className:'enh-settings-grid' },
-            createMarksPanel(),
+            createMarksPanel(registerCleanup),
             makeEl('div', { className:'enh-settings-stack' }, backupCard, cacheCard)
         ));
         dataPage.appendChild(makeEl('div', { className:'enh-settings-callout', style:{ marginTop:'12px' } },
@@ -6355,11 +6366,13 @@ section[id*="quote" i] .ipc-list-card { padding: 4px 0 !important; margin: 2px 0
                 first.focus();
             }
         });
-        document.addEventListener('focusin', event => {
+        const containSettingsFocus = event => {
             if (!settingsOpen || overlay.contains(event.target)) return;
             const activeTab = overlay.querySelector(`.enh-settings-nav-btn[data-settings-page="${activeSettingsPage}"]`);
             (activeTab || getFocusableElements(overlay)[0] || panel).focus();
-        });
+        };
+        document.addEventListener('focusin', containSettingsFocus);
+        registerCleanup(() => document.removeEventListener('focusin', containSettingsFocus));
         overlay.querySelector('#enh-export-btn').addEventListener('click', () => {
             const copied = copyTextToClipboard(JSON.stringify(getExportSettings(), null, 2));
             showToast(copied
@@ -6433,6 +6446,10 @@ section[id*="quote" i] .ipc-list-card { padding: 4px 0 !important; margin: 2px 0
 
         showPage(activeSettingsPage);
         document.body.appendChild(overlay);
+        settingsPanelCleanup = () => {
+            cleanupTasks.splice(0).forEach(cleanup => cleanup());
+            settingsPanelCleanup = null;
+        };
     }
 
     function createFAB() {
@@ -6470,6 +6487,16 @@ section[id*="quote" i] .ipc-list-card { padding: 4px 0 !important; margin: 2px 0
             document.documentElement.style.overflow = previousDocumentOverflow;
             lastFocusedElement?.focus?.();
         }
+    }
+
+    function destroySettingsChrome() {
+        settingsPanelCleanup?.();
+        if (settingsOpen) document.documentElement.style.overflow = previousDocumentOverflow;
+        settingsOpen = false;
+        document.getElementById('enh-settings-overlay')?.remove();
+        document.getElementById('enh-settings-fab')?.remove();
+        lastFocusedElement = null;
+        previousDocumentOverflow = '';
     }
 
     // =========================================================================
@@ -6579,6 +6606,7 @@ section[id*="quote" i] .ipc-list-card { padding: 4px 0 !important; margin: 2px 0
             catch (e) { console.warn(`[IMDb Enhanced] destroy ${f.key}:`, e); }
         });
         document.getElementById('enh-toast')?.remove();
+        destroySettingsChrome();
     }
 
     function scheduleInit(delay = 350) {
