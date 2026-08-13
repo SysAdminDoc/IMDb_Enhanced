@@ -107,6 +107,7 @@
 - Raised the bounded settings-import path from 100 KB to 4 MB so a supported 5,000-mark/100-destination export remains re-importable, and made export read/size failures explicit.
 - Bounded IMDb histogram discovery by script count, script size, queue growth, and node count before parsing embedded application data.
 - Prevented Cineby links from opening an unprepared destination when the one-time title handoff cannot be stored; title-page and both list-queue paths now explain the storage failure.
+- Kept a visible, announced “Save failed” state after storage errors and surfaced feature refresh failures instead of leaving the settings header or rebuilt controls looking successful.
 
 ## 2.5.1 — 2026-08-12
 

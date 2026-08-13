@@ -867,6 +867,8 @@
                 catch { rollbackFailed = true; }
             });
             console.warn('[IMDb Enhanced] settings import write failed:', cause);
+            try { document.dispatchEvent(new CustomEvent('imdb-enhanced:settings-save-failed')); }
+            catch { /* rollback result is reported by the caller */ }
             throw new Error(rollbackFailed
                 ? 'Import failed and automatic recovery was incomplete. Reload before changing settings.'
                 : 'Import could not be saved; previous settings were restored.');
@@ -1057,6 +1059,8 @@
                 console.warn(`[IMDb Enhanced] setting write failed (${key}):`, error);
                 showToast('Could not save locally. Check userscript storage permissions or quota.', 4500);
             }
+            try { document.dispatchEvent(new CustomEvent('imdb-enhanced:settings-save-failed', { detail:{ key } })); }
+            catch { /* the write result is still returned to its control */ }
             return false;
         }
     }
@@ -5207,6 +5211,10 @@ section[id*="quote" i] .ipc-list-card { padding: 4px 0 !important; margin: 2px 0
     content: ''; width: 7px; height: 7px; border-radius: 50%;
     background: ${t.green}; box-shadow: 0 0 0 3px color-mix(in srgb, ${t.green} 14%, transparent);
 }
+.enh-settings-save-state--error { color: ${t.red}; }
+.enh-settings-save-state--error::before {
+    background: ${t.red}; box-shadow: 0 0 0 3px color-mix(in srgb, ${t.red} 14%, transparent);
+}
 .enh-settings-close {
     background: ${t.sf1}; border: 1px solid ${t.bd0};
     min-width: 58px; height: 32px; padding: 0 10px; border-radius: 8px;
@@ -5653,10 +5661,11 @@ section[id*="quote" i] .ipc-list-card { padding: 4px 0 !important; margin: 2px 0
         try {
             if (linkMenu && get('expandedLinkMenu')) stopFeature(linkMenu);
             stopFeature(feature);
-            startFeature(feature, { context:'refresh' });
-            if (linkMenu && get('expandedLinkMenu')) startFeature(linkMenu, { context:'refresh' });
+            startFeature(feature, { context:'refresh', notify:true });
+            if (linkMenu && get('expandedLinkMenu')) startFeature(linkMenu, { context:'refresh', notify:true });
         } catch (e) {
             console.warn(`[IMDb Enhanced] refresh ${key}:`, e);
+            showToast(`${feature.name} could not refresh. Reload and try again.`, 4500);
         }
     }
 
@@ -6118,13 +6127,21 @@ section[id*="quote" i] .ipc-list-card { padding: 4px 0 !important; margin: 2px 0
         let savedTimer = null;
 
         const markSaved = () => {
+            saveState.classList.remove('enh-settings-save-state--error');
             saveState.textContent = 'Saved';
             clearTimeout(savedTimer);
             savedTimer = setTimeout(() => { saveState.textContent = 'Saved locally'; }, 1200);
         };
+        const markSaveFailed = () => {
+            clearTimeout(savedTimer);
+            saveState.classList.add('enh-settings-save-state--error');
+            saveState.textContent = 'Save failed';
+        };
         document.addEventListener('imdb-enhanced:settings-saved', markSaved);
+        document.addEventListener('imdb-enhanced:settings-save-failed', markSaveFailed);
         registerCleanup(() => {
             document.removeEventListener('imdb-enhanced:settings-saved', markSaved);
+            document.removeEventListener('imdb-enhanced:settings-save-failed', markSaveFailed);
             clearTimeout(savedTimer);
         });
         const makePage = meta => {

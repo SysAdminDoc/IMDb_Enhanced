@@ -377,6 +377,7 @@ test('pending route work and lazy score lookups are cancellable', () => {
     assert(script.includes('pending.catch(rejectCurrentGeneration)'), 'async feature initialization failures should invalidate their lifecycle');
     assert(script.includes('stopFeature(feature)'), 'settings refresh and disable paths should invalidate prior feature instances');
     assert(script.includes("startFeature(feature, { context:'settings', notify:true })"), 'settings-triggered feature failures should be visible');
+    assert(script.includes("startFeature(feature, { context:'refresh', notify:true })"), 'settings-triggered feature refresh failures should be visible');
     assert(
         /const added = await this\._add\(action\.kind, imdbId, title, year, isCurrent\);\s*if \(!added \|\| !isCurrent\(\)\) return;/.test(script),
         'Servarr add results must not update a later route'
@@ -455,6 +456,8 @@ test('settings use six accessible desktop destinations', () => {
     assert(script.includes('Settings could not be read for export. No backup was copied.'), 'export read failures should remain visible');
     assert(script.includes('Changes save automatically.'), 'automatic-save status missing');
     assert(script.includes('id="enh-settings-save-state" role="status" aria-live="polite" aria-atomic="true"'), 'automatic-save feedback should be announced');
+    assert(script.includes("document.addEventListener('imdb-enhanced:settings-save-failed', markSaveFailed)"), 'storage failures should update the persistent save indicator');
+    assert(script.includes("saveState.textContent = 'Save failed'"), 'failed writes must not leave a saved-state claim visible');
     assert(!script.includes('<main class="enh-settings-main">'), 'settings dialog must not add a second page-level main landmark');
     assert(script.includes('When “Optional keyboard shortcuts” is enabled'), 'disabled-by-default shortcut hints must disclose their prerequisite');
     assert(script.includes("'aria-controls':'enh-import-panel', 'aria-expanded':'false'"), 'import disclosure state missing');
