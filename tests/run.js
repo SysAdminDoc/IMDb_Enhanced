@@ -160,6 +160,8 @@ test('metadata stays distribution-safe', () => {
 
 test('fragile selectors and global Cineby key stay removed', () => {
     assert(!/\.sc-|sc-[0-9a-fA-F]+|sc-[a-z0-9]+/.test(script), 'hashed styled-components selectors should stay removed');
+    assert(!/\.bRimta\b/.test(script), 'observed generated IMDb class selectors should stay removed');
+    assert(!/margin[^;]*-[0-9]+px/.test(script), 'layout styling should not pull poster content over adjacent rows');
     assert(!/GM_setValue\('movieTitle'/.test(script), 'Cineby should not write the global movieTitle key');
 });
 

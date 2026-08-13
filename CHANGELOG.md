@@ -42,6 +42,7 @@
 - Replaced Rotten Tomatoes' obsolete unscoped first-score search regex with parsing of current semantic result rows and exact normalized title/media-type plus one-year-tolerant release matching; matched score links now open the validated result page.
 - Replaced Metacritic's first-result assumption with exact normalized title, movie/show type, and one-year-tolerant release matching against the current result payload; malformed critic/user score ranges are discarded before caching.
 - Guarded JustWatch availability against guessed-slug and first-link mismatches by validating detail-page JSON-LD identity and selecting current semantic search rows only when title, movie/show type, and release year agree.
+- Removed a generated IMDb class dependency and a negative-margin poster-title hack from the wider-layout option so upstream class churn cannot widen unrelated elements or overlap adjacent card content.
 
 ## 2.5.1 — 2026-08-12
 

@@ -1831,7 +1831,6 @@ html[data-imdb-enhanced="active"] .ipc-page-background {
 /* ── Full-width containers ── */
 .ipc-page-content-container--center { max-width: 100% !important; padding: 0 32px !important; }
 .ipc-page-section--base.celwidget { width: 100% !important; max-width: 100% !important; }
-.bRimta { width: 100% !important; max-width: 100% !important; }
 .ipc-page-grid { max-width: 100% !important; width: 100% !important; padding: 0 32px !important; }
 .ipc-page-content-container--full { max-width: 100% !important; width: 100% !important; }
 .ipc-page-wrapper { max-width: 100% !important; }
@@ -1842,7 +1841,7 @@ div.ipc-rating-star-group.ipc-poster-card__rating-star-group {
     padding: 0 !important; margin: 0 !important;
 }
 a.ipc-poster-card__title.ipc-poster-card__title--clamp-2.ipc-poster-card__title--clickable {
-    padding: 0 !important; margin: 0 0 -29px 0 !important;
+    padding: 0 !important; margin: 0 !important;
 }
 
 /* ── Grid & shoveler spacing ── */
