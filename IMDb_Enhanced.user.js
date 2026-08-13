@@ -2095,6 +2095,70 @@ section[id*="quote" i] .ipc-list-card { padding: 4px 0 !important; margin: 2px 0
         return !wantedYear || Boolean(candidateYear) && Math.abs(candidateYear - wantedYear) <= 1;
     }
 
+    function parseRTDetailPage(html, title, year, type = 'movie', fallbackUrl = '') {
+        const expectedType = type === 'tv' ? 'tv' : 'movie';
+        let detail = null;
+        const scripts = String(html || '').matchAll(/<script[^>]+type=["']application\/ld\+json["'][^>]*>\s*([\s\S]*?)<\/script>/gi);
+        for (const script of scripts) {
+            try {
+                const parsed = JSON.parse(script[1]);
+                const queue = Array.isArray(parsed) ? [...parsed] : [parsed];
+                for (let index = 0; index < queue.length && index < 100; index++) {
+                    const item = queue[index];
+                    if (!item || typeof item !== 'object') continue;
+                    if (Array.isArray(item)) {
+                        queue.push(...item.slice(0, Math.max(0, 100 - queue.length)));
+                        continue;
+                    }
+                    const types = Array.isArray(item['@type']) ? item['@type'] : [item['@type']];
+                    const itemType = types.includes('Movie') ? 'movie'
+                        : types.some(value => ['TVSeries', 'TVShow'].includes(value)) ? 'tv'
+                            : '';
+                    if (itemType === expectedType && isMatchingTitleIdentity({
+                        title:item.name,
+                        year:Number(yearFromText(item.dateCreated || item.datePublished || item.startDate)) || 0,
+                    }, title, year)) {
+                        detail = item;
+                        break;
+                    }
+                    Object.values(item)
+                        .filter(value => value && typeof value === 'object')
+                        .slice(0, Math.max(0, 100 - queue.length))
+                        .forEach(value => queue.push(value));
+                }
+            } catch { /* inspect the next structured-data block */ }
+            if (detail) break;
+        }
+        if (!detail) return null;
+
+        const rawAggregate = Number(detail.aggregateRating?.ratingValue);
+        let tomatometer = Number.isFinite(rawAggregate) && rawAggregate >= 0 && rawAggregate <= 100
+            ? Math.round(rawAggregate)
+            : null;
+        const scoreMatch = String(html || '').match(/tomatometer[^}]*?"value"\s*:\s*(\d+)/i);
+        if (tomatometer === null && scoreMatch) {
+            const value = Number(scoreMatch[1]);
+            if (value >= 0 && value <= 100) tomatometer = value;
+        }
+        if (tomatometer === null) return null;
+
+        const audienceMatch = String(html || '').match(/audienceScore[^}]*?"value"\s*:\s*(\d+)/i);
+        const rawAudience = Number(audienceMatch?.[1]);
+        const audience = Number.isFinite(rawAudience) && rawAudience >= 0 && rawAudience <= 100
+            ? rawAudience
+            : null;
+        const consensusMatch = String(html || '').match(/critics-consensus[^>]*>([^<]+)</i)
+            || String(html || '').match(/"criticsConsensus"\s*:\s*"([^"\\]*(?:\\.[^"\\]*)*)"/i);
+        const consensus = consensusMatch
+            ? decodeHTML(consensusMatch[1]).replace(/\\"/g, '"').trim().slice(0, 500)
+            : null;
+        let candidateUrl = fallbackUrl;
+        try { candidateUrl = new URL(detail.url || fallbackUrl, 'https://www.rottentomatoes.com').href; }
+        catch { /* retain the trusted request URL */ }
+        const url = normalizeTrustedUrl(candidateUrl, 'rottentomatoes.com', fallbackUrl);
+        return { tomatometer, audience, consensus, url };
+    }
+
     function parseJustWatchSearchResult(html, title, year, typePath = 'movie') {
         const candidates = [];
         const anchors = String(html || '').matchAll(/<a\b([^>]*\bclass\s*=\s*["'][^"']*title-list-row__column-header[^"']*["'][^>]*)>([\s\S]*?)<\/a>/gi);
@@ -2352,9 +2416,11 @@ section[id*="quote" i] .ipc-list-card { padding: 4px 0 !important; margin: 2px 0
             for (const slug of getRTSlugCandidates(title)) {
                 if (!isCurrent()) return;
                 try {
-                    const res = await httpGet('https://www.rottentomatoes.com' + prefix + slug, { cancelOnRouteChange:true });
+                    const directUrl = 'https://www.rottentomatoes.com' + prefix + slug;
+                    const res = await httpGet(directUrl, { cancelOnRouteChange:true });
                     if (!isCurrent()) return;
-                    const data = this._parse(res.responseText);
+                    const resolvedUrl = normalizeTrustedUrl(res.finalUrl, 'rottentomatoes.com', directUrl);
+                    const data = parseRTDetailPage(res.responseText, title, year, type, resolvedUrl);
                     if (data) { cacheSet(cacheKey, data); this._render(data); return; }
                 } catch { /* try next slug */ }
             }
@@ -2373,26 +2439,6 @@ section[id*="quote" i] .ipc-list-card { padding: 4px 0 !important; margin: 2px 0
             if (!isCurrent()) return;
             cacheSetUnavailable(cacheKey);
             this._renderUnavailable();
-        },
-        _parse(html) {
-            try {
-                let tomatometer = null, audience = null, consensus = null;
-                const ldM = html.match(/<script type="application\/ld\+json">([\s\S]*?)<\/script>/);
-                if (ldM) {
-                    const ld = JSON.parse(ldM[1]);
-                    if (ld.aggregateRating)
-                        tomatometer = Math.round(ld.aggregateRating.ratingValue);
-                }
-                const tm = html.match(/tomatometer[^}]*?"value"\s*:\s*(\d+)/);
-                const au = html.match(/audienceScore[^}]*?"value"\s*:\s*(\d+)/);
-                if (tm && tomatometer === null) tomatometer = parseInt(tm[1]);
-                if (au) audience = parseInt(au[1]);
-                const cm = html.match(/critics-consensus[^>]*>([^<]+)</i)
-                    || html.match(/"criticsConsensus"\s*:\s*"([^"]+)"/);
-                if (cm) consensus = cm[1].trim();
-                if (tomatometer !== null) return { tomatometer, audience, consensus };
-            } catch { /* ignore */ }
-            return null;
         },
         _render(data) {
             document.getElementById('enh-rt-widget')?.remove();

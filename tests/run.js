@@ -44,6 +44,7 @@ function loadScriptTestHooks() {
         normalizeTrustedUrl,
         normalizeSite,
         parseRTSearchResult,
+        parseRTDetailPage,
         selectMetacriticResult,
         parseJustWatchSearchResult,
         parseJustWatchIdentity,
@@ -591,6 +592,21 @@ test('Rotten Tomatoes search fallback requires an exact title and year', () => {
     );
     assert.strictEqual(hooks.normalizeLookupTitle('Amélie'), hooks.normalizeLookupTitle('Amelie'), 'accent variants should retain title identity');
     assert(!script.includes('responseText.match(/"tomatoScore"'), 'unscoped first-score fallback should stay removed');
+});
+
+test('Rotten Tomatoes direct slugs require detail-page identity', () => {
+    const hooks = loadScriptTestHooks();
+    const html = `<script type="application/ld+json">${JSON.stringify({
+        '@type':'Movie', name:'The Matrix', dateCreated:'1999-03-31',
+        url:'https://www.rottentomatoes.com/m/matrix',
+        aggregateRating:{ ratingValue:'83' },
+    })}</script><div data-qa="critics-consensus">A genre-defining classic.</div>`;
+    const result = hooks.parseRTDetailPage(html, 'The Matrix', 1999, 'movie', 'https://www.rottentomatoes.com/m/the_matrix');
+    assert.strictEqual(result.tomatometer, 83);
+    assert.strictEqual(result.url, 'https://www.rottentomatoes.com/m/matrix');
+    assert.strictEqual(hooks.parseRTDetailPage(html, 'Matrix', 1999, 'movie', ''), null, 'a plausible slug must not replace exact title identity');
+    assert.strictEqual(hooks.parseRTDetailPage(html, 'The Matrix', 2021, 'movie', ''), null, 'a remake year must not reuse another film score');
+    assert.strictEqual(hooks.parseRTDetailPage(html, 'The Matrix', 1999, 'tv', ''), null, 'movie detail data must not satisfy a TV lookup');
 });
 
 test('Metacritic lookup selection requires exact title, type, and year context', () => {
