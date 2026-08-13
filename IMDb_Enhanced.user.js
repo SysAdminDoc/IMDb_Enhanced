@@ -52,6 +52,7 @@
     const CACHE_MAX_ENTRIES = 120;
     const CACHE_GC_WRITE_INTERVAL = 10;
     const USER_MARKS_MAX = 5000;
+    const USER_MARK_TITLE_LIMIT = 160;
     const LOCAL_LOOKUP_RESULT_LIMIT = 100;
     const LOCAL_PROVIDER_ID_LIMIT = 32;
     const REQUEST_ERROR_TEXT_LIMIT = 240;
@@ -318,10 +319,11 @@
         if (!record || typeof record !== 'object') return null;
         const state = record.state === 'watched' || record.state === 'skip' ? record.state : '';
         if (!state) return null;
+        const timestamp = Number(record.ts);
         return {
             state,
-            title: String(record.title || '').trim().slice(0, 160),
-            ts: Number(record.ts) || 0,
+            title: String(record.title || '').trim().slice(0, USER_MARK_TITLE_LIMIT),
+            ts:Number.isFinite(timestamp) && timestamp >= 0 && timestamp <= Date.now() + 60000 ? timestamp : 0,
         };
     }
     function getUserMarks() {
@@ -360,7 +362,7 @@
         if (!/^tt\d+$/.test(imdbId || '')) return false;
         const marks = { ...getUserMarks() };
         if (state === 'watched' || state === 'skip') {
-            marks[imdbId] = { state, title: String(title || '').trim().slice(0, 160), ts: Date.now() };
+            marks[imdbId] = { state, title: String(title || '').trim().slice(0, USER_MARK_TITLE_LIMIT), ts: Date.now() };
         } else {
             delete marks[imdbId];
         }
@@ -806,15 +808,14 @@
         if (key === 'userMarks') {
             if (!value || Array.isArray(value) || typeof value !== 'object') return null;
             const normalized = {};
-            Object.entries(value).slice(0, USER_MARKS_MAX).forEach(([id, record]) => {
-                if (!/^tt\d+$/.test(id) || !record || !['watched', 'skip'].includes(record.state)) return;
-                const timestamp = Number(record.ts);
-                normalized[id] = {
-                    state:record.state,
-                    title:String(record.title || '').slice(0, 200),
-                    ts:Number.isFinite(timestamp) && timestamp >= 0 ? timestamp : Date.now(),
-                };
-            });
+            let inspected = 0;
+            for (const id in value) {
+                if (!Object.prototype.hasOwnProperty.call(value, id)) continue;
+                if (inspected >= USER_MARKS_MAX) break;
+                inspected += 1;
+                const record = normalizeUserMark(value[id]);
+                if (/^tt\d+$/.test(id) && record) normalized[id] = record;
+            }
             return { key, value:normalized };
         }
         if (typeof fallback === 'boolean') {

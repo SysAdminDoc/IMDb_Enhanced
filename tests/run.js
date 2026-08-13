@@ -765,6 +765,16 @@ test('settings exports are canonical and fully re-importable', () => {
     assert.strictEqual(prepared.entries.length, Object.keys(exported).length, 'every exported setting should be restorable');
     assert(script.includes('JSON.stringify(getExportSettings(), null, 2)'), 'clipboard export should use canonical schema data');
 
+    const legacyPrepared = hooks.prepareSettingsImport({
+        userMarks:{
+            tt0133093:'watched',
+            tt0078748:{ state:'skip', title:'A'.repeat(200), ts:Date.now() + 120000 },
+        },
+    }).entries[0].value;
+    assert.strictEqual(legacyPrepared.tt0133093.state, 'watched', 'legacy string marks should remain importable');
+    assert.strictEqual(legacyPrepared.tt0078748.title.length, 160, 'imported mark titles should use the runtime storage bound');
+    assert.strictEqual(legacyPrepared.tt0078748.ts, 0, 'future-dated mark order should be neutralized');
+
     const maximumHooks = loadScriptTestHooks();
     const maximumMarks = {};
     for (let index = 0; index < 5000; index++) {

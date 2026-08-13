@@ -118,6 +118,7 @@
 - Unified cache-read and garbage-collection validation so malformed, overlong, expired, or future-dated cache envelopes are removed instead of bypassing expiry through invalid metadata.
 - Suppressed both opener access and IMDb referrer data on every enhancement-created new-tab handoff, including configurable destinations and fallback searches.
 - Prevented rapid or cross-tab Cineby actions from overwriting a title handoff that has not yet been consumed, with distinct guidance for a pending tab versus storage failure.
+- Canonicalized imported title marks through the runtime schema, retaining legacy string marks while enforcing the 160-character title bound and neutralizing invalid or future timestamps.
 
 ## 2.5.1 — 2026-08-12
 
