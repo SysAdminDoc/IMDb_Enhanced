@@ -449,6 +449,21 @@ test('local marks are cached and bounded while DOM rescans stay mutation-scoped'
         'mark writes should report storage failure instead of claiming success'
     );
     assert.strictEqual(failingHooks.getStoredSetting('userMarks'), undefined, 'failed mark writes must not update the local cache contract');
+    const mergingHooks = loadScriptTestHooks();
+    mergingHooks.seedStoredSetting('userMarks', {
+        tt0133093:{ state:'watched', title:'The Matrix', ts:1 },
+    });
+    mergingHooks.getUserMarks();
+    mergingHooks.seedStoredSetting('userMarks', {
+        tt0133093:{ state:'watched', title:'The Matrix', ts:1 },
+        tt0078748:{ state:'skip', title:'Alien', ts:2 },
+    });
+    assert(mergingHooks.setUserMark('tt0083658', 'watched', 'Blade Runner'));
+    assert.deepStrictEqual(
+        Object.keys(mergingHooks.getStoredSetting('userMarks')).sort(),
+        ['tt0078748', 'tt0083658', 'tt0133093'].sort(),
+        'a tab should merge a new mark into storage changed by another tab after its last read'
+    );
     assert(script.includes('mutation.addedNodes.forEach'), 'watched-mark observer should scan added subtrees');
     assert(script.includes('this._pendingScanRoots.size > 50'), 'large mutation batches should retain a bounded full-scan fallback');
 });

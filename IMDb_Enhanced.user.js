@@ -326,7 +326,8 @@
             ts:Number.isFinite(timestamp) && timestamp >= 0 && timestamp <= Date.now() + 60000 ? timestamp : 0,
         };
     }
-    function getUserMarks() {
+    function getUserMarks(forceRefresh = false) {
+        if (forceRefresh) userMarksCache = null;
         if (userMarksCache) return userMarksCache;
         const raw = get('userMarks');
         if (!raw || typeof raw !== 'object' || Array.isArray(raw)) {
@@ -360,7 +361,7 @@
     }
     function setUserMark(imdbId, state, title = '', notifyFailure = true) {
         if (!/^tt\d+$/.test(imdbId || '')) return false;
-        const marks = { ...getUserMarks() };
+        const marks = { ...getUserMarks(true) };
         if (state === 'watched' || state === 'skip') {
             marks[imdbId] = { state, title: String(title || '').trim().slice(0, USER_MARK_TITLE_LIMIT), ts: Date.now() };
         } else {
