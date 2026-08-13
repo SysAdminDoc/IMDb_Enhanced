@@ -33,6 +33,8 @@ function loadScriptTestHooks() {
         getLinkedTitleId,
         getPageSurface,
         shouldInitFeature,
+        normalizeUrlTemplate,
+        normalizeSite,
         setAdRequestBlocking,
         setTestPath: path => { location.pathname = path; }
     };
@@ -192,6 +194,23 @@ test('default watch sites are all live domains', () => {
     });
 });
 
+test('watch links avoid unreliable background origin probes', () => {
+    assert(!script.includes('probeSiteHealth'), 'favicon health probes should stay removed');
+    assert(!script.includes('_probeButtons'), 'watch buttons should not launch background health requests');
+    assert(!script.includes('/favicon.ico?'), 'watch-site origins must not receive automatic favicon probes');
+    assert(script.includes("const legacySiteHealthKey = PREFIX + 'siteHealth'"), 'legacy health cache cleanup missing');
+});
+
+test('custom site templates require complete HTTP or HTTPS URLs', () => {
+    const hooks = loadScriptTestHooks();
+    assert.strictEqual(hooks.normalizeUrlTemplate('https://example.com/search?q={{TITLE}}'), 'https://example.com/search?q={{TITLE}}');
+    assert.strictEqual(hooks.normalizeUrlTemplate('http://localhost:8080/search'), 'http://localhost:8080/search');
+    assert.strictEqual(hooks.normalizeUrlTemplate('https://'), '');
+    assert.strictEqual(hooks.normalizeUrlTemplate('javascript:alert(1)'), '');
+    assert.strictEqual(hooks.normalizeUrlTemplate('file:///tmp/search'), '');
+    assert.strictEqual(hooks.normalizeSite({ name:'Broken', url:'https://' }), null);
+});
+
 test('Trakt links use the current web-app search route', () => {
     assert(script.includes('https://app.trakt.tv/search?query='), 'current Trakt search route missing');
     assert(!script.includes('trakt.tv/search/imdb/'), 'retired Trakt IMDb route should not return');
@@ -208,6 +227,14 @@ test('cineby uses current domain', () => {
     assert(script.includes('// @match        https://www.cineby.at/*'), 'Cineby root route should be matched');
     assert(script.includes("url:'https://www.cineby.at/'"), 'Cineby handoff should target the live root route');
     assert(script.includes("return /^search$/i.test(label.trim())"), 'Cineby handoff should open the current search control');
+});
+
+test('settings preserve host scroll state and complete nested tab keyboard support', () => {
+    assert(script.includes("previousDocumentOverflow = document.documentElement.style.overflow"), 'settings should capture the host page overflow value');
+    assert(script.includes('document.documentElement.style.overflow = previousDocumentOverflow'), 'settings should restore the host page overflow value');
+    assert(script.includes("if (event.key === 'Home') next = 0;"), 'nested tabs should support Home');
+    assert(script.includes("if (event.key === 'End') next = ordered.length - 1;"), 'nested tabs should support End');
+    assert(script.includes('enh-site-input--invalid'), 'invalid custom site fields need a visible state');
 });
 
 test('Greasy Fork distribution guardrails stay intact', () => {

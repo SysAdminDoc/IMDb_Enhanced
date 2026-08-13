@@ -16,7 +16,7 @@ A desktop IMDb overhaul delivered as a single userscript. Cleaner pages, modern 
 
 **Streaming Availability** - JustWatch integration shows which streaming services carry the title.
 
-**Watch Site Search** - Quick-search buttons for streaming sites (StreamXTV, LookMovie, CineVids, CinemaOS, LivNet, Flixer, Cine.su, Fmovies+, Cineby). Fully configurable in settings. Dead sites auto-detected and visually muted.
+**Watch Site Search** - Quick-search buttons for streaming sites (StreamXTV, LookMovie, CineVids, CinemaOS, LivNet, Flixer, Cine.su, Fmovies+, Cineby). Fully configurable in settings. Destinations are contacted only when you open them; the userscript does not background-probe every site.
 
 **External Links** - One-click links to Rotten Tomatoes, Letterboxd, TMDB, YouTube trailers, Wikipedia, JustWatch, and Trakt. Configurable.
 
@@ -54,9 +54,9 @@ Click the gear icon on any covered IMDb page to open the six-section settings wo
 
 **Tools** - Title, TV/episode, list, watched-mark, and keyboard-shortcut controls.
 
-**Sites** - Editable watch-search and external-link destinations, URL templates, ordering, colors, and Cineby handoff.
+**Sites** - Editable watch-search and external-link destinations, URL templates, ordering, colors, and Cineby handoff. Incomplete or non-HTTP(S) URLs are visibly rejected without replacing the last valid saved list.
 
-**Integrations** - Tabbed Radarr/Sonarr and Plex/Jellyfin/Emby local-service configuration.
+**Integrations** - Tabbed Radarr/Sonarr and Plex/Jellyfin/Emby local-service configuration with arrow/Home/End keyboard navigation.
 
 **Data** - Local mark review, import validation, export, cache status, clearing, and reset/recovery actions.
 

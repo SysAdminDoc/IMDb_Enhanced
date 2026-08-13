@@ -216,6 +216,10 @@
         if (cacheGC._ran) return;
         cacheGC._ran = true;
         try {
+            const legacySiteHealthKey = PREFIX + 'siteHealth';
+            if (GM_getValue(legacySiteHealthKey, null) !== null && typeof GM_deleteValue === 'function') {
+                GM_deleteValue(legacySiteHealthKey);
+            }
             const now = Date.now();
             const live = [];
             GM_listValues().forEach(storageKey => {
@@ -459,7 +463,10 @@
 
     function normalizeUrlTemplate(url) {
         const value = String(url || '').trim();
-        return /^https?:\/\//i.test(value) ? value : '';
+        try {
+            const parsed = new URL(value);
+            return /^https?:$/i.test(parsed.protocol) && parsed.hostname ? value : '';
+        } catch { return ''; }
     }
 
     function getCinebyHost() {
@@ -2365,39 +2372,6 @@ section[id*="quote" i] .ipc-list-card { padding: 4px 0 !important; margin: 2px 0
     //
     // #########################################################################
 
-    function probeSiteHealth(url, timeout = 4000) {
-        return new Promise(resolve => {
-            try {
-                const origin = new URL(url).origin;
-                const img = new Image();
-                let settled = false;
-                const settle = (alive) => { if (!settled) { settled = true; resolve(alive); } };
-                img.onload = () => settle(true);
-                img.onerror = () => settle(true);
-                setTimeout(() => settle(false), timeout);
-                img.src = origin + '/favicon.ico?' + Date.now();
-            } catch { resolve(false); }
-        });
-    }
-
-    const SITE_HEALTH_CACHE_TTL = 6 * 60 * 60 * 1000; // 6 hours
-    function getSiteHealthCache() {
-        try {
-            const raw = GM_getValue(PREFIX + 'siteHealth', null);
-            if (!raw) return {};
-            const parsed = JSON.parse(raw);
-            const now = Date.now();
-            const live = {};
-            Object.entries(parsed).forEach(([domain, entry]) => {
-                if (now - (entry.ts || 0) < SITE_HEALTH_CACHE_TTL) live[domain] = entry;
-            });
-            return live;
-        } catch { return {}; }
-    }
-    function setSiteHealthCache(cache) {
-        GM_setValue(PREFIX + 'siteHealth', JSON.stringify(cache));
-    }
-
     reg({
         key: 'searchButtons', name: 'Watch search buttons', group: 'Features',
         init() {
@@ -2440,31 +2414,7 @@ section[id*="quote" i] .ipc-list-card { padding: 4px 0 !important; margin: 2px 0
                         if (btn.dataset.storeQuery === 'true') GM_setValue(CINEBY_QUERY_KEY, title);
                     });
                 });
-                this._probeButtons(row);
             }).catch(() => {});
-        },
-        async _probeButtons(row) {
-            const cache = getSiteHealthCache();
-            const buttons = Array.from(row.querySelectorAll('.enh-search-btn'));
-            const toProbe = [];
-            buttons.forEach(btn => {
-                try {
-                    const domain = new URL(btn.href).hostname;
-                    const cached = cache[domain];
-                    if (cached) {
-                        if (!cached.alive) btn.classList.add('enh-search-btn--dead');
-                    } else {
-                        toProbe.push({ btn, domain });
-                    }
-                } catch { /* skip malformed URLs */ }
-            });
-            if (!toProbe.length) return;
-            await Promise.all(toProbe.map(async ({ btn, domain }) => {
-                const alive = await probeSiteHealth(btn.href);
-                cache[domain] = { alive, ts: Date.now() };
-                if (!alive) btn.classList.add('enh-search-btn--dead');
-            }));
-            setSiteHealthCache(cache);
         },
         destroy() { document.getElementById('enh-search-buttons')?.remove(); pruneTitleStack(); }
     });
@@ -3660,14 +3610,6 @@ section[id*="quote" i] .ipc-list-card { padding: 4px 0 !important; margin: 2px 0
     box-shadow: 0 4px 14px color-mix(in srgb, var(--btn-color) 22%, transparent);
 }
 .enh-search-btn:active { transform: translateY(0); }
-.enh-search-btn--dead {
-    opacity: .35; text-decoration: line-through; pointer-events: auto;
-    filter: grayscale(.6);
-}
-.enh-search-btn--dead::after {
-    content: ' (offline)'; font-size: 10px; opacity: .7; margin-left: 3px;
-}
-
 /* ════ External Links ════ */
 #enh-external-links {
     display: flex; flex-wrap: wrap; align-items: center; gap: 5px;
@@ -4157,6 +4099,11 @@ section[id*="quote" i] .ipc-list-card { padding: 4px 0 !important; margin: 2px 0
     border-color: ${t.accentBorder};
     box-shadow: 0 0 0 2px ${t.accentMuted};
 }
+.enh-site-input--invalid,
+.enh-site-input--invalid:focus {
+    border-color: ${t.red};
+    box-shadow: 0 0 0 2px ${t.redMuted};
+}
 
 /* ════ Mark Review Panel ════ */
 .enh-marks-panel {
@@ -4272,6 +4219,7 @@ section[id*="quote" i] .ipc-list-card { padding: 4px 0 !important; margin: 2px 0
 .enh-mark-btn:focus-visible,
 .enh-mark-row__clear:focus-visible,
 .enh-site-remove:focus-visible,
+.enh-integration-tab:focus-visible,
 .enh-servarr-input:focus-visible,
 .enh-settings-footer-btn:focus-visible,
 .enh-settings-nav-btn:focus-visible,
@@ -4291,6 +4239,7 @@ section[id*="quote" i] .ipc-list-card { padding: 4px 0 !important; margin: 2px 0
     // #########################################################################
     let settingsOpen = false;
     let lastFocusedElement = null;
+    let previousDocumentOverflow = '';
     let activeSettingsPage = 'experience';
 
     function getSettingsFocusables(root) {
@@ -4331,10 +4280,28 @@ section[id*="quote" i] .ipc-list-card { padding: 4px 0 !important; margin: 2px 0
             storeQuery: row.dataset.storeQuery === 'true',
         }));
 
+        const validateRows = () => {
+            let valid = true;
+            rows.querySelectorAll('.enh-site-row').forEach(row => {
+                const nameInput = row.querySelector('[data-field="name"]');
+                const urlInput = row.querySelector('[data-field="url"]');
+                const nameValid = Boolean(nameInput?.value.trim());
+                const urlValid = Boolean(normalizeUrlTemplate(urlInput?.value));
+                [[nameInput, nameValid], [urlInput, urlValid]].forEach(([input, inputValid]) => {
+                    input?.classList.toggle('enh-site-input--invalid', !inputValid);
+                    input?.setAttribute('aria-invalid', String(!inputValid));
+                });
+                valid = valid && nameValid && urlValid;
+            });
+            return valid;
+        };
+
         const save = (refresh = true) => {
+            if (!validateRows()) return false;
             setSiteList(key, readRows());
             if (refresh) refreshFeature(featureKey);
             updateCount();
+            return true;
         };
 
         const addRow = (site = {}) => {
@@ -4376,7 +4343,9 @@ section[id*="quote" i] .ipc-list-card { padding: 4px 0 !important; margin: 2px 0
 
             [nameInput, urlInput, colorInput].forEach(input => {
                 input.addEventListener('input', () => save(false));
-                input.addEventListener('change', () => save(true));
+                input.addEventListener('change', () => {
+                    if (!save(true)) showToast('Enter a site name and a valid HTTP or HTTPS URL');
+                });
             });
             row.appendChild(nameInput);
             row.appendChild(urlInput);
@@ -4496,6 +4465,8 @@ section[id*="quote" i] .ipc-list-card { padding: 4px 0 !important; margin: 2px 0
                 let next = null;
                 if (event.key === 'ArrowRight') next = (current + 1) % ordered.length;
                 if (event.key === 'ArrowLeft') next = (current - 1 + ordered.length) % ordered.length;
+                if (event.key === 'Home') next = 0;
+                if (event.key === 'End') next = ordered.length - 1;
                 if (next === null) return;
                 event.preventDefault();
                 select(ordered[next]);
@@ -5101,12 +5072,14 @@ section[id*="quote" i] .ipc-list-card { padding: 4px 0 !important; margin: 2px 0
         overlay?.classList.toggle('enh-visible', settingsOpen);
         overlay?.setAttribute('aria-hidden', String(!settingsOpen));
         document.getElementById('enh-settings-fab')?.setAttribute('aria-expanded', String(settingsOpen));
-        document.documentElement.style.overflow = settingsOpen ? 'hidden' : '';
         if (settingsOpen) {
             lastFocusedElement = document.activeElement;
+            previousDocumentOverflow = document.documentElement.style.overflow;
+            document.documentElement.style.overflow = 'hidden';
             const activeTab = overlay?.querySelector(`.enh-settings-nav-btn[data-settings-page="${activeSettingsPage}"]`);
             setTimeout(() => (activeTab || getSettingsFocusables(overlay)[0] || panel)?.focus(), 40);
         } else {
+            document.documentElement.style.overflow = previousDocumentOverflow;
             lastFocusedElement?.focus?.();
         }
     }

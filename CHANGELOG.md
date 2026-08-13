@@ -23,6 +23,8 @@
 - Prevented watched marks from decorating showtime and nested non-title links.
 - Prevented built-in URL templates from duplicating the `tt` prefix in IMDb identifiers.
 - Made text and site-editor changes persist immediately and refresh dependent features only after committed changes.
+- Removed the unreliable background favicon probe that contacted every watch-site origin and could treat DNS or TLS failures as healthy; stale probe data is cleaned up automatically.
+- Kept the last valid custom-site list while incomplete URLs are edited, added a visible invalid state, completed nested-tab Home/End behavior, and restored IMDb's prior scroll-lock style when settings close.
 
 ## 2.5.1 — 2026-08-12
 
