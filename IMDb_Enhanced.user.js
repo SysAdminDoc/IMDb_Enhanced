@@ -3079,13 +3079,14 @@ section[id*="quote" i] .ipc-list-card { padding: 4px 0 !important; margin: 2px 0
         _revealHandler: null,
         _revealKeyHandler: null,
         init() {
-            addCSS(`
-                .enh-blur{filter:blur(6px);transition:filter .3s ease;cursor:pointer;user-select:none;position:relative}
+            addThemedCSS(t => `
+                .enh-blur{cursor:pointer;user-select:none;position:relative}
+                .enh-blur,.enh-blur *{color:transparent!important;text-shadow:0 0 7px ${t.tx1}}
                 .enh-blur::after{content:'Click or press Enter to reveal';position:absolute;top:50%;left:50%;
-                    transform:translate(-50%,-50%);color:#f5c518;font-weight:600;font-size:12px;
-                    background:rgba(0,0,0,0.5);padding:4px 12px;border-radius:6px;pointer-events:none;
+                    transform:translate(-50%,-50%);color:${t.accent};font-weight:700;font-size:12px;text-shadow:none;
+                    background:${t.sf2};border:1px solid ${t.accentBorder};box-shadow:${t.sh1};padding:4px 12px;border-radius:6px;pointer-events:none;
                     opacity:1;transition:opacity .3s ease}
-                .enh-blur:focus-visible{outline:2px solid #f5c518;outline-offset:3px}
+                .enh-blur:focus-visible{outline:2px solid ${t.accent};outline-offset:3px}
             `, 'enh-spoilerBlur');
 
             const plotFull = document.querySelector('[data-testid="plot-l"],[data-testid="plot-xl"]');
@@ -4371,11 +4372,16 @@ section[id*="quote" i] .ipc-list-card { padding: 4px 0 !important; margin: 2px 0
             const isCurrent = createFeatureGuard(this);
             const imdbId = getIMDbID(), title = getTitleText();
             if (!imdbId) return;
+            addThemedCSS(t => `
+                #enh-sub-row{margin-top:12px;display:flex;flex-wrap:wrap;gap:6px;align-items:center}
+                .enh-sub-row__label{color:${t.tx2};font-size:12px;font-weight:600;margin-right:4px}
+                .enh-sub-link{--link-color:${t.blue}}
+            `, 'enh-subtitleLinks');
             waitFor('section[data-testid="Details"]').then(sec => {
                 if (!isCurrent()) return;
                 if (document.getElementById('enh-sub-row')) return;
-                const row = makeEl('div', { id:'enh-sub-row', style: { marginTop:'12px', display:'flex', flexWrap:'wrap', gap:'6px', alignItems:'center' } });
-                row.appendChild(makeEl('span', { style: { color:'#71717a', fontSize:'12px', fontWeight:'600', marginRight:'4px' } }, 'Subtitles:'));
+                const row = makeEl('div', { id:'enh-sub-row' });
+                row.appendChild(makeEl('span', { className:'enh-sub-row__label' }, 'Subtitles:'));
                 [
                     { n:'OpenSubtitles', u:`https://www.opensubtitles.org/en/search/imdbid-${imdbId.replace(/^tt/, '')}` },
                     { n:'OpenSubs.com', u:`https://www.opensubtitles.com/en/en/search-all/q-${imdbId}` },
@@ -4383,12 +4389,12 @@ section[id*="quote" i] .ipc-list-card { padding: 4px 0 !important; margin: 2px 0
                     { n:'YIFY-Subs', u:`https://yifysubtitles.ch/movie-imdb/${imdbId}`, movieOnly:true },
                     { n:'Addic7ed', u:`https://www.addic7ed.com/search.php?search=${encodeURIComponent(title)}&Submit=Search` },
                 ].filter(s => !(s.movieOnly && isTVType())).forEach(s => row.appendChild(makeEl('a', {
-                    href:s.u, target:'_blank', rel:'noopener', className:'enh-ext-link', style:{ '--link-color':'#22d3ee' }
+                    href:s.u, target:'_blank', rel:'noopener', className:'enh-ext-link enh-sub-link'
                 }, s.n)));
                 sec.appendChild(row);
             }).catch(() => {});
         },
-        destroy() { document.getElementById('enh-sub-row')?.remove(); }
+        destroy() { removeCSS('enh-subtitleLinks'); document.getElementById('enh-sub-row')?.remove(); }
     });
 
     // #########################################################################
