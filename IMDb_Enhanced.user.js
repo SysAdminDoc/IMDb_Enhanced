@@ -13,6 +13,9 @@
 // @match        https://www.imdb.com/user/*/watchlist*
 // @match        https://www.imdb.com/list/*
 // @match        https://www.imdb.com/chart/*
+// @match        https://www.imdb.com/*/user/*/watchlist*
+// @match        https://www.imdb.com/*/list/*
+// @match        https://www.imdb.com/*/chart/*
 // @match        https://www.cineby.at/*
 // @grant        GM_getValue
 // @grant        GM_setValue

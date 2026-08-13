@@ -183,6 +183,11 @@ test('metadata stays distribution-safe', () => {
     assert(!/@match\s+https:\/\/m\.imdb\.com\//.test(script), 'desktop-only userscript must not match mobile IMDb');
     assert(/@updateURL/.test(script), '@updateURL should be present for update channel');
     assert(/@downloadURL/.test(script), '@downloadURL should be present for update channel');
+    [
+        'https://www.imdb.com/*/user/*/watchlist*',
+        'https://www.imdb.com/*/list/*',
+        'https://www.imdb.com/*/chart/*',
+    ].forEach(pattern => assert(script.includes(`@match        ${pattern}`), `localized collection match missing: ${pattern}`));
     const hooks = loadScriptTestHooks();
     assert(hooks.isIMDbHost('www.imdb.com'));
     assert(!hooks.isIMDbHost('not-imdb.com'), 'IMDb host checks must not use substring trust');

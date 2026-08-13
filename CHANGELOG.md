@@ -85,6 +85,7 @@
 - Kept enabled ad-request rules and the zero-gap shell stylesheet active across IMDb SPA route teardown instead of briefly unregistering both before the next route initialized.
 - Rejected credential-bearing URLs at the third-party response-link boundary even when their HTTPS hostname is otherwise trusted.
 - Tightened trailer identity matching so short or shared titles such as “It” and “Alien” cannot autoplay a longer, different movie merely because its video title contains the IMDb title as a phrase.
+- Extended list, chart, and watchlist tools to IMDb's live locale-prefixed desktop routes instead of matching only their unprefixed English URLs.
 
 ## 2.5.1 — 2026-08-12
 
