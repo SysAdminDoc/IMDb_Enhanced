@@ -117,6 +117,7 @@
 - Grouped every repeated destination-editor row under a name that follows its edits, and enforced the same name/URL length limits in the visible inputs as in storage.
 - Unified cache-read and garbage-collection validation so malformed, overlong, expired, or future-dated cache envelopes are removed instead of bypassing expiry through invalid metadata.
 - Suppressed both opener access and IMDb referrer data on every enhancement-created new-tab handoff, including configurable destinations and fallback searches.
+- Prevented rapid or cross-tab Cineby actions from overwriting a title handoff that has not yet been consumed, with distinct guidance for a pending tab versus storage failure.
 
 ## 2.5.1 — 2026-08-12
 

@@ -682,13 +682,50 @@
         } catch { /* best-effort stale handoff cleanup */ }
     }
 
+    let cinebyHandoffFailure = '';
+    function parseCinebyQuery(raw, acceptLegacy = false) {
+        if (!raw) return '';
+        let payload = raw;
+        if (typeof raw === 'string') {
+            try {
+                const parsed = JSON.parse(raw);
+                if (!parsed || Array.isArray(parsed) || typeof parsed !== 'object') {
+                    return acceptLegacy ? raw.trim().slice(0, 200) : '';
+                }
+                payload = parsed;
+            } catch { return acceptLegacy ? raw.trim().slice(0, 200) : ''; }
+        }
+        if (!payload || Array.isArray(payload) || typeof payload !== 'object') return '';
+        const timestamp = Number(payload.ts);
+        const age = Date.now() - timestamp;
+        if (!Number.isFinite(timestamp) || age < -60000 || age > CINEBY_QUERY_TTL) return '';
+        return String(payload.title || '').trim().slice(0, 200);
+    }
+
+    function getCinebyHandoffFailureMessage() {
+        return cinebyHandoffFailure === 'pending'
+            ? 'Another Cineby title is still opening. Wait for that tab, then try again.'
+            : 'Could not prepare the Cineby title handoff. Check userscript storage permissions or quota.';
+    }
+
     function storeCinebyQuery(title) {
+        cinebyHandoffFailure = '';
         const normalized = String(title || '').trim().slice(0, 200);
-        if (!normalized) return false;
+        if (!normalized) {
+            cinebyHandoffFailure = 'invalid';
+            return false;
+        }
         try {
+            if (parseCinebyQuery(GM_getValue(CINEBY_QUERY_KEY, ''))) {
+                cinebyHandoffFailure = 'pending';
+                return false;
+            }
             GM_setValue(CINEBY_QUERY_KEY, JSON.stringify({ title:normalized, ts:Date.now() }));
             return true;
-        } catch { return false; }
+        } catch {
+            cinebyHandoffFailure = 'storage';
+            return false;
+        }
     }
 
     function takeCinebyQuery() {
@@ -698,24 +735,7 @@
         catch { return ''; }
         clearCinebyQueryKey(CINEBY_QUERY_KEY);
         clearCinebyQueryKey(legacyKey);
-        if (!raw) return '';
-
-        let payload = raw;
-        if (typeof raw === 'string') {
-            try {
-                const parsed = JSON.parse(raw);
-                if (!parsed || Array.isArray(parsed) || typeof parsed !== 'object') {
-                    return raw.trim().slice(0, 200);
-                }
-                payload = parsed;
-            }
-            catch { return raw.trim().slice(0, 200); }
-        }
-        if (!payload || Array.isArray(payload) || typeof payload !== 'object') return '';
-        const timestamp = Number(payload.ts);
-        const age = Date.now() - timestamp;
-        if (!Number.isFinite(timestamp) || age < -60000 || age > CINEBY_QUERY_TTL) return '';
-        return String(payload.title || '').trim().slice(0, 200);
+        return parseCinebyQuery(raw, true);
     }
 
     function normalizeSite(site, fallbackColor = '#6366f1') {
@@ -3417,7 +3437,7 @@ section[id*="quote" i] .ipc-list-card { padding: 4px 0 !important; margin: 2px 0
                     btn.addEventListener('click', event => {
                         if (btn.dataset.storeQuery !== 'true' || storeCinebyQuery(title)) return;
                         event.preventDefault();
-                        showToast('Could not prepare the Cineby title handoff. Check userscript storage permissions or quota.', 4500);
+                        showToast(getCinebyHandoffFailureMessage(), 4500);
                     });
                 });
             }).catch(() => {});
@@ -4787,7 +4807,7 @@ section[id*="quote" i] .ipc-list-card { padding: 4px 0 !important; margin: 2px 0
         },
         _prepareEntry(site, entry) {
             if (!site.storeQuery || storeCinebyQuery(entry.name)) return true;
-            showToast('Could not prepare the Cineby title handoff. Check userscript storage permissions or quota.', 4500);
+            showToast(getCinebyHandoffFailureMessage(), 4500);
             return false;
         },
         _showQueue(site, trigger) {

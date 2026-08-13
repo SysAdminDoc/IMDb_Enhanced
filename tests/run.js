@@ -78,6 +78,7 @@ function loadScriptTestHooks() {
         applySettingsImport,
         storeCinebyQuery,
         takeCinebyQuery,
+        getCinebyHandoffFailureMessage,
         cacheSet,
         cacheGet,
         cacheGC,
@@ -1238,6 +1239,11 @@ test('Cineby handoffs are short-lived and consumed only once', () => {
     assert.strictEqual(hooks.takeCinebyQuery(), 'The Matrix');
     assert.strictEqual(hooks.getStoredSetting('cineby_query'), undefined, 'consumed handoff should be deleted immediately');
 
+    assert(hooks.storeCinebyQuery('Alien'));
+    assert.strictEqual(hooks.storeCinebyQuery('Aliens'), false, 'a second handoff must not overwrite one still opening');
+    assert.match(hooks.getCinebyHandoffFailureMessage(), /still opening/);
+    assert.strictEqual(hooks.takeCinebyQuery(), 'Alien', 'the first pending title must remain intact');
+
     hooks.seedStoredSetting('cineby_query', JSON.stringify({ title:'Stale title', ts:0 }));
     assert.strictEqual(hooks.takeCinebyQuery(), '', 'expired handoffs should not fill a later Cineby visit');
     assert.strictEqual(hooks.getStoredSetting('cineby_query'), undefined, 'expired handoff should also be deleted');
@@ -1248,6 +1254,7 @@ test('Cineby handoffs are short-lived and consumed only once', () => {
     const failingHooks = loadScriptTestHooks();
     failingHooks.failSettingWriteAt(1);
     assert.strictEqual(failingHooks.storeCinebyQuery('The Matrix'), false, 'handoff writes should report storage failure');
+    assert.match(failingHooks.getCinebyHandoffFailureMessage(), /storage permissions or quota/);
     assert(script.includes("if (btn.dataset.storeQuery !== 'true' || storeCinebyQuery(title)) return"), 'title-page Cineby navigation should stop after a failed handoff write');
     assert((script.match(/if \(!this\._prepareEntry\(site, entry\)\)/g) || []).length === 2, 'both list-queue navigation paths should stop after a failed handoff write');
 });
