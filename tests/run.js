@@ -38,6 +38,7 @@ function loadScriptTestHooks() {
         normalizeTrustedUrl,
         normalizeSite,
         parseRTSearchResult,
+        selectMetacriticResult,
         buildListSearchEntries,
         getEnhancementScrollBehavior,
         getFocusableElements,
@@ -526,6 +527,21 @@ test('Rotten Tomatoes search fallback requires an exact title and year', () => {
     assert.strictEqual(hooks.parseRTSearchResult(html, 'The Matrix', 1993, 'tv').tomatometer, 55, 'movie and TV results must stay separated');
     assert.strictEqual(hooks.parseRTSearchResult(html, 'Matrix', 1999, 'movie'), null, 'partial title matches must be rejected');
     assert(!script.includes('responseText.match(/"tomatoScore"'), 'unscoped first-score fallback should stay removed');
+});
+
+test('Metacritic lookup selection requires exact title, type, and year context', () => {
+    const hooks = loadScriptTestHooks();
+    const items = [
+        { title:'The Thing', releaseDate:'2011-10-14', type:'movie' },
+        { title:'The Thing', releaseDate:'1982-06-25', type:'movie' },
+        { title:'The Thing', releaseDate:'2005-01-01', type:'show' },
+        { title:'Thing', releaseDate:'1982-01-01', type:'movie' },
+    ];
+    assert.strictEqual(hooks.selectMetacriticResult(items, 'The Thing', 1982, 'movie'), items[1]);
+    assert.strictEqual(hooks.selectMetacriticResult(items, 'The Thing', 2005, 'tv'), items[2]);
+    assert.strictEqual(hooks.selectMetacriticResult(items, 'The Thing', 1995, 'movie'), null, 'remake results must not cross years');
+    assert.strictEqual(hooks.selectMetacriticResult(items, 'Thing', 2011, 'movie'), null, 'different exact titles must not be substituted by year');
+    assert(!script.includes('const best = items[0]'), 'first-result Metacritic selection should stay removed');
 });
 
 test('list multi-search builds a popup-safe link queue', () => {

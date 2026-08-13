@@ -2021,6 +2021,28 @@ section[id*="quote" i] .ipc-list-card { padding: 4px 0 !important; margin: 2px 0
         return exact.length === 1 ? exact[0] : null;
     }
 
+    function selectMetacriticResult(items, title, year, type = 'movie') {
+        if (!Array.isArray(items)) return null;
+        const wantedTitle = normalizeLookupTitle(title);
+        const expectedType = type === 'tv' ? 'show' : 'movie';
+        const exact = items.filter(item =>
+            normalizeLookupTitle(item?.title) === wantedTitle
+            && String(item?.type || '').toLowerCase() === expectedType
+        );
+        const wantedYear = Number(year) || 0;
+        if (!wantedYear) return exact.length === 1 ? exact[0] : null;
+        const yearMatch = exact.find(item => {
+            const itemYear = Number(yearFromText(item?.releaseDate || item?.premiereDate || item?.year)) || 0;
+            return itemYear && Math.abs(itemYear - wantedYear) <= 1;
+        });
+        if (yearMatch) return yearMatch;
+        if (exact.length === 1) {
+            const onlyYear = Number(yearFromText(exact[0]?.releaseDate || exact[0]?.premiereDate || exact[0]?.year)) || 0;
+            if (!onlyYear) return exact[0];
+        }
+        return null;
+    }
+
     reg({
         key: 'ratingColorCoding', name: 'Rating quality labels', group: 'Appearance',
         init() {
@@ -2435,7 +2457,7 @@ section[id*="quote" i] .ipc-list-card { padding: 4px 0 !important; margin: 2px 0
         key: 'inlineMetacriticScore', name: 'Metacritic scores', group: 'Scores',
         async init() {
             const isCurrent = createFeatureGuard(this);
-            const imdbId = getIMDbID(), title = getTitleText();
+            const imdbId = getIMDbID(), title = getTitleText(), year = getTitleYear();
             if (!imdbId || !title) return;
 
             const cacheKey = 'mc_' + imdbId;
@@ -2450,18 +2472,21 @@ section[id*="quote" i] .ipc-list-card { padding: 4px 0 !important; margin: 2px 0
             if (!await waitUntilVisible(bar, isCurrent) || !isCurrent()) return;
             this._renderLoading();
 
-            const type = isTVType() ? '1' : '2';
-            const url = `https://backend.metacritic.com/finder/metacritic/search/${encodeURIComponent(title)}/web?componentName=search-tabs&componentDisplayName=Search+Page+Tab+Filters&componentType=FilterConfig&mcoTypeId=${type}&offset=0&limit=5`;
+            const mediaType = isTVType() ? 'tv' : 'movie';
+            const typeId = mediaType === 'tv' ? '1' : '2';
+            const url = `https://backend.metacritic.com/finder/metacritic/search/${encodeURIComponent(title)}/web?componentName=search-tabs&componentDisplayName=Search+Page+Tab+Filters&componentType=FilterConfig&mcoTypeId=${typeId}&offset=0&limit=10`;
 
             try {
                 const res = await httpGet(url, { cancelOnRouteChange:true });
                 if (!isCurrent()) return;
                 const obj = JSON.parse(res.responseText);
                 const items = obj?.data?.items || [];
-                if (items.length > 0) {
-                    const best = items[0];
-                    const score = best.criticScoreSummary?.score || null;
-                    const userScore = best.userScoreSummary?.score || null;
+                const best = selectMetacriticResult(items, title, year, mediaType);
+                if (best) {
+                    const rawScore = Number(best.criticScoreSummary?.score);
+                    const rawUserScore = Number(best.userScoreSummary?.score);
+                    const score = Number.isFinite(rawScore) && rawScore >= 0 && rawScore <= 100 ? rawScore : null;
+                    const userScore = Number.isFinite(rawUserScore) && rawUserScore >= 0 && rawUserScore <= 10 ? rawUserScore : null;
                     const fallbackUrl = `https://www.metacritic.com/search/${encodeURIComponent(title)}/`;
                     let candidateUrl = fallbackUrl;
                     if (best.criticScoreSummary?.url) {
