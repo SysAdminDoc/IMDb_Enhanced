@@ -524,7 +524,6 @@ test('core features remain registered', () => {
         'servarrIntegration',
         'watchlistBatch',
         'themeAuto',
-        'getRTSlugCandidates',
         'cacheGC',
     ].forEach(token => assert(script.includes(token), `${token} missing`));
 });
@@ -641,6 +640,8 @@ test('Rotten Tomatoes direct slugs require detail-page identity', () => {
     assert.strictEqual(hooks.parseRTDetailPage(html, 'Matrix', 1999, 'movie', ''), null, 'a plausible slug must not replace exact title identity');
     assert.strictEqual(hooks.parseRTDetailPage(html, 'The Matrix', 2021, 'movie', ''), null, 'a remake year must not reuse another film score');
     assert.strictEqual(hooks.parseRTDetailPage(html, 'The Matrix', 1999, 'tv', ''), null, 'movie detail data must not satisfy a TV lookup');
+    assert(!script.includes('getRTSlugCandidates'), 'Rotten Tomatoes should not probe speculative title slugs');
+    assert(script.includes('parseRTDetailPage(detailRes.responseText'), 'search-selected detail pages should still be identity validated');
 });
 
 test('Letterboxd IMDb lookups retain movie identity and bounded scores', () => {

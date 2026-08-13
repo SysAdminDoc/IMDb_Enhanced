@@ -48,7 +48,7 @@
 - Tightened third-party title identity matching so year-qualified IMDb titles reject score or streaming candidates with no release year, while canonical title comparison now tolerates accent variants such as `Amélie`/`Amelie`.
 - Made IMDb title-data extraction skip malformed and unrelated JSON-LD blocks, recognize explicit miniseries schema, and bounded the scan; runtime host checks now require the exact matched IMDb or Cineby hostname instead of substring trust.
 - Bounded and validated rating-histogram discovery, normalized it to a stable 1–10 distribution, waited for the live rating surface before rendering, and exposed each vote bucket to assistive technology.
-- Required Rotten Tomatoes' guessed direct slugs to pass the same JSON-LD title/type/year identity contract as search results before caching, with bounded score values and trusted canonical links.
+- Removed speculative Rotten Tomatoes slug probes in favor of one identity-bound semantic search; its canonical detail page is fetched only for richer data and must independently pass JSON-LD title/type/year, score-range, and trusted-link validation.
 - Validated Letterboxd's IMDb-ID response against movie title/year JSON-LD and canonical `/film/` links, and now rechecks Rotten Tomatoes, Letterboxd, and Metacritic score ranges when rendering cached data.
 - Versioned the lookup-cache schema so entries created before the new cross-site identity contracts are discarded and lazily refetched instead of remaining trusted for their old TTL.
 - Removed CineVids from fresh default watch-site lists after repeated direct HTTPS checks timed out while every other generated default destination returned successfully; existing customized lists remain untouched.

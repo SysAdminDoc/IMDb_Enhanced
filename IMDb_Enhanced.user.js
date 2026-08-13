@@ -1963,25 +1963,6 @@ section[id*="quote" i] .ipc-list-card { padding: 4px 0 !important; margin: 2px 0
     function mcColor(s) { return s >= 75 ? '#6c3' : s >= 50 ? '#ffbd3f' : s >= 25 ? '#ff6874' : '#f00'; }
     function rtColorFn(s) { return s >= 60 ? '#fa320a' : '#6b7280'; }
     function lbColor(s) { return s >= 4 ? '#00e054' : s >= 3 ? '#40bcf4' : s >= 2 ? '#ff8000' : '#ff6874'; }
-    function getRTSlugCandidates(title) {
-        const normalized = String(title || '')
-            .normalize('NFKD')
-            .replace(/[\u0300-\u036f]/g, '')
-            .replace(/&/g, ' and ')
-            .toLowerCase()
-            .replace(/[^a-z0-9\s-]/g, ' ')
-            .trim()
-            .replace(/\s+/g, ' ');
-        if (!normalized) return [];
-        const tokens = normalized.split(' ').filter(Boolean);
-        const withoutArticle = tokens[0] === 'the' && tokens.length > 1 ? tokens.slice(1) : tokens;
-        const variants = [tokens, withoutArticle];
-        return [...new Set(variants.flatMap(parts => [
-            parts.join('_'),
-            parts.join('-'),
-            parts.join(''),
-        ]).filter(Boolean))];
-    }
     function formatScore(n) {
         return Number(n).toFixed(2).replace(/0+$/, '').replace(/\.$/, '');
     }
@@ -2496,27 +2477,21 @@ section[id*="quote" i] .ipc-list-card { padding: 4px 0 !important; margin: 2px 0
             this._renderLoading();
 
             const type = isTVType() ? 'tv' : 'movie';
-            const prefix = type === 'tv' ? '/tv/' : '/m/';
-            for (const slug of getRTSlugCandidates(title)) {
-                if (!isCurrent()) return;
-                try {
-                    const directUrl = 'https://www.rottentomatoes.com' + prefix + slug;
-                    const res = await httpGet(directUrl, { cancelOnRouteChange:true });
-                    if (!isCurrent()) return;
-                    const resolvedUrl = normalizeTrustedUrl(res.finalUrl, 'rottentomatoes.com', directUrl);
-                    const data = parseRTDetailPage(res.responseText, title, year, type, resolvedUrl);
-                    if (data) { cacheSet(cacheKey, data); this._render(data); return; }
-                } catch { /* try next slug */ }
-            }
-
-            // Fallback: search page
             if (!isCurrent()) return;
             try {
-                const res2 = await httpGet(`https://www.rottentomatoes.com/search?search=${encodeURIComponent(title)}`, { cancelOnRouteChange:true });
+                const searchUrl = `https://www.rottentomatoes.com/search?search=${encodeURIComponent(title)}`;
+                const res2 = await httpGet(searchUrl, { cancelOnRouteChange:true });
                 if (!isCurrent()) return;
                 const result = parseRTSearchResult(res2.responseText, title, year, type);
                 if (result) {
-                    cacheSet(cacheKey, result); this._render(result);
+                    let data = result;
+                    try {
+                        const detailRes = await httpGet(result.url, { cancelOnRouteChange:true });
+                        if (!isCurrent()) return;
+                        const resolvedUrl = normalizeTrustedUrl(detailRes.finalUrl, 'rottentomatoes.com', result.url);
+                        data = parseRTDetailPage(detailRes.responseText, title, year, type, resolvedUrl) || result;
+                    } catch { /* the identity-bound search score remains usable */ }
+                    cacheSet(cacheKey, data); this._render(data);
                     return;
                 }
             } catch { /* handled below */ }
