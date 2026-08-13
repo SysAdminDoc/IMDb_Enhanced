@@ -849,7 +849,11 @@
     function applySettingsImport(entries) {
         let snapshots;
         try {
-            snapshots = new Map(entries.map(({ key }) => [key, get(key)]));
+            const storedKeys = typeof GM_listValues === 'function' ? new Set(GM_listValues()) : null;
+            snapshots = new Map(entries.map(({ key }) => [key, {
+                exists:storedKeys ? storedKeys.has(PREFIX + key) : true,
+                value:get(key),
+            }]));
         } catch {
             throw new Error('Current settings could not be read; no changes were made.');
         }
@@ -863,7 +867,11 @@
         } catch (cause) {
             let rollbackFailed = false;
             [...touched].reverse().forEach(key => {
-                try { GM_setValue(PREFIX + key, snapshots.get(key)); }
+                try {
+                    const snapshot = snapshots.get(key);
+                    if (!snapshot.exists && typeof GM_deleteValue === 'function') GM_deleteValue(PREFIX + key);
+                    else GM_setValue(PREFIX + key, snapshot.value);
+                }
                 catch { rollbackFailed = true; }
             });
             console.warn('[IMDb Enhanced] settings import write failed:', cause);

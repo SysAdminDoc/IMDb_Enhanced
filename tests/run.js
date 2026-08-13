@@ -666,6 +666,16 @@ test('settings imports validate first and roll back partial storage failures', (
     assert.strictEqual(hooks.getStoredSetting('modernUI'), true, 'first partial write was not rolled back');
     assert.strictEqual(hooks.getStoredSetting('themeVariant'), 'dark', 'failed-key snapshot was not restored');
 
+    const absentHooks = loadScriptTestHooks();
+    absentHooks.seedStoredSetting('modernUI', true);
+    absentHooks.failSettingWriteAt(2);
+    assert.throws(
+        () => absentHooks.applySettingsImport(prepared.entries.slice(0, 2)),
+        /previous settings were restored/
+    );
+    assert.strictEqual(absentHooks.getStoredSetting('modernUI'), true, 'existing values should survive rollback');
+    assert(!absentHooks.getStorageKeys().includes('imdb_enh_themeVariant'), 'rollback should restore an absent key as absent');
+
     assert.strictEqual(hooks.applySettingsImport(prepared.entries.slice(0, 2)), 2);
     assert.strictEqual(hooks.getStoredSetting('modernUI'), false);
     assert.strictEqual(hooks.getStoredSetting('themeVariant'), 'light');
