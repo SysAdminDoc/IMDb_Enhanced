@@ -1129,18 +1129,33 @@
     //  FEATURE REGISTRY
     // =========================================================================
     const features = [];
+    const featureGenerations = new WeakMap();
     function reg(f) { features.push(f); }
+    function advanceFeatureGeneration(feature) {
+        const generation = (featureGenerations.get(feature) || 0) + 1;
+        featureGenerations.set(feature, generation);
+        return generation;
+    }
+    function stopFeature(feature) {
+        advanceFeatureGeneration(feature);
+        feature.destroy?.();
+    }
     function startFeature(feature, { context = 'init', notify = false } = {}) {
+        const generation = advanceFeatureGeneration(feature);
         const report = error => {
             console.warn(`[IMDb Enhanced] ${context} ${feature.key}:`, error);
             if (notify) showToast(`${feature.name} could not start. Reload and try again.`, 4500);
         };
+        const rejectCurrentGeneration = error => {
+            if (featureGenerations.get(feature) === generation) advanceFeatureGeneration(feature);
+            report(error);
+        };
         try {
             const pending = feature.init();
-            if (pending && typeof pending.catch === 'function') pending.catch(report);
+            if (pending && typeof pending.catch === 'function') pending.catch(rejectCurrentGeneration);
             return true;
         } catch (error) {
-            report(error);
+            rejectCurrentGeneration(error);
             return false;
         }
     }
@@ -5189,10 +5204,10 @@ section[id*="quote" i] .ipc-list-card { padding: 4px 0 !important; margin: 2px 0
         if (!feature || !get(key) || !shouldInitFeature(feature)) return;
 
         const linkMenu = key === 'externalLinks' ? features.find(f => f.key === 'expandedLinkMenu') : null;
-        if (linkMenu && get('expandedLinkMenu')) linkMenu.destroy?.();
 
         try {
-            feature.destroy?.();
+            if (linkMenu && get('expandedLinkMenu')) stopFeature(linkMenu);
+            stopFeature(feature);
             startFeature(feature, { context:'refresh' });
             if (linkMenu && get('expandedLinkMenu')) startFeature(linkMenu, { context:'refresh' });
         } catch (e) {
@@ -5687,7 +5702,7 @@ section[id*="quote" i] .ipc-list-card { padding: 4px 0 !important; margin: 2px 0
                 if (input.checked && shouldInitFeature(feature)) {
                     startFeature(feature, { context:'settings', notify:true });
                 } else if (!input.checked) {
-                    feature.destroy?.();
+                    stopFeature(feature);
                 }
                 markSaved();
             });
@@ -6156,7 +6171,9 @@ section[id*="quote" i] .ipc-list-card { padding: 4px 0 !important; margin: 2px 0
     function createFeatureGuard(feature) {
         const routeKey = getRouteKey();
         const routeGeneration = activeRouteGeneration;
+        const featureGeneration = featureGenerations.get(feature) || 0;
         return () => activeRouteGeneration === routeGeneration
+            && (featureGenerations.get(feature) || 0) === featureGeneration
             && getRouteKey() === routeKey
             && get(feature.key)
             && shouldInitFeature(feature);
@@ -6165,7 +6182,7 @@ section[id*="quote" i] .ipc-list-card { padding: 4px 0 !important; margin: 2px 0
     function destroyRouteFeatures() {
         cancelPendingRouteWork();
         features.forEach(f => {
-            try { f.destroy?.(); }
+            try { stopFeature(f); }
             catch (e) { console.warn(`[IMDb Enhanced] destroy ${f.key}:`, e); }
         });
         document.getElementById('enh-toast')?.remove();

@@ -43,6 +43,7 @@
 - Replaced Metacritic's first-result assumption with exact normalized title, movie/show type, and one-year-tolerant release matching against the current result payload; malformed critic/user score ranges are discarded before caching.
 - Guarded JustWatch availability against guessed-slug and first-link mismatches by validating detail-page JSON-LD identity and selecting current semantic search rows only when title, movie/show type, and release year agree.
 - Removed a generated IMDb class dependency and a negative-margin poster-title hack from the wider-layout option so upstream class churn cannot widen unrelated elements or overlap adjacent card content.
+- Added per-feature lifecycle generations so an async callback started before a quick off/on toggle or settings refresh cannot become current again and render duplicate or stale controls on the same route.
 
 ## 2.5.1 — 2026-08-12
 

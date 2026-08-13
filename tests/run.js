@@ -34,6 +34,7 @@ function loadScriptTestHooks() {
         getPageSurface,
         shouldInitFeature,
         createFeatureGuard,
+        advanceFeatureGeneration,
         normalizeUrlTemplate,
         normalizeTrustedUrl,
         normalizeSite,
@@ -229,7 +230,7 @@ test('feature activation is scoped to the current IMDb surface', () => {
     assert.strictEqual(hooks.getPageSurface(), 'name', 'localized name routes should retain secondary-page scoping');
 });
 
-test('async feature guards expire across route changes and route generations', () => {
+test('async feature guards expire across route and feature generations', () => {
     const hooks = loadScriptTestHooks();
     const feature = { key:'searchButtons', group:'Features' };
 
@@ -244,6 +245,12 @@ test('async feature guards expire across route changes and route generations', (
     assert(guard(), 'same route key remains current until a new route lifecycle begins');
     hooks.advanceRouteGeneration();
     assert(!guard(), 'route generation should prevent stale A-to-B-to-A callbacks');
+
+    const refreshedFeature = { key:'searchButtons', group:'Features' };
+    const refreshGuard = hooks.createFeatureGuard(refreshedFeature);
+    assert(refreshGuard(), 'current feature instance should begin active');
+    hooks.advanceFeatureGeneration(refreshedFeature);
+    assert(!refreshGuard(), 'feature generation should prevent stale off-to-on callbacks on one route');
 });
 
 test('pending route work and lazy score lookups are cancellable', () => {
@@ -264,7 +271,8 @@ test('pending route work and lazy score lookups are cancellable', () => {
     assert(script.includes('waitForRatingBar(isCurrent)'), 'score widgets should wait for a current rating surface');
     assert(script.includes('waitUntilVisible(bar, isCurrent)'), 'third-party score requests should remain lazy and route-aware');
     assert((script.match(/createFeatureGuard\(this\)/g) || []).length >= 15, 'async feature entry points should be route guarded');
-    assert(script.includes("pending.catch(report)"), 'async feature initialization failures should be handled');
+    assert(script.includes('pending.catch(rejectCurrentGeneration)'), 'async feature initialization failures should invalidate their lifecycle');
+    assert(script.includes('stopFeature(feature)'), 'settings refresh and disable paths should invalidate prior feature instances');
     assert(script.includes("startFeature(feature, { context:'settings', notify:true })"), 'settings-triggered feature failures should be visible');
 });
 
