@@ -32,7 +32,7 @@ Third-party lookup responses are rendered as text and their outbound links are r
 
 **TV Tools** - Episode synopsis blur, highest-rated episode highlighting, TV-specific lookup shortcuts.
 
-**List Page Tools** - Batch IMDb ID copy and multi-search (open all titles on a selected streaming site) on watchlist, custom list, and chart pages.
+**List Page Tools** - Batch IMDb ID copy plus a popup-safe search queue on watchlist, custom list, and chart pages. Prepare up to 20 real new-tab links, open them one gesture at a time, or copy the full link set (a title list for Cineby's local handoff).
 
 **Extras** - Collapsible sections with remembered state, spoiler blur, quick navigation sidebar, wider layout, compact header, subtitle links, copy IMDb ID button, settings import/export.
 

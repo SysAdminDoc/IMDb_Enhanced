@@ -37,6 +37,7 @@ function loadScriptTestHooks() {
         normalizeUrlTemplate,
         normalizeTrustedUrl,
         normalizeSite,
+        buildListSearchEntries,
         httpRequest,
         waitFor,
         cancelPendingRouteWork,
@@ -290,6 +291,31 @@ test('third-party response links stay on trusted HTTPS domains', () => {
     ['letterboxd.com', 'metacritic.com', 'justwatch.com'].forEach(domain => {
         assert(script.includes(`normalizeTrustedUrl(data.url, '${domain}'`), `${domain} render allowlist missing`);
     });
+});
+
+test('list multi-search builds a popup-safe link queue', () => {
+    const hooks = loadScriptTestHooks();
+    const titles = Array.from({ length: 24 }, (_, index) => ({
+        id:`tt${String(index + 1).padStart(7, '0')}`,
+        name:`Title ${index + 1}`,
+    }));
+    const entries = hooks.buildListSearchEntries({
+        name:'Search',
+        url:'https://example.com/?q={{TITLE}}&id={{IMDB_ID}}',
+    }, titles);
+    assert.strictEqual(entries.length, 20, 'queue should cap visible titles at 20');
+    assert.strictEqual(entries[0].url, 'https://example.com/?q=Title%201&id=tt0000001');
+    const cinebyEntries = hooks.buildListSearchEntries({ storeQuery:true }, titles.slice(0, 1));
+    assert.strictEqual(cinebyEntries[0].url, 'https://www.cineby.at/', 'Cineby queue should retain its controlled-input handoff');
+    assert(!script.includes("window.open(url, '_blank'"), 'timer-driven popup loop should stay removed');
+    assert(!script.includes('setTimeout(r, 800)'), 'delayed popup loop should stay removed');
+    [
+        'enh-multi-search-queue',
+        'Browsers allow one new tab per click.',
+        'Copy all links',
+        'Open next',
+        "target:'_blank', rel:'noopener'",
+    ].forEach(token => assert(script.includes(token), `${token} missing from popup-safe queue`));
 });
 
 test('Trakt links use the current web-app search route', () => {

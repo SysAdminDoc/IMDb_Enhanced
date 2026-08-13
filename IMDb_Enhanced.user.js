@@ -180,7 +180,7 @@
         subtitleLinks: 'Adds subtitle lookup links in the details section.',
         quickCopyID: 'Adds a visible IMDb ID copy button beside the title.',
         watchlistBatch: 'Adds a watchlist-page button that copies all visible IMDb title IDs.',
-        listMultiSearch: 'Adds a search-all button on watchlist, list, and chart pages to open each title on a selected watch site.',
+        listMultiSearch: 'Builds a popup-safe queue of up to 20 title links on watchlist, list, and chart pages.',
         keyboardShortcuts: 'Optional. Enables ? for settings, c to copy, r for rating, and t for top.',
     };
 
@@ -3589,6 +3589,15 @@ section[id*="quote" i] .ipc-list-card { padding: 4px 0 !important; margin: 2px 0
         return titles;
     }
 
+    function buildListSearchEntries(site, titles) {
+        return titles.slice(0, 20).map(title => ({
+            ...title,
+            url: site.storeQuery
+                ? getCinebyHost()
+                : applyLinkTemplate(site.url, getLinkContext(title.name, title.id, '')),
+        }));
+    }
+
     reg({
         key: 'listMultiSearch', name: 'List multi-search', group: 'Utility',
         init() {
@@ -3616,7 +3625,54 @@ section[id*="quote" i] .ipc-list-card { padding: 4px 0 !important; margin: 2px 0
                     transition: background .15s ease, border-color .15s ease, color .15s ease, transform .15s ease;
                 }
                 .enh-multi-search-btn:hover { background: ${t.sf2}; border-color: ${t.accentBorder}; color: ${t.accent}; transform: translateY(-1px); }
-                .enh-multi-search-btn:disabled { opacity: .5; cursor: wait; }
+                #enh-multi-search-queue {
+                    margin: 0 0 18px; padding: 14px; max-width: 980px;
+                    border: 1px solid ${t.bd1}; border-radius: 10px;
+                    background: ${t.sf0}; color: ${t.tx1}; box-shadow: ${t.sh1};
+                    outline: none;
+                }
+                .enh-multi-search-queue__header {
+                    display: flex; align-items: flex-start; justify-content: space-between; gap: 16px;
+                    margin-bottom: 12px;
+                }
+                .enh-multi-search-queue__title {
+                    margin: 0 0 4px; color: ${t.tx0};
+                    font: 800 14px/1.25 -apple-system, BlinkMacSystemFont, 'Segoe UI', sans-serif;
+                }
+                .enh-multi-search-queue__description,
+                .enh-multi-search-queue__status {
+                    margin: 0; color: ${t.tx2};
+                    font: 500 11px/1.45 -apple-system, BlinkMacSystemFont, 'Segoe UI', sans-serif;
+                }
+                .enh-multi-search-queue__status { margin-top: 5px; color: ${t.accent}; font-weight: 700; }
+                .enh-multi-search-queue__actions { display: flex; align-items: center; gap: 6px; flex-wrap: wrap; }
+                .enh-multi-search-queue__action {
+                    min-height: 32px; display: inline-flex; align-items: center; justify-content: center;
+                    padding: 0 10px; border: 1px solid ${t.bd1}; border-radius: 7px;
+                    background: ${t.sf1}; color: ${t.tx1} !important; text-decoration: none !important;
+                    cursor: pointer; font: 750 11px/1 -apple-system, BlinkMacSystemFont, 'Segoe UI', sans-serif;
+                }
+                .enh-multi-search-queue__action:hover { background: ${t.sf2}; border-color: ${t.accentBorder}; color: ${t.accent} !important; }
+                .enh-multi-search-queue__action[aria-disabled="true"] { opacity: .48; cursor: default; pointer-events: none; }
+                .enh-multi-search-queue__list {
+                    list-style: none; display: grid; grid-template-columns: repeat(2, minmax(0, 1fr));
+                    gap: 6px; max-height: 340px; overflow: auto; margin: 0; padding: 0 2px 0 0;
+                }
+                .enh-multi-search-queue__item {
+                    min-width: 0; border: 1px solid ${t.bd0}; border-radius: 8px; background: ${t.sf1};
+                }
+                .enh-multi-search-queue__item--opened { opacity: .56; }
+                .enh-multi-search-queue__link {
+                    min-height: 40px; display: flex; align-items: center; justify-content: space-between; gap: 10px;
+                    padding: 7px 9px; color: ${t.tx1} !important; text-decoration: none !important;
+                    font: 650 11px/1.3 -apple-system, BlinkMacSystemFont, 'Segoe UI', sans-serif;
+                }
+                .enh-multi-search-queue__link:hover { color: ${t.accent} !important; }
+                .enh-multi-search-queue__link-meta { color: ${t.tx3}; font-size: 9px; font-weight: 750; white-space: nowrap; }
+                .enh-multi-search-queue__action:focus-visible,
+                .enh-multi-search-queue__link:focus-visible {
+                    outline: 2px solid ${t.accent}; outline-offset: 2px;
+                }
             `, 'enh-listMultiSearch');
 
             const bar = makeEl('div', { id:'enh-multi-search' },
@@ -3627,36 +3683,125 @@ section[id*="quote" i] .ipc-list-card { padding: 4px 0 !important; margin: 2px 0
                     type:'button',
                     className:'enh-multi-search-btn',
                     style:{ '--btn-color': site.color },
-                    onClick: () => this._searchAll(site, btn),
+                    'aria-label': `Prepare visible titles for ${site.name}`,
+                    onClick: () => this._showQueue(site, btn),
                 }, site.name);
                 bar.appendChild(btn);
             });
             const target = document.querySelector('main') || document.body;
             target.insertBefore(bar, target.firstElementChild?.nextSibling || null);
         },
-        async _searchAll(site, btn) {
+        _prepareEntry(site, entry) {
+            if (site.storeQuery) GM_setValue(CINEBY_QUERY_KEY, entry.name);
+        },
+        _showQueue(site, trigger) {
             const titles = getListTitles();
             if (!titles.length) { showToast('No titles found on this page'); return; }
-            const max = Math.min(titles.length, 20);
-            btn.disabled = true;
-            btn.textContent = `Opening 0/${max}...`;
-            let opened = 0;
-            for (let i = 0; i < max; i++) {
-                const title = titles[i];
-                const ctx = getLinkContext(title.name, title.id, '');
-                const url = site.storeQuery ? getCinebyHost() : applyLinkTemplate(site.url, ctx);
-                if (site.storeQuery) GM_setValue(CINEBY_QUERY_KEY, title.name);
-                window.open(url, '_blank', 'noopener');
-                opened++;
-                btn.textContent = `Opening ${opened}/${max}...`;
-                if (i < max - 1) await new Promise(r => setTimeout(r, 800));
-            }
-            btn.textContent = `Opened ${opened} titles`;
-            setTimeout(() => { btn.disabled = false; btn.textContent = site.name; }, 3000);
+            const entries = buildListSearchEntries(site, titles);
+            document.getElementById('enh-multi-search-queue')?.remove();
+
+            const opened = new Set();
+            let nextIndex = 0;
+            const queue = makeEl('section', {
+                id:'enh-multi-search-queue', role:'region', tabindex:'-1',
+                'aria-label':`${site.name} search queue`,
+            });
+            const status = makeEl('p', {
+                className:'enh-multi-search-queue__status', role:'status', 'aria-live':'polite',
+            }, `0 of ${entries.length} opened`);
+            const list = makeEl('ol', { className:'enh-multi-search-queue__list' });
+            const openNext = makeEl('a', {
+                className:'enh-multi-search-queue__action', target:'_blank', rel:'noopener',
+            });
+
+            const updateNext = () => {
+                while (nextIndex < entries.length && opened.has(nextIndex)) nextIndex++;
+                const entry = entries[nextIndex];
+                if (!entry) {
+                    openNext.removeAttribute('href');
+                    openNext.removeAttribute('target');
+                    openNext.setAttribute('aria-disabled', 'true');
+                    openNext.textContent = 'All opened';
+                    return;
+                }
+                openNext.href = entry.url;
+                openNext.target = '_blank';
+                openNext.removeAttribute('aria-disabled');
+                openNext.textContent = `Open next (${nextIndex + 1} of ${entries.length})`;
+                openNext.setAttribute('aria-label', `Open ${entry.name} on ${site.name} in a new tab`);
+            };
+            const markOpened = index => {
+                opened.add(index);
+                list.children[index]?.classList.add('enh-multi-search-queue__item--opened');
+                status.textContent = `${opened.size} of ${entries.length} opened`;
+                updateNext();
+            };
+
+            entries.forEach((entry, index) => {
+                const link = makeEl('a', {
+                    href:entry.url, target:'_blank', rel:'noopener',
+                    className:'enh-multi-search-queue__link',
+                    'aria-label':`Open ${entry.name} on ${site.name} in a new tab`,
+                },
+                    makeEl('span', {}, entry.name),
+                    makeEl('span', { className:'enh-multi-search-queue__link-meta' }, `${entry.id} · New tab`)
+                );
+                link.addEventListener('click', () => {
+                    this._prepareEntry(site, entry);
+                    setTimeout(() => markOpened(index), 0);
+                });
+                list.appendChild(makeEl('li', { className:'enh-multi-search-queue__item' }, link));
+            });
+
+            openNext.addEventListener('click', event => {
+                const entry = entries[nextIndex];
+                if (!entry) { event.preventDefault(); return; }
+                const index = nextIndex;
+                this._prepareEntry(site, entry);
+                setTimeout(() => markOpened(index), 0);
+            });
+
+            const copy = makeEl('button', {
+                type:'button', className:'enh-multi-search-queue__action',
+                onClick: () => {
+                    const text = site.storeQuery
+                        ? entries.map(entry => `${entry.name} (${entry.id})`).join('\n')
+                        : entries.map(entry => entry.url).join('\n');
+                    try {
+                        GM_setClipboard(text);
+                        showToast(site.storeQuery ? `Copied ${entries.length} titles` : `Copied ${entries.length} search links`);
+                    } catch { showToast('Copy failed. Try the individual links instead.', 4500); }
+                },
+            }, site.storeQuery ? 'Copy title list' : 'Copy all links');
+            const close = makeEl('button', {
+                type:'button', className:'enh-multi-search-queue__action',
+                onClick: () => { queue.remove(); trigger.focus(); },
+            }, 'Close');
+
+            const limited = titles.length > entries.length ? ` First ${entries.length} of ${titles.length} visible titles are shown.` : '';
+            queue.append(
+                makeEl('div', { className:'enh-multi-search-queue__header' },
+                    makeEl('div', {},
+                        makeEl('h3', { className:'enh-multi-search-queue__title' }, `${site.name} search queue`),
+                        makeEl('p', { className:'enh-multi-search-queue__description' },
+                            `Browsers allow one new tab per click.${limited}`
+                        ),
+                        status
+                    ),
+                    makeEl('div', { className:'enh-multi-search-queue__actions' }, openNext, copy, close)
+                ),
+                list
+            );
+            const bar = trigger.closest('#enh-multi-search');
+            if (!insertAfter(bar, queue)) return;
+            updateNext();
+            queue.scrollIntoView({ block:'nearest' });
+            queue.focus({ preventScroll:true });
         },
         destroy() {
             removeCSS('enh-listMultiSearch');
             document.getElementById('enh-multi-search')?.remove();
+            document.getElementById('enh-multi-search-queue')?.remove();
         }
     });
 
