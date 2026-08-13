@@ -222,7 +222,9 @@
     const get = (k) => GM_getValue(PREFIX + k, DEFAULTS[k]);
     const set = (k, v) => {
         GM_setValue(PREFIX + k, v);
-        document.dispatchEvent(new CustomEvent('imdb-enhanced:settings-saved', { detail:{ key:k } }));
+        try { document.dispatchEvent(new CustomEvent('imdb-enhanced:settings-saved', { detail:{ key:k } })); }
+        catch { /* persistence succeeded; notification is best-effort */ }
+        return true;
     };
     let cacheWritesSinceGC = 0;
     let userMarksCache = null;
@@ -327,7 +329,7 @@
         userMarksCache = Object.fromEntries(entries.slice(0, USER_MARKS_MAX));
         return userMarksCache;
     }
-    function setUserMarks(marks) {
+    function setUserMarks(marks, notifyFailure = true) {
         const source = marks && typeof marks === 'object' && !Array.isArray(marks) ? marks : {};
         const entries = Object.entries(source)
             .map(([id, record]) => [id, normalizeUserMark(record)])
@@ -335,22 +337,22 @@
             .sort((a, b) => (b[1].ts || 0) - (a[1].ts || 0))
             .slice(0, USER_MARKS_MAX);
         const normalized = Object.fromEntries(entries);
-        set('userMarks', normalized);
+        if (!trySaveSetting('userMarks', normalized, { notify:notifyFailure })) return false;
         userMarksCache = normalized;
         return true;
     }
     function getUserMark(imdbId) {
         return getUserMarks()[imdbId]?.state || '';
     }
-    function setUserMark(imdbId, state, title = '') {
-        if (!/^tt\d+$/.test(imdbId || '')) return;
+    function setUserMark(imdbId, state, title = '', notifyFailure = true) {
+        if (!/^tt\d+$/.test(imdbId || '')) return false;
         const marks = { ...getUserMarks() };
         if (state === 'watched' || state === 'skip') {
             marks[imdbId] = { state, title: String(title || '').trim().slice(0, 160), ts: Date.now() };
         } else {
             delete marks[imdbId];
         }
-        setUserMarks(marks);
+        return setUserMarks(marks, notifyFailure);
     }
     function getUserMarkEntries() {
         return Object.entries(getUserMarks()).sort((a, b) => (b[1].ts || 0) - (a[1].ts || 0));
@@ -386,12 +388,11 @@
         }
         return state;
     }
-    function setSectionCollapsed(id, collapsed) {
+    function setSectionCollapsed(id, collapsed, notifyFailure = true) {
         if (!COLLAPSIBLE_SECTION_IDS.includes(id)) return false;
         const state = getSectionCollapseState();
         state[id] = Boolean(collapsed);
-        set('sectionCollapseState', state);
-        return true;
+        return trySaveSetting('sectionCollapseState', state, { notify:notifyFailure });
     }
 
     // =========================================================================
@@ -885,9 +886,9 @@
         return defaults.slice(0, SITE_LIST_LIMIT).map(site => normalizeSite(site)).filter(Boolean);
     }
 
-    function setSiteList(key, sites) {
+    function setSiteList(key, sites, notifyFailure = true) {
         const normalized = sites.slice(0, SITE_LIST_LIMIT).map(site => normalizeSite(site)).filter(Boolean);
-        set(key, normalized);
+        return trySaveSetting(key, normalized, { notify:notifyFailure });
     }
 
     function getLinkContext(title = getTitleText(), imdbId = getIMDbID(), year = getTitleYear()) {
@@ -1046,6 +1047,17 @@
         document.body.appendChild(t);
         requestAnimationFrame(() => t.classList.add('visible'));
         setTimeout(() => { t.classList.remove('visible'); setTimeout(() => t.remove(), 350); }, duration);
+    }
+
+    function trySaveSetting(key, value, { notify = true } = {}) {
+        try { return set(key, value); }
+        catch (error) {
+            if (notify) {
+                console.warn(`[IMDb Enhanced] setting write failed (${key}):`, error);
+                showToast('Could not save locally. Check userscript storage permissions or quota.', 4500);
+            }
+            return false;
+        }
     }
 
     function copyTextToClipboard(text) {
@@ -3194,12 +3206,13 @@ section[id*="quote" i] .ipc-list-card { padding: 4px 0 !important; margin: 2px 0
                     'aria-label': `${collapsed ? 'Expand' : 'Collapse'} ${sectionLabel}`,
                     textContent: collapsed ? '+' : '-',
                     onClick: () => {
-                        const now = sec.classList.toggle('enh-section--collapsed');
+                        const now = !sec.classList.contains('enh-section--collapsed');
+                        if (!setSectionCollapsed(id, now)) return;
+                        sec.classList.toggle('enh-section--collapsed', now);
                         btn.textContent = now ? '+' : '-';
                         btn.title = now ? 'Expand section' : 'Collapse section';
                         btn.setAttribute('aria-expanded', String(!now));
                         btn.setAttribute('aria-label', `${now ? 'Expand' : 'Collapse'} ${sectionLabel}`);
-                        setSectionCollapsed(id, now);
                     }
                 });
                 sec.insertBefore(btn, sec.firstChild);
@@ -3835,7 +3848,7 @@ section[id*="quote" i] .ipc-list-card { padding: 4px 0 !important; margin: 2px 0
                 e.stopImmediatePropagation?.();
                 const action = btn.dataset.enhMarkAction;
                 const state = action === 'clear' || getUserMark(imdbId) === action ? '' : action;
-                setUserMark(imdbId, state, card.dataset.enhMarkTitle || getTitleText());
+                if (!setUserMark(imdbId, state, card.dataset.enhMarkTitle || getTitleText())) return;
                 this._syncAll();
                 showToast(state
                     ? `Saved locally as ${state === 'watched' ? 'Seen' : 'Skip'} — IMDb Watched was not changed`
@@ -5668,7 +5681,7 @@ section[id*="quote" i] .ipc-list-card { padding: 4px 0 !important; margin: 2px 0
 
         const save = (refresh = true) => {
             if (!validateRows()) return false;
-            setSiteList(key, readRows());
+            if (!setSiteList(key, readRows(), refresh)) return false;
             if (refresh) refreshFeature(featureKey);
             updateCount();
             return true;
@@ -5774,30 +5787,33 @@ section[id*="quote" i] .ipc-list-card { padding: 4px 0 !important; margin: 2px 0
             ...(type === 'number' ? { min:'1', step:'1' } : {}),
         });
         input.value = get(key) || '';
-        const persist = () => {
+        const persist = (notifyFailure = false) => {
             const raw = input.value.trim();
             if (LOCAL_SERVICE_URL_KEYS.has(key)) {
                 const normalized = normalizeLocalServiceUrl(raw);
                 const valid = !raw || Boolean(normalized);
                 input.classList.toggle('enh-site-input--invalid', !valid);
                 input.setAttribute('aria-invalid', String(!valid));
-                if (!valid) return false;
-                set(key, normalized);
-                return true;
+                if (!valid) {
+                    if (notifyFailure) showToast('Use a localhost or 127.0.0.1 HTTP(S) URL without embedded credentials');
+                    return false;
+                }
+                return trySaveSetting(key, normalized, { notify:notifyFailure });
             }
             if (POSITIVE_INTEGER_SETTING_KEYS.has(key) && raw) {
                 const number = Number(raw);
                 const valid = Number.isSafeInteger(number) && number > 0;
                 input.classList.toggle('enh-site-input--invalid', !valid);
                 input.setAttribute('aria-invalid', String(!valid));
-                if (!valid) return false;
-                set(key, String(number));
-                return true;
+                if (!valid) {
+                    if (notifyFailure) showToast('Use a positive whole-number profile ID');
+                    return false;
+                }
+                return trySaveSetting(key, String(number), { notify:notifyFailure });
             }
             input.classList.remove('enh-site-input--invalid');
             input.setAttribute('aria-invalid', 'false');
-            set(key, raw);
-            return true;
+            return trySaveSetting(key, raw, { notify:notifyFailure });
         };
         if (LOCAL_SERVICE_URL_KEYS.has(key)) {
             const initial = input.value.trim();
@@ -5805,14 +5821,9 @@ section[id*="quote" i] .ipc-list-card { padding: 4px 0 !important; margin: 2px 0
             input.classList.toggle('enh-site-input--invalid', !valid);
             input.setAttribute('aria-invalid', String(!valid));
         }
-        input.addEventListener('input', persist);
+        input.addEventListener('input', () => persist(false));
         input.addEventListener('change', () => {
-            if (!persist()) {
-                showToast(LOCAL_SERVICE_URL_KEYS.has(key)
-                    ? 'Use a localhost or 127.0.0.1 HTTP(S) URL without embedded credentials'
-                    : 'Use a positive whole-number profile ID');
-                return;
-            }
+            if (!persist(true)) return;
             if (refreshKey) refreshFeature(refreshKey);
         });
         return makeEl('div', { className:'enh-servarr-field' + (wide ? ' enh-servarr-field--wide' : '') },
@@ -5827,7 +5838,11 @@ section[id*="quote" i] .ipc-list-card { padding: 4px 0 !important; margin: 2px 0
             className:'enh-servarr-input',
             'aria-label':'Preferred Cineby host',
             onChange: () => {
-                set('cinebyHost', select.value);
+                const previous = getCinebyHost();
+                if (!trySaveSetting('cinebyHost', select.value)) {
+                    select.value = previous;
+                    return;
+                }
                 refreshFeature('searchButtons');
             },
         });
@@ -5983,7 +5998,7 @@ section[id*="quote" i] .ipc-list-card { padding: 4px 0 !important; margin: 2px 0
                     showToast('Press the clear button again within 5 seconds to remove every mark');
                     return;
                 }
-                setUserMarks({});
+                if (!setUserMarks({})) return;
                 refreshFeature('watchedMarking');
                 render();
                 showToast(`Cleared ${entries.length} saved title marks`);
@@ -6024,7 +6039,7 @@ section[id*="quote" i] .ipc-list-card { padding: 4px 0 !important; margin: 2px 0
                     title:`Clear ${title}`,
                     'aria-label':`Clear mark for ${title}`,
                     onClick: () => {
-                        setUserMark(id, '');
+                        if (!setUserMark(id, '')) return;
                         refreshFeature('watchedMarking');
                         render();
                         showToast('Mark cleared');
@@ -6153,10 +6168,14 @@ section[id*="quote" i] .ipc-list-card { padding: 4px 0 !important; margin: 2px 0
             const input = makeEl('input', { type:'checkbox', 'aria-label':feature.name });
             input.checked = get(feature.key);
             input.addEventListener('change', () => {
-                set(feature.key, input.checked);
-                if (input.checked && shouldInitFeature(feature)) {
+                const enabled = input.checked;
+                if (!trySaveSetting(feature.key, enabled)) {
+                    input.checked = !enabled;
+                    return;
+                }
+                if (enabled && shouldInitFeature(feature)) {
                     startFeature(feature, { context:'settings', notify:true });
-                } else if (!input.checked) {
+                } else if (!enabled) {
                     stopFeature(feature);
                 }
                 markSaved();
@@ -6232,8 +6251,14 @@ section[id*="quote" i] .ipc-list-card { padding: 4px 0 !important; margin: 2px 0
                 'aria-label':`Use ${theme.label} theme`,
                 'aria-pressed':String(curTheme === theme.id),
                 onClick: () => {
-                    set('themeAuto', false);
-                    set('themeVariant', theme.id);
+                    try { applySettingsImport([
+                        { key:'themeAuto', value:false },
+                        { key:'themeVariant', value:theme.id },
+                    ]); }
+                    catch {
+                        showToast('Could not save the theme. Previous settings were restored.', 4500);
+                        return;
+                    }
                     applyThemeStyles();
                     markSaved();
                 },
@@ -6251,7 +6276,11 @@ section[id*="quote" i] .ipc-list-card { padding: 4px 0 !important; margin: 2px 0
         const autoThemeInput = makeEl('input', { id:'enh-theme-auto', type:'checkbox', 'aria-label':'Follow system theme' });
         autoThemeInput.checked = get('themeAuto');
         autoThemeInput.addEventListener('change', () => {
-            set('themeAuto', autoThemeInput.checked);
+            const enabled = autoThemeInput.checked;
+            if (!trySaveSetting('themeAuto', enabled)) {
+                autoThemeInput.checked = !enabled;
+                return;
+            }
             applyThemeStyles();
             markSaved();
         });

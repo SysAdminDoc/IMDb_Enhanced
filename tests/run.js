@@ -400,6 +400,14 @@ test('local marks are cached and bounded while DOM rescans stay mutation-scoped'
     assert(normalized.tt0005002, 'newest marks should be retained');
     hooks.setUserMark('tt9999999', 'watched', 'Newest');
     assert.strictEqual(Object.keys(hooks.getStoredSetting('userMarks')).length, 5000, 'new writes should preserve the mark bound');
+    const failingHooks = loadScriptTestHooks();
+    failingHooks.failSettingWriteAt(1);
+    assert.strictEqual(
+        failingHooks.setUserMark('tt0133093', 'watched', 'The Matrix', false),
+        false,
+        'mark writes should report storage failure instead of claiming success'
+    );
+    assert.strictEqual(failingHooks.getStoredSetting('userMarks'), undefined, 'failed mark writes must not update the local cache contract');
     assert(script.includes('mutation.addedNodes.forEach'), 'watched-mark observer should scan added subtrees');
     assert(script.includes('this._pendingScanRoots.size > 50'), 'large mutation batches should retain a bounded full-scan fallback');
 });
@@ -438,6 +446,8 @@ test('settings use six accessible desktop destinations', () => {
     assert(script.includes('const setDataDisclosureState = openPanel =>'), 'data subpanels should share one disclosure-state owner');
     assert(script.includes("showToast('Cache could not be read or cleared.', 4500)"), 'cache failures should remain visible');
     assert(script.includes('else if (failed) showToast(`Cleared ${cleared} cached entries; ${failed} could not be removed.`'), 'partial cache deletion must not claim complete success');
+    assert(script.includes('if (!trySaveSetting(feature.key, enabled))'), 'feature toggles should revert when storage fails');
+    assert(script.includes("showToast('Could not save the theme. Previous settings were restored.'"), 'multi-key theme changes should report transactional rollback');
     assert(script.includes('if (!settingsOpen || overlay.contains(event.target)) return'), 'settings should recapture focus that leaves the modal');
     assert(script.includes('createMarksPanel(registerCleanup)'), 'settings-owned document listeners should join the panel cleanup lifecycle');
     assert(script.includes("document.removeEventListener('imdb-enhanced:marks-updated', render)"), 'marks listener must be removed when settings are rebuilt');
@@ -668,6 +678,11 @@ test('remembered section state participates in backup and migrates legacy keys',
     failingHooks.failSettingWriteAt(1);
     assert.throws(() => failingHooks.getSectionCollapseState(), /simulated settings write failure/);
     assert(failingHooks.getStorageKeys().includes('enh_coll_Details'), 'legacy state must survive a failed schema write');
+
+    const failingControlHooks = loadScriptTestHooks();
+    failingControlHooks.failSettingWriteAt(1);
+    assert.strictEqual(failingControlHooks.setSectionCollapsed('Details', true, false), false, 'collapse state should report normal-write failure');
+    assert.strictEqual(failingControlHooks.getStoredSetting('sectionCollapseState'), undefined, 'failed collapse writes must leave storage unchanged');
 });
 
 test('settings exports are canonical and fully re-importable', () => {
