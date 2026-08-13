@@ -5755,12 +5755,30 @@ section[id*="quote" i] .ipc-list-card { padding: 4px 0 !important; margin: 2px 0
         const panel = makeEl('div', { className:'enh-marks-panel' });
         const count = makeEl('div', { className:'enh-marks-panel__count' });
         const rows = makeEl('div', { className:'enh-marks-panel__rows' });
+        let clearAllArmed = false;
+        let clearAllTimer = null;
+        const disarmClearAll = () => {
+            clearTimeout(clearAllTimer);
+            clearAllTimer = null;
+            clearAllArmed = false;
+            clearAll.textContent = 'Clear all';
+            clearAll.setAttribute('aria-label', 'Clear all saved title marks');
+        };
         const clearAll = makeEl('button', {
             type:'button',
             className:'enh-settings-footer-btn enh-settings-footer-btn--danger',
+            'aria-label':'Clear all saved title marks',
             onClick: () => {
                 const entries = getUserMarkEntries();
                 if (!entries.length) return;
+                if (!clearAllArmed) {
+                    clearAllArmed = true;
+                    clearAll.textContent = `Confirm clear ${entries.length}`;
+                    clearAll.setAttribute('aria-label', `Confirm clearing ${entries.length} saved title marks`);
+                    clearAllTimer = setTimeout(disarmClearAll, 5000);
+                    showToast('Press the clear button again within 5 seconds to remove every mark');
+                    return;
+                }
                 setUserMarks({});
                 refreshFeature('watchedMarking');
                 render();
@@ -5769,6 +5787,7 @@ section[id*="quote" i] .ipc-list-card { padding: 4px 0 !important; margin: 2px 0
         }, 'Clear all');
 
         const render = () => {
+            disarmClearAll();
             const entries = getUserMarkEntries();
             count.textContent = `${entries.length} saved`;
             const summary = document.getElementById('enh-data-marks-count');

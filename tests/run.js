@@ -581,6 +581,8 @@ test('settings reset is explicit, complete, and isolated from live defaults', ()
     assert(script.includes("id:'enh-reset-panel', hidden:'hidden', role:'alert'"), 'reset should use an explicit inline warning');
     assert(script.includes('Export a backup first if you may need them.'), 'reset warning should offer recovery guidance');
     assert(!/\bconfirm\s*\(/.test(script), 'reset must not reintroduce browser confirmation dialogs');
+    assert(script.includes('clearAllTimer = setTimeout(disarmClearAll, 5000)'), 'bulk mark deletion should require a bounded second action');
+    assert(script.includes('Press the clear button again within 5 seconds'), 'bulk mark deletion should explain its recovery window');
 });
 
 test('core features remain registered', () => {
