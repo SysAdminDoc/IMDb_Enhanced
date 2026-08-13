@@ -105,6 +105,7 @@
 - Replaced the single-option Cineby host selector with accurate handoff guidance; the editable watch-site row remains the real destination control.
 - Restored destination rows after failed Remove or Reset writes and stopped reporting storage failures as URL-validation errors.
 - Raised the bounded settings-import path from 100 KB to 4 MB so a supported 5,000-mark/100-destination export remains re-importable, and made export read/size failures explicit.
+- Bounded IMDb histogram discovery by script count, script size, queue growth, and node count before parsing embedded application data.
 
 ## 2.5.1 — 2026-08-12
 

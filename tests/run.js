@@ -31,6 +31,7 @@ function loadScriptTestHooks() {
         parseIMDbTitleStructuredData,
         normalizeHistogramData,
         findHistogramData,
+        parseHistogramScriptTexts,
         collectProviderIds,
         mediaItemMatches,
         selectServarrLookupResult,
@@ -239,6 +240,18 @@ test('rating histogram extraction is bounded and normalizes a 1-10 distribution'
     assert.strictEqual(histogram[0].voteCount, 100);
     assert.strictEqual(histogram[9].voteCount, 1000);
     assert.strictEqual(hooks.findHistogramData({ histogramData:[{ rating:1, count:10 }] }), null, 'one malformed bucket must not become a chart');
+    const payload = JSON.stringify({ ratingsSummary:{ histogramData:raw } });
+    assert.strictEqual(
+        hooks.parseHistogramScriptTexts(['x'.repeat(2 * 1024 * 1024 + 1), payload])?.length,
+        10,
+        'an oversized inline script should be skipped without hiding a later bounded histogram'
+    );
+    assert.strictEqual(
+        hooks.parseHistogramScriptTexts(Array(50).fill('{}').concat(payload)),
+        null,
+        'histogram discovery should not inspect scripts beyond its finite budget'
+    );
+    assert(/function findHistogramData[\s\S]*?appendBoundedObjectChildren\(queue, node, maxNodes\)/.test(script), 'histogram traversal must not materialize every child before slicing');
     assert(script.includes("'aria-label':'IMDb vote distribution from 1 to 10'"), 'histogram should expose its meaning to assistive technology');
 });
 

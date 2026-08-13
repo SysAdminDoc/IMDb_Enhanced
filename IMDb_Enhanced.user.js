@@ -2695,27 +2695,30 @@ section[id*="quote" i] .ipc-list-card { padding: 4px 0 !important; margin: 2px 0
             const direct = normalizeHistogramData(node.histogramData)
                 || normalizeHistogramData(node.ratingsSummary?.histogramData);
             if (direct) return direct;
-            const remaining = maxNodes - queue.length;
-            if (remaining <= 0) continue;
-            Object.values(node)
-                .filter(value => value && typeof value === 'object')
-                .slice(0, remaining)
-                .forEach(value => queue.push(value));
+            appendBoundedObjectChildren(queue, node, maxNodes);
+        }
+        return null;
+    }
+
+    function parseHistogramScriptTexts(scriptTexts) {
+        let inspectedScripts = 0;
+        for (const text of scriptTexts || []) {
+            if (inspectedScripts >= STRUCTURED_DATA_SCRIPT_LIMIT) break;
+            inspectedScripts += 1;
+            const source = toBoundedText(text, STRUCTURED_DATA_TEXT_LIMIT);
+            if (!source || (!source.includes('histogramData') && !source.includes('ratingsSummary'))) continue;
+            try {
+                const data = findHistogramData(JSON.parse(source));
+                if (data) return data;
+            } catch { /* inspect the next application-data block */ }
         }
         return null;
     }
 
     function getHistogramData() {
-        const scripts = document.querySelectorAll('script[type="application/json"]');
-        for (const script of scripts) {
-            const text = script.textContent || '';
-            if (!text.includes('histogramData') && !text.includes('ratingsSummary')) continue;
-            try {
-                const data = findHistogramData(JSON.parse(text));
-                if (data) return data;
-            } catch { /* inspect the next application-data block */ }
-        }
-        return null;
+        const scripts = Array.from(document.querySelectorAll('script[type="application/json"]'))
+            .slice(0, STRUCTURED_DATA_SCRIPT_LIMIT);
+        return parseHistogramScriptTexts(scripts.map(script => script.textContent));
     }
 
     reg({
