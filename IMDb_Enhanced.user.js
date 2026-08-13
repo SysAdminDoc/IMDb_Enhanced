@@ -3006,13 +3006,13 @@ section[id*="quote" i] .ipc-list-card { padding: 4px 0 !important; margin: 2px 0
         key: 'collapsibleSections', name: 'Collapsible sections', group: 'Layout',
         _ids: COLLAPSIBLE_SECTION_IDS,
         init() {
-            addCSS(`
+            addThemedCSS(t => `
                 .enh-collapse-btn{position:absolute;top:12px;right:12px;width:28px;height:28px;
-                    background:rgba(255,255,255,0.06);border:1px solid rgba(255,255,255,0.08);
-                    border-radius:6px;cursor:pointer;color:#a1a1aa;font-size:16px;z-index:10;
+                    background:${t.sf1};border:1px solid ${t.bd1};
+                    border-radius:6px;cursor:pointer;color:${t.tx3};font-size:16px;z-index:10;
                     display:flex;align-items:center;justify-content:center;transition:background .12s ease,border-color .12s ease,color .12s ease,transform .12s ease;
                     line-height:1;padding:0}
-                .enh-collapse-btn:hover{background:rgba(255,255,255,0.1);color:#fff}
+                .enh-collapse-btn:hover{background:${t.sf2};border-color:${t.accentBorder};color:${t.tx0}}
                 .enh-section--collapsed>*:not(.ipc-title):not(.enh-collapse-btn):not([class*="title"]):not(h3):not(header){display:none!important}
                 .enh-section--collapsed{min-height:auto!important;padding-bottom:12px!important}
                 section[data-testid]{position:relative}
@@ -3125,21 +3125,21 @@ section[id*="quote" i] .ipc-list-card { padding: 4px 0 !important; margin: 2px 0
             { id:'DidYouKnow', label:'Trivia', icon:'?' },
         ],
         init() {
-            addCSS(`
+            addThemedCSS(t => `
                 #enh-quicknav{position:fixed;right:16px;top:50%;transform:translateY(-50%);
                     z-index:99999;display:flex;flex-direction:column;gap:4px}
                 .enh-qn-dot{width:36px;height:36px;border-radius:10px;
-                    background:rgba(22,22,26,0.9);border:1px solid rgba(255,255,255,0.06);
-                    color:#a1a1aa;font-size:11px;font-weight:800;letter-spacing:.04em;cursor:pointer;
+                    background:${t.sf0};border:1px solid ${t.bd1};
+                    color:${t.tx3};font-size:11px;font-weight:800;letter-spacing:.04em;cursor:pointer;
                     display:flex;align-items:center;justify-content:center;transition:background .15s ease,border-color .15s ease,color .15s ease,transform .15s ease;
                     text-decoration:none;position:relative}
-                .enh-qn-dot:hover{background:rgba(245,197,24,0.12);border-color:rgba(245,197,24,0.25);
-                    color:#f5c518;transform:translateX(-2px)}
+                .enh-qn-dot:hover,.enh-qn-dot:focus-visible{background:${t.accentMuted};border-color:${t.accentBorder};
+                    color:${t.accent};transform:translateX(-2px)}
                 .enh-qn-dot::before{content:attr(data-label);position:absolute;right:calc(100% + 8px);
                     padding:4px 10px;border-radius:6px;font-size:11px;font-weight:600;
-                    background:#1c1c22;color:#e4e4e7;white-space:nowrap;border:1px solid rgba(255,255,255,0.08);
+                    background:${t.sf1};color:${t.tx1};white-space:nowrap;border:1px solid ${t.bd1};
                     opacity:0;transform:translateX(4px);pointer-events:none;transition:opacity .15s ease,transform .15s ease}
-                .enh-qn-dot:hover::before{opacity:1;transform:translateX(0)}
+                .enh-qn-dot:hover::before,.enh-qn-dot:focus-visible::before{opacity:1;transform:translateX(0)}
                 @media(max-width:1200px){#enh-quicknav{display:none}}
             `, 'enh-quickNav');
 
@@ -4112,26 +4112,26 @@ section[id*="quote" i] .ipc-list-card { padding: 4px 0 !important; margin: 2px 0
             if (!isTVType() && !/\/title\/tt\d+\/episodes/i.test(location.pathname)) return;
             const isCurrent = createFeatureGuard(this);
             this._plotAttributes = new Map();
-            addCSS(`
+            addThemedCSS(t => `
                 .enh-episode-spoiler {
                     filter: blur(5px);
                     cursor: pointer;
                     transition: filter .18s ease, opacity .18s ease;
                 }
                 .enh-episode-spoiler:hover { opacity: .9; }
-                .enh-episode-spoiler:focus-visible { outline: 2px solid #facc15; outline-offset: 3px; }
+                .enh-episode-spoiler:focus-visible { outline: 2px solid ${t.accent}; outline-offset: 3px; }
                 #enh-best-episodes {
                     margin: 14px 0 18px;
                     padding: 14px;
                     border-radius: 10px;
-                    border: 1px solid rgba(250,204,21,.2);
-                    background: rgba(250,204,21,.07);
+                    border: 1px solid ${t.accentBorder};
+                    background: ${t.accentMuted};
                     color: inherit;
                 }
                 #enh-best-episodes h3 {
                     margin: 0 0 10px;
                     font: 700 14px/1.3 -apple-system,BlinkMacSystemFont,'Segoe UI',sans-serif;
-                    color: #fde68a;
+                    color: ${t.accent};
                 }
                 .enh-best-episodes-list {
                     display: grid;
@@ -4148,12 +4148,12 @@ section[id*="quote" i] .ipc-list-card { padding: 4px 0 !important; margin: 2px 0
                     align-items: center;
                     padding: 7px 9px;
                     border-radius: 8px;
-                    background: rgba(255,255,255,.045);
-                    border: 1px solid rgba(255,255,255,.07);
+                    background: ${t.sf1};
+                    border: 1px solid ${t.bd0};
                 }
                 .enh-best-episode__rank,
                 .enh-best-episode__rating {
-                    color: #facc15;
+                    color: ${t.accent};
                     font: 800 12px/1 -apple-system,BlinkMacSystemFont,'Segoe UI',sans-serif;
                 }
                 .enh-best-episode__title {
@@ -4165,7 +4165,7 @@ section[id*="quote" i] .ipc-list-card { padding: 4px 0 !important; margin: 2px 0
                     text-decoration: none;
                     font: 600 12px/1.25 -apple-system,BlinkMacSystemFont,'Segoe UI',sans-serif;
                 }
-                .enh-best-episode__title:hover { color: #fde68a; }
+                .enh-best-episode__title:hover { color: ${t.accent}; }
             `, 'enh-tvEpisodeTools');
 
             const run = () => {
@@ -4312,14 +4312,14 @@ section[id*="quote" i] .ipc-list-card { padding: 4px 0 !important; margin: 2px 0
         init() {
             if (!isTVType()) return;
             const isCurrent = createFeatureGuard(this);
-            addCSS(`
+            addThemedCSS(t => `
                 #enh-tv-bar{display:flex;flex-wrap:wrap;gap:6px;margin:8px 0}
                 .enh-tv-chip{padding:4px 12px;border-radius:8px;
                     font:600 11px/1.5 -apple-system,BlinkMacSystemFont,'Segoe UI',sans-serif;
-                    color:#a78bfa;background:rgba(167,139,250,0.08);
-                    border:1px solid rgba(167,139,250,0.15);text-decoration:none!important;
+                    color:${t.blue};background:${t.blueMuted};
+                    border:1px solid ${t.bd1};text-decoration:none!important;
                     transition:background .12s ease,border-color .12s ease,color .12s ease,transform .12s ease}
-                .enh-tv-chip:hover{background:rgba(167,139,250,0.18);color:#c4b5fd;border-color:rgba(167,139,250,0.3)}
+                .enh-tv-chip:hover{background:${t.sf2};color:${t.blueHi};border-color:${t.accentBorder}}
             `, 'enh-tvShow');
 
             waitForTitleSurface().then(() => {
@@ -5404,6 +5404,10 @@ section[id*="quote" i] .ipc-list-card { padding: 4px 0 !important; margin: 2px 0
 #enh-copy-id:focus-visible,
 .enh-mark-btn:focus-visible,
 .enh-mark-row__clear:focus-visible,
+.enh-collapse-btn:focus-visible,
+.enh-qn-dot:focus-visible,
+.enh-tv-chip:focus-visible,
+.enh-best-episode__title:focus-visible,
 .enh-site-remove:focus-visible,
 .enh-integration-tab:focus-visible,
 .enh-servarr-input:focus-visible,

@@ -484,7 +484,9 @@ test('theme changes repaint feature styles without restarting behavior', () => {
     assert(script.includes('const themedStyleFactories = new Map()'), 'theme-aware feature styles need a shared registry');
     assert(script.includes('refreshThemedStyles();'), 'theme application should repaint registered feature styles');
     assert(!script.includes('refreshThemeDependentFeatures'), 'theme changes must not restart feature lifecycles or network checks');
-    assert((script.match(/addThemedCSS\(t =>/g) || []).length >= 8, 'all feature-local theme styles should use the repaint registry');
+    assert((script.match(/addThemedCSS\(t =>/g) || []).length >= 12, 'all feature-local theme styles should use the repaint registry');
+    assert(!script.includes('background:rgba(255,255,255,0.06);border:1px solid rgba(255,255,255,0.08);'), 'collapse controls must not retain dark-only surfaces');
+    assert(script.includes('.enh-qn-dot:hover,.enh-qn-dot:focus-visible'), 'quick navigation should expose its tooltip and theme state to keyboard focus');
 });
 
 test('optional keyboard shortcuts do not collide with browser or modal commands', () => {
