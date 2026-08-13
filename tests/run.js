@@ -30,6 +30,7 @@ function loadScriptTestHooks() {
         toBoundedText,
         parseIMDbTitleStructuredData,
         getStructuredTitleYear,
+        getStructuredMediaType,
         normalizeHistogramData,
         findHistogramData,
         parseHistogramScriptTexts,
@@ -267,6 +268,25 @@ test('IMDb title data selection ignores unrelated or malformed structured data',
         'title-year extraction must not traverse release-event arrays past its finite budget'
     );
     assert(script.includes('inspectedInlines >= TITLE_YEAR_INLINE_LIMIT'), 'inline title-year fallbacks should have a finite scan budget');
+    const oversizedTypes = Array(21).fill('Thing');
+    oversizedTypes[20] = 'Movie';
+    assert.deepStrictEqual(
+        Object.keys(hooks.parseIMDbTitleStructuredData([JSON.stringify({ '@type':oversizedTypes })])),
+        [],
+        'title selection must not scan unbounded type arrays'
+    );
+    const keywords = Array(51).fill('ongoing');
+    keywords[49] = 'mini-series';
+    keywords[50] = 'mini-series outside budget';
+    assert.strictEqual(hooks.getStructuredMediaType({ '@type':'TVSeries', keywords }), 'miniseries');
+    keywords[49] = 'ongoing';
+    assert.strictEqual(hooks.getStructuredMediaType({ '@type':'TVSeries', keywords }), 'series', 'series classification should bound keyword arrays');
+    const genres = Array(51).fill('Drama');
+    genres[49] = 'Short';
+    genres[50] = 'Short Film';
+    assert.strictEqual(hooks.getStructuredMediaType({ '@type':'Movie', genre:genres }), 'short');
+    genres[49] = 'Drama';
+    assert.strictEqual(hooks.getStructuredMediaType({ '@type':'Movie', genre:genres }), 'movie', 'movie classification should bound genre arrays');
     assert(script.includes('if (Object.keys(selected).length) _ldData = selected'), 'an early empty scan must not prevent a later structured-data retry');
 });
 

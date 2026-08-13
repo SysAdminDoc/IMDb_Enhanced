@@ -61,6 +61,9 @@
     const EXTERNAL_RESULT_SCAN_LIMIT = 100;
     const STRUCTURED_DATA_SCRIPT_LIMIT = 50;
     const STRUCTURED_DATA_NODE_LIMIT = 1000;
+    const STRUCTURED_DATA_TYPE_LIMIT = 20;
+    const STRUCTURED_DATA_CLASSIFICATION_ITEM_LIMIT = 50;
+    const STRUCTURED_DATA_CLASSIFICATION_TEXT_LIMIT = 2000;
     const TITLE_YEAR_RELEASE_EVENT_LIMIT = 50;
     const TITLE_YEAR_INLINE_LIMIT = 100;
     const EXTERNAL_STRUCTURED_DATA_NODE_LIMIT = 100;
@@ -989,6 +992,22 @@
         return text.length <= limit ? text : '';
     }
 
+    function getBoundedStructuredStrings(value, itemLimit, textLimit = STRUCTURED_DATA_CLASSIFICATION_TEXT_LIMIT) {
+        const values = Array.isArray(value) ? value : [value];
+        const strings = [];
+        let totalLength = 0;
+        for (let index = 0; index < values.length && index < itemLimit && totalLength < textLimit; index++) {
+            const item = values[index];
+            if (typeof item !== 'string' && typeof item !== 'number') continue;
+            const text = String(item).trim();
+            if (!text) continue;
+            const bounded = text.slice(0, textLimit - totalLength);
+            strings.push(bounded);
+            totalLength += bounded.length;
+        }
+        return strings;
+    }
+
     function parseIMDbTitleStructuredData(scriptTexts) {
         let fallback = null;
         let inspectedScripts = 0;
@@ -1008,7 +1027,7 @@
                 const node = queue[index];
                 if (!node || typeof node !== 'object') continue;
                 if (!Array.isArray(node)) {
-                    const types = Array.isArray(node['@type']) ? node['@type'] : [node['@type']].filter(Boolean);
+                    const types = getBoundedStructuredStrings(node['@type'], STRUCTURED_DATA_TYPE_LIMIT);
                     if (types.some(type => ['Movie', 'TVSeries', 'TVEpisode', 'TVMiniSeries'].includes(type))) return node;
                     if (!fallback && node.name && (node.aggregateRating || node.datePublished || node.startDate)) fallback = node;
                 }
@@ -1075,18 +1094,25 @@
         return '';
     }
 
-    function getMediaType() {
-        const ld = getLDData();
-        const types = Array.isArray(ld['@type']) ? ld['@type'] : [ld['@type']];
-        if (types.includes('TVEpisode') || ld.partOfSeries || ld.partOfSeason) return 'episode';
+    function getStructuredMediaType(ld) {
+        const types = getBoundedStructuredStrings(ld?.['@type'], STRUCTURED_DATA_TYPE_LIMIT);
+        if (types.includes('TVEpisode') || ld?.partOfSeries || ld?.partOfSeason) return 'episode';
         if (types.includes('TVSeries') || types.includes('TVMiniSeries')) {
             if (types.includes('TVMiniSeries')) return 'miniseries';
-            const text = [ld.name, ld.description, ld.keywords].filter(Boolean).join(' ');
-            return /mini[-\s]?series/i.test(text) ? 'miniseries' : 'series';
+            const classification = [
+                ...getBoundedStructuredStrings(ld?.name, 1),
+                ...getBoundedStructuredStrings(ld?.description, 1),
+                ...getBoundedStructuredStrings(ld?.keywords, STRUCTURED_DATA_CLASSIFICATION_ITEM_LIMIT),
+            ];
+            return classification.some(text => /mini[-\s]?series/i.test(text)) ? 'miniseries' : 'series';
         }
-        const genres = Array.isArray(ld.genre) ? ld.genre : [ld.genre].filter(Boolean);
-        if (genres.some(genre => /short/i.test(String(genre)))) return 'short';
+        const genres = getBoundedStructuredStrings(ld?.genre, STRUCTURED_DATA_CLASSIFICATION_ITEM_LIMIT);
+        if (genres.some(genre => /short/i.test(genre))) return 'short';
         return 'movie';
+    }
+
+    function getMediaType() {
+        return getStructuredMediaType(getLDData());
     }
 
     function isTVType(type = getMediaType()) {
