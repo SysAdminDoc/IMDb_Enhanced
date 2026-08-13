@@ -41,6 +41,7 @@
 - Restored the documented full-settings reset as an accessible two-step inline recovery flow; it covers every schema key, clearly warns that marks and credentials will be cleared, and reuses transactional rollback on storage failure.
 - Replaced Rotten Tomatoes' obsolete unscoped first-score search regex with parsing of current semantic result rows and exact normalized title/media-type plus one-year-tolerant release matching; matched score links now open the validated result page.
 - Replaced Metacritic's first-result assumption with exact normalized title, movie/show type, and one-year-tolerant release matching against the current result payload; malformed critic/user score ranges are discarded before caching.
+- Guarded JustWatch availability against guessed-slug and first-link mismatches by validating detail-page JSON-LD identity and selecting current semantic search rows only when title, movie/show type, and release year agree.
 
 ## 2.5.1 — 2026-08-12
 

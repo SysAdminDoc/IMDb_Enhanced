@@ -14,7 +14,7 @@ A desktop IMDb overhaul delivered as a single userscript. Cleaner pages, modern 
 
 **Aggregated Scores** - Inline Rotten Tomatoes (with critics consensus on hover), Letterboxd, and Metacritic scores fetched lazily near IMDb's rating and cached locally. Search-backed score matches require an exact title and media type plus a release year within one year. Navigation aborts route-owned lookups when the manager provides an abort handle, and stale responses are discarded regardless. Rating histogram shows 1-10 vote distribution at a glance.
 
-**Streaming Availability** - JustWatch integration shows which streaming services carry the title, using the same lazy, route-aware lookup lifecycle.
+**Streaming Availability** - JustWatch integration shows which streaming services carry the title, using the same lazy, route-aware lookup lifecycle and exact title/type/year identity checks on direct and search-fallback pages.
 
 Third-party lookup responses are rendered as text and their outbound links are restricted to the expected HTTPS service domains.
 

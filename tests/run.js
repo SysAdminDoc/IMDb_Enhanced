@@ -39,6 +39,8 @@ function loadScriptTestHooks() {
         normalizeSite,
         parseRTSearchResult,
         selectMetacriticResult,
+        parseJustWatchSearchResult,
+        parseJustWatchIdentity,
         buildListSearchEntries,
         getEnhancementScrollBehavior,
         getFocusableElements,
@@ -542,6 +544,36 @@ test('Metacritic lookup selection requires exact title, type, and year context',
     assert.strictEqual(hooks.selectMetacriticResult(items, 'The Thing', 1995, 'movie'), null, 'remake results must not cross years');
     assert.strictEqual(hooks.selectMetacriticResult(items, 'Thing', 2011, 'movie'), null, 'different exact titles must not be substituted by year');
     assert(!script.includes('const best = items[0]'), 'first-result Metacritic selection should stay removed');
+});
+
+test('JustWatch direct and fallback pages preserve title identity', () => {
+    const hooks = loadScriptTestHooks();
+    const searchHtml = `
+        <a href="https://www.justwatch.com/us/movie/the-thing-1982" class="title-list-row__column-header">
+            <span class="header-title">The Thing</span><span class="header-year">(1982)</span>
+        </a>
+        <a class="title-list-row__column-header" href="https://www.justwatch.com/us/movie/the-thing">
+            <span class="header-title">The Thing</span><span class="header-year">(2011)</span>
+        </a>
+        <a href="https://www.justwatch.com/us/tv-show/the-thing" class="title-list-row__column-header">
+            <span class="header-title">The Thing</span><span class="header-year">(2005)</span>
+        </a>`;
+    assert.strictEqual(
+        hooks.parseJustWatchSearchResult(searchHtml, 'The Thing', 1982, 'movie'),
+        'https://www.justwatch.com/us/movie/the-thing-1982'
+    );
+    assert.strictEqual(hooks.parseJustWatchSearchResult(searchHtml, 'The Thing', 1995, 'movie'), '');
+    assert.strictEqual(
+        hooks.parseJustWatchSearchResult(searchHtml, 'The Thing', 2005, 'tv-show'),
+        'https://www.justwatch.com/us/tv-show/the-thing'
+    );
+
+    const movieIdentity = hooks.parseJustWatchIdentity(`
+        <script type="application/ld+json">{"@type":"Movie","name":"The Thing","dateCreated":"1982-06-25"}</script>`);
+    assert.strictEqual(movieIdentity.title, 'The Thing');
+    assert.strictEqual(movieIdentity.year, 1982);
+    assert.strictEqual(movieIdentity.type, 'movie');
+    assert(!script.includes('_firstDetailPath'), 'first-path JustWatch fallback should stay removed');
 });
 
 test('list multi-search builds a popup-safe link queue', () => {

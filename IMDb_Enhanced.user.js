@@ -2043,6 +2043,60 @@ section[id*="quote" i] .ipc-list-card { padding: 4px 0 !important; margin: 2px 0
         return null;
     }
 
+    function isMatchingTitleIdentity(candidate, title, year) {
+        if (normalizeLookupTitle(candidate?.title) !== normalizeLookupTitle(title)) return false;
+        const wantedYear = Number(year) || 0;
+        const candidateYear = Number(candidate?.year) || 0;
+        return !wantedYear || !candidateYear || Math.abs(candidateYear - wantedYear) <= 1;
+    }
+
+    function parseJustWatchSearchResult(html, title, year, typePath = 'movie') {
+        const candidates = [];
+        const anchors = String(html || '').matchAll(/<a\b([^>]*\bclass\s*=\s*["'][^"']*title-list-row__column-header[^"']*["'][^>]*)>([\s\S]*?)<\/a>/gi);
+        for (const anchor of anchors) {
+            const rawHref = getHTMLAttribute(anchor[1], 'href');
+            let candidateUrl = '';
+            try { candidateUrl = new URL(rawHref, 'https://www.justwatch.com').href; } catch { /* reject malformed result URLs */ }
+            const href = normalizeTrustedUrl(candidateUrl, 'justwatch.com', '');
+            if (!href) continue;
+            const path = new URL(href).pathname;
+            if (!path.startsWith(`/us/${typePath}/`)) continue;
+            const titleMatch = anchor[2].match(/<span\b[^>]*\bclass\s*=\s*["'][^"']*header-title[^"']*["'][^>]*>([\s\S]*?)<\/span>/i);
+            if (!titleMatch) continue;
+            const yearMatch = anchor[2].match(/<span\b[^>]*\bclass\s*=\s*["'][^"']*header-year[^"']*["'][^>]*>([\s\S]*?)<\/span>/i);
+            candidates.push({
+                title:decodeHTML(titleMatch[1].replace(/<[^>]*>/g, ' ')).replace(/\s+/g, ' ').trim(),
+                year:Number(yearFromText(yearMatch?.[1])) || 0,
+                url:href,
+            });
+        }
+        const exact = candidates.filter(candidate => isMatchingTitleIdentity(candidate, title, year));
+        return exact.length === 1 ? exact[0].url : '';
+    }
+
+    function parseJustWatchIdentity(html) {
+        const scripts = String(html || '').matchAll(/<script[^>]+type=["']application\/ld\+json["'][^>]*>\s*([\s\S]*?)<\/script>/gi);
+        for (const script of scripts) {
+            try {
+                const parsed = JSON.parse(script[1]);
+                const roots = Array.isArray(parsed) ? parsed : [parsed];
+                for (const item of roots) {
+                    const types = Array.isArray(item?.['@type']) ? item['@type'] : [item?.['@type']];
+                    const type = types.includes('Movie') ? 'movie'
+                        : types.some(value => ['TVSeries', 'TVShow'].includes(value)) ? 'tv-show'
+                            : '';
+                    if (!type || !item?.name) continue;
+                    return {
+                        title:String(item.name),
+                        year:Number(yearFromText(item.dateCreated || item.datePublished || item.startDate)) || 0,
+                        type,
+                    };
+                }
+            } catch { /* inspect the next structured-data block */ }
+        }
+        return null;
+    }
+
     reg({
         key: 'ratingColorCoding', name: 'Rating quality labels', group: 'Appearance',
         init() {
@@ -2588,7 +2642,8 @@ section[id*="quote" i] .ipc-list-card { padding: 4px 0 !important; margin: 2px 0
             try {
                 const res = await httpGet(directUrl, { headers, timeout: 12000, cancelOnRouteChange:true });
                 if (!isCurrent()) return;
-                const data = this._parse(res.responseText, directUrl);
+                const resolvedUrl = normalizeTrustedUrl(res.finalUrl, 'justwatch.com', directUrl);
+                const data = this._parse(res.responseText, resolvedUrl, { title, year:getTitleYear(), typePath:getJustWatchTypePath() });
                 if (data) {
                     cacheSet(cacheKey, data);
                     this._render(data);
@@ -2600,12 +2655,14 @@ section[id*="quote" i] .ipc-list-card { padding: 4px 0 !important; margin: 2px 0
                 const searchUrl = getJustWatchSearchUrl(title);
                 const searchRes = await httpGet(searchUrl, { headers, timeout: 12000, cancelOnRouteChange:true });
                 if (!isCurrent()) return;
-                const path = this._firstDetailPath(searchRes.responseText);
-                if (path) {
-                    const detailUrl = new URL(path, 'https://www.justwatch.com').href;
+                const year = getTitleYear();
+                const typePath = getJustWatchTypePath();
+                const detailUrl = parseJustWatchSearchResult(searchRes.responseText, title, year, typePath);
+                if (detailUrl) {
                     const detailRes = await httpGet(detailUrl, { headers, timeout: 12000, cancelOnRouteChange:true });
                     if (!isCurrent()) return;
-                    const data = this._parse(detailRes.responseText, detailUrl);
+                    const resolvedUrl = normalizeTrustedUrl(detailRes.finalUrl, 'justwatch.com', detailUrl);
+                    const data = this._parse(detailRes.responseText, resolvedUrl, { title, year, typePath });
                     if (data) {
                         cacheSet(cacheKey, data);
                         this._render(data);
@@ -2618,8 +2675,12 @@ section[id*="quote" i] .ipc-list-card { padding: 4px 0 !important; margin: 2px 0
             cacheSetUnavailable(cacheKey);
             this._renderUnavailable();
         },
-        _parse(html, url) {
+        _parse(html, url, expected) {
             if (!html) return null;
+            const identity = parseJustWatchIdentity(html);
+            if (!identity || identity.type !== expected.typePath || !isMatchingTitleIdentity(identity, expected.title, expected.year)) {
+                return null;
+            }
             const providers = [];
 
             const metaTag = html.match(/<meta[^>]+name=["']description["'][^>]*>/i)?.[0] || '';
@@ -2664,12 +2725,6 @@ section[id*="quote" i] .ipc-list-card { padding: 4px 0 !important; margin: 2px 0
                 providers.push(offeredBy.name);
             }
             Object.values(node).forEach(value => this._collectProviderNames(value, providers));
-        },
-        _firstDetailPath(html) {
-            const typePath = getJustWatchTypePath();
-            const re = new RegExp(`/us/${typePath}/[a-z0-9][a-z0-9-]*`, 'gi');
-            const match = re.exec(html || '');
-            return match ? decodeHTML(match[0]) : '';
         },
         _render(data) {
             document.getElementById('enh-jw-widget')?.remove();
