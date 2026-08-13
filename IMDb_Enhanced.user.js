@@ -335,6 +335,15 @@
         return waitForMatch(() => document.querySelector(sel), timeout);
     }
 
+    function getFocusableElements(root) {
+        if (!root) return [];
+        return [...root.querySelectorAll(
+            'button, [href], input, select, textarea, iframe, [tabindex]:not([tabindex="-1"])'
+        )].filter(element => !element.disabled
+            && element.getAttribute('aria-hidden') !== 'true'
+            && element.offsetParent !== null);
+    }
+
     function getEnhancementScrollBehavior() {
         return window.matchMedia?.('(prefers-reduced-motion: reduce)').matches ? 'auto' : 'smooth';
     }
@@ -2768,6 +2777,10 @@ section[id*="quote" i] .ipc-list-card { padding: 4px 0 !important; margin: 2px 0
     reg({
         key: 'trailerPopover', name: 'Trailer popover', group: 'Features',
         _keydown: null,
+        _lastFocused: null,
+        _previousOverflow: '',
+        _modalOpen: false,
+        _modalGeneration: 0,
         init() {
             if (!window.location.hostname.includes('imdb.com')) return;
             const isCurrent = createFeatureGuard(this);
@@ -2822,6 +2835,8 @@ section[id*="quote" i] .ipc-list-card { padding: 4px 0 !important; margin: 2px 0
                     id:'enh-trailer-btn',
                     type:'button',
                     'aria-haspopup':'dialog',
+                    'aria-controls':'enh-trailer-dialog',
+                    'aria-expanded':'false',
                     onClick: () => this._open(),
                 }, 'Trailer');
                 const extBar = document.getElementById('enh-external-links');
@@ -2831,9 +2846,11 @@ section[id*="quote" i] .ipc-list-card { padding: 4px 0 !important; margin: 2px 0
         },
         async _open() {
             const overlay = this._renderModal('Loading trailer...');
+            const generation = this._modalGeneration;
             const body = overlay.querySelector('.enh-trailer-body');
             try {
                 const videoId = await this._getVideoId();
+                if (generation !== this._modalGeneration || !body.isConnected) return;
                 body.replaceChildren(makeEl('iframe', {
                     src:`https://www.youtube-nocookie.com/embed/${videoId}?autoplay=1&rel=0`,
                     title:`${getTitleText()} trailer`,
@@ -2841,6 +2858,7 @@ section[id*="quote" i] .ipc-list-card { padding: 4px 0 !important; margin: 2px 0
                     allowfullscreen:'allowfullscreen',
                 }));
             } catch {
+                if (generation !== this._modalGeneration || !body.isConnected) return;
                 const url = getTrailerSearchUrl();
                 body.replaceChildren(makeEl('a', {
                     href:url,
@@ -2851,12 +2869,40 @@ section[id*="quote" i] .ipc-list-card { padding: 4px 0 !important; margin: 2px 0
             }
         },
         _renderModal(message) {
+            if (this._modalOpen) this._closeModal(false);
             document.getElementById('enh-trailer-overlay')?.remove();
-            const close = () => {
-                document.removeEventListener('keydown', this._keydown);
-                document.getElementById('enh-trailer-overlay')?.remove();
+            this._modalOpen = true;
+            this._modalGeneration += 1;
+            this._lastFocused = document.activeElement;
+            this._previousOverflow = document.documentElement.style.overflow;
+            document.documentElement.style.overflow = 'hidden';
+            document.getElementById('enh-trailer-btn')?.setAttribute('aria-expanded', 'true');
+            const close = () => this._closeModal();
+            this._keydown = event => {
+                if (event.key === 'Escape') {
+                    event.preventDefault();
+                    close();
+                    return;
+                }
+                if (event.key !== 'Tab') return;
+                const dialog = document.getElementById('enh-trailer-dialog');
+                const focusables = getFocusableElements(dialog);
+                if (!focusables.length) {
+                    event.preventDefault();
+                    dialog?.focus();
+                    return;
+                }
+                const first = focusables[0];
+                const last = focusables[focusables.length - 1];
+                const focusOutside = !dialog?.contains(document.activeElement);
+                if (event.shiftKey && (document.activeElement === first || focusOutside)) {
+                    event.preventDefault();
+                    last.focus();
+                } else if (!event.shiftKey && (document.activeElement === last || focusOutside)) {
+                    event.preventDefault();
+                    first.focus();
+                }
             };
-            this._keydown = (e) => { if (e.key === 'Escape') close(); };
             document.addEventListener('keydown', this._keydown);
 
             const overlay = makeEl('div', {
@@ -2867,17 +2913,33 @@ section[id*="quote" i] .ipc-list-card { padding: 4px 0 !important; margin: 2px 0
                 id:'enh-trailer-dialog',
                 role:'dialog',
                 'aria-modal':'true',
-                'aria-label':'Trailer',
+                'aria-labelledby':'enh-trailer-title',
+                tabindex:'-1',
             },
                 makeEl('div', { className:'enh-trailer-header' },
-                    makeEl('div', { className:'enh-trailer-title' }, `${getTitleText()} trailer`),
-                    makeEl('button', { type:'button', className:'enh-trailer-close', 'aria-label':'Close trailer', onClick:close }, 'x')
+                    makeEl('div', { className:'enh-trailer-title', id:'enh-trailer-title' }, `${getTitleText()} trailer`),
+                    makeEl('button', { type:'button', className:'enh-trailer-close', 'aria-label':'Close trailer', onClick:close }, '×')
                 ),
-                makeEl('div', { className:'enh-trailer-body' }, message)
+                makeEl('div', { className:'enh-trailer-body' },
+                    makeEl('div', { role:'status', 'aria-live':'polite' }, message)
+                )
             ));
             document.body.appendChild(overlay);
             setTimeout(() => overlay.querySelector('.enh-trailer-close')?.focus(), 20);
             return overlay;
+        },
+        _closeModal(restoreFocus = true) {
+            const wasOpen = this._modalOpen;
+            this._modalOpen = false;
+            this._modalGeneration += 1;
+            document.removeEventListener('keydown', this._keydown);
+            this._keydown = null;
+            document.getElementById('enh-trailer-overlay')?.remove();
+            document.getElementById('enh-trailer-btn')?.setAttribute('aria-expanded', 'false');
+            if (wasOpen) document.documentElement.style.overflow = this._previousOverflow;
+            if (wasOpen && restoreFocus) this._lastFocused?.focus?.();
+            this._lastFocused = null;
+            this._previousOverflow = '';
         },
         async _getVideoId() {
             const imdbId = getIMDbID();
@@ -2910,11 +2972,9 @@ section[id*="quote" i] .ipc-list-card { padding: 4px 0 !important; margin: 2px 0
             return '';
         },
         destroy() {
+            this._closeModal(false);
             removeCSS('enh-trailerPopover');
-            document.removeEventListener('keydown', this._keydown);
-            this._keydown = null;
             document.getElementById('enh-trailer-btn')?.remove();
-            document.getElementById('enh-trailer-overlay')?.remove();
             pruneTitleStack();
         }
     });
@@ -4741,12 +4801,6 @@ section[id*="quote" i] .ipc-list-card { padding: 4px 0 !important; margin: 2px 0
     let previousDocumentOverflow = '';
     let activeSettingsPage = 'experience';
 
-    function getSettingsFocusables(root) {
-        if (!root) return [];
-        return [...root.querySelectorAll('button, [href], input, textarea, [tabindex]:not([tabindex="-1"])')]
-            .filter(el => !el.disabled && el.offsetParent !== null);
-    }
-
     function refreshFeature(key) {
         const feature = features.find(f => f.key === key);
         if (!feature || !get(key) || !shouldInitFeature(feature)) return;
@@ -5494,7 +5548,7 @@ section[id*="quote" i] .ipc-list-card { padding: 4px 0 !important; margin: 2px 0
                 return;
             }
             if (event.key !== 'Tab') return;
-            const focusables = getSettingsFocusables(overlay);
+            const focusables = getFocusableElements(overlay);
             if (!focusables.length) return;
             const first = focusables[0];
             const last = focusables[focusables.length - 1];
@@ -5585,7 +5639,7 @@ section[id*="quote" i] .ipc-list-card { padding: 4px 0 !important; margin: 2px 0
             previousDocumentOverflow = document.documentElement.style.overflow;
             document.documentElement.style.overflow = 'hidden';
             const activeTab = overlay?.querySelector(`.enh-settings-nav-btn[data-settings-page="${activeSettingsPage}"]`);
-            setTimeout(() => (activeTab || getSettingsFocusables(overlay)[0] || panel)?.focus(), 40);
+            setTimeout(() => (activeTab || getFocusableElements(overlay)[0] || panel)?.focus(), 40);
         } else {
             document.documentElement.style.overflow = previousDocumentOverflow;
             lastFocusedElement?.focus?.();

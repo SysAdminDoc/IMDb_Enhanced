@@ -22,7 +22,7 @@ Third-party lookup responses are rendered as text and their outbound links are r
 
 **External Links** - One-click links to Rotten Tomatoes, Letterboxd, TMDB, YouTube trailers, Wikipedia, JustWatch, and Trakt. Configurable.
 
-**Trailer Popover** - In-page trailer modal backed by YouTube search. No page navigation needed.
+**Trailer Popover** - In-page trailer dialog backed by YouTube search, with focus containment, Escape/overlay close, opener restoration, and stale-result protection. No page navigation needed.
 
 **Radarr/Sonarr Integration** - Quick-add buttons with library status indicator (green dot when a title is already in your library). Localhost-only for security.
 

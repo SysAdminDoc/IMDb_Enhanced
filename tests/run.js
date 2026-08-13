@@ -39,6 +39,7 @@ function loadScriptTestHooks() {
         normalizeSite,
         buildListSearchEntries,
         getEnhancementScrollBehavior,
+        getFocusableElements,
         prepareSettingsImport,
         applySettingsImport,
         storeCinebyQuery,
@@ -248,6 +249,26 @@ test('settings use six accessible desktop destinations', () => {
     assert(/#enh-settings-overlay\.enh-visible\s*\{[^}]*visibility:\s*visible/s.test(script), 'open settings must restore visibility');
     assert(script.includes("maxlength:'100000'"), 'import size guard missing');
     assert(script.includes('Changes save automatically.'), 'automatic-save status missing');
+});
+
+test('trailer dialog contains focus, restores page state, and ignores stale lookups', () => {
+    const hooks = loadScriptTestHooks();
+    let selector = '';
+    const visible = { disabled:false, getAttribute:() => null, offsetParent:{} };
+    const hidden = { disabled:false, getAttribute:() => null, offsetParent:null };
+    const disabled = { disabled:true, getAttribute:() => null, offsetParent:{} };
+    assert.deepStrictEqual(
+        Array.from(hooks.getFocusableElements({ querySelectorAll:value => { selector = value; return [visible, hidden, disabled]; } })),
+        [visible],
+        'focus collection should exclude hidden and disabled controls'
+    );
+    assert(selector.includes('select') && selector.includes('iframe'), 'dialog focus collection should include selects and embedded players');
+    assert(script.includes("'aria-controls':'enh-trailer-dialog'"), 'trailer opener should reference its dialog');
+    assert(script.includes("'aria-expanded':'false'"), 'trailer opener should expose expanded state');
+    assert(script.includes("'aria-labelledby':'enh-trailer-title'"), 'trailer dialog should use its visible title');
+    assert(script.includes('this._lastFocused?.focus?.()'), 'closing the trailer should restore its opener');
+    assert(script.includes("document.documentElement.style.overflow = this._previousOverflow"), 'closing the trailer should restore page scrolling');
+    assert(script.includes('generation !== this._modalGeneration || !body.isConnected'), 'closed trailer lookups must not render late results');
 });
 
 test('all enhancements respect the operating-system reduced-motion preference', () => {
