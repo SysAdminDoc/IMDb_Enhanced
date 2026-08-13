@@ -2452,6 +2452,49 @@ section[id*="quote" i] .ipc-list-card { padding: 4px 0 !important; margin: 2px 0
         return providers.slice(0, maxProviders);
     }
 
+    function parseJustWatchAvailability(html, url, expected) {
+        if (!html) return null;
+        const source = String(html);
+        const identity = parseJustWatchIdentity(source);
+        if (!identity || identity.type !== expected.typePath || !isMatchingTitleIdentity(identity, expected.title, expected.year)) {
+            return null;
+        }
+        const providers = [];
+        const addProviders = values => {
+            for (const value of values || []) {
+                if (providers.length >= 50) break;
+                providers.push(value);
+            }
+        };
+
+        const metaTag = source.match(/<meta[^>]+name=["']description["'][^>]*>/i)?.[0] || '';
+        const content = metaTag.match(/\scontent=["']([^"']+)["']/i)?.[1] || '';
+        const desc = decodeHTML(content);
+        const availability = desc.match(/\bonline on (.+?) today\b/i)?.[1];
+        if (availability) {
+            addProviders(availability
+                .replace(/\s+[–-]\s+including.*$/i, '')
+                .replace(/\bincluding.*$/i, '')
+                .replace(/\s*,?\s+and\s+/gi, ',')
+                .split(',')
+                .map(name => name.trim())
+                .filter(Boolean));
+        }
+
+        const ldScripts = source.matchAll(/<script[^>]+type=["']application\/ld\+json["'][^>]*>\s*([\s\S]*?)<\/script>/gi);
+        let inspectedScripts = 0;
+        for (const script of ldScripts) {
+            if (inspectedScripts >= STRUCTURED_DATA_SCRIPT_LIMIT || providers.length >= 50) break;
+            inspectedScripts += 1;
+            try {
+                addProviders(collectJustWatchProviderNames(JSON.parse(script[1]), 2000, 50 - providers.length));
+            } catch { /* ignore malformed structured data */ }
+        }
+
+        const unique = compactProviders(providers, 12).providers;
+        return unique.length ? { providers:unique, url } : null;
+    }
+
     reg({
         key: 'ratingColorCoding', name: 'Rating quality labels', group: 'Appearance',
         init() {
@@ -2997,37 +3040,7 @@ section[id*="quote" i] .ipc-list-card { padding: 4px 0 !important; margin: 2px 0
             this._renderUnavailable();
         },
         _parse(html, url, expected) {
-            if (!html) return null;
-            const identity = parseJustWatchIdentity(html);
-            if (!identity || identity.type !== expected.typePath || !isMatchingTitleIdentity(identity, expected.title, expected.year)) {
-                return null;
-            }
-            const providers = [];
-
-            const metaTag = html.match(/<meta[^>]+name=["']description["'][^>]*>/i)?.[0] || '';
-            const content = metaTag.match(/\scontent=["']([^"']+)["']/i)?.[1] || '';
-            const desc = decodeHTML(content);
-            const availability = desc.match(/\bonline on (.+?) today\b/i)?.[1];
-            if (availability) {
-                availability
-                    .replace(/\s+[–-]\s+including.*$/i, '')
-                    .replace(/\bincluding.*$/i, '')
-                    .replace(/\s*,?\s+and\s+/gi, ',')
-                    .split(',')
-                    .map(name => name.trim())
-                    .filter(Boolean)
-                    .forEach(name => providers.push(name));
-            }
-
-            const ldScripts = html.matchAll(/<script[^>]+type=["']application\/ld\+json["'][^>]*>\s*([\s\S]*?)<\/script>/gi);
-            for (const script of ldScripts) {
-                try {
-                    providers.push(...collectJustWatchProviderNames(JSON.parse(script[1])));
-                } catch { /* ignore malformed structured data */ }
-            }
-
-            const unique = compactProviders(providers, 12).providers;
-            return unique.length ? { providers: unique, url } : null;
+            return parseJustWatchAvailability(html, url, expected);
         },
         _render(data) {
             document.getElementById('enh-jw-widget')?.remove();

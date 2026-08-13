@@ -92,6 +92,7 @@
 - Bounded IMDb JSON-LD traversal plus YouTube, Rotten Tomatoes, Letterboxd, Metacritic, and JustWatch response scans so unexpectedly large pages cannot grow parser queues or candidate work without limit.
 - Kept rating, private-mark, watch-site, and external-link labels readable by choosing contrast-safe badge foregrounds and using tested theme text tokens instead of deriving text from arbitrary brand colors.
 - Clarified that the IMDbPro cleanup preserves native list controls and that the modern skin follows the selected theme rather than always applying a dark surface.
+- Applied the same finite script and provider budgets to JustWatch availability extraction after identity validation, including its meta-description fallback.
 
 ## 2.5.1 — 2026-08-12
 

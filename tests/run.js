@@ -54,6 +54,7 @@ function loadScriptTestHooks() {
         selectMetacriticResult,
         parseJustWatchSearchResult,
         parseJustWatchIdentity,
+        parseJustWatchAvailability,
         collectJustWatchProviderNames,
         isTrailerTitleMatch,
         parseYouTubeTrailerVideoId,
@@ -925,6 +926,31 @@ test('JustWatch direct and fallback pages preserve title identity', () => {
         offers:Array.from({ length:75 }, (_, index) => ({ offeredBy:{ name:`Provider ${index}` } })),
     });
     assert.strictEqual(excessive.length, 50, 'provider traversal should enforce its output budget');
+    const detailIdentity = JSON.stringify({ '@type':'Movie', name:'The Thing', dateCreated:'1982-06-25' });
+    const providerScript = index => `<script type="application/ld+json">${JSON.stringify({ offers:[{
+        offeredBy:{ name:`Provider ${index}` },
+    }] })}</script>`;
+    const excessiveScripts = `<script type="application/ld+json">${detailIdentity}</script>`
+        + Array.from({ length:49 }, (_, index) => providerScript(index)).join('')
+        + providerScript(50);
+    const availability = hooks.parseJustWatchAvailability(
+        excessiveScripts,
+        'https://www.justwatch.com/us/movie/the-thing-1982',
+        { title:'The Thing', year:1982, typePath:'movie' }
+    );
+    assert(availability, 'bounded provider parsing should retain data inside the script budget');
+    assert(!availability.providers.includes('Provider 50'), 'provider extraction must stop after its script budget');
+    const oversizedDescription = `<meta name="description" content="Watch The Thing online on ${Array.from(
+        { length:75 }, (_, index) => `Meta Provider ${index}`
+    ).join(', ')} today"><script type="application/ld+json">${detailIdentity}</script>`;
+    assert(
+        hooks.parseJustWatchAvailability(
+            oversizedDescription,
+            'https://www.justwatch.com/us/movie/the-thing-1982',
+            { title:'The Thing', year:1982, typePath:'movie' }
+        ).providers.length <= 13,
+        'meta-description providers should be capped before display compaction'
+    );
     assert(!script.includes('_firstDetailPath'), 'first-path JustWatch fallback should stay removed');
     assert(!script.includes('_collectProviderNames'), 'recursive provider traversal should stay removed');
 });
@@ -965,6 +991,15 @@ test('third-party search and structured-data parsers enforce finite scan budgets
     assert.strictEqual(hooks.parseJustWatchIdentity(emptyScripts + `<script type="application/ld+json">${JSON.stringify({
         '@type':'Movie', name:'The Matrix', dateCreated:'1999-03-31',
     })}</script>`), null);
+    assert.strictEqual(
+        hooks.parseJustWatchAvailability(
+            emptyScripts + rtDetail,
+            'https://www.justwatch.com/us/movie/the-matrix',
+            { title:'The Matrix', year:1999, typePath:'movie' }
+        ),
+        null,
+        'availability parsing must share the structured-data script budget'
+    );
 });
 
 test('list multi-search builds a popup-safe link queue', () => {
