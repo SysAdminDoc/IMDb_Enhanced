@@ -1977,6 +1977,11 @@ section[id*="quote" i] .ipc-list-card { padding: 4px 0 !important; margin: 2px 0
     function formatScore(n) {
         return Number(n).toFixed(2).replace(/0+$/, '').replace(/\.$/, '');
     }
+    function boundedScore(value, maximum) {
+        if (value === null || value === undefined || value === '') return null;
+        const score = Number(value);
+        return Number.isFinite(score) && score >= 0 && score <= maximum ? score : null;
+    }
     function formatCount(n) {
         const count = Number(n);
         if (!Number.isFinite(count) || count <= 0) return '';
@@ -2131,22 +2136,17 @@ section[id*="quote" i] .ipc-list-card { padding: 4px 0 !important; margin: 2px 0
         }
         if (!detail) return null;
 
-        const rawAggregate = Number(detail.aggregateRating?.ratingValue);
-        let tomatometer = Number.isFinite(rawAggregate) && rawAggregate >= 0 && rawAggregate <= 100
-            ? Math.round(rawAggregate)
-            : null;
+        const aggregate = boundedScore(detail.aggregateRating?.ratingValue, 100);
+        let tomatometer = aggregate === null ? null : Math.round(aggregate);
         const scoreMatch = String(html || '').match(/tomatometer[^}]*?"value"\s*:\s*(\d+)/i);
         if (tomatometer === null && scoreMatch) {
-            const value = Number(scoreMatch[1]);
-            if (value >= 0 && value <= 100) tomatometer = value;
+            const value = boundedScore(scoreMatch[1], 100);
+            if (value !== null) tomatometer = value;
         }
         if (tomatometer === null) return null;
 
         const audienceMatch = String(html || '').match(/audienceScore[^}]*?"value"\s*:\s*(\d+)/i);
-        const rawAudience = Number(audienceMatch?.[1]);
-        const audience = Number.isFinite(rawAudience) && rawAudience >= 0 && rawAudience <= 100
-            ? rawAudience
-            : null;
+        const audience = boundedScore(audienceMatch?.[1], 100);
         const consensusMatch = String(html || '').match(/critics-consensus[^>]*>([^<]+)</i)
             || String(html || '').match(/"criticsConsensus"\s*:\s*"([^"\\]*(?:\\.[^"\\]*)*)"/i);
         const consensus = consensusMatch
@@ -2157,6 +2157,54 @@ section[id*="quote" i] .ipc-list-card { padding: 4px 0 !important; margin: 2px 0
         catch { /* retain the trusted request URL */ }
         const url = normalizeTrustedUrl(candidateUrl, 'rottentomatoes.com', fallbackUrl);
         return { tomatometer, audience, consensus, url };
+    }
+
+    function parseLetterboxdDetailPage(html, title, year, fallbackUrl) {
+        let detail = null;
+        const scripts = String(html || '').matchAll(/<script[^>]+type=["']application\/ld\+json["'][^>]*>\s*([\s\S]*?)<\/script>/gi);
+        for (const script of scripts) {
+            try {
+                const parsed = JSON.parse(script[1]);
+                const queue = Array.isArray(parsed) ? [...parsed] : [parsed];
+                for (let index = 0; index < queue.length && index < 100; index++) {
+                    const item = queue[index];
+                    if (!item || typeof item !== 'object') continue;
+                    if (Array.isArray(item)) {
+                        queue.push(...item.slice(0, Math.max(0, 100 - queue.length)));
+                        continue;
+                    }
+                    const types = Array.isArray(item['@type']) ? item['@type'] : [item['@type']];
+                    if (types.includes('Movie') && isMatchingTitleIdentity({
+                        title:item.name,
+                        year:Number(yearFromText(item.dateCreated || item.datePublished)) || 0,
+                    }, title, year)) {
+                        detail = item;
+                        break;
+                    }
+                    Object.values(item)
+                        .filter(value => value && typeof value === 'object')
+                        .slice(0, Math.max(0, 100 - queue.length))
+                        .forEach(value => queue.push(value));
+                }
+            } catch { /* inspect the next structured-data block */ }
+            if (detail) break;
+        }
+        if (!detail) return null;
+
+        let score = boundedScore(detail.aggregateRating?.ratingValue, 5);
+        if (score === null) {
+            const meta = String(html || '').match(/<meta[^>]+name=["']twitter:data2["'][^>]+content=["']([^"']+)["']/i);
+            score = boundedScore(parseFloat(meta?.[1]), 5);
+        }
+        if (score === null) return null;
+        const rawCount = Number(detail.aggregateRating?.ratingCount);
+        const ratingCount = Number.isSafeInteger(rawCount) && rawCount >= 0 ? rawCount : null;
+        let candidateUrl = fallbackUrl;
+        try { candidateUrl = new URL(detail.url || detail['@id'] || fallbackUrl, 'https://letterboxd.com').href; }
+        catch { /* retain the trusted IMDb-ID lookup URL */ }
+        const trusted = normalizeTrustedUrl(candidateUrl, 'letterboxd.com', fallbackUrl);
+        const url = trusted && new URL(trusted).pathname.startsWith('/film/') ? trusted : fallbackUrl;
+        return { score, ratingCount, url };
     }
 
     function parseJustWatchSearchResult(html, title, year, typePath = 'movie') {
@@ -2444,10 +2492,10 @@ section[id*="quote" i] .ipc-list-card { padding: 4px 0 !important; margin: 2px 0
             document.getElementById('enh-rt-widget')?.remove();
             const bar = findRatingBar();
             if (!bar) return;
-            const score = data.tomatometer === null || data.tomatometer === undefined ? NaN : Number(data.tomatometer);
-            const audience = data.audience === null || data.audience === undefined ? NaN : Number(data.audience);
-            const hasScore = Number.isFinite(score);
-            const hasAudience = Number.isFinite(audience);
+            const score = boundedScore(data.tomatometer, 100);
+            const audience = boundedScore(data.audience, 100);
+            const hasScore = score !== null;
+            const hasAudience = audience !== null;
             const color = hasScore ? rtColorFn(score) : '#555';
             const consensus = String(data.consensus || '').trim().slice(0, 500);
             const fallbackUrl = `https://www.rottentomatoes.com/search?search=${encodeURIComponent(getTitleText())}`;
@@ -2501,8 +2549,8 @@ section[id*="quote" i] .ipc-list-card { padding: 4px 0 !important; margin: 2px 0
         async init() {
             const isCurrent = createFeatureGuard(this);
             if (isTVType()) return;
-            const imdbId = getIMDbID();
-            if (!imdbId) return;
+            const imdbId = getIMDbID(), title = getTitleText(), year = getTitleYear();
+            if (!imdbId || !title) return;
 
             const cacheKey = 'lb_' + imdbId;
             const cached = cacheGet(cacheKey);
@@ -2520,7 +2568,8 @@ section[id*="quote" i] .ipc-list-card { padding: 4px 0 !important; margin: 2px 0
             try {
                 const res = await httpGet(lookupUrl, { cancelOnRouteChange:true });
                 if (!isCurrent()) return;
-                const data = this._parse(res.responseText, lookupUrl);
+                const resolvedUrl = normalizeTrustedUrl(res.finalUrl, 'letterboxd.com', lookupUrl);
+                const data = parseLetterboxdDetailPage(res.responseText, title, year, resolvedUrl);
                 if (data) {
                     cacheSet(cacheKey, data);
                     this._render(data);
@@ -2532,52 +2581,12 @@ section[id*="quote" i] .ipc-list-card { padding: 4px 0 !important; margin: 2px 0
             cacheSetUnavailable(cacheKey);
             this._renderUnavailable();
         },
-        _parse(html, fallbackUrl) {
-            if (!html || /IMDb ID Not found/i.test(html)) return null;
-
-            let score = null;
-            let ratingCount = null;
-            let url = fallbackUrl;
-
-            const meta = html.match(/<meta[^>]+name=["']twitter:data2["'][^>]+content=["']([^"']+)["']/i);
-            if (meta) score = parseFloat(meta[1]);
-
-            const ldMatch = html.match(/<script[^>]+type=["']application\/ld\+json["'][^>]*>\s*([\s\S]*?)<\/script>/i);
-            if (ldMatch) {
-                try {
-                    const ld = JSON.parse(ldMatch[1]);
-                    const aggregate = ld.aggregateRating || {};
-                    if (aggregate.ratingValue !== undefined) score = parseFloat(aggregate.ratingValue);
-                    if (aggregate.ratingCount !== undefined) ratingCount = parseInt(aggregate.ratingCount, 10);
-                    if (ld.url) {
-                        const candidate = new URL(ld.url, 'https://letterboxd.com').href;
-                        url = normalizeTrustedUrl(candidate, 'letterboxd.com', fallbackUrl);
-                    }
-                } catch { /* fall through to regex fallback */ }
-            }
-
-            if (!ratingCount) {
-                const count = html.match(/"ratingCount"\s*:\s*(\d+)/);
-                if (count) ratingCount = parseInt(count[1], 10);
-            }
-            if (url === fallbackUrl) {
-                const idUrl = html.match(/"@id"\s*:\s*"([^"]+)"/);
-                if (idUrl) {
-                    try {
-                        const candidate = new URL(idUrl[1], 'https://letterboxd.com').href;
-                        url = normalizeTrustedUrl(candidate, 'letterboxd.com', fallbackUrl);
-                    } catch { /* retain trusted fallback */ }
-                }
-            }
-
-            return Number.isFinite(score) ? { score, ratingCount, url } : null;
-        },
         _render(data) {
             document.getElementById('enh-lb-widget')?.remove();
             const bar = findRatingBar();
             if (!bar) return;
-            const score = Number(data.score);
-            if (!Number.isFinite(score)) { this._renderUnavailable(); return; }
+            const score = boundedScore(data.score, 5);
+            if (score === null) { this._renderUnavailable(); return; }
             const color = lbColor(score);
             const count = formatCount(data.ratingCount);
             const fallbackUrl = `https://letterboxd.com/imdb/${getIMDbID()}/`;
@@ -2656,10 +2665,8 @@ section[id*="quote" i] .ipc-list-card { padding: 4px 0 !important; margin: 2px 0
                 const items = obj?.data?.items || [];
                 const best = selectMetacriticResult(items, title, year, mediaType);
                 if (best) {
-                    const rawScore = Number(best.criticScoreSummary?.score);
-                    const rawUserScore = Number(best.userScoreSummary?.score);
-                    const score = Number.isFinite(rawScore) && rawScore >= 0 && rawScore <= 100 ? rawScore : null;
-                    const userScore = Number.isFinite(rawUserScore) && rawUserScore >= 0 && rawUserScore <= 10 ? rawUserScore : null;
+                    const score = boundedScore(best.criticScoreSummary?.score, 100);
+                    const userScore = boundedScore(best.userScoreSummary?.score, 10);
                     const fallbackUrl = `https://www.metacritic.com/search/${encodeURIComponent(title)}/`;
                     let candidateUrl = fallbackUrl;
                     if (best.criticScoreSummary?.url) {
@@ -2684,10 +2691,10 @@ section[id*="quote" i] .ipc-list-card { padding: 4px 0 !important; margin: 2px 0
             document.getElementById('enh-mc-widget')?.remove();
             const bar = findRatingBar();
             if (!bar) return;
-            const score = data.score === null || data.score === undefined ? NaN : Number(data.score);
-            const userScore = data.userScore === null || data.userScore === undefined ? NaN : Number(data.userScore);
-            const hasScore = Number.isFinite(score);
-            const hasUserScore = Number.isFinite(userScore);
+            const score = boundedScore(data.score, 100);
+            const userScore = boundedScore(data.userScore, 10);
+            const hasScore = score !== null;
+            const hasUserScore = userScore !== null;
             const color = hasScore ? mcColor(score) : '#555';
             const fallbackUrl = `https://www.metacritic.com/search/${encodeURIComponent(getTitleText())}/`;
             const href = normalizeTrustedUrl(data.url, 'metacritic.com', fallbackUrl);

@@ -43,8 +43,10 @@ function loadScriptTestHooks() {
         normalizeUrlTemplate,
         normalizeTrustedUrl,
         normalizeSite,
+        boundedScore,
         parseRTSearchResult,
         parseRTDetailPage,
+        parseLetterboxdDetailPage,
         selectMetacriticResult,
         parseJustWatchSearchResult,
         parseJustWatchIdentity,
@@ -607,6 +609,24 @@ test('Rotten Tomatoes direct slugs require detail-page identity', () => {
     assert.strictEqual(hooks.parseRTDetailPage(html, 'Matrix', 1999, 'movie', ''), null, 'a plausible slug must not replace exact title identity');
     assert.strictEqual(hooks.parseRTDetailPage(html, 'The Matrix', 2021, 'movie', ''), null, 'a remake year must not reuse another film score');
     assert.strictEqual(hooks.parseRTDetailPage(html, 'The Matrix', 1999, 'tv', ''), null, 'movie detail data must not satisfy a TV lookup');
+});
+
+test('Letterboxd IMDb lookups retain movie identity and bounded scores', () => {
+    const hooks = loadScriptTestHooks();
+    const fallback = 'https://letterboxd.com/imdb/tt0133093/';
+    const html = `<script type="application/ld+json">${JSON.stringify({
+        '@type':'Movie', name:'The Matrix', dateCreated:'1999-03-24',
+        url:'https://letterboxd.com/film/the-matrix/',
+        aggregateRating:{ ratingValue:'4.18', ratingCount:3007846 },
+    })}</script>`;
+    const result = hooks.parseLetterboxdDetailPage(html, 'The Matrix', 1999, fallback);
+    assert.strictEqual(result.score, 4.18);
+    assert.strictEqual(result.ratingCount, 3007846);
+    assert.strictEqual(result.url, 'https://letterboxd.com/film/the-matrix/');
+    assert.strictEqual(hooks.parseLetterboxdDetailPage(html, 'Matrix', 1999, fallback), null);
+    assert.strictEqual(hooks.parseLetterboxdDetailPage(html, 'The Matrix', 2021, fallback), null);
+    assert.strictEqual(hooks.boundedScore('5.01', 5), null);
+    assert.strictEqual(hooks.boundedScore('4.2', 5), 4.2);
 });
 
 test('Metacritic lookup selection requires exact title, type, and year context', () => {
