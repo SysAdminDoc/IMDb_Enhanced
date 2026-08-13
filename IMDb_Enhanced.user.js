@@ -56,6 +56,10 @@
     const LOCAL_LOOKUP_RESULT_LIMIT = 100;
     const LOCAL_PROVIDER_ID_LIMIT = 32;
     const REQUEST_ERROR_TEXT_LIMIT = 240;
+    const EXTERNAL_RESULT_SCAN_LIMIT = 100;
+    const STRUCTURED_DATA_SCRIPT_LIMIT = 50;
+    const STRUCTURED_DATA_NODE_LIMIT = 1000;
+    const EXTERNAL_STRUCTURED_DATA_NODE_LIMIT = 100;
     const AD_SHELL_SELECTOR = [
         '.nas-slot',
         '.slot_wrapper',
@@ -898,29 +902,38 @@
                 document.querySelector('h1'))?.textContent?.trim() || '';
     }
 
+    function appendBoundedObjectChildren(queue, node, limit) {
+        if (!node || typeof node !== 'object') return;
+        let inspected = 0;
+        for (const key in node) {
+            if (queue.length >= limit || inspected >= limit) break;
+            inspected += 1;
+            if (!Object.prototype.hasOwnProperty.call(node, key)) continue;
+            const value = node[key];
+            if (value && typeof value === 'object') queue.push(value);
+        }
+    }
+
     function parseIMDbTitleStructuredData(scriptTexts) {
         let fallback = null;
+        let inspectedScripts = 0;
         for (const text of scriptTexts || []) {
+            if (inspectedScripts >= STRUCTURED_DATA_SCRIPT_LIMIT) break;
+            inspectedScripts += 1;
             let parsed;
             try { parsed = JSON.parse(String(text || '')); }
             catch { continue; }
 
-            const queue = Array.isArray(parsed) ? [...parsed] : [parsed];
-            let inspected = 0;
-            while (queue.length && inspected < 1000) {
-                const node = queue.shift();
-                inspected += 1;
+            const queue = [parsed];
+            for (let index = 0; index < queue.length && index < STRUCTURED_DATA_NODE_LIMIT; index++) {
+                const node = queue[index];
                 if (!node || typeof node !== 'object') continue;
-                if (Array.isArray(node)) {
-                    queue.push(...node);
-                    continue;
+                if (!Array.isArray(node)) {
+                    const types = Array.isArray(node['@type']) ? node['@type'] : [node['@type']].filter(Boolean);
+                    if (types.some(type => ['Movie', 'TVSeries', 'TVEpisode', 'TVMiniSeries'].includes(type))) return node;
+                    if (!fallback && node.name && (node.aggregateRating || node.datePublished || node.startDate)) fallback = node;
                 }
-                const types = Array.isArray(node['@type']) ? node['@type'] : [node['@type']].filter(Boolean);
-                if (types.some(type => ['Movie', 'TVSeries', 'TVEpisode', 'TVMiniSeries'].includes(type))) return node;
-                if (!fallback && node.name && (node.aggregateRating || node.datePublished || node.startDate)) fallback = node;
-                Object.values(node).forEach(value => {
-                    if (value && typeof value === 'object') queue.push(value);
-                });
+                appendBoundedObjectChildren(queue, node, STRUCTURED_DATA_NODE_LIMIT);
             }
         }
         return fallback || {};
@@ -929,7 +942,8 @@
     let _ldData = null;
     function getLDData() {
         if (_ldData) return _ldData;
-        const scripts = Array.from(document.querySelectorAll('script[type="application/ld+json"]'));
+        const scripts = Array.from(document.querySelectorAll('script[type="application/ld+json"]'))
+            .slice(0, STRUCTURED_DATA_SCRIPT_LIMIT);
         const selected = parseIMDbTitleStructuredData(scripts.map(script => script.textContent));
         if (Object.keys(selected).length) _ldData = selected;
         return _ldData || {};
@@ -2126,7 +2140,10 @@ section[id*="quote" i] .ipc-list-card { padding: 4px 0 !important; margin: 2px 0
         const renderers = String(html || '').matchAll(
             /"videoRenderer":\{"videoId":"([a-zA-Z0-9_-]{11})"[\s\S]{0,4000}?"title":\{"runs":\[\{"text":"((?:\\.|[^"\\])*)"/g
         );
+        let inspected = 0;
         for (const match of renderers) {
+            if (inspected >= EXTERNAL_RESULT_SCAN_LIMIT) break;
+            inspected += 1;
             let candidateTitle = '';
             try { candidateTitle = JSON.parse(`"${match[2]}"`); }
             catch { continue; }
@@ -2167,7 +2184,10 @@ section[id*="quote" i] .ipc-list-card { padding: 4px 0 !important; margin: 2px 0
     function parseRTSearchResult(html, title, year, type = 'movie') {
         const candidates = [];
         const rows = String(html || '').matchAll(/<search-page-media-row\b([^>]*)>([\s\S]*?)<\/search-page-media-row>/gi);
+        let inspected = 0;
         for (const row of rows) {
+            if (inspected >= EXTERNAL_RESULT_SCAN_LIMIT) break;
+            inspected += 1;
             const titleAnchor = row[2].match(/<a\b([^>]*\bslot\s*=\s*["']title["'][^>]*)>([\s\S]*?)<\/a>/i);
             if (!titleAnchor) continue;
             const href = normalizeTrustedUrl(getHTMLAttribute(titleAnchor[1], 'href'), 'rottentomatoes.com', '');
@@ -2204,7 +2224,7 @@ section[id*="quote" i] .ipc-list-card { padding: 4px 0 !important; margin: 2px 0
         if (!Array.isArray(items)) return null;
         const wantedTitle = normalizeLookupTitle(title);
         const expectedType = type === 'tv' ? 'show' : 'movie';
-        const exact = items.filter(item =>
+        const exact = items.slice(0, EXTERNAL_RESULT_SCAN_LIMIT).filter(item =>
             normalizeLookupTitle(item?.title) === wantedTitle
             && String(item?.type || '').toLowerCase() === expectedType
         );
@@ -2228,15 +2248,18 @@ section[id*="quote" i] .ipc-list-card { padding: 4px 0 !important; margin: 2px 0
         const expectedType = type === 'tv' ? 'tv' : 'movie';
         let detail = null;
         const scripts = String(html || '').matchAll(/<script[^>]+type=["']application\/ld\+json["'][^>]*>\s*([\s\S]*?)<\/script>/gi);
+        let inspectedScripts = 0;
         for (const script of scripts) {
+            if (inspectedScripts >= STRUCTURED_DATA_SCRIPT_LIMIT) break;
+            inspectedScripts += 1;
             try {
                 const parsed = JSON.parse(script[1]);
-                const queue = Array.isArray(parsed) ? [...parsed] : [parsed];
-                for (let index = 0; index < queue.length && index < 100; index++) {
+                const queue = [parsed];
+                for (let index = 0; index < queue.length && index < EXTERNAL_STRUCTURED_DATA_NODE_LIMIT; index++) {
                     const item = queue[index];
                     if (!item || typeof item !== 'object') continue;
                     if (Array.isArray(item)) {
-                        queue.push(...item.slice(0, Math.max(0, 100 - queue.length)));
+                        appendBoundedObjectChildren(queue, item, EXTERNAL_STRUCTURED_DATA_NODE_LIMIT);
                         continue;
                     }
                     const types = Array.isArray(item['@type']) ? item['@type'] : [item['@type']];
@@ -2250,10 +2273,7 @@ section[id*="quote" i] .ipc-list-card { padding: 4px 0 !important; margin: 2px 0
                         detail = item;
                         break;
                     }
-                    Object.values(item)
-                        .filter(value => value && typeof value === 'object')
-                        .slice(0, Math.max(0, 100 - queue.length))
-                        .forEach(value => queue.push(value));
+                    appendBoundedObjectChildren(queue, item, EXTERNAL_STRUCTURED_DATA_NODE_LIMIT);
                 }
             } catch { /* inspect the next structured-data block */ }
             if (detail) break;
@@ -2286,15 +2306,18 @@ section[id*="quote" i] .ipc-list-card { padding: 4px 0 !important; margin: 2px 0
     function parseLetterboxdDetailPage(html, title, year, fallbackUrl) {
         let detail = null;
         const scripts = String(html || '').matchAll(/<script[^>]+type=["']application\/ld\+json["'][^>]*>\s*([\s\S]*?)<\/script>/gi);
+        let inspectedScripts = 0;
         for (const script of scripts) {
+            if (inspectedScripts >= STRUCTURED_DATA_SCRIPT_LIMIT) break;
+            inspectedScripts += 1;
             try {
                 const parsed = JSON.parse(script[1]);
-                const queue = Array.isArray(parsed) ? [...parsed] : [parsed];
-                for (let index = 0; index < queue.length && index < 100; index++) {
+                const queue = [parsed];
+                for (let index = 0; index < queue.length && index < EXTERNAL_STRUCTURED_DATA_NODE_LIMIT; index++) {
                     const item = queue[index];
                     if (!item || typeof item !== 'object') continue;
                     if (Array.isArray(item)) {
-                        queue.push(...item.slice(0, Math.max(0, 100 - queue.length)));
+                        appendBoundedObjectChildren(queue, item, EXTERNAL_STRUCTURED_DATA_NODE_LIMIT);
                         continue;
                     }
                     const types = Array.isArray(item['@type']) ? item['@type'] : [item['@type']];
@@ -2305,10 +2328,7 @@ section[id*="quote" i] .ipc-list-card { padding: 4px 0 !important; margin: 2px 0
                         detail = item;
                         break;
                     }
-                    Object.values(item)
-                        .filter(value => value && typeof value === 'object')
-                        .slice(0, Math.max(0, 100 - queue.length))
-                        .forEach(value => queue.push(value));
+                    appendBoundedObjectChildren(queue, item, EXTERNAL_STRUCTURED_DATA_NODE_LIMIT);
                 }
             } catch { /* inspect the next structured-data block */ }
             if (detail) break;
@@ -2334,7 +2354,10 @@ section[id*="quote" i] .ipc-list-card { padding: 4px 0 !important; margin: 2px 0
     function parseJustWatchSearchResult(html, title, year, typePath = 'movie') {
         const candidates = [];
         const anchors = String(html || '').matchAll(/<a\b([^>]*\bclass\s*=\s*["'][^"']*title-list-row__column-header[^"']*["'][^>]*)>([\s\S]*?)<\/a>/gi);
+        let inspected = 0;
         for (const anchor of anchors) {
+            if (inspected >= EXTERNAL_RESULT_SCAN_LIMIT) break;
+            inspected += 1;
             const rawHref = getHTMLAttribute(anchor[1], 'href');
             let candidateUrl = '';
             try { candidateUrl = new URL(rawHref, 'https://www.justwatch.com').href; } catch { /* reject malformed result URLs */ }
@@ -2357,10 +2380,13 @@ section[id*="quote" i] .ipc-list-card { padding: 4px 0 !important; margin: 2px 0
 
     function parseJustWatchIdentity(html) {
         const scripts = String(html || '').matchAll(/<script[^>]+type=["']application\/ld\+json["'][^>]*>\s*([\s\S]*?)<\/script>/gi);
+        let inspectedScripts = 0;
         for (const script of scripts) {
+            if (inspectedScripts >= STRUCTURED_DATA_SCRIPT_LIMIT) break;
+            inspectedScripts += 1;
             try {
                 const parsed = JSON.parse(script[1]);
-                const roots = Array.isArray(parsed) ? parsed : [parsed];
+                const roots = Array.isArray(parsed) ? parsed.slice(0, EXTERNAL_RESULT_SCAN_LIMIT) : [parsed];
                 for (const item of roots) {
                     const types = Array.isArray(item?.['@type']) ? item['@type'] : [item?.['@type']];
                     const type = types.includes('Movie') ? 'movie'
@@ -2393,12 +2419,16 @@ section[id*="quote" i] .ipc-list-card { padding: 4px 0 !important; margin: 2px 0
                 continue;
             }
             const offeredBy = node.offeredBy;
-            if (Array.isArray(offeredBy)) offeredBy.forEach(item => add(item?.name));
+            if (Array.isArray(offeredBy)) {
+                let inspectedOffers = 0;
+                for (const item of offeredBy) {
+                    if (providers.length >= maxProviders || inspectedOffers >= maxProviders) break;
+                    inspectedOffers += 1;
+                    add(item?.name);
+                }
+            }
             else add(offeredBy?.name);
-            Object.values(node)
-                .filter(value => value && typeof value === 'object')
-                .slice(0, Math.max(0, maxNodes - queue.length))
-                .forEach(value => queue.push(value));
+            appendBoundedObjectChildren(queue, node, maxNodes);
         }
         return providers.slice(0, maxProviders);
     }

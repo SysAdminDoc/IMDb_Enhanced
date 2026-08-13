@@ -89,6 +89,7 @@
 - Distinguished private Seen/Skip marks from IMDb's newer account-based Watched feature in settings, badges, accessible names, and save feedback without changing existing local mark data.
 - Raised secondary and tertiary text contrast across Dark, OLED, Midnight, and Light themes so settings help, status labels, metadata, and integration notes remain readable on elevated surfaces.
 - Replaced fixed gray and whole-widget opacity on unavailable score links with the active theme's readable secondary text token.
+- Bounded IMDb JSON-LD traversal plus YouTube, Rotten Tomatoes, Letterboxd, Metacritic, and JustWatch response scans so unexpectedly large pages cannot grow parser queues or candidate work without limit.
 
 ## 2.5.1 — 2026-08-12
 

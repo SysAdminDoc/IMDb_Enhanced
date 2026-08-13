@@ -208,6 +208,13 @@ test('IMDb title data selection ignores unrelated or malformed structured data',
     ]);
     assert.strictEqual(selected.name, 'Chernobyl');
     assert.strictEqual(selected['@type'], 'TVMiniSeries');
+    const oversizedGraph = Array.from({ length:1200 }, (_, index) => ({ '@type':'Thing', name:`Noise ${index}` }));
+    oversizedGraph.push({ '@type':'Movie', name:'Outside the scan budget', datePublished:'2026-01-01' });
+    assert.deepStrictEqual(
+        Object.keys(hooks.parseIMDbTitleStructuredData([JSON.stringify({ '@graph':oversizedGraph })])),
+        [],
+        'structured-data traversal must not keep expanding past its node budget'
+    );
     assert(script.includes('if (Object.keys(selected).length) _ldData = selected'), 'an early empty scan must not prevent a later structured-data retry');
 });
 
@@ -454,6 +461,14 @@ test('trailer dialog contains focus, restores page state, and ignores stale look
         '"videoRenderer":{"videoId":"rightvideo1","title":{"runs":[{"text":"It (2017) Official Trailer"}]}}',
     ].join('');
     assert.strictEqual(hooks.parseYouTubeTrailerVideoId(genericHtml, 'It', 2017), 'rightvideo1');
+    const excessiveHtml = Array.from({ length:100 }, (_, index) =>
+        `"videoRenderer":{"videoId":"${String(index).padStart(11, '0')}","title":{"runs":[{"text":"Noise ${index} Official Trailer"}]}}`
+    ).join('') + '"videoRenderer":{"videoId":"rightvideo1","title":{"runs":[{"text":"It (2017) Official Trailer"}]}}';
+    assert.strictEqual(
+        hooks.parseYouTubeTrailerVideoId(excessiveHtml, 'It', 2017),
+        '',
+        'trailer parsing must stop after its bounded result budget'
+    );
 });
 
 test('secondary interactions expose complete keyboard and toggle semantics', () => {
@@ -888,6 +903,44 @@ test('JustWatch direct and fallback pages preserve title identity', () => {
     assert.strictEqual(excessive.length, 50, 'provider traversal should enforce its output budget');
     assert(!script.includes('_firstDetailPath'), 'first-path JustWatch fallback should stay removed');
     assert(!script.includes('_collectProviderNames'), 'recursive provider traversal should stay removed');
+});
+
+test('third-party search and structured-data parsers enforce finite scan budgets', () => {
+    const hooks = loadScriptTestHooks();
+    const rtNoise = Array.from({ length:100 }, (_, index) => `
+        <search-page-media-row release-year="2000" tomatometer-score="50">
+            <a slot="title" href="https://www.rottentomatoes.com/m/noise_${index}">Noise ${index}</a>
+        </search-page-media-row>`).join('');
+    const rtMatch = `
+        <search-page-media-row release-year="1999" tomatometer-score="83">
+            <a slot="title" href="https://www.rottentomatoes.com/m/matrix">The Matrix</a>
+        </search-page-media-row>`;
+    assert.strictEqual(hooks.parseRTSearchResult(rtNoise + rtMatch, 'The Matrix', 1999, 'movie'), null);
+
+    const justWatchNoise = Array.from({ length:100 }, (_, index) => `
+        <a class="title-list-row__column-header" href="/us/movie/noise-${index}">
+            <span class="header-title">Noise ${index}</span><span class="header-year">(2000)</span>
+        </a>`).join('');
+    const justWatchMatch = `
+        <a class="title-list-row__column-header" href="/us/movie/the-matrix">
+            <span class="header-title">The Matrix</span><span class="header-year">(1999)</span>
+        </a>`;
+    assert.strictEqual(hooks.parseJustWatchSearchResult(justWatchNoise + justWatchMatch, 'The Matrix', 1999), '');
+
+    const metacriticItems = Array.from({ length:100 }, (_, index) => ({
+        title:`Noise ${index}`, type:'movie', releaseDate:'2000-01-01',
+    }));
+    metacriticItems.push({ title:'The Matrix', type:'movie', releaseDate:'1999-03-31' });
+    assert.strictEqual(hooks.selectMetacriticResult(metacriticItems, 'The Matrix', 1999), null);
+
+    const emptyScripts = '<script type="application/ld+json">{}</script>'.repeat(50);
+    const rtDetail = `<script type="application/ld+json">${JSON.stringify({
+        '@type':'Movie', name:'The Matrix', dateCreated:'1999-03-31', aggregateRating:{ ratingValue:83 },
+    })}</script>`;
+    assert.strictEqual(hooks.parseRTDetailPage(emptyScripts + rtDetail, 'The Matrix', 1999), null);
+    assert.strictEqual(hooks.parseJustWatchIdentity(emptyScripts + `<script type="application/ld+json">${JSON.stringify({
+        '@type':'Movie', name:'The Matrix', dateCreated:'1999-03-31',
+    })}</script>`), null);
 });
 
 test('list multi-search builds a popup-safe link queue', () => {
