@@ -63,6 +63,7 @@ function loadScriptTestHooks() {
         parseJustWatchIdentity,
         parseJustWatchAvailability,
         collectJustWatchProviderNames,
+        compactProviders,
         isTrailerTitleMatch,
         normalizeYouTubeVideoId,
         parseYouTubeTrailerVideoId,
@@ -1185,6 +1186,12 @@ test('JustWatch direct and fallback pages preserve title identity', () => {
         { offeredBy:[{ name:'Max' }, { name:'netflix' }] },
     ] });
     assert.deepStrictEqual(Array.from(providers), ['Netflix', 'Max']);
+    const cachedProviders = Array.from({ length:52 }, (_, index) => `Provider ${index} ${'x'.repeat(150)}`);
+    cachedProviders[1] = cachedProviders[0].toUpperCase();
+    const compacted = hooks.compactProviders(cachedProviders);
+    assert.strictEqual(compacted.providers.length, 2);
+    assert(compacted.providers.every(name => name.length <= 120), 'cached provider labels should be bounded at render time');
+    assert.strictEqual(compacted.extra, 47, 'provider compaction should inspect only 50 cached entries and deduplicate them');
     const excessive = hooks.collectJustWatchProviderNames({
         offers:Array.from({ length:75 }, (_, index) => ({ offeredBy:{ name:`Provider ${index}` } })),
     });

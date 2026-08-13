@@ -2331,12 +2331,22 @@ section[id*="quote" i] .ipc-list-card { padding: 4px 0 !important; margin: 2px 0
     }
     function compactProviders(providers, limit = 2) {
         const clean = [];
-        providers.forEach(provider => {
-            const name = String(provider || '').trim().replace(/\s+/g, ' ');
-            if (name && !clean.some(existing => existing.toLowerCase() === name.toLowerCase())) clean.push(name);
-        });
-        if (clean.length <= limit + 1) return { providers: clean, extra: 0 };
-        return { providers: clean.slice(0, limit), extra: clean.length - limit };
+        const seen = new Set();
+        const shownLimit = Number.isSafeInteger(limit) && limit > 0 ? limit : 2;
+        let inspected = 0;
+        for (const provider of Array.isArray(providers) ? providers : []) {
+            if (inspected >= STRUCTURED_DATA_CLASSIFICATION_ITEM_LIMIT) break;
+            inspected += 1;
+            if (typeof provider !== 'string' && typeof provider !== 'number') continue;
+            const name = String(provider || '').trim().replace(/\s+/g, ' ').slice(0, 120);
+            const identity = name.toLowerCase();
+            if (name && !seen.has(identity)) {
+                seen.add(identity);
+                clean.push(name);
+            }
+        }
+        if (clean.length <= shownLimit + 1) return { providers: clean, extra: 0 };
+        return { providers: clean.slice(0, shownLimit), extra: clean.length - shownLimit };
     }
     function formatProviderSummary(providers) {
         const { providers: shown, extra } = compactProviders(providers);

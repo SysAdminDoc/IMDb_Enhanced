@@ -127,6 +127,7 @@
 - Cleaned up the current feature generation when synchronous or asynchronous startup fails, while preventing a late rejection from tearing down a newer refresh of the same feature.
 - Bounded JSON-LD type, keyword, and genre classification before title/media detection, closing nested-array scan gaps left after the broader structured-data traversal limit.
 - Reworked collection-page title discovery to stop after 5,000 inspected links, with the multi-search path ending as soon as its 20-title queue is full instead of materializing every title anchor first.
+- Revalidated cached JustWatch provider lists at render time, inspecting at most 50 primitive labels, bounding each to 120 characters, and replacing repeated linear duplicate scans with a normalized set.
 
 ## 2.5.1 — 2026-08-12
 
