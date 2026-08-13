@@ -83,6 +83,7 @@
 - Bounded local Servarr and media-server result/provider scans, and reduced untrusted local-service errors to concise plain text before placing them in toasts or tooltips.
 - Kept plot-reveal instructions sharp instead of blurring their own prompt, and moved spoiler/subtitle surfaces onto the active theme tokens for readable Light and High Contrast states.
 - Kept enabled ad-request rules and the zero-gap shell stylesheet active across IMDb SPA route teardown instead of briefly unregistering both before the next route initialized.
+- Rejected credential-bearing URLs at the third-party response-link boundary even when their HTTPS hostname is otherwise trusted.
 
 ## 2.5.1 — 2026-08-12
 

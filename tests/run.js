@@ -707,6 +707,11 @@ test('third-party response links stay on trusted HTTPS domains', () => {
         'https://letterboxd.com/film/the-matrix/'
     );
     assert.strictEqual(
+        hooks.normalizeTrustedUrl('https://user:secret@letterboxd.com/film/the-matrix/', 'letterboxd.com', fallback),
+        fallback,
+        'trusted-domain response links must still reject embedded credentials'
+    );
+    assert.strictEqual(
         hooks.normalizeTrustedUrl('https://boxd.it/abc', 'letterboxd.com', fallback),
         fallback,
         'unlisted redirect domains should not cross the render trust boundary'

@@ -608,7 +608,9 @@
             const parsed = new URL(String(value || ''));
             const hostname = parsed.hostname.toLowerCase();
             const trustedHost = hostname === rootDomain || hostname.endsWith(`.${rootDomain}`);
-            return parsed.protocol === 'https:' && trustedHost ? parsed.href : fallback;
+            return parsed.protocol === 'https:' && trustedHost && !parsed.username && !parsed.password
+                ? parsed.href
+                : fallback;
         } catch { return fallback; }
     }
 
