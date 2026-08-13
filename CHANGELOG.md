@@ -98,6 +98,7 @@
 - Limited private-mark fading to poster imagery and replaced whole-row opacity on opened list-search links with semantic surfaces/text, keeping interactive labels at the theme contrast target.
 - Rejected custom URL templates with unknown/malformed tokens or placeholders in the destination authority, preventing typos from silently disappearing and IMDb page text from choosing the outbound origin.
 - Capped editable destination lists at 50 and URL templates at 4,096 characters across runtime, import, and settings UI; non-canonical backslash-style HTTP URLs are also rejected.
+- Qualified the Tools shortcut legend as optional instead of presenting disabled-by-default keys as immediately active, and aligned the README with the private Seen/Skip terminology.
 
 ## 2.5.1 — 2026-08-12
 

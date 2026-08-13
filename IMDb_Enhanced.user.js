@@ -6307,6 +6307,7 @@ section[id*="quote" i] .ipc-list-card { padding: 4px 0 !important; margin: 2px 0
             ])
         ));
         toolsPage.appendChild(makeEl('div', { className:'enh-settings-callout', style:{ marginTop:'12px', justifyContent:'center' } },
+            makeEl('strong', {}, 'When “Optional keyboard shortcuts” is enabled'),
             makeEl('span', { className:'enh-settings-kbd' }, '?'), 'Open settings',
             makeEl('span', { className:'enh-settings-kbd', style:{ marginLeft:'20px' } }, 'C'), 'Copy IMDb ID'
         ));

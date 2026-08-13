@@ -54,7 +54,7 @@ Click the gear icon on any covered IMDb page to open the six-section settings wo
 
 **Ratings** - Aggregated-score, histogram, and streaming-availability controls with an inline preview.
 
-**Tools** - Title, TV/episode, list, watched-mark, and keyboard-shortcut controls.
+**Tools** - Title, TV/episode, list, private Seen/Skip, and optional keyboard-shortcut controls.
 
 **Sites** - Editable watch-search and external-link destinations, URL templates, ordering, colors, and Cineby handoff. Incomplete, non-HTTP(S), credential-bearing, origin-dynamic, or unknown-token templates are visibly rejected without replacing the last valid saved list.
 
