@@ -70,6 +70,7 @@
 - Derived Letterboxd's movie-only scope from its visible domain, so replacing that editable row no longer leaves the new destination silently hidden on TV pages.
 - Decoupled the trailer and expanded-links controls from the external-links bar, so toggling that separate setting no longer removes still-enabled tools; the expanded menu can now stand alone.
 - Made Add in the custom-site editors create a focused unsaved draft with real placeholders instead of immediately publishing a fake “New site” link to Example.com.
+- Prevented poster-only links from consuming a title ID before list multi-search reaches the corresponding text link, restoring titles that were silently omitted from generated queues.
 
 ## 2.5.1 — 2026-08-12
 

@@ -4411,19 +4411,23 @@ section[id*="quote" i] .ipc-list-card { padding: 4px 0 !important; margin: 2px 0
         return /\/(watchlist|list\/|chart\/)/i.test(location.pathname);
     }
 
-    function getListTitles() {
-        const links = document.querySelectorAll('a[href*="/title/tt"]');
+    function getListTitlesFromLinks(links) {
         const seen = new Set();
         const titles = [];
-        links.forEach(a => {
+        Array.from(links || []).forEach(a => {
             const id = getLinkedTitleId(a.href);
             if (!id || seen.has(id)) return;
-            seen.add(id);
             const textEl = a.querySelector('[class*="title"]') || a;
             const name = (textEl.textContent || '').trim().replace(/\s+/g, ' ').slice(0, 120);
-            if (name) titles.push({ id, name });
+            if (!name) return;
+            seen.add(id);
+            titles.push({ id, name });
         });
         return titles;
+    }
+
+    function getListTitles() {
+        return getListTitlesFromLinks(document.querySelectorAll('a[href*="/title/tt"]'));
     }
 
     function buildListSearchEntries(site, titles) {

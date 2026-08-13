@@ -55,6 +55,7 @@ function loadScriptTestHooks() {
         parseJustWatchIdentity,
         collectJustWatchProviderNames,
         parseYouTubeTrailerVideoId,
+        getListTitlesFromLinks,
         buildListSearchEntries,
         getEnhancementScrollBehavior,
         getFocusableElements,
@@ -806,6 +807,15 @@ test('JustWatch direct and fallback pages preserve title identity', () => {
 
 test('list multi-search builds a popup-safe link queue', () => {
     const hooks = loadScriptTestHooks();
+    const titleLinks = [
+        { href:'https://www.imdb.com/title/tt0133093/', textContent:'', querySelector:() => null },
+        { href:'https://www.imdb.com/title/tt0133093/', textContent:'The Matrix', querySelector:() => null },
+    ];
+    assert.deepStrictEqual(
+        Array.from(hooks.getListTitlesFromLinks(titleLinks), entry => ({ ...entry })),
+        [{ id:'tt0133093', name:'The Matrix' }],
+        'an empty poster link must not consume the title ID before its text link is inspected'
+    );
     const titles = Array.from({ length: 24 }, (_, index) => ({
         id:`tt${String(index + 1).padStart(7, '0')}`,
         name:`Title ${index + 1}`,
