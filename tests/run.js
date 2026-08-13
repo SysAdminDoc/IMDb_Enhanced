@@ -35,6 +35,7 @@ function loadScriptTestHooks() {
         shouldInitFeature,
         createFeatureGuard,
         normalizeUrlTemplate,
+        normalizeTrustedUrl,
         normalizeSite,
         httpRequest,
         waitFor,
@@ -265,7 +266,30 @@ test('custom site templates require complete HTTP or HTTPS URLs', () => {
     assert.strictEqual(hooks.normalizeUrlTemplate('https://'), '');
     assert.strictEqual(hooks.normalizeUrlTemplate('javascript:alert(1)'), '');
     assert.strictEqual(hooks.normalizeUrlTemplate('file:///tmp/search'), '');
+    assert.strictEqual(hooks.normalizeUrlTemplate('https://user:secret@example.com/search'), '');
     assert.strictEqual(hooks.normalizeSite({ name:'Broken', url:'https://' }), null);
+});
+
+test('third-party response links stay on trusted HTTPS domains', () => {
+    const hooks = loadScriptTestHooks();
+    const fallback = 'https://letterboxd.com/imdb/tt0133093/';
+    assert.strictEqual(
+        hooks.normalizeTrustedUrl('https://letterboxd.com/film/the-matrix/', 'letterboxd.com', fallback),
+        'https://letterboxd.com/film/the-matrix/'
+    );
+    assert.strictEqual(
+        hooks.normalizeTrustedUrl('https://boxd.it/abc', 'letterboxd.com', fallback),
+        fallback,
+        'unlisted redirect domains should not cross the render trust boundary'
+    );
+    assert.strictEqual(hooks.normalizeTrustedUrl('javascript:alert(1)', 'letterboxd.com', fallback), fallback);
+    assert.strictEqual(hooks.normalizeTrustedUrl('http://letterboxd.com/film/test/', 'letterboxd.com', fallback), fallback);
+    assert.strictEqual(hooks.normalizeTrustedUrl('https://letterboxd.com.evil.test/', 'letterboxd.com', fallback), fallback);
+    assert(!script.includes('href="${data.url'), 'external response URLs must not be interpolated into HTML');
+    assert(!script.includes('titleAttr.replace'), 'external consensus text must not be interpolated into HTML attributes');
+    ['letterboxd.com', 'metacritic.com', 'justwatch.com'].forEach(domain => {
+        assert(script.includes(`normalizeTrustedUrl(data.url, '${domain}'`), `${domain} render allowlist missing`);
+    });
 });
 
 test('Trakt links use the current web-app search route', () => {

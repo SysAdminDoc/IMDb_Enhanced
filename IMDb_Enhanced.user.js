@@ -476,8 +476,18 @@
         const value = String(url || '').trim();
         try {
             const parsed = new URL(value);
-            return /^https?:$/i.test(parsed.protocol) && parsed.hostname ? value : '';
+            const safeProtocol = /^https?:$/i.test(parsed.protocol);
+            return safeProtocol && parsed.hostname && !parsed.username && !parsed.password ? value : '';
         } catch { return ''; }
+    }
+
+    function normalizeTrustedUrl(value, rootDomain, fallback) {
+        try {
+            const parsed = new URL(String(value || ''));
+            const hostname = parsed.hostname.toLowerCase();
+            const trustedHost = hostname === rootDomain || hostname.endsWith(`.${rootDomain}`);
+            return parsed.protocol === 'https:' && trustedHost ? parsed.href : fallback;
+        } catch { return fallback; }
     }
 
     function getCinebyHost() {
@@ -1923,21 +1933,24 @@ section[id*="quote" i] .ipc-list-card { padding: 4px 0 !important; margin: 2px 0
             document.getElementById('enh-rt-widget')?.remove();
             const bar = findRatingBar();
             if (!bar) return;
-            const hasScore = data.tomatometer !== null && data.tomatometer !== undefined;
-            const hasAudience = data.audience !== null && data.audience !== undefined;
-            const color = hasScore ? rtColorFn(data.tomatometer) : '#555';
-            const titleAttr = data.consensus ? data.consensus : '';
+            const score = data.tomatometer === null || data.tomatometer === undefined ? NaN : Number(data.tomatometer);
+            const audience = data.audience === null || data.audience === undefined ? NaN : Number(data.audience);
+            const hasScore = Number.isFinite(score);
+            const hasAudience = Number.isFinite(audience);
+            const color = hasScore ? rtColorFn(score) : '#555';
+            const consensus = String(data.consensus || '').trim().slice(0, 500);
             const w = makeEl('div', { id: 'enh-rt-widget', className: 'enh-score-widget' });
-            w.innerHTML = `
-                <div class="enh-score-widget__label">TOMATOMETER</div>
-                <a href="https://www.rottentomatoes.com/search?search=${encodeURIComponent(getTitleText())}"
-                   target="_blank" rel="noopener" class="enh-score-widget__score" style="--score-color:${color}"
-                   ${titleAttr ? `title="${titleAttr.replace(/"/g, '&quot;')}"` : ''}>
-                    <span class="enh-score-widget__badge enh-score-widget__badge--outline">RT</span>
-                    <span class="enh-score-widget__value">${hasScore ? data.tomatometer + '%' : '--'}</span>
-                </a>
-                ${hasAudience ? `<div class="enh-score-widget__sub">Audience: ${data.audience}%</div>` : ''}
-            `;
+            const scoreLink = makeEl('a', {
+                href:`https://www.rottentomatoes.com/search?search=${encodeURIComponent(getTitleText())}`,
+                target:'_blank', rel:'noopener', className:'enh-score-widget__score',
+                style:{ '--score-color':color },
+                ...(consensus ? { title:consensus } : {}),
+            },
+                makeEl('span', { className:'enh-score-widget__badge enh-score-widget__badge--outline' }, 'RT'),
+                makeEl('span', { className:'enh-score-widget__value' }, hasScore ? `${score}%` : '--')
+            );
+            w.append(makeEl('div', { className:'enh-score-widget__label' }, 'TOMATOMETER'), scoreLink);
+            if (hasAudience) w.appendChild(makeEl('div', { className:'enh-score-widget__sub' }, `Audience: ${audience}%`));
             bar.appendChild(w);
         },
         _renderLoading() {
@@ -2023,7 +2036,10 @@ section[id*="quote" i] .ipc-list-card { padding: 4px 0 !important; margin: 2px 0
                     const aggregate = ld.aggregateRating || {};
                     if (aggregate.ratingValue !== undefined) score = parseFloat(aggregate.ratingValue);
                     if (aggregate.ratingCount !== undefined) ratingCount = parseInt(aggregate.ratingCount, 10);
-                    if (ld.url) url = new URL(ld.url, 'https://letterboxd.com').href;
+                    if (ld.url) {
+                        const candidate = new URL(ld.url, 'https://letterboxd.com').href;
+                        url = normalizeTrustedUrl(candidate, 'letterboxd.com', fallbackUrl);
+                    }
                 } catch { /* fall through to regex fallback */ }
             }
 
@@ -2033,7 +2049,12 @@ section[id*="quote" i] .ipc-list-card { padding: 4px 0 !important; margin: 2px 0
             }
             if (url === fallbackUrl) {
                 const idUrl = html.match(/"@id"\s*:\s*"([^"]+)"/);
-                if (idUrl) url = new URL(idUrl[1], 'https://letterboxd.com').href;
+                if (idUrl) {
+                    try {
+                        const candidate = new URL(idUrl[1], 'https://letterboxd.com').href;
+                        url = normalizeTrustedUrl(candidate, 'letterboxd.com', fallbackUrl);
+                    } catch { /* retain trusted fallback */ }
+                }
             }
 
             return Number.isFinite(score) ? { score, ratingCount, url } : null;
@@ -2043,18 +2064,23 @@ section[id*="quote" i] .ipc-list-card { padding: 4px 0 !important; margin: 2px 0
             const bar = findRatingBar();
             if (!bar) return;
             const score = Number(data.score);
+            if (!Number.isFinite(score)) { this._renderUnavailable(); return; }
             const color = lbColor(score);
             const count = formatCount(data.ratingCount);
+            const fallbackUrl = `https://letterboxd.com/imdb/${getIMDbID()}/`;
+            const href = normalizeTrustedUrl(data.url, 'letterboxd.com', fallbackUrl);
             const w = makeEl('div', { id: 'enh-lb-widget', className: 'enh-score-widget' });
-            w.innerHTML = `
-                <div class="enh-score-widget__label">LETTERBOXD</div>
-                <a href="${data.url || `https://letterboxd.com/imdb/${getIMDbID()}/`}"
-                   target="_blank" rel="noopener" class="enh-score-widget__score" style="--score-color:${color}">
-                    <span class="enh-score-widget__badge enh-score-widget__badge--outline">LB</span>
-                    <span class="enh-score-widget__value">${formatScore(score)}</span>
-                </a>
-                <div class="enh-score-widget__sub">${count ? `${count} ratings` : 'Average rating'}</div>
-            `;
+            w.append(
+                makeEl('div', { className:'enh-score-widget__label' }, 'LETTERBOXD'),
+                makeEl('a', {
+                    href, target:'_blank', rel:'noopener', className:'enh-score-widget__score',
+                    style:{ '--score-color':color },
+                },
+                    makeEl('span', { className:'enh-score-widget__badge enh-score-widget__badge--outline' }, 'LB'),
+                    makeEl('span', { className:'enh-score-widget__value' }, formatScore(score))
+                ),
+                makeEl('div', { className:'enh-score-widget__sub' }, count ? `${count} ratings` : 'Average rating')
+            );
             bar.appendChild(w);
         },
         _renderLoading() {
@@ -2118,9 +2144,17 @@ section[id*="quote" i] .ipc-list-card { padding: 4px 0 !important; margin: 2px 0
                     const best = items[0];
                     const score = best.criticScoreSummary?.score || null;
                     const userScore = best.userScoreSummary?.score || null;
-                    let metaUrl = best.criticScoreSummary?.url
-                        ? 'https://www.metacritic.com' + best.criticScoreSummary.url.replace('/critic-reviews/', '/')
-                        : `https://www.metacritic.com/search/${encodeURIComponent(title)}/`;
+                    const fallbackUrl = `https://www.metacritic.com/search/${encodeURIComponent(title)}/`;
+                    let candidateUrl = fallbackUrl;
+                    if (best.criticScoreSummary?.url) {
+                        try {
+                            candidateUrl = new URL(
+                                String(best.criticScoreSummary.url).replace('/critic-reviews/', '/'),
+                                'https://www.metacritic.com'
+                            ).href;
+                        } catch { /* retain trusted fallback */ }
+                    }
+                    const metaUrl = normalizeTrustedUrl(candidateUrl, 'metacritic.com', fallbackUrl);
                     const d = { score, userScore, url: metaUrl, title: best.title };
                     cacheSet(cacheKey, d); this._render(d);
                     return;
@@ -2134,16 +2168,27 @@ section[id*="quote" i] .ipc-list-card { padding: 4px 0 !important; margin: 2px 0
             document.getElementById('enh-mc-widget')?.remove();
             const bar = findRatingBar();
             if (!bar) return;
-            const hasScore = data.score !== null && data.score !== undefined;
-            const color = hasScore ? mcColor(data.score) : '#555';
+            const score = data.score === null || data.score === undefined ? NaN : Number(data.score);
+            const userScore = data.userScore === null || data.userScore === undefined ? NaN : Number(data.userScore);
+            const hasScore = Number.isFinite(score);
+            const hasUserScore = Number.isFinite(userScore);
+            const color = hasScore ? mcColor(score) : '#555';
+            const fallbackUrl = `https://www.metacritic.com/search/${encodeURIComponent(getTitleText())}/`;
+            const href = normalizeTrustedUrl(data.url, 'metacritic.com', fallbackUrl);
             const w = makeEl('div', { id: 'enh-mc-widget', className: 'enh-score-widget' });
-            w.innerHTML = `
-                <div class="enh-score-widget__label">METASCORE</div>
-                <a href="${data.url}" target="_blank" rel="noopener" class="enh-score-widget__score" style="--score-color:${color}">
-                    <span class="enh-score-widget__badge" style="background:${color};color:${data.score >= 60 ? '#000' : '#fff'}">${hasScore ? data.score : '--'}</span>
-                </a>
-                ${data.userScore ? `<div class="enh-score-widget__sub">User: ${data.userScore.toFixed(1)}</div>` : ''}
-            `;
+            w.append(
+                makeEl('div', { className:'enh-score-widget__label' }, 'METASCORE'),
+                makeEl('a', {
+                    href, target:'_blank', rel:'noopener', className:'enh-score-widget__score',
+                    style:{ '--score-color':color },
+                }, makeEl('span', {
+                    className:'enh-score-widget__badge',
+                    style:{ background:color, color:score >= 60 ? '#000' : '#fff' },
+                }, hasScore ? String(score) : '--'))
+            );
+            if (hasUserScore) {
+                w.appendChild(makeEl('div', { className:'enh-score-widget__sub' }, `User: ${userScore.toFixed(1)}`));
+            }
             bar.appendChild(w);
         },
         _renderLoading() {
@@ -2290,11 +2335,12 @@ section[id*="quote" i] .ipc-list-card { padding: 4px 0 !important; margin: 2px 0
             const providers = Array.isArray(data.providers) ? data.providers : [];
             const summary = formatProviderSummary(providers);
             if (!summary) { this._renderUnavailable(); return; }
+            const href = normalizeTrustedUrl(data.url, 'justwatch.com', getJustWatchSearchUrl());
 
             const w = makeEl('div', { id: 'enh-jw-widget', className: 'enh-score-widget enh-score-widget--availability' },
                 makeEl('div', { className: 'enh-score-widget__label' }, 'STREAMING'),
                 makeEl('a', {
-                    href: data.url || getJustWatchSearchUrl(),
+                    href,
                     target: '_blank',
                     rel: 'noopener',
                     className: 'enh-score-widget__score enh-score-widget__score--availability',
