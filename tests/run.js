@@ -426,6 +426,13 @@ test('all enhancements respect the operating-system reduced-motion preference', 
     assert(!readme.includes('WCAG AAA compliant'), 'README must not claim unverified conformance');
 });
 
+test('optional keyboard shortcuts do not collide with browser or modal commands', () => {
+    assert(script.includes('e.defaultPrevented || e.repeat || e.ctrlKey || e.metaKey || e.altKey'), 'modified and repeated key events should bypass shortcuts');
+    assert(script.includes("document.getElementById('enh-trailer-overlay')"), 'page shortcuts should pause while the trailer dialog is open');
+    assert(/if \(settingsOpen\) \{[\s\S]*?if \(e\.key === 'Escape'\)[\s\S]*?return;/m.test(script), 'settings should own keyboard input while open');
+    assert(!script.includes("e.key === 'c' && !e.ctrlKey"), 'copy collision checks should remain centralized for every shortcut');
+});
+
 test('settings imports validate first and roll back partial storage failures', () => {
     const hooks = loadScriptTestHooks();
     const prepared = hooks.prepareSettingsImport({
