@@ -663,7 +663,7 @@
         const url = normalizeUrlTemplate(site?.url);
         if (!name || !url) return null;
         const storeQuery = isCinebyHandoffUrl(url);
-        let movieOnly = Boolean(site?.movieOnly);
+        let movieOnly = false;
         try {
             const hostname = new URL(url).hostname.toLowerCase();
             if (hostname === 'letterboxd.com' || hostname.endsWith('.letterboxd.com')) movieOnly = true;
@@ -5442,7 +5442,6 @@ section[id*="quote" i] .ipc-list-card { padding: 4px 0 !important; margin: 2px 0
             name: row.querySelector('[data-field="name"]')?.value || '',
             url: row.querySelector('[data-field="url"]')?.value || '',
             color: row.querySelector('[data-field="color"]')?.value || '#6366f1',
-            movieOnly: row.dataset.movieOnly === 'true',
         }));
 
         const validateRows = () => {
@@ -5470,12 +5469,7 @@ section[id*="quote" i] .ipc-list-card { padding: 4px 0 !important; margin: 2px 0
         };
 
         const addRow = (site = {}) => {
-            const row = makeEl('div', {
-                className:'enh-site-row',
-                dataset:{
-                    movieOnly:String(Boolean(site.movieOnly)),
-                },
-            });
+            const row = makeEl('div', { className:'enh-site-row' });
             const nameInput = makeEl('input', {
                 type:'text',
                 className:'enh-site-input',

@@ -638,6 +638,11 @@ test('custom site templates require complete HTTP or HTTPS URLs', () => {
         true,
         'the exact visible Cineby URL should derive its required controlled-input handoff'
     );
+    assert.strictEqual(
+        hooks.normalizeSite({ name:'Edited Letterboxd', url:'https://www.themoviedb.org/search?query={{TITLE}}', movieOnly:true }).movieOnly,
+        undefined,
+        'editing the Letterboxd row to another service must remove its invisible movie-only scope'
+    );
     const letterboxd = hooks.normalizeSite({ name:'Letterboxd', url:'https://letterboxd.com/imdb/{{IMDB_ID}}/' });
     assert.strictEqual(letterboxd.movieOnly, true, 'Letterboxd custom/default links should remain movie-scoped');
     assert.deepStrictEqual(
