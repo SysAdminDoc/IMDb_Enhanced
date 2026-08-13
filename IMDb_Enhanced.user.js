@@ -415,6 +415,14 @@
             && element.offsetParent !== null);
     }
 
+    function restoreElementAttributes(element, attributes) {
+        if (!element || !attributes) return;
+        attributes.forEach((value, attribute) => {
+            if (value === null) element.removeAttribute(attribute);
+            else element.setAttribute(attribute, value);
+        });
+    }
+
     function getEnhancementScrollBehavior() {
         return window.matchMedia?.('(prefers-reduced-motion: reduce)').matches ? 'auto' : 'smooth';
     }
@@ -2866,8 +2874,6 @@ section[id*="quote" i] .ipc-list-card { padding: 4px 0 !important; margin: 2px 0
                     background:rgba(0,0,0,0.5);padding:4px 12px;border-radius:6px;pointer-events:none;
                     opacity:1;transition:opacity .3s ease}
                 .enh-blur:focus-visible{outline:2px solid #f5c518;outline-offset:3px}
-                .enh-blur.enh-revealed{filter:none;cursor:default;user-select:auto}
-                .enh-blur.enh-revealed::after{opacity:0}
             `, 'enh-spoilerBlur');
 
             const plotFull = document.querySelector('[data-testid="plot-l"],[data-testid="plot-xl"]');
@@ -2886,9 +2892,8 @@ section[id*="quote" i] .ipc-list-card { padding: 4px 0 !important; margin: 2px 0
                 const reveal = () => {
                     if (plotFull.classList.contains('enh-revealed')) return;
                     plotFull.classList.add('enh-revealed');
-                    plotFull.setAttribute('aria-pressed', 'true');
-                    plotFull.setAttribute('aria-label', 'Plot synopsis revealed');
-                    plotFull.title = 'Plot synopsis revealed';
+                    plotFull.classList.remove('enh-blur');
+                    restoreElementAttributes(plotFull, this._plotAttributes);
                     showToast('Plot synopsis revealed');
                 };
                 this._revealHandler = event => {
@@ -2910,10 +2915,7 @@ section[id*="quote" i] .ipc-list-card { padding: 4px 0 !important; margin: 2px 0
             this._plot?.removeEventListener('keydown', this._revealKeyHandler);
             [this._plot].filter(Boolean).forEach(element => {
                 element.classList.remove('enh-blur', 'enh-revealed');
-                this._plotAttributes?.forEach((value, attribute) => {
-                    if (value === null) element.removeAttribute(attribute);
-                    else element.setAttribute(attribute, value);
-                });
+                restoreElementAttributes(element, this._plotAttributes);
             });
             this._plot = null;
             this._plotAttributes = null;
@@ -3052,6 +3054,7 @@ section[id*="quote" i] .ipc-list-card { padding: 4px 0 !important; margin: 2px 0
     reg({
         key: 'trailerPopover', name: 'Trailer popover', group: 'Features',
         _keydown: null,
+        _focusin: null,
         _lastFocused: null,
         _previousOverflow: '',
         _modalOpen: false,
@@ -3179,6 +3182,13 @@ section[id*="quote" i] .ipc-list-card { padding: 4px 0 !important; margin: 2px 0
                 }
             };
             document.addEventListener('keydown', this._keydown);
+            this._focusin = event => {
+                const dialog = document.getElementById('enh-trailer-dialog');
+                if (!this._modalOpen || !dialog || dialog.contains(event.target)) return;
+                const focusables = getFocusableElements(dialog);
+                (focusables[0] || dialog).focus();
+            };
+            document.addEventListener('focusin', this._focusin);
 
             const overlay = makeEl('div', {
                 id:'enh-trailer-overlay',
@@ -3208,7 +3218,9 @@ section[id*="quote" i] .ipc-list-card { padding: 4px 0 !important; margin: 2px 0
             this._modalOpen = false;
             this._modalGeneration += 1;
             document.removeEventListener('keydown', this._keydown);
+            document.removeEventListener('focusin', this._focusin);
             this._keydown = null;
+            this._focusin = null;
             document.getElementById('enh-trailer-overlay')?.remove();
             document.getElementById('enh-trailer-btn')?.setAttribute('aria-expanded', 'false');
             if (wasOpen) document.documentElement.style.overflow = this._previousOverflow;
@@ -3894,7 +3906,6 @@ section[id*="quote" i] .ipc-list-card { padding: 4px 0 !important; margin: 2px 0
                 }
                 .enh-episode-spoiler:hover { opacity: .9; }
                 .enh-episode-spoiler:focus-visible { outline: 2px solid #facc15; outline-offset: 3px; }
-                .enh-episode-spoiler.enh-revealed { filter: none; cursor: text; user-select: auto; }
                 #enh-best-episodes {
                     margin: 14px 0 18px;
                     padding: 14px;
@@ -4039,9 +4050,8 @@ section[id*="quote" i] .ipc-list-card { padding: 4px 0 !important; margin: 2px 0
         _revealPlot(plot) {
             if (!plot || plot.classList.contains('enh-revealed')) return;
             plot.classList.add('enh-revealed');
-            plot.setAttribute('aria-pressed', 'true');
-            plot.setAttribute('aria-label', 'Episode synopsis revealed');
-            plot.title = 'Episode synopsis revealed';
+            plot.classList.remove('enh-episode-spoiler');
+            restoreElementAttributes(plot, this._plotAttributes?.get(plot));
             showToast('Episode synopsis revealed');
         },
         _renderBestEpisodes(episodes) {
@@ -4075,10 +4085,7 @@ section[id*="quote" i] .ipc-list-card { padding: 4px 0 !important; margin: 2px 0
             this._keydownHandler = null;
             this._plotAttributes?.forEach((attributes, el) => {
                 el.classList.remove('enh-episode-spoiler', 'enh-revealed');
-                attributes.forEach((value, attribute) => {
-                    if (value === null) el.removeAttribute(attribute);
-                    else el.setAttribute(attribute, value);
-                });
+                restoreElementAttributes(el, attributes);
             });
             this._plotAttributes?.clear();
             this._plotAttributes = null;

@@ -343,6 +343,8 @@ test('trailer dialog contains focus, restores page state, and ignores stale look
     assert(script.includes('this._lastFocused?.focus?.()'), 'closing the trailer should restore its opener');
     assert(script.includes("document.documentElement.style.overflow = this._previousOverflow"), 'closing the trailer should restore page scrolling');
     assert(script.includes('generation !== this._modalGeneration || !body.isConnected'), 'closed trailer lookups must not render late results');
+    assert(script.includes("document.addEventListener('focusin', this._focusin)"), 'iframe focus exits should be returned to the trailer dialog');
+    assert(script.includes("document.removeEventListener('focusin', this._focusin)"), 'trailer focus containment should be cleaned up on close');
 });
 
 test('secondary interactions expose complete keyboard and toggle semantics', () => {
@@ -357,6 +359,8 @@ test('secondary interactions expose complete keyboard and toggle semantics', () 
     assert(script.includes("plotFull.addEventListener('keydown', this._revealKeyHandler)"), 'plot reveal should support keyboard activation');
     assert(script.includes("document.addEventListener('keydown', this._keydownHandler)"), 'episode reveals should support keyboard activation');
     assert(script.includes("['Enter', ' '].includes(event.key)"), 'spoiler controls should support Enter and Space');
+    assert(script.includes('restoreElementAttributes(plotFull, this._plotAttributes)'), 'revealed plots should restore their original non-button semantics');
+    assert(script.includes("plot.classList.remove('enh-episode-spoiler')"), 'revealed episode plots should leave the keyboard tab order');
     assert(!script.includes("querySelectorAll('.enh-episode-spoiler, .enh-revealed')"), 'episode cleanup must not mutate another feature\'s revealed state');
 });
 
