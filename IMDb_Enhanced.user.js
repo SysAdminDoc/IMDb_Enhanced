@@ -2352,6 +2352,7 @@ section[id*="quote" i] .ipc-list-card { padding: 4px 0 !important; margin: 2px 0
         if (typeof IntersectionObserver === 'undefined') return Promise.resolve(true);
         return new Promise(resolve => {
             let settled = false;
+            let timer = null;
             const observer = new IntersectionObserver(entries => {
                 if (!isCurrent()) { finish(false); return; }
                 if (entries.some(entry => entry.isIntersecting)) finish(true);
@@ -2361,11 +2362,13 @@ section[id*="quote" i] .ipc-list-card { padding: 4px 0 !important; margin: 2px 0
                 if (settled) return;
                 settled = true;
                 observer.disconnect();
+                clearTimeout(timer);
                 pendingRouteWorkCancels.delete(cancel);
                 resolve(value);
             };
             pendingRouteWorkCancels.add(cancel);
             observer.observe(el);
+            timer = setTimeout(() => finish(false), 60000);
         });
     }
 

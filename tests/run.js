@@ -317,6 +317,7 @@ test('pending route work and lazy score lookups are cancellable', () => {
     assert(script.includes('cancelPendingRouteWork();'), 'route teardown must cancel pending observers');
     assert(script.includes('waitForRatingBar(isCurrent)'), 'score widgets should wait for a current rating surface');
     assert(script.includes('waitUntilVisible(bar, isCurrent)'), 'third-party score requests should remain lazy and route-aware');
+    assert(script.includes('timer = setTimeout(() => finish(false), 60000)'), 'offscreen visibility waits should release themselves after a bounded interval');
     assert((script.match(/createFeatureGuard\(this\)/g) || []).length >= 15, 'async feature entry points should be route guarded');
     assert(script.includes('pending.catch(rejectCurrentGeneration)'), 'async feature initialization failures should invalidate their lifecycle');
     assert(script.includes('stopFeature(feature)'), 'settings refresh and disable paths should invalidate prior feature instances');

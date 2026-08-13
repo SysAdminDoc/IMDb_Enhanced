@@ -56,6 +56,7 @@
 - Refreshed expanded destinations by moving AllMovie to HTTPS, replacing Metacritic's 404 search path, removing the DNS-dead YTS entry, and dropping the unused OpenSubtitles cross-origin request permission.
 - Prevented optional single-key shortcuts from reacting to Ctrl/Command/Alt combinations, key repeats, handled events, or keys intended for the trailer/settings dialogs.
 - Replaced recursive JustWatch provider discovery with a bounded iterative scan that deduplicates and caps provider names before rendering.
+- Added a one-minute self-release to offscreen lazy score observers so title pages no longer retain dormant visibility work for an entire long-lived SPA session.
 
 ## 2.5.1 — 2026-08-12
 
