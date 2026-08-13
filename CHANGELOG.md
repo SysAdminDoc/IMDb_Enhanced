@@ -102,6 +102,7 @@
 - Announced automatic-save feedback through a polite status region and removed the settings dialog's duplicate page-level main landmark.
 - Exposed import/reset disclosure state to assistive technology and made cache clearing report read failures, partial deletion, and the actual remaining count instead of always claiming an empty cache.
 - Made ordinary preference, integration, destination, title-mark, collapse-state, and theme writes visibly fail-safe: controls no longer claim or render saved state after userscript storage rejects a write, and two-key theme changes roll back atomically.
+- Replaced the single-option Cineby host selector with accurate handoff guidance; the editable watch-site row remains the real destination control.
 
 ## 2.5.1 — 2026-08-12
 

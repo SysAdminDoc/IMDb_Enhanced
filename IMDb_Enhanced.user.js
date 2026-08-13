@@ -5832,39 +5832,6 @@ section[id*="quote" i] .ipc-list-card { padding: 4px 0 !important; margin: 2px 0
         );
     }
 
-    function createCinebySettingsPanel() {
-        const select = makeEl('select', {
-            id:'enh-cineby-host',
-            className:'enh-servarr-input',
-            'aria-label':'Preferred Cineby host',
-            onChange: () => {
-                const previous = getCinebyHost();
-                if (!trySaveSetting('cinebyHost', select.value)) {
-                    select.value = previous;
-                    return;
-                }
-                refreshFeature('searchButtons');
-            },
-        });
-        CINEBY_HOSTS.forEach(host => {
-            const option = makeEl('option', { value:host.url }, host.label);
-            option.selected = host.url === getCinebyHost();
-            select.appendChild(option);
-        });
-        return makeEl('div', { className:'enh-servarr-panel' },
-            makeEl('div', { className:'enh-servarr-section' },
-                makeEl('div', { className:'enh-servarr-title' }, 'Cineby destination'),
-                makeEl('div', { className:'enh-servarr-field enh-servarr-field--wide' },
-                    makeEl('label', { for:'enh-cineby-host' }, 'Search destination'),
-                    select
-                ),
-                makeEl('div', { className:'enh-servarr-note' },
-                    'Used for the main watch search button and Cineby quick links.'
-                )
-            )
-        );
-    }
-
     function createIntegrationTabs(sections, fieldFactory, namespace) {
         const panel = makeEl('form', { className:'enh-servarr-panel', autocomplete:'off' });
         const tabs = makeEl('div', { className:'enh-integration-tabs', role:'tablist', 'aria-label':`${namespace} services` });
@@ -6342,7 +6309,10 @@ section[id*="quote" i] .ipc-list-card { padding: 4px 0 !important; margin: 2px 0
         ));
 
         const sitesPage = pages.get('sites');
-        sitesPage.appendChild(createCinebySettingsPanel());
+        sitesPage.appendChild(makeEl('div', { className:'enh-settings-callout' },
+            makeEl('strong', {}, 'Cineby handoff'),
+            'The exact Cineby root uses a one-time local title handoff. Edit or remove its row below to use an ordinary URL template.'
+        ));
         const sitesGrid = makeEl('div', { className:'enh-sites-grid', style:{ marginTop:'12px' } },
             createSiteEditor({ title:'Watch search sites', key:'watchSites', defaults:DEFAULT_WATCH_SITES, featureKey:'searchButtons' }),
             createSiteEditor({ title:'External link sites', key:'externalSites', defaults:DEFAULT_EXTERNAL_SITES, featureKey:'externalLinks' })

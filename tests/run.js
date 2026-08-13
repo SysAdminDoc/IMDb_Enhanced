@@ -1123,6 +1123,9 @@ test('cineby uses current domain', () => {
     assert(script.includes('// @match        https://www.cineby.at/*'), 'Cineby root route should be matched');
     assert(script.includes("url:'https://www.cineby.at/'"), 'Cineby handoff should target the live root route');
     assert(script.includes("/^search$/i.test(label.trim())"), 'Cineby handoff should open the current search control');
+    assert(!script.includes('createCinebySettingsPanel'), 'a single supported Cineby host should not render a false-choice selector');
+    assert(script.includes('The exact Cineby root uses a one-time local title handoff.'), 'Sites should explain the fixed handoff behavior');
+    assert(!readme.includes('Preferred Cineby host selector'), 'README must not advertise a host choice that does not exist');
 });
 
 test('Cineby handoffs are short-lived and consumed only once', () => {
