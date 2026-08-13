@@ -103,6 +103,8 @@ function loadScriptTestHooks() {
         mediaServerRequest,
         getServarrConfig,
         isServarrConfigured,
+        buildRadarrAddBody,
+        buildSonarrAddBody,
         toPositiveInteger,
         httpRequest,
         waitFor,
@@ -1515,6 +1517,20 @@ test('local-service credentials stay out of request URLs', () => {
     hooks.seedStoredSetting('radarrUrl', 'http://localhost:7878');
     hooks.seedStoredSetting('radarrApiKey', 'secret\r\nX-Injected: yes');
     assert.strictEqual(hooks.isServarrConfigured('radarr'), false, 'malformed stored header credentials must keep the integration inert');
+    const servarrConfig = { qualityProfileId:7, rootFolderPath:'/media' };
+    const sonarrBody = hooks.buildSonarrAddBody({
+        seasons:Array.from({ length:502 }, (_, index) => ({ seasonNumber:index })),
+        addOptions:['invalid'],
+    }, servarrConfig);
+    assert.strictEqual(sonarrBody.seasons.length, 500, 'Sonarr add payloads should cap local lookup season arrays');
+    assert(sonarrBody.seasons.every(season => season.monitored === true), 'retained Sonarr seasons should be monitored');
+    assert.deepStrictEqual(
+        { ...sonarrBody.addOptions },
+        { monitor:'all', searchForMissingEpisodes:true },
+        'array-valued lookup addOptions must not spread numeric keys into a Sonarr request'
+    );
+    const radarrBody = hooks.buildRadarrAddBody({ addOptions:['invalid'] }, servarrConfig);
+    assert.deepStrictEqual({ ...radarrBody.addOptions }, { searchForMovie:true }, 'Radarr add options should require a plain object');
 });
 
 test('media server matching handles provider IDs and title fallback', () => {

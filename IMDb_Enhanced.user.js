@@ -57,6 +57,7 @@
     const USER_MARK_TITLE_LIMIT = 160;
     const LOCAL_LOOKUP_RESULT_LIMIT = 100;
     const LOCAL_PROVIDER_ID_LIMIT = 32;
+    const SERVARR_SEASON_LIMIT = 500;
     const REQUEST_ERROR_TEXT_LIMIT = 240;
     const EXTERNAL_RESULT_SCAN_LIMIT = 100;
     const STRUCTURED_DATA_SCRIPT_LIMIT = 50;
@@ -1293,6 +1294,43 @@
     function isServarrConfigured(kind) {
         const cfg = getServarrConfig(kind);
         return Boolean(cfg.baseUrl && cfg.apiKey && cfg.rootFolderPath && cfg.qualityProfileId);
+    }
+    function getServarrAddOptions(item) {
+        return item?.addOptions && typeof item.addOptions === 'object' && !Array.isArray(item.addOptions)
+            ? item.addOptions
+            : {};
+    }
+    function buildRadarrAddBody(item, cfg) {
+        const source = item && typeof item === 'object' && !Array.isArray(item) ? item : {};
+        return {
+            ...source,
+            monitored: true,
+            qualityProfileId: cfg.qualityProfileId,
+            rootFolderPath: cfg.rootFolderPath,
+            minimumAvailability: source.minimumAvailability || 'released',
+            addOptions: { ...getServarrAddOptions(source), searchForMovie:true },
+        };
+    }
+    function buildSonarrAddBody(item, cfg) {
+        const source = item && typeof item === 'object' && !Array.isArray(item) ? item : {};
+        const seasons = Array.isArray(source.seasons)
+            ? source.seasons.slice(0, SERVARR_SEASON_LIMIT)
+                .filter(season => season && typeof season === 'object' && !Array.isArray(season))
+                .map(season => ({ ...season, monitored:true }))
+            : [];
+        return {
+            ...source,
+            monitored: true,
+            seasonFolder: true,
+            qualityProfileId: cfg.qualityProfileId,
+            rootFolderPath: cfg.rootFolderPath,
+            seasons,
+            addOptions: {
+                ...getServarrAddOptions(source),
+                monitor: 'all',
+                searchForMissingEpisodes: true,
+            },
+        };
     }
     function buildServarrUrl(cfg, path, query = {}) {
         const url = new URL(`${cfg.baseUrl}/api/v3/${path.replace(/^\/+/, '')}`);
@@ -4279,34 +4317,12 @@ section[id*="quote" i] .ipc-list-card { padding: 4px 0 !important; margin: 2px 0
             if (!item || !isCurrent()) return false;
             const cfg = getServarrConfig(kind);
             if (kind === 'radarr') {
-                const body = {
-                    ...item,
-                    monitored: true,
-                    qualityProfileId: cfg.qualityProfileId,
-                    rootFolderPath: cfg.rootFolderPath,
-                    minimumAvailability: item.minimumAvailability || 'released',
-                    addOptions: { ...(item.addOptions || {}), searchForMovie: true },
-                };
+                const body = buildRadarrAddBody(item, cfg);
                 await servarrRequest('radarr', 'movie', { method:'POST', body });
                 return true;
             }
 
-            const seasons = Array.isArray(item.seasons)
-                ? item.seasons.map(season => ({ ...season, monitored: true }))
-                : [];
-            const body = {
-                ...item,
-                monitored: true,
-                seasonFolder: true,
-                qualityProfileId: cfg.qualityProfileId,
-                rootFolderPath: cfg.rootFolderPath,
-                seasons,
-                addOptions: {
-                    ...(item.addOptions || {}),
-                    monitor: 'all',
-                    searchForMissingEpisodes: true,
-                },
-            };
+            const body = buildSonarrAddBody(item, cfg);
             await servarrRequest('sonarr', 'series', { method:'POST', body });
             return true;
         },
