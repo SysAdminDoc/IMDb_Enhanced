@@ -60,6 +60,8 @@
     const EXTERNAL_RESULT_SCAN_LIMIT = 100;
     const STRUCTURED_DATA_SCRIPT_LIMIT = 50;
     const STRUCTURED_DATA_NODE_LIMIT = 1000;
+    const TITLE_YEAR_RELEASE_EVENT_LIMIT = 50;
+    const TITLE_YEAR_INLINE_LIMIT = 100;
     const EXTERNAL_STRUCTURED_DATA_NODE_LIMIT = 100;
     const STRUCTURED_DATA_TEXT_LIMIT = 2 * 1024 * 1024;
     const EXTERNAL_RESPONSE_TEXT_LIMIT = 8 * 1024 * 1024;
@@ -1034,23 +1036,35 @@
         return String(text || '').match(/\b(18|19|20)\d{2}\b/)?.[0] || '';
     }
 
-    function getTitleYear() {
-        const ld = getLDData();
-        const releaseEvents = Array.isArray(ld.releasedEvent) ? ld.releasedEvent : [ld.releasedEvent].filter(Boolean);
-        const structuredCandidates = [
-            ld.datePublished,
-            ld.releaseDate,
-            ld.startDate,
-            ld.dateCreated,
-            ...releaseEvents.flatMap(ev => [ev?.startDate, ev?.endDate]),
-        ];
-        for (const candidate of structuredCandidates) {
+    function getStructuredTitleYear(ld) {
+        for (const candidate of [ld?.datePublished, ld?.releaseDate, ld?.startDate, ld?.dateCreated]) {
             const year = yearFromText(candidate);
             if (year) return year;
         }
+        const releaseEvents = Array.isArray(ld?.releasedEvent) ? ld.releasedEvent : [ld?.releasedEvent].filter(Boolean);
+        for (let index = 0; index < releaseEvents.length && index < TITLE_YEAR_RELEASE_EVENT_LIMIT; index++) {
+            const event = releaseEvents[index];
+            for (const candidate of [event?.startDate, event?.endDate]) {
+                const year = yearFromText(candidate);
+                if (year) return year;
+            }
+        }
+        return '';
+    }
+
+    function getTitleYear() {
+        const ld = getLDData();
+        const structuredYear = getStructuredTitleYear(ld);
+        if (structuredYear) return structuredYear;
 
         const inlines = document.querySelectorAll('[data-testid="hero-subnav-bar-left-block"] a, section[data-testid="hero-parent"] a[href*="releaseinfo"], main h1 ~ ul a');
-        for (const a of inlines) { const m = a.textContent.match(/\b(19|20)\d{2}\b/); if (m) return m[0]; }
+        let inspectedInlines = 0;
+        for (const a of inlines) {
+            if (inspectedInlines >= TITLE_YEAR_INLINE_LIMIT) break;
+            inspectedInlines += 1;
+            const match = a.textContent.match(/\b(19|20)\d{2}\b/);
+            if (match) return match[0];
+        }
         const metaTitle = document.querySelector('meta[property="og:title"], meta[name="title"]')?.content;
         const fallbackSources = [
             metaTitle,

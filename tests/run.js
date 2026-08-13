@@ -29,6 +29,7 @@ function loadScriptTestHooks() {
         normalizeLookupTitle,
         toBoundedText,
         parseIMDbTitleStructuredData,
+        getStructuredTitleYear,
         normalizeHistogramData,
         findHistogramData,
         parseHistogramScriptTexts,
@@ -251,6 +252,17 @@ test('IMDb title data selection ignores unrelated or malformed structured data',
         [],
         'structured-data traversal must not keep expanding past its node budget'
     );
+    const releaseEvents = Array.from({ length:51 }, () => ({}));
+    releaseEvents[49] = { startDate:'1999-03-31' };
+    releaseEvents[50] = { startDate:'2001-01-01' };
+    assert.strictEqual(hooks.getStructuredTitleYear({ releasedEvent:releaseEvents }), '1999');
+    releaseEvents[49] = {};
+    assert.strictEqual(
+        hooks.getStructuredTitleYear({ releasedEvent:releaseEvents }),
+        '',
+        'title-year extraction must not traverse release-event arrays past its finite budget'
+    );
+    assert(script.includes('inspectedInlines >= TITLE_YEAR_INLINE_LIMIT'), 'inline title-year fallbacks should have a finite scan budget');
     assert(script.includes('if (Object.keys(selected).length) _ldData = selected'), 'an early empty scan must not prevent a later structured-data retry');
 });
 
