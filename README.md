@@ -30,7 +30,7 @@ Third-party lookups omit destination cookies. Responses are rendered as text, ou
 
 **Media Server Indicator** - Optional Plex, Jellyfin, and Emby checks show whether the current title already exists in your local media library. Localhost-only for security; access tokens are sent in request headers, not URLs.
 
-**Private Title Marks** - Local Seen/Skip toggle controls on title posters and recommendation cards, with exposed pressed state and a newest-first 5,000-title storage bound. They require no login and deliberately do not change or sync IMDb's account-based Watched status.
+**Private Title Marks** - Local Seen/Skip toggle controls on title posters and on every IMDb title card — charts, lists, watchlists, person filmographies, episode lists, and search results — with exposed pressed state and a newest-first 5,000-title storage bound. They require no login and deliberately do not change or sync IMDb's account-based Watched status.
 
 **TV Tools** - Highest-rated episode highlighting and TV-specific lookup shortcuts. Synopsis blur is opt-in and off by default.
 

@@ -5,6 +5,7 @@
 ### Added
 
 - Extended themes, cleanup, and layout options to IMDb's search, advanced-search, and homepage routes, which previously lost every enhancement mid-navigation.
+- Private Seen/Skip marks now decorate title cards on charts, lists, watchlists, person filmographies, episode lists, and search results instead of title pages alone.
 - Added a Firefox build (`npm run build:firefox`) with an event-page background, a stable add-on id, and a toolbar popup that requests the site access Firefox withholds until you approve it. The build passes `web-ext lint` with no errors.
 - Added a one-way import that turns the IMDb Watched titles visible on the current page into private local Seen marks, keeping any mark you already made.
 

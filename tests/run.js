@@ -405,6 +405,23 @@ test('feature activation is scoped to the current IMDb surface', () => {
     assert.strictEqual(hooks.getPageSurface(), 'name', 'localized name routes should retain secondary-page scoping');
 });
 
+test('private marks decorate title cards on every card-bearing surface', () => {
+    const hooks = loadScriptTestHooks();
+    const marks = { key:'watchedMarking', group:'Features' };
+
+    [
+        ['/chart/top/', 'charts'],
+        ['/list/ls048549284/', 'custom lists'],
+        ['/user/ur47264037/watchlist/', 'watchlists'],
+        ['/name/nm0000206/', 'person filmographies'],
+        ['/title/tt0903747/episodes/', 'episode lists'],
+        ['/title/tt0133093/', 'title pages'],
+    ].forEach(([path, label]) => {
+        hooks.setTestPath(path);
+        assert(hooks.shouldInitFeature(marks), `private marks should run on ${label}`);
+    });
+});
+
 test('native IMDb Watched state is read only when the control positively says so', () => {
     const hooks = loadScriptTestHooks();
     const button = (testId, label, text = '') => ({
@@ -470,6 +487,7 @@ test('browse surfaces receive presentation and cleanup without title tools', () 
         assert(!hooks.shouldInitFeature({ key:'searchButtons', group:'Features' }), `title watch buttons must not run on ${path}`);
         assert(!hooks.shouldInitFeature({ key:'trailerPopover', group:'Features' }), `trailer tools must not run on ${path}`);
         assert(!hooks.shouldInitFeature({ key:'listMultiSearch', group:'Utility' }), `list queue tools must not run on ${path}`);
+        assert(hooks.shouldInitFeature({ key:'watchedMarking', group:'Features' }), `private marks should decorate cards on ${path}`);
     });
 
     hooks.setTestPath('/search/title/?title_type=feature');

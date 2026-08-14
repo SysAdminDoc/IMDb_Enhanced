@@ -281,7 +281,7 @@
         externalLinks: 'Adds trusted research and trailer links near the title.',
         expandedLinkMenu: 'Groups additional movie, review, subtitle, and TV lookup links.',
         trailerPopover: 'Adds an in-page trailer modal backed by a click-to-fetch YouTube lookup.',
-        watchedMarking: 'Adds private Seen and Skip marks that stay in this userscript and do not change IMDb Watched.',
+        watchedMarking: 'Adds private Seen and Skip marks on title cards across titles, charts, lists, watchlists, filmographies, and search results. Marks stay in this userscript and do not change IMDb Watched.',
         servarrIntegration: 'Adds optional local Radarr/Sonarr quick-add buttons with library status indicator when API settings are configured.',
         mediaServerIntegration: 'Checks configured local Plex, Jellyfin, and Emby servers and shows whether the title is already in your library.',
         tvEpisodeTools: 'Surfaces the highest-rated episodes; synopsis blur remains opt-in through Spoiler blur on plot.',
@@ -8162,11 +8162,15 @@ section[data-testid="hero-parent"].enh-editorial-native-hidden { display: none !
     const UNIVERSAL_FEATURE_KEYS = new Set([
         'modernUI', 'compactHeader', 'widerLayout', 'keyboardShortcuts',
     ]);
+    /* Private marks belong anywhere IMDb renders title cards, not only on a title
+       page: charts, lists, watchlists, person filmographies, episode lists, and
+       search results are exactly where knowing what you already watched or
+       dismissed changes what you click. */
     const COLLECTION_FEATURE_KEYS = new Set([
-        ...UNIVERSAL_FEATURE_KEYS, 'watchlistBatch', 'listMultiSearch',
+        ...UNIVERSAL_FEATURE_KEYS, 'watchlistBatch', 'listMultiSearch', 'watchedMarking',
     ]);
     const SECONDARY_PAGE_FEATURE_KEYS = new Set([
-        ...UNIVERSAL_FEATURE_KEYS, 'collapsibleSections', 'quickNav',
+        ...UNIVERSAL_FEATURE_KEYS, 'collapsibleSections', 'quickNav', 'watchedMarking',
     ]);
     const EPISODE_LIST_FEATURE_KEYS = new Set([
         ...SECONDARY_PAGE_FEATURE_KEYS, 'tvEpisodeTools',
@@ -8175,7 +8179,7 @@ section[data-testid="hero-parent"].enh-editorial-native-hidden { display: none !
        IMDb's own cards rather than one title, so they take presentation and
        cleanup work without any title-scoped control. */
     const BROWSE_FEATURE_KEYS = new Set([
-        ...UNIVERSAL_FEATURE_KEYS,
+        ...UNIVERSAL_FEATURE_KEYS, 'watchedMarking',
     ]);
 
     function getPageSurface() {
