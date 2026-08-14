@@ -1,5 +1,11 @@
 # Changelog
 
+## 2.10.4 — 2026-08-14
+
+### Fixed
+
+- Raised the editorial title surface above IMDb's native backdrop layer so title content is not covered by a full-page blur.
+
 ## 2.10.3 — 2026-08-14
 
 ### Changed

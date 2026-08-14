@@ -86,7 +86,7 @@
     // =========================================================================
     //  CONSTANTS & CONFIG
     // =========================================================================
-    const VERSION = '2.10.3';
+    const VERSION = '2.10.4';
     const PREFIX  = 'imdb_enh_';
     const CINEBY_QUERY_KEY = PREFIX + 'cineby_query';
     const CINEBY_QUERY_TTL = 10 * 60 * 1000;
@@ -5718,7 +5718,7 @@ section[id*="quote" i] .ipc-list-card { padding: 4px 0 !important; margin: 2px 0
 /* ════ Editorial Title Surface ════ */
 section[data-testid="hero-parent"].enh-editorial-native-hidden { display: none !important; }
 #enh-editorial-surface {
-    position: relative; isolation: isolate; overflow: hidden;
+    position: relative; z-index: 7; isolation: isolate; overflow: hidden;
     width: 100%; max-width: 1600px; margin: 0 auto; padding: 0 40px 28px;
     color: ${t.tx1}; background-color: ${t.bg};
     background-image: var(--enh-editorial-backdrop, none);

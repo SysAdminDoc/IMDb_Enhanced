@@ -719,6 +719,7 @@ test('editorial title layout owns a stable full-width title surface', () => {
     assert(script.includes("id:'enh-editorial-action-slot'"), 'editorial hero needs a dedicated action slot');
     assert(script.includes("id:'enh-editorial-score-rail'"), 'editorial hero needs a dedicated score rail');
     assert(script.includes("id:'enh-editorial-research-slot'"), 'editorial details need a dedicated research slot');
+    assert(/#enh-editorial-surface\s*\{[^}]*z-index:\s*7/.test(script), 'editorial surface must sit above IMDb backdrop overlays');
     assert(script.includes('refreshEditorialSurface(surface, this._nativeHero || document)'), 'hydrated poster and title data should refresh the surface');
     assert(/const synopsisNode = about\.querySelector\('\.enh-editorial-synopsis'\);[\s\S]*?if \(synopsisNode\)[\s\S]*?synopsisNode\.textContent !== synopsis/.test(script), 'surface hydration must not rewrite identical synopsis text');
     assert(script.includes("appendTitleStackItem(node, Number.isFinite(order) ? order : fallback)"), 'late title controls should be rehomed into the editorial surface');
