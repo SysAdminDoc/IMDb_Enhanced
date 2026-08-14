@@ -63,6 +63,9 @@ function loadScriptTestHooks() {
         parseRTDetailPage,
         parseLetterboxdDetailPage,
         selectMetacriticResult,
+        buildWikidataIdQuery,
+        parseWikidataExternalIds,
+        normalizeExternalId,
         parseJustWatchSearchResult,
         parseJustWatchIdentity,
         parseJustWatchAvailability,
@@ -420,6 +423,56 @@ test('private marks decorate title cards on every card-bearing surface', () => {
         hooks.setTestPath(path);
         assert(hooks.shouldInitFeature(marks), `private marks should run on ${label}`);
     });
+});
+
+test('Wikidata resolves external service IDs without trusting arbitrary values', () => {
+    const hooks = loadScriptTestHooks();
+
+    const query = hooks.buildWikidataIdQuery('tt0133093');
+    assert(query.includes('wdt:P345 "tt0133093"'), 'the query should look the title up by its IMDb ID');
+    ['P1258', 'P1712', 'P4947', 'P4983'].forEach(property => {
+        assert(query.includes(property), `the query should request ${property}`);
+    });
+    assert.strictEqual(hooks.buildWikidataIdQuery('not-an-id'), '', 'malformed IMDb IDs must not reach the endpoint');
+    assert.strictEqual(hooks.buildWikidataIdQuery('tt0133093" } INJECT {'), '', 'query text must not be user-controlled');
+
+    const response = JSON.stringify({ results:{ bindings:[{
+        rt:{ value:'m/matrix' },
+        mc:{ value:'movie/the-matrix' },
+        tmdbMovie:{ value:'603' },
+    }] } });
+    assert.strictEqual(JSON.stringify(hooks.parseWikidataExternalIds(response)),
+        JSON.stringify({ rt:'m/matrix', metacritic:'movie/the-matrix', tmdb:'movie/603' }));
+
+    const tvResponse = JSON.stringify({ results:{ bindings:[{ tmdbTv:{ value:'1396' } }] } });
+    assert.strictEqual(JSON.stringify(hooks.parseWikidataExternalIds(tvResponse)), JSON.stringify({ tmdb:'tv/1396' }));
+
+    assert.strictEqual(JSON.stringify(hooks.parseWikidataExternalIds('not json')), '{}', 'malformed payloads must degrade to no mapping');
+    assert.strictEqual(JSON.stringify(hooks.parseWikidataExternalIds(JSON.stringify({ results:{ bindings:[] } }))), '{}', 'an empty result set means no mapping');
+
+    // A mapping is remote data, so it has to satisfy the shape of a real slug
+    // before it can be pasted into a URL.
+    const hostile = JSON.stringify({ results:{ bindings:[{
+        rt:{ value:'../../evil' },
+        mc:{ value:'https://evil.example/movie/x' },
+    }] } });
+    assert.strictEqual(JSON.stringify(hooks.parseWikidataExternalIds(hostile)), '{}', 'path traversal and absolute URLs must be rejected');
+    assert.strictEqual(hooks.normalizeExternalId('rt', 'm/' + 'a'.repeat(400)), '', 'oversized identifiers must be rejected');
+    assert.strictEqual(hooks.normalizeExternalId('rt', 'x/matrix'), '', 'unknown Rotten Tomatoes sections must be rejected');
+    assert.strictEqual(hooks.normalizeExternalId('tmdb', 'movie/603'), 'movie/603');
+});
+
+test('a mapped Metacritic slug outranks search order', () => {
+    const hooks = loadScriptTestHooks();
+    const items = [
+        { title:'The Matrix', type:'movie', releaseDate:'1999-03-31', criticScoreSummary:{ url:'/movie/the-matrix-remake/critic-reviews/' } },
+        { title:'The Matrix', type:'movie', releaseDate:'1999-03-31', criticScoreSummary:{ url:'/movie/the-matrix/critic-reviews/' } },
+    ];
+    const picked = hooks.selectMetacriticResult(items, 'The Matrix', 1999, 'movie', 'movie/the-matrix');
+    assert.strictEqual(picked.criticScoreSummary.url, '/movie/the-matrix/critic-reviews/', 'the mapped slug should decide between equal-looking results');
+
+    const unmapped = hooks.selectMetacriticResult(items, 'The Matrix', 1999, 'movie');
+    assert(unmapped, 'without a mapping the existing title/type/year selection still applies');
 });
 
 test('native IMDb Watched state is read only when the control positively says so', () => {

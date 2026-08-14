@@ -35,6 +35,7 @@
 // @connect      letterboxd.com
 // @connect      www.justwatch.com
 // @connect      www.youtube.com
+// @connect      query.wikidata.org
 // @connect      localhost
 // @connect      127.0.0.1
 // @run-at       document-start
@@ -3098,7 +3099,93 @@ section[id*="quote" i] .ipc-list-card { padding: 4px 0 !important; margin: 2px 0
         return exact.length === 1 ? exact[0] : null;
     }
 
-    function selectMetacriticResult(items, title, year, type = 'movie') {
+    /* Cross-site score lookups used to start from a title search, which is where
+       nearly every historical identity defect came from: remakes, sequels sharing
+       a prefix, and same-name titles all rank plausibly. Wikidata publishes the
+       mapping outright — P345 is the IMDb ID, and each title's item carries the
+       Rotten Tomatoes, Metacritic, and TMDB identifiers alongside it — over a
+       keyless, CORS-open SPARQL endpoint. Resolving the ID first turns a fuzzy
+       search into a direct fetch; when Wikidata has no mapping, the validated
+       search path still runs unchanged. */
+    const WIKIDATA_ENDPOINT = 'https://query.wikidata.org/sparql';
+    const WIKIDATA_ID_TTL = 30 * 24 * 60 * 60 * 1000;
+    const WIKIDATA_RESPONSE_LIMIT = 256 * 1024;
+    const EXTERNAL_ID_PATTERNS = {
+        rt: /^(?:m|tv)\/[a-z0-9][a-z0-9_-]{0,120}$/i,
+        metacritic: /^(?:movie|tv)\/[a-z0-9][a-z0-9._-]{0,120}$/i,
+        tmdb: /^(?:movie|tv)\/\d{1,12}$/i,
+    };
+
+    function buildWikidataIdQuery(imdbId) {
+        if (!/^tt\d{5,12}$/.test(String(imdbId || ''))) return '';
+        return `SELECT ?rt ?mc ?tmdbMovie ?tmdbTv WHERE {`
+            + ` ?item wdt:P345 "${imdbId}".`
+            + ` OPTIONAL { ?item wdt:P1258 ?rt. }`
+            + ` OPTIONAL { ?item wdt:P1712 ?mc. }`
+            + ` OPTIONAL { ?item wdt:P4947 ?tmdbMovie. }`
+            + ` OPTIONAL { ?item wdt:P4983 ?tmdbTv. }`
+            + ` } LIMIT 1`;
+    }
+
+    function normalizeExternalId(kind, value) {
+        const raw = String(value ?? '').trim().replace(/^\/+|\/+$/g, '');
+        const pattern = EXTERNAL_ID_PATTERNS[kind];
+        if (!raw || raw.length > 128 || !pattern) return '';
+        return pattern.test(raw) ? raw : '';
+    }
+
+    function parseWikidataExternalIds(responseText) {
+        const raw = typeof responseText === 'string' ? responseText : '';
+        if (!raw || raw.length > WIKIDATA_RESPONSE_LIMIT) return {};
+        let payload = null;
+        try { payload = JSON.parse(raw); } catch { return {}; }
+        const row = payload?.results?.bindings?.[0];
+        if (!row || typeof row !== 'object') return {};
+        const read = key => (row[key] && typeof row[key].value === 'string' ? row[key].value : '');
+        const ids = {};
+        const rt = normalizeExternalId('rt', read('rt'));
+        if (rt) ids.rt = rt;
+        const metacritic = normalizeExternalId('metacritic', read('mc'));
+        if (metacritic) ids.metacritic = metacritic;
+        const tmdbMovie = read('tmdbMovie');
+        const tmdbTv = read('tmdbTv');
+        const tmdb = normalizeExternalId('tmdb', tmdbMovie ? `movie/${tmdbMovie}` : tmdbTv ? `tv/${tmdbTv}` : '');
+        if (tmdb) ids.tmdb = tmdb;
+        return ids;
+    }
+
+    async function resolveExternalIds(imdbId, isCurrent = () => true) {
+        const query = buildWikidataIdQuery(imdbId);
+        if (!query) return {};
+        const cacheKey = 'xid_' + imdbId;
+        const cached = cacheGet(cacheKey);
+        if (cached) return cached.unavailable ? {} : cached;
+        try {
+            const res = await httpGet(`${WIKIDATA_ENDPOINT}?format=json&query=${encodeURIComponent(query)}`, {
+                headers: { Accept:'application/sparql-results+json' },
+                cancelOnRouteChange: true,
+            });
+            if (!isCurrent()) return {};
+            const ids = parseWikidataExternalIds(res.responseText);
+            if (Object.keys(ids).length) cacheSet(cacheKey, ids, WIKIDATA_ID_TTL);
+            else cacheSetUnavailable(cacheKey);
+            return ids;
+        } catch {
+            return {};
+        }
+    }
+
+    /* Slugs share prefixes — `movie/the-matrix` is a substring of
+       `movie/the-matrix-remake` — so a mapped identifier only counts when it
+       occupies whole path segments. */
+    function metacriticUrlUsesSlug(url, slug) {
+        const path = String(url || '').slice(0, 512);
+        if (!path || !slug) return false;
+        const normalized = `/${path.replace(/^https?:\/\/[^/]+/i, '').replace(/^\/+/, '')}`;
+        return normalized.startsWith(`/${slug}/`) || normalized === `/${slug}`;
+    }
+
+    function selectMetacriticResult(items, title, year, type = 'movie', mappedSlug = '') {
         if (!Array.isArray(items)) return null;
         const wantedTitle = normalizeLookupTitle(title);
         const expectedType = type === 'tv' ? 'show' : 'movie';
@@ -3106,6 +3193,11 @@ section[id*="quote" i] .ipc-list-card { padding: 4px 0 !important; margin: 2px 0
             normalizeLookupTitle(item?.title) === wantedTitle
             && String(item?.type || '').toLowerCase() === expectedType
         );
+        const slug = normalizeExternalId('metacritic', mappedSlug);
+        if (slug) {
+            const bySlug = exact.find(item => metacriticUrlUsesSlug(item?.criticScoreSummary?.url, slug));
+            if (bySlug) return bySlug;
+        }
         const wantedYear = Number(year) || 0;
         if (!wantedYear) return exact.length === 1 ? exact[0] : null;
         const yearMatch = exact.find(item => {
@@ -3586,6 +3678,29 @@ section[id*="quote" i] .ipc-list-card { padding: 4px 0 !important; margin: 2px 0
 
             const type = isTVType() ? 'tv' : 'movie';
             if (!isCurrent()) return;
+
+            /* A Wikidata-mapped identifier names the exact Rotten Tomatoes page,
+               so the search step and its ranking guesswork can be skipped. The
+               detail parser still has to agree on title, type, and year before
+               anything is cached, so a stale mapping cannot mislabel a title. */
+            const mapped = await resolveExternalIds(imdbId, isCurrent);
+            if (!isCurrent()) return;
+            if (mapped.rt) {
+                try {
+                    const mappedUrl = `https://www.rottentomatoes.com/${mapped.rt}`;
+                    const mappedRes = await httpGet(mappedUrl, { cancelOnRouteChange:true });
+                    if (!isCurrent()) return;
+                    const resolvedUrl = normalizeTrustedUrl(mappedRes.finalUrl, 'rottentomatoes.com', mappedUrl);
+                    const mappedData = parseRTDetailPage(mappedRes.responseText, title, year, type, resolvedUrl);
+                    if (mappedData) {
+                        cacheSet(cacheKey, mappedData);
+                        this._render(mappedData);
+                        return;
+                    }
+                } catch { /* fall through to the validated search path */ }
+                if (!isCurrent()) return;
+            }
+
             try {
                 const searchUrl = `https://www.rottentomatoes.com/search?search=${encodeURIComponent(title)}`;
                 const res2 = await httpGet(searchUrl, { cancelOnRouteChange:true });
@@ -3773,6 +3888,8 @@ section[id*="quote" i] .ipc-list-card { padding: 4px 0 !important; margin: 2px 0
             if (!await waitUntilVisible(bar, isCurrent) || !isCurrent()) return;
             this._renderLoading();
 
+            const mapped = await resolveExternalIds(imdbId, isCurrent);
+            if (!isCurrent()) return;
             const mediaType = isTVType() ? 'tv' : 'movie';
             const typeId = mediaType === 'tv' ? '1' : '2';
             const url = `https://backend.metacritic.com/finder/metacritic/search/${encodeURIComponent(title)}/web?componentName=search-tabs&componentDisplayName=Search+Page+Tab+Filters&componentType=FilterConfig&mcoTypeId=${typeId}&offset=0&limit=10`;
@@ -3784,7 +3901,10 @@ section[id*="quote" i] .ipc-list-card { padding: 4px 0 !important; margin: 2px 0
                 if (!source) throw new Error('Response was too large or empty');
                 const obj = JSON.parse(source);
                 const items = obj?.data?.items || [];
-                const best = selectMetacriticResult(items, title, year, mediaType);
+                /* Where Wikidata names the Metacritic slug, prefer the result that
+                   actually points at it; search rank alone has never been an
+                   identity guarantee. */
+                const best = selectMetacriticResult(items, title, year, mediaType, mapped.metacritic);
                 if (best) {
                     const score = boundedScore(best.criticScoreSummary?.score, 100);
                     const userScore = boundedScore(best.userScoreSummary?.score, 10);

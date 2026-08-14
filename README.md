@@ -12,7 +12,7 @@ A desktop IMDb overhaul delivered as a single userscript and a Chromium Manifest
 
 **Theme System** - Five themes (Dark, OLED, Midnight, Light, High Contrast) with a full design system: semantic colors, 3-tier elevation, 4px grid spacing, squircle avatars, hover lifts, and smooth transitions. Auto-theme follows OS preference.
 
-**Aggregated Scores** - Inline Rotten Tomatoes (with critics consensus on hover), Letterboxd, and Metacritic scores fetched lazily near IMDb's rating and cached locally. Search-backed score matches require an exact title and media type plus a release year within one year. Navigation aborts route-owned lookups when the manager provides an abort handle, and stale responses are discarded regardless. Rating histogram shows 1-10 vote distribution at a glance.
+**Aggregated Scores** - Inline Rotten Tomatoes (with critics consensus on hover), Letterboxd, and Metacritic scores fetched lazily near IMDb's rating and cached locally. Lookups first resolve the exact service page through Wikidata's public IMDb-to-service identifier mapping; titles it does not cover fall back to search, where matches require an exact title and media type plus a release year within one year. Navigation aborts route-owned lookups when the manager provides an abort handle, and stale responses are discarded regardless. Rating histogram shows 1-10 vote distribution at a glance.
 
 **Streaming Availability** - JustWatch integration shows which streaming services carry the title, using the same lazy, route-aware lookup lifecycle and exact title/type/year identity checks on direct and search-fallback pages.
 

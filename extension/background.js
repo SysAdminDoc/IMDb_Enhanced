@@ -11,6 +11,7 @@ const ALLOWED_REQUEST_HOSTS = new Set([
     'letterboxd.com',
     'www.justwatch.com',
     'www.youtube.com',
+    'query.wikidata.org',
     'localhost',
     '127.0.0.1',
 ]);

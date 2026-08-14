@@ -24,6 +24,7 @@
     "https://letterboxd.com/*",
     "https://www.justwatch.com/*",
     "https://www.youtube.com/*",
+    "https://query.wikidata.org/*",
     "https://*.amazon-adsystem.com/*",
     "https://advertising.amazon.dev/*",
     "https://images-na.ssl-images-amazon.com/*",
