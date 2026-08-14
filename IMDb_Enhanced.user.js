@@ -1,7 +1,7 @@
 // ==UserScript==
 // @name         IMDb Enhanced
 // @namespace    https://github.com/SysAdminDoc
-// @version      2.10.0
+// @version      2.10.1
 // @updateURL    https://raw.githubusercontent.com/SysAdminDoc/IMDb_Enhanced/main/IMDb_Enhanced.user.js
 // @downloadURL  https://raw.githubusercontent.com/SysAdminDoc/IMDb_Enhanced/main/IMDb_Enhanced.user.js
 // @description  Premium IMDb overhaul: cleaner pages, modern themes, refined score widgets, media library indicators, quick navigation, richer external links, TV tools, search shortcuts, and polished settings import/export
@@ -42,7 +42,7 @@
     // =========================================================================
     //  CONSTANTS & CONFIG
     // =========================================================================
-    const VERSION = '2.10.0';
+    const VERSION = '2.10.1';
     const PREFIX  = 'imdb_enh_';
     const CINEBY_QUERY_KEY = PREFIX + 'cineby_query';
     const CINEBY_QUERY_TTL = 10 * 60 * 1000;
@@ -722,8 +722,11 @@
         const synopsis = getEditorialSynopsis();
         if (about && synopsis) {
             const synopsisNode = about.querySelector('.enh-editorial-synopsis');
-            if (synopsisNode) synopsisNode.textContent = synopsis;
-            else about.insertBefore(makeEl('p', { className:'enh-editorial-synopsis' }, synopsis), about.querySelector('.enh-editorial-about-link'));
+            if (synopsisNode) {
+                if (synopsisNode.textContent !== synopsis) synopsisNode.textContent = synopsis;
+            } else {
+                about.insertBefore(makeEl('p', { className:'enh-editorial-synopsis' }, synopsis), about.querySelector('.enh-editorial-about-link'));
+            }
         }
 
         const cast = getEditorialLinkData('[data-testid="title-cast-item"] a', 3);

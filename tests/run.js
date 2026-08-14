@@ -720,6 +720,7 @@ test('editorial title layout owns a stable full-width title surface', () => {
     assert(script.includes("id:'enh-editorial-score-rail'"), 'editorial hero needs a dedicated score rail');
     assert(script.includes("id:'enh-editorial-research-slot'"), 'editorial details need a dedicated research slot');
     assert(script.includes('refreshEditorialSurface(surface, this._nativeHero || document)'), 'hydrated poster and title data should refresh the surface');
+    assert(/const synopsisNode = about\.querySelector\('\.enh-editorial-synopsis'\);[\s\S]*?if \(synopsisNode\)[\s\S]*?synopsisNode\.textContent !== synopsis/.test(script), 'surface hydration must not rewrite identical synopsis text');
     assert(script.includes("appendTitleStackItem(node, Number.isFinite(order) ? order : fallback)"), 'late title controls should be rehomed into the editorial surface');
     assert(/function findRatingBar\(\)[\s\S]*?const editorialRail = document\.getElementById\('enh-editorial-score-rail'\)[\s\S]*?if \(editorialRail\) return editorialRail/.test(script), 'rating features should target the editorial score rail');
 });

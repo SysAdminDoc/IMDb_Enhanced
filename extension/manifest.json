@@ -1,7 +1,7 @@
 {
   "manifest_version": 3,
   "name": "IMDb Enhanced",
-  "version": "2.10.0",
+  "version": "2.10.1",
   "description": "A premium, decluttered IMDb experience with configurable title links, score widgets, private marks, local media integrations, and stronger ad-request blocking.",
   "author": "SysAdminDoc",
   "permissions": [

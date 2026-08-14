@@ -1,5 +1,11 @@
 # Changelog
 
+## 2.10.1 — 2026-08-14
+
+### Fixed
+
+- Prevented title-surface hydration from continuously rewriting identical synopsis content and stalling IMDb pages.
+
 ## 2.10.0 — 2026-08-14
 
 ### Fixed
