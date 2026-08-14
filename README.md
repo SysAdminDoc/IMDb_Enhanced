@@ -1,4 +1,4 @@
-[![Version](https://img.shields.io/badge/version-2.6.0-blue)](https://github.com/SysAdminDoc/IMDb_Enhanced)
+[![Version](https://img.shields.io/badge/version-2.7.0-blue)](https://github.com/SysAdminDoc/IMDb_Enhanced)
 [![License](https://img.shields.io/badge/license-MIT-green)](LICENSE)
 [![Platform](https://img.shields.io/badge/platform-Tampermonkey%20%7C%20Violentmonkey-yellow)](https://www.tampermonkey.net/)
 
@@ -18,9 +18,9 @@ A desktop IMDb overhaul delivered as a single userscript. Cleaner pages, modern 
 
 Third-party lookups omit destination cookies. Responses are rendered as text, outbound links suppress opener/referrer data, and response-provided URLs are restricted to the expected HTTPS service domains.
 
-**Watch Site Search** - Quick-search buttons for streaming sites (StreamXTV, LookMovie, CinemaOS, LivNet, Flixer, Cine.su, Fmovies+, Cineby). Fully configurable in settings. Destinations are contacted only when you open them; the userscript does not background-probe every site.
+**Watch Site Search** - Quick-search buttons for streaming sites (Cineby, StreamXTV, LookMovie2, CinemaOS, LivNet, Flixer, Cine.su, Fmovies+, UFlix, FlixMomo, Movies2Watch, WatchLuna, 1Movies). Fully configurable in settings. Destinations are contacted only when you open them; the userscript does not background-probe every site.
 
-**External Links** - One-click links to Rotten Tomatoes, Letterboxd, TMDB, YouTube trailers, Wikipedia, JustWatch, and Trakt. Configurable.
+**External Links** - One-click links grouped by purpose: Reviews & ratings (Rotten Tomatoes, Letterboxd, Trakt), Info & research (TMDB, Wikipedia), Trailers & video (YouTube), and Availability (JustWatch). Configurable.
 
 **Trailer Popover** - In-page trailer dialog backed by YouTube search, with focus containment, Escape/overlay close, opener restoration, and stale-result protection. No page navigation needed.
 
@@ -56,15 +56,15 @@ Click the gear icon on any covered IMDb page to open the six-section settings wo
 
 **Tools** - Title, TV/episode, list, private Seen/Skip, and optional keyboard-shortcut controls.
 
-**Sites** - Editable watch-search and external-link destinations, URL templates, ordering, colors, and Cineby handoff. Incomplete, non-HTTP(S), credential-bearing, origin-dynamic, or unknown-token templates are visibly rejected without replacing the last valid saved list.
+**Sites** - Editable watch-search and external-link destinations with show/hide controls, purpose categories, ordering, colors, and Cineby handoff. Page buttons are grouped into Watch, Reviews & ratings, Availability, Trailers & video, Info & research, and Other. Incomplete, non-HTTP(S), credential-bearing, origin-dynamic, or unknown-token templates are visibly rejected without replacing the last valid saved list.
 
 **Integrations** - Tabbed Radarr/Sonarr and Plex/Jellyfin/Emby local-service configuration with arrow/Home/End keyboard navigation.
 
 **Data** - Local mark review, validated JSON backup/restore up to 4 MB, cache status/clearing, and an explicit two-step reset with backup guidance.
 
-**Watch Sites** - Add, remove, reorder, and customize streaming site buttons with name, URL template, and color.
+**Watch Sites** - Add, remove, reorder, show/hide, categorize, and customize streaming site buttons with name, URL template, and color.
 
-**External Links** - Same customization as watch sites for research/trailer links.
+**External Links** - Same customization as watch sites for review, availability, trailer, and research links; hidden destinations remain available to re-enable later.
 
 **Cineby** - The exact Cineby root uses a one-time, ten-minute local title handoff that is consumed as soon as Cineby opens. A second Cineby navigation is held back while the first handoff is pending so it cannot replace the earlier title. Edit or remove its watch-site row to use an ordinary URL template instead.
 

@@ -54,6 +54,8 @@ function loadScriptTestHooks() {
         isLocalServiceUrl,
         normalizeTrustedUrl,
         normalizeSite,
+        normalizeSiteCategory,
+        groupSitesByCategory,
         getSiteList,
         filterSitesForMediaType,
         boundedScore,
@@ -1039,6 +1041,42 @@ test('custom site templates require complete HTTP or HTTPS URLs', () => {
     hooks.seedStoredSetting('watchSites', oversizedSites);
     assert.strictEqual(hooks.getSiteList('watchSites', []).length, 50, 'runtime custom-site lists must honor the import/UI bound');
     assert(script.includes('add.disabled = total >= SITE_LIST_LIMIT'), 'site editor should expose the destination limit before adding another row');
+});
+
+test('site destinations support purpose, visibility, and ordering metadata', () => {
+    const hooks = loadScriptTestHooks();
+    assert.strictEqual(hooks.normalizeSiteCategory('reviews'), 'reviews');
+    assert.strictEqual(hooks.normalizeSiteCategory('unknown', 'watch'), 'watch');
+    const hidden = hooks.normalizeSite({
+        name:'Hidden review',
+        url:'https://reviews.example/search?q={{TITLE}}',
+        category:'reviews',
+        enabled:false,
+    });
+    assert.strictEqual(hidden.category, 'reviews');
+    assert.strictEqual(hidden.enabled, false);
+    const groups = hooks.groupSitesByCategory([
+        { name:'Watch A', category:'watch' },
+        { name:'Review A', category:'reviews' },
+        { name:'Watch B', category:'watch' },
+    ]);
+    assert.strictEqual(
+        JSON.stringify(groups.map(group => [group.category, Array.from(group.sites, site => site.name)])),
+        JSON.stringify([['watch', ['Watch A', 'Watch B']], ['reviews', ['Review A']]]),
+        'site grouping should preserve category and configured order'
+    );
+    [
+        'https://uflix.to/',
+        'https://www.streamxtv.tech/',
+        'https://flixmomo.app/',
+        'https://movies2watch.vc/',
+        'https://watchluna.com/movies',
+        'https://1movies.stream/home',
+    ].forEach(url => assert(script.includes(url), `${url} should be available in the default watch destinations`));
+    assert(script.includes("filter(site => site.enabled !== false)"), 'disabled destinations must stay off title pages');
+    assert(script.includes("dataset:{ field:'category' }"), 'site editors should expose category selection');
+    assert(script.includes("dataset:{ field:'enabled' }"), 'site editors should expose per-destination visibility');
+    assert(script.includes("dataset:{ action:'up' }"), 'site editors should expose destination ordering');
 });
 
 test('third-party response links stay on trusted HTTPS domains', () => {

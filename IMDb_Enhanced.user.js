@@ -1,7 +1,7 @@
 // ==UserScript==
 // @name         IMDb Enhanced
 // @namespace    https://github.com/SysAdminDoc
-// @version      2.6.0
+// @version      2.7.0
 // @updateURL    https://raw.githubusercontent.com/SysAdminDoc/IMDb_Enhanced/main/IMDb_Enhanced.user.js
 // @downloadURL  https://raw.githubusercontent.com/SysAdminDoc/IMDb_Enhanced/main/IMDb_Enhanced.user.js
 // @description  Premium IMDb overhaul: cleaner pages, modern themes, refined score widgets, media library indicators, quick navigation, richer external links, TV tools, search shortcuts, and polished settings import/export
@@ -42,7 +42,7 @@
     // =========================================================================
     //  CONSTANTS & CONFIG
     // =========================================================================
-    const VERSION = '2.6.0';
+    const VERSION = '2.7.0';
     const PREFIX  = 'imdb_enh_';
     const CINEBY_QUERY_KEY = PREFIX + 'cineby_query';
     const CINEBY_QUERY_TTL = 10 * 60 * 1000;
@@ -79,6 +79,16 @@
     const URL_TEMPLATE_TEXT_LIMIT = 4096;
     const SETTING_TEXT_LIMIT = 4096;
     const SETTINGS_IMPORT_TEXT_LIMIT = 4 * 1024 * 1024;
+    const SITE_CATEGORY_OPTIONS = [
+        { key:'watch', label:'Watch', description:'Find the movie or show to watch.' },
+        { key:'reviews', label:'Reviews & ratings', description:'Critics, audience scores, and discussion.' },
+        { key:'availability', label:'Availability', description:'See where the title is streaming.' },
+        { key:'trailers', label:'Trailers & video', description:'Trailers, clips, and video results.' },
+        { key:'info', label:'Info & research', description:'Cast, credits, facts, and reference.' },
+        { key:'other', label:'Other', description:'A custom destination.' },
+    ];
+    const SITE_CATEGORY_KEYS = new Set(SITE_CATEGORY_OPTIONS.map(option => option.key));
+    const SITE_CATEGORY_LABELS = Object.fromEntries(SITE_CATEGORY_OPTIONS.map(option => [option.key, option.label]));
     const URL_TEMPLATE_KEYS = new Set([
         'TITLE', 'TITLE_RAW', 'TITLE_DASH', 'TITLE_SLUG',
         'IMDB_ID', 'IMDB_NUM', 'TRAKT_TYPE', 'YEAR',
@@ -126,23 +136,28 @@
         { label:'Cineby', url:'https://www.cineby.at/' },
     ];
     const DEFAULT_WATCH_SITES = [
-        { name:'Cineby', color:'#6366f1', url:CINEBY_HOSTS[0].url, storeQuery:true },
-        { name:'StreamXTV', color:'#10b981', url:'https://www.streamxtv.tech/search?q={{TITLE}}' },
-        { name:'LookMovie', color:'#f59e0b', url:'https://www.lookmovie2.to/movies/search/?q={{TITLE}}' },
-        { name:'CinemaOS', color:'#ef4444', url:'https://cinemaos.live/search?q={{TITLE}}' },
-        { name:'LivNet', color:'#ec4899', url:'https://livnet.pages.dev/search?q={{TITLE}}' },
-        { name:'Flixer', color:'#06b6d4', url:'https://flixer.su/search?q={{TITLE}}' },
-        { name:'Cine.su', color:'#14b8a6', url:'https://cine.su/en/search' },
-        { name:'Fmovies+', color:'#f97316', url:'https://fmovies.gd/search/{{TITLE_DASH}}' },
+        { name:'Cineby', color:'#6366f1', url:CINEBY_HOSTS[0].url, category:'watch', storeQuery:true },
+        { name:'StreamXTV', color:'#10b981', url:'https://www.streamxtv.tech/search?q={{TITLE}}', category:'watch' },
+        { name:'LookMovie2', color:'#f59e0b', url:'https://www.lookmovie2.to/movies/search/?q={{TITLE}}', category:'watch' },
+        { name:'CinemaOS', color:'#ef4444', url:'https://cinemaos.live/search?q={{TITLE}}', category:'watch' },
+        { name:'LivNet', color:'#ec4899', url:'https://livnet.pages.dev/search?q={{TITLE}}', category:'watch' },
+        { name:'Flixer', color:'#06b6d4', url:'https://flixer.su/search?q={{TITLE}}', category:'watch' },
+        { name:'Cine.su', color:'#14b8a6', url:'https://cine.su/en/search', category:'watch' },
+        { name:'Fmovies+', color:'#f97316', url:'https://fmovies.gd/search/{{TITLE_DASH}}', category:'watch' },
+        { name:'UFlix', color:'#8b5cf6', url:'https://uflix.to/', category:'watch' },
+        { name:'FlixMomo', color:'#22c55e', url:'https://flixmomo.app/', category:'watch' },
+        { name:'Movies2Watch', color:'#fb7185', url:'https://movies2watch.vc/', category:'watch' },
+        { name:'WatchLuna', color:'#0ea5e9', url:'https://watchluna.com/movies', category:'watch' },
+        { name:'1Movies', color:'#e11d48', url:'https://1movies.stream/home', category:'watch' },
     ];
     const DEFAULT_EXTERNAL_SITES = [
-        { name:'Rotten Tomatoes', color:'#fa320a', url:'https://www.rottentomatoes.com/search?search={{TITLE}}' },
-        { name:'Letterboxd', color:'#00d735', url:'https://letterboxd.com/imdb/{{IMDB_ID}}/', movieOnly:true },
-        { name:'TMDB', color:'#01b4e4', url:'https://www.themoviedb.org/search?query={{TITLE}}' },
-        { name:'YouTube', color:'#ff0000', url:'https://www.youtube.com/results?search_query={{TITLE}}%20trailer' },
-        { name:'Wikipedia', color:'#636466', url:'https://en.wikipedia.org/w/index.php?search={{TITLE}}+{{YEAR}}' },
-        { name:'JustWatch', color:'#fbc500', url:'https://www.justwatch.com/us/search?q={{TITLE}}' },
-        { name:'Trakt', color:'#ed1c24', url:'https://app.trakt.tv/search?query={{TITLE}}' },
+        { name:'Rotten Tomatoes', color:'#fa320a', url:'https://www.rottentomatoes.com/search?search={{TITLE}}', category:'reviews' },
+        { name:'Letterboxd', color:'#00d735', url:'https://letterboxd.com/imdb/{{IMDB_ID}}/', category:'reviews', movieOnly:true },
+        { name:'TMDB', color:'#01b4e4', url:'https://www.themoviedb.org/search?query={{TITLE}}', category:'info' },
+        { name:'YouTube', color:'#ff0000', url:'https://www.youtube.com/results?search_query={{TITLE}}%20trailer', category:'trailers' },
+        { name:'Wikipedia', color:'#636466', url:'https://en.wikipedia.org/w/index.php?search={{TITLE}}+{{YEAR}}', category:'info' },
+        { name:'JustWatch', color:'#fbc500', url:'https://www.justwatch.com/us/search?q={{TITLE}}', category:'availability' },
+        { name:'Trakt', color:'#ed1c24', url:'https://app.trakt.tv/search?query={{TITLE}}', category:'reviews' },
     ];
 
     const DEFAULTS = {
@@ -650,6 +665,31 @@
         return /^#[0-9a-f]{6}$/i.test(value) ? value : fallback;
     }
 
+    function normalizeSiteCategory(value, fallback = 'other') {
+        const category = String(value || '').trim().toLowerCase();
+        return SITE_CATEGORY_KEYS.has(category) ? category : fallback;
+    }
+
+    function getSiteCategoryLabel(category) {
+        return SITE_CATEGORY_LABELS[normalizeSiteCategory(category)] || SITE_CATEGORY_LABELS.other;
+    }
+
+    function groupSitesByCategory(sites) {
+        const groups = [];
+        const byCategory = new Map();
+        (Array.isArray(sites) ? sites : []).forEach(site => {
+            const category = normalizeSiteCategory(site?.category);
+            let group = byCategory.get(category);
+            if (!group) {
+                group = { category, sites:[] };
+                byCategory.set(category, group);
+                groups.push(group);
+            }
+            group.sites.push(site);
+        });
+        return groups;
+    }
+
     function normalizeUrlTemplate(url) {
         const value = String(url || '').trim();
         if (!value || value.length > URL_TEMPLATE_TEXT_LIMIT || !/^https?:\/\//i.test(value)) return '';
@@ -765,7 +805,7 @@
         return parseCinebyQuery(raw, true);
     }
 
-    function normalizeSite(site, fallbackColor = '#6366f1') {
+    function normalizeSite(site, fallbackColor = '#6366f1', fallbackCategory = 'other') {
         const name = String(site?.name || '').trim().slice(0, 40);
         const url = normalizeUrlTemplate(site?.url);
         if (!name || !url) return null;
@@ -779,6 +819,8 @@
             name,
             url,
             color: normalizeColor(site?.color, fallbackColor),
+            category: normalizeSiteCategory(site?.category, storeQuery ? 'watch' : fallbackCategory),
+            enabled: site?.enabled !== false,
             ...(storeQuery ? { storeQuery:true } : {}),
             ...(movieOnly ? { movieOnly:true } : {}),
         };
@@ -852,7 +894,8 @@
         if (Array.isArray(fallback)) {
             if (!Array.isArray(value)) return null;
             const limited = value.slice(0, SITE_LIST_LIMIT);
-            const normalized = limited.map(site => normalizeSite(site)).filter(Boolean);
+            const fallbackCategory = key === 'watchSites' ? 'watch' : 'other';
+            const normalized = limited.map(site => normalizeSite(site, '#6366f1', fallbackCategory)).filter(Boolean);
             if (normalized.length !== limited.length) return null;
             return {
                 key,
@@ -953,12 +996,14 @@
 
     function getSiteList(key, defaults) {
         const value = get(key);
-        if (Array.isArray(value)) return value.slice(0, SITE_LIST_LIMIT).map(site => normalizeSite(site)).filter(Boolean);
-        return defaults.slice(0, SITE_LIST_LIMIT).map(site => normalizeSite(site)).filter(Boolean);
+        const fallbackCategory = key === 'watchSites' ? 'watch' : 'other';
+        if (Array.isArray(value)) return value.slice(0, SITE_LIST_LIMIT).map(site => normalizeSite(site, '#6366f1', fallbackCategory)).filter(Boolean);
+        return defaults.slice(0, SITE_LIST_LIMIT).map(site => normalizeSite(site, '#6366f1', fallbackCategory)).filter(Boolean);
     }
 
     function setSiteList(key, sites, notifyFailure = true) {
-        const normalized = sites.slice(0, SITE_LIST_LIMIT).map(site => normalizeSite(site)).filter(Boolean);
+        const fallbackCategory = key === 'watchSites' ? 'watch' : 'other';
+        const normalized = sites.slice(0, SITE_LIST_LIMIT).map(site => normalizeSite(site, '#6366f1', fallbackCategory)).filter(Boolean);
         return trySaveSetting(key, normalized, { notify:notifyFailure });
     }
 
@@ -3533,7 +3578,8 @@ section[id*="quote" i] .ipc-list-card { padding: 4px 0 !important; margin: 2px 0
                 const title = getTitleText();
                 if (!title) return;
                 const ctx = getLinkContext(title);
-                const sites = getSiteList('watchSites', DEFAULT_WATCH_SITES);
+                const sites = getSiteList('watchSites', DEFAULT_WATCH_SITES).filter(site => site.enabled !== false);
+                if (!sites.length) return;
                 const wrap = makeEl('section', {
                     id:'enh-search-buttons',
                     role:'region',
@@ -3543,23 +3589,33 @@ section[id*="quote" i] .ipc-list-card { padding: 4px 0 !important; margin: 2px 0
                     makeEl('span', { className:'enh-stream-label__dot' }),
                     'WATCH MOVIES & SHOWS'
                 );
-                const row = makeEl('div', { className:'enh-search-row' });
-                sites.forEach(site => {
-                    const url = site.storeQuery ? getCinebyHost() : applyLinkTemplate(site.url, ctx);
-                    const btn = makeEl('a', {
-                        href:url,
-                        target:'_blank',
-                        rel:'noopener noreferrer',
-                        className:'enh-search-btn',
-                        dataset:{ url, storeQuery:String(Boolean(site.storeQuery)) },
-                        style:{ '--btn-color':site.color },
-                        title:`Search ${site.name} for ${title}`,
-                        'aria-label': `Open ${site.name} search for ${title}`,
-                    }, makeEl('span', {}, site.name));
-                    row.appendChild(btn);
+                const groups = makeEl('div', { className:'enh-link-groups' });
+                const siteGroups = groupSitesByCategory(sites);
+                siteGroups.forEach(groupData => {
+                    const group = makeEl('div', { className:'enh-link-group' });
+                    if (siteGroups.length > 1 || groupData.category !== 'watch') {
+                        group.appendChild(makeEl('div', { className:'enh-link-group__label' }, getSiteCategoryLabel(groupData.category)));
+                    }
+                    const row = makeEl('div', { className:'enh-search-row' });
+                    groupData.sites.forEach(site => {
+                        const url = site.storeQuery ? getCinebyHost() : applyLinkTemplate(site.url, ctx);
+                        const btn = makeEl('a', {
+                            href:url,
+                            target:'_blank',
+                            rel:'noopener noreferrer',
+                            className:'enh-search-btn',
+                            dataset:{ url, storeQuery:String(Boolean(site.storeQuery)) },
+                            style:{ '--btn-color':site.color },
+                            title:`Search ${site.name} for ${title}`,
+                            'aria-label': `Open ${site.name} search for ${title}`,
+                        }, makeEl('span', {}, site.name));
+                        row.appendChild(btn);
+                    });
+                    group.appendChild(row);
+                    groups.appendChild(group);
                 });
                 wrap.appendChild(label);
-                wrap.appendChild(row);
+                wrap.appendChild(groups);
                 appendTitleStackItem(wrap, TITLE_STACK_ORDER.searchButtons);
                 wrap.querySelectorAll('.enh-search-btn').forEach(btn => {
                     btn.addEventListener('click', event => {
@@ -3583,16 +3639,25 @@ section[id*="quote" i] .ipc-list-card { padding: 4px 0 !important; margin: 2px 0
                 const title = getTitleText(), year = getTitleYear(), imdbId = getIMDbID();
                 if (!title || !imdbId) return;
                 const ctx = getLinkContext(title, imdbId, year);
-                const links = filterSitesForMediaType(getSiteList('externalSites', DEFAULT_EXTERNAL_SITES));
+                const links = filterSitesForMediaType(getSiteList('externalSites', DEFAULT_EXTERNAL_SITES))
+                    .filter(link => link.enabled !== false);
                 const bar = makeEl('div', { id:'enh-external-links' });
-                links.forEach(link => {
-                    bar.appendChild(makeEl('a', {
-                        href: applyLinkTemplate(link.url, ctx),
-                        target:'_blank',
-                        rel:'noopener noreferrer',
-                        className:'enh-ext-link',
-                        style:{ '--link-color':link.color },
-                    }, link.name));
+                groupSitesByCategory(links).forEach(groupData => {
+                    const group = makeEl('div', { className:'enh-external-group' });
+                    group.appendChild(makeEl('div', { className:'enh-link-group__label' }, getSiteCategoryLabel(groupData.category)));
+                    const row = makeEl('div', { className:'enh-external-group__row' });
+                    groupData.sites.forEach(link => {
+                        row.appendChild(makeEl('a', {
+                            href: applyLinkTemplate(link.url, ctx),
+                            target:'_blank',
+                            rel:'noopener noreferrer',
+                            className:'enh-ext-link',
+                            style:{ '--link-color':link.color },
+                            'aria-label': `Open ${getSiteCategoryLabel(link.category)} link: ${link.name}`,
+                        }, link.name));
+                    });
+                    group.appendChild(row);
+                    bar.appendChild(group);
                 });
                 appendTitleStackItem(bar, TITLE_STACK_ORDER.externalLinks);
                 const trailer = document.getElementById('enh-trailer-btn');
@@ -5154,6 +5219,15 @@ section[id*="quote" i] .ipc-list-card { padding: 4px 0 !important; margin: 2px 0
 .enh-stream-label__dot {
     color: ${t.accent}; font-size: 10px; line-height: 1;
 }
+.enh-link-groups { display: flex; flex-direction: column; gap: 8px; }
+.enh-link-group { min-width: 0; }
+.enh-link-group__label {
+    margin: 0 0 5px 2px;
+    color: ${t.tx3};
+    font: 700 9px/1.1 -apple-system, BlinkMacSystemFont, 'Segoe UI', sans-serif;
+    letter-spacing: .1em;
+    text-transform: uppercase;
+}
 .enh-search-row {
     display: grid;
     grid-template-columns: repeat(auto-fit, minmax(112px, 1fr));
@@ -5181,9 +5255,11 @@ section[id*="quote" i] .ipc-list-card { padding: 4px 0 !important; margin: 2px 0
 .enh-search-btn:active { transform: translateY(0); }
 /* ════ External Links ════ */
 #enh-external-links {
-    display: flex; flex-wrap: wrap; align-items: center; gap: 5px;
+    display: flex; flex-wrap: wrap; align-items: flex-end; gap: 10px;
     margin: 6px 0 4px;
 }
+.enh-external-group { display: flex; flex-direction: column; gap: 5px; min-width: 0; }
+.enh-external-group__row { display: flex; flex-wrap: wrap; align-items: center; gap: 5px; }
 .enh-ext-link {
     padding: 4px 11px; border-radius: 6px;
     font: 500 11px/1.5 -apple-system, BlinkMacSystemFont, 'Segoe UI', sans-serif;
@@ -5609,6 +5685,7 @@ section[id*="quote" i] .ipc-list-card { padding: 4px 0 !important; margin: 2px 0
 
 /* ════ Site Editors ════ */
 .enh-sites-grid { display: grid; grid-template-columns: repeat(2, minmax(0, 1fr)); gap: 12px; }
+.enh-sites-grid--single { grid-template-columns: minmax(0, 1fr); }
 .enh-site-editor {
     margin: 0;
     padding: 14px;
@@ -5630,10 +5707,11 @@ section[id*="quote" i] .ipc-list-card { padding: 4px 0 !important; margin: 2px 0
 }
 .enh-site-editor__title-wrap { display: flex; align-items: center; gap: 8px; min-width: 0; }
 .enh-site-editor__actions { display: flex; gap: 6px; flex-shrink: 0; }
-.enh-site-editor__rows { display: flex; flex-direction: column; gap: 7px; max-height: 312px; overflow: auto; padding-right: 2px; }
+.enh-site-editor__hint { margin: 0 0 10px; color: ${t.tx3}; font: 500 11px/1.35 -apple-system, BlinkMacSystemFont, 'Segoe UI', sans-serif; }
+.enh-site-editor__rows { display: flex; flex-direction: column; gap: 7px; max-height: 380px; overflow: auto; padding-right: 2px; }
 .enh-site-row {
     display: grid;
-    grid-template-columns: minmax(76px, .65fr) minmax(140px, 1.35fr) 34px 58px;
+    grid-template-columns: 30px minmax(110px, .6fr) minmax(200px, 1.35fr) minmax(132px, .78fr) 34px 56px 58px;
     gap: 6px;
     align-items: center;
 }
@@ -5648,6 +5726,16 @@ section[id*="quote" i] .ipc-list-card { padding: 4px 0 !important; margin: 2px 0
     font: 500 11px/1.3 -apple-system, BlinkMacSystemFont, 'Segoe UI', sans-serif;
     outline: none;
 }
+.enh-site-select { appearance: auto; padding: 0 5px; }
+.enh-site-visibility { display: inline-flex; align-items: center; justify-content: center; min-width: 30px; height: 30px; cursor: pointer; }
+.enh-site-enabled { position: absolute; opacity: 0; width: 1px; height: 1px; pointer-events: none; }
+.enh-site-visibility__dot { width: 16px; height: 16px; border-radius: 5px; border: 1px solid ${t.bd2}; background: ${t.sf0}; box-shadow: inset 0 0 0 3px ${t.sf0}; transition: background .15s ease, border-color .15s ease, box-shadow .15s ease; }
+.enh-site-enabled:checked + .enh-site-visibility__dot { background: ${t.accent}; border-color: ${t.accent}; box-shadow: inset 0 0 0 3px ${t.sf0}; }
+.enh-site-enabled:focus-visible + .enh-site-visibility__dot { outline: 2px solid ${t.accent}; outline-offset: 2px; }
+.enh-site-order { display: inline-flex; gap: 3px; }
+.enh-site-order-btn { width: 27px; height: 30px; padding: 0; border-radius: 7px; border: 1px solid ${t.bd1}; background: ${t.sf0}; color: ${t.tx2}; cursor: pointer; font: 700 13px/1 -apple-system, BlinkMacSystemFont, 'Segoe UI', sans-serif; }
+.enh-site-order-btn:hover:not(:disabled) { background: ${t.sf2}; color: ${t.tx0}; border-color: ${t.bd2}; }
+.enh-site-order-btn:disabled { opacity: .32; cursor: not-allowed; }
 .enh-site-color {
     width: 34px;
     height: 30px;
@@ -5677,6 +5765,9 @@ section[id*="quote" i] .ipc-list-card { padding: 4px 0 !important; margin: 2px 0
 .enh-site-input--invalid:focus {
     border-color: ${t.red};
     box-shadow: 0 0 0 2px ${t.redMuted};
+}
+@media (max-width: 900px) {
+    .enh-site-row { grid-template-columns: 30px minmax(100px, .65fr) minmax(150px, 1.35fr) minmax(116px, .8fr) 34px 56px 58px; }
 }
 
 /* ════ Mark Review Panel ════ */
@@ -5797,6 +5888,9 @@ section[id*="quote" i] .ipc-list-card { padding: 4px 0 !important; margin: 2px 0
 .enh-tv-chip:focus-visible,
 .enh-best-episode__title:focus-visible,
 .enh-site-remove:focus-visible,
+.enh-site-order-btn:focus-visible,
+.enh-site-visibility:focus-within,
+.enh-site-select:focus-visible,
 .enh-integration-tab:focus-visible,
 .enh-servarr-input:focus-visible,
 .enh-settings-footer-btn:focus-visible,
@@ -5851,21 +5945,37 @@ section[id*="quote" i] .ipc-list-card { padding: 4px 0 !important; margin: 2px 0
     function createSiteEditor({ title, key, defaults, featureKey }) {
         const editor = makeEl('div', { className:'enh-site-editor' });
         const rows = makeEl('div', { className:'enh-site-editor__rows' });
+        const defaultCategory = key === 'watchSites' ? 'watch' : 'other';
         const count = makeEl('span', {
             className:'enh-settings-route-badge', role:'status', 'aria-live':'polite', 'aria-atomic':'true',
         });
         let add = null;
         let lastSaveFailure = '';
+        const updateOrderButtons = () => {
+            const rowList = [...rows.children];
+            rowList.forEach((row, index) => {
+                const up = row.querySelector('[data-action="up"]');
+                const down = row.querySelector('[data-action="down"]');
+                if (up) up.disabled = index === 0;
+                if (down) down.disabled = index === rowList.length - 1;
+            });
+        };
         const updateCount = () => {
-            const total = rows.querySelectorAll('.enh-site-row').length;
-            count.textContent = `${total} ${total === 1 ? 'site' : 'sites'}`;
+            const siteRows = [...rows.querySelectorAll('.enh-site-row')];
+            const total = siteRows.length;
+            const visible = siteRows.filter(row => row.querySelector('[data-field="enabled"]')?.checked).length;
+            count.textContent = total ? `${visible}/${total} visible` : '0 sites';
+            count.title = `${visible} of ${total} destinations appear on IMDb pages`;
             if (add) add.disabled = total >= SITE_LIST_LIMIT;
+            updateOrderButtons();
         };
 
         const readRows = () => Array.from(rows.querySelectorAll('.enh-site-row')).map(row => ({
             name: row.querySelector('[data-field="name"]')?.value || '',
             url: row.querySelector('[data-field="url"]')?.value || '',
             color: row.querySelector('[data-field="color"]')?.value || '#6366f1',
+            category: row.querySelector('[data-field="category"]')?.value || defaultCategory,
+            enabled: row.querySelector('[data-field="enabled"]')?.checked !== false,
         }));
 
         const validateRows = () => {
@@ -5873,13 +5983,15 @@ section[id*="quote" i] .ipc-list-card { padding: 4px 0 !important; margin: 2px 0
             rows.querySelectorAll('.enh-site-row').forEach(row => {
                 const nameInput = row.querySelector('[data-field="name"]');
                 const urlInput = row.querySelector('[data-field="url"]');
+                const categoryInput = row.querySelector('[data-field="category"]');
                 const nameValid = Boolean(nameInput?.value.trim());
                 const urlValid = Boolean(normalizeUrlTemplate(urlInput?.value));
-                [[nameInput, nameValid], [urlInput, urlValid]].forEach(([input, inputValid]) => {
+                const categoryValid = SITE_CATEGORY_KEYS.has(categoryInput?.value);
+                [[nameInput, nameValid], [urlInput, urlValid], [categoryInput, categoryValid]].forEach(([input, inputValid]) => {
                     input?.classList.toggle('enh-site-input--invalid', !inputValid);
                     input?.setAttribute('aria-invalid', String(!inputValid));
                 });
-                valid = valid && nameValid && urlValid;
+                valid = valid && nameValid && urlValid && categoryValid;
             });
             return valid;
         };
@@ -5901,6 +6013,17 @@ section[id*="quote" i] .ipc-list-card { padding: 4px 0 !important; margin: 2px 0
 
         const addRow = (site = {}) => {
             const row = makeEl('div', { className:'enh-site-row', role:'group' });
+            const enabledInput = makeEl('input', {
+                type:'checkbox',
+                className:'enh-site-enabled',
+                dataset:{ field:'enabled' },
+                'aria-label':'Show destination on IMDb pages',
+            });
+            enabledInput.checked = site.enabled !== false;
+            const visibility = makeEl('label', {
+                className:'enh-site-visibility',
+                title:'Show or hide this destination on IMDb pages',
+            }, enabledInput, makeEl('span', { className:'enh-site-visibility__dot', 'aria-hidden':'true' }));
             const nameInput = makeEl('input', {
                 type:'text',
                 className:'enh-site-input',
@@ -5910,6 +6033,13 @@ section[id*="quote" i] .ipc-list-card { padding: 4px 0 !important; margin: 2px 0
                 maxlength:'40',
             });
             nameInput.value = site.name || '';
+
+            const categoryInput = makeEl('select', {
+                className:'enh-site-input enh-site-select',
+                dataset:{ field:'category' },
+                'aria-label':'Destination category',
+            }, ...SITE_CATEGORY_OPTIONS.map(option => makeEl('option', { value:option.key }, option.label)));
+            categoryInput.value = normalizeSiteCategory(site.category, defaultCategory);
 
             const urlInput = makeEl('input', {
                 type:'url',
@@ -5928,6 +6058,40 @@ section[id*="quote" i] .ipc-list-card { padding: 4px 0 !important; margin: 2px 0
                 'aria-label':'Destination color',
             });
             colorInput.value = normalizeColor(site.color);
+
+            const moveRow = direction => {
+                const target = direction === 'up' ? row.previousElementSibling : row.nextElementSibling;
+                if (!target) return;
+                const previousOrder = [...rows.children];
+                if (direction === 'up') rows.insertBefore(row, target);
+                else rows.insertBefore(target, row);
+                if (save()) {
+                    nameInput.focus();
+                    return;
+                }
+                rows.replaceChildren(...previousOrder);
+                updateCount();
+                if (lastSaveFailure === 'validation') {
+                    showToast('Finish or remove the incomplete site row before changing the order');
+                }
+            };
+            const moveUp = makeEl('button', {
+                type:'button',
+                className:'enh-site-order-btn',
+                dataset:{ action:'up' },
+                title:'Move destination up',
+                'aria-label':'Move destination up',
+                onClick: () => moveRow('up'),
+            }, '↑');
+            const moveDown = makeEl('button', {
+                type:'button',
+                className:'enh-site-order-btn',
+                dataset:{ action:'down' },
+                title:'Move destination down',
+                'aria-label':'Move destination down',
+                onClick: () => moveRow('down'),
+            }, '↓');
+            const order = makeEl('span', { className:'enh-site-order' }, moveUp, moveDown);
 
             const remove = makeEl('button', {
                 type:'button',
@@ -5958,22 +6122,32 @@ section[id*="quote" i] .ipc-list-card { padding: 4px 0 !important; margin: 2px 0
 
             const updateRowLabel = () => {
                 const destination = nameInput.value.trim() || 'new destination';
+                const category = getSiteCategoryLabel(categoryInput.value);
                 row.setAttribute('aria-label', `${destination} in ${title}`);
+                row.setAttribute('aria-description', category);
+                enabledInput.setAttribute('aria-label', `Show ${destination} on IMDb pages`);
                 remove.setAttribute('aria-label', `Remove ${destination} from ${title}`);
+                moveUp.setAttribute('aria-label', `Move ${destination} up`);
+                moveDown.setAttribute('aria-label', `Move ${destination} down`);
             };
             nameInput.addEventListener('input', updateRowLabel);
+            categoryInput.addEventListener('change', updateRowLabel);
 
-            [nameInput, urlInput, colorInput].forEach(input => {
+            [nameInput, urlInput, categoryInput, colorInput, enabledInput].forEach(input => {
                 input.addEventListener('input', () => save(false));
                 input.addEventListener('change', () => {
                     if (!save(true) && lastSaveFailure === 'validation') {
-                        showToast('Enter a site name, a valid HTTP(S) URL, and only supported template tokens');
+                        showToast('Enter a name, valid HTTP(S) URL, category, and supported template tokens');
                     }
+                    updateCount();
                 });
             });
+            row.appendChild(visibility);
             row.appendChild(nameInput);
             row.appendChild(urlInput);
+            row.appendChild(categoryInput);
             row.appendChild(colorInput);
+            row.appendChild(order);
             row.appendChild(remove);
             rows.appendChild(row);
             updateRowLabel();
@@ -6014,6 +6188,9 @@ section[id*="quote" i] .ipc-list-card { padding: 4px 0 !important; margin: 2px 0
                 makeEl('div', { className:'enh-site-editor__title' }, title), count
             ),
             makeEl('div', { className:'enh-site-editor__actions' }, add, reset)
+        ));
+        editor.appendChild(makeEl('div', { className:'enh-site-editor__hint' },
+            'Show only the destinations you use, choose a purpose, and move the essentials to the front.'
         ));
 
         getSiteList(key, defaults).forEach(site => addRow(site));
@@ -6582,13 +6759,17 @@ section[id*="quote" i] .ipc-list-card { padding: 4px 0 !important; margin: 2px 0
             makeEl('strong', {}, 'Cineby handoff'),
             'The exact Cineby root uses a one-time local title handoff. Edit or remove its row below to use an ordinary URL template.'
         ));
-        const sitesGrid = makeEl('div', { className:'enh-sites-grid', style:{ marginTop:'12px' } },
+        sitesPage.appendChild(makeEl('div', { className:'enh-settings-callout', style:{ marginTop:'8px' } },
+            makeEl('strong', {}, 'Keep it focused'),
+            'Untick a destination to hide its page button without deleting it. Categories group the visible links by purpose, and the arrows set their order.'
+        ));
+        const sitesGrid = makeEl('div', { className:'enh-sites-grid enh-sites-grid--single', style:{ marginTop:'12px' } },
             createSiteEditor({ title:'Watch search sites', key:'watchSites', defaults:DEFAULT_WATCH_SITES, featureKey:'searchButtons' }),
             createSiteEditor({ title:'External link sites', key:'externalSites', defaults:DEFAULT_EXTERNAL_SITES, featureKey:'externalLinks' })
         );
         sitesPage.append(sitesGrid, makeEl('div', { className:'enh-settings-callout', style:{ marginTop:'12px' } },
             makeEl('strong', {}, 'Templates'),
-            'URL templates support {{TITLE}}, {{IMDB_ID}}, {{YEAR}}, and the tokens documented in the README.'
+            'URL templates support {{TITLE}}, {{IMDB_ID}}, {{YEAR}}, and the tokens documented in the README. Categories include Watch, Reviews & ratings, Availability, Trailers & video, Info & research, and Other.'
         ));
 
         const integrationsPage = pages.get('integrations');

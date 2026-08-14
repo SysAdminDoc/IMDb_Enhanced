@@ -1,5 +1,18 @@
 # Changelog
 
+## 2.7.0 — 2026-08-14
+
+### Added
+
+- Added category-aware destination metadata for Watch, Reviews & ratings, Availability, Trailers & video, Info & research, and Other.
+- Added show/hide controls, compact ordering controls, and category selectors to both editable site lists; enabled destinations now render in purpose-grouped title-page sections.
+- Added UFlix, FlixMomo, Movies2Watch, WatchLuna, and 1Movies to the default watch destinations and refreshed the LookMovie label to LookMovie2.
+
+### Changed
+
+- Reworked the Sites settings page into a single, more readable editor surface with visible-count badges and a focus-preserving curation workflow for adding, editing, hiding, moving, resetting, and removing destinations.
+- Grouped external title links by purpose so review, availability, trailer, and research actions are easier to scan without changing their privacy-preserving outbound behavior.
+
 ## 2.6.0 — 2026-08-13
 
 ### Added
