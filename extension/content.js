@@ -86,7 +86,7 @@
     // =========================================================================
     //  CONSTANTS & CONFIG
     // =========================================================================
-    const VERSION = '2.10.5';
+    const VERSION = '2.10.6';
     const PREFIX  = 'imdb_enh_';
     const CINEBY_QUERY_KEY = PREFIX + 'cineby_query';
     const CINEBY_QUERY_TTL = 10 * 60 * 1000;
@@ -2146,6 +2146,43 @@ body {
     text-rendering: optimizeLegibility;
 }
 
+/* Keep IMDb's own component tokens in the selected palette. IMDb scopes many
+   of these variables to native surfaces, so body color alone cannot prevent
+   white cards with black text from leaking into a dark theme. */
+html[data-imdb-enhanced="active"] {
+    --ipt-base-bg: ${t.bg};
+    --ipt-base-color: ${t.bg};
+    --ipt-base-shade1-bg: ${t.sf1};
+    --ipt-base-shade1-color: ${t.sf1};
+    --ipt-base-shade2-bg: ${t.sf2};
+    --ipt-base-shade2-color: ${t.sf2};
+    --ipt-base-shade3-bg: ${t.sf1};
+    --ipt-base-shade3-color: ${t.sf1};
+    --ipt-baseAlt-bg: ${t.sf0};
+    --ipt-baseAlt-color: ${t.sf0};
+    --ipt-baseAlt-shade1-bg: ${t.sf1};
+    --ipt-baseAlt-shade1-color: ${t.sf1};
+    --ipt-baseAlt-shade2-bg: ${t.sf2};
+    --ipt-baseAlt-shade2-color: ${t.sf2};
+    --ipt-baseAlt-shade3-bg: ${t.sf1};
+    --ipt-baseAlt-shade3-color: ${t.sf1};
+    --ipt-on-base-color: ${t.tx0};
+    --ipt-on-base-textPrimary-color: ${t.tx0};
+    --ipt-on-base-textSecondary-color: ${t.tx1};
+    --ipt-on-base-textHint-color: ${t.tx2};
+    --ipt-on-base-textDisabled-color: ${t.tx3};
+    --ipt-on-baseAlt-color: ${t.tx0};
+    --ipt-on-baseAlt-textPrimary-color: ${t.tx0};
+    --ipt-on-baseAlt-textSecondary-color: ${t.tx1};
+    --ipt-on-baseAlt-textHint-color: ${t.tx2};
+    --ipt-on-baseAlt-textDisabled-color: ${t.tx3};
+    --ipt-on-baseAlt-accent2-color: ${t.blue};
+    --ipc-pageSection-base-bg: ${t.sf0};
+    --ipc-pageSection-baseAlt-bg: ${t.sf0};
+    --ipc-listCard-base-bg: ${t.sf1};
+    --ipc-listCard-baseAlt-bg: ${t.sf0};
+}
+
 /* Type scale — tighten the whole page */
 [data-testid="hero__primary-text"] {
     font-weight: 700 !important; letter-spacing: -0.025em !important;
@@ -2258,6 +2295,95 @@ section[data-testid="hero-parent"] [data-testid="hero-media__poster"] img {
 /* Transparent base sections (prevent double-backgrounds) */
 section.ipc-page-section.ipc-page-section--base { background: transparent !important; }
 section.ipc-page-section.ipc-page-section--none { background: transparent !important; }
+
+/* Native page surfaces and cards. These stable IMDb primitives are shared by
+   cast, user-list, poll, recommendation, and sidebar content. */
+section.ipc-page-section--baseAlt:not([data-testid="hero-parent"]),
+div.ipc-page-section--baseAlt {
+    background: ${t.sf0} !important;
+    color: ${t.tx1} !important;
+    border-color: ${t.bd1} !important;
+}
+.ipc-list-card,
+.ipc-slate-card,
+.ipc-poster-card,
+.ipc-primary-image-list-card {
+    background: ${t.sf0} !important;
+    background-color: ${t.sf0} !important;
+    color: ${t.tx1} !important;
+    border-color: ${t.bd1} !important;
+}
+.ipc-list-card:hover,
+.ipc-slate-card:hover,
+.ipc-poster-card:hover,
+.ipc-primary-image-list-card:hover {
+    background-color: ${t.sf1} !important;
+}
+.ipc-list-card .text-on-light,
+.ipc-slate-card .text-on-light,
+.ipc-primary-image-list-card .text-on-light,
+.ipc-list-card [class*="metadata"],
+.ipc-list-card [class*="description"],
+.ipc-list-card [class*="secondary"],
+.ipc-slate-card [class*="metadata"],
+.ipc-slate-card [class*="description"],
+.ipc-slate-card [class*="secondary"],
+.ipc-primary-image-list-card__content,
+.ipc-primary-image-list-card__title-metadata,
+.ipc-primary-image-list-card__secondary-text--attribute {
+    color: ${t.tx2} !important;
+}
+.ipc-list-card a,
+.ipc-slate-card a,
+.ipc-primary-image-list-card a,
+.ipc-primary-image-list-card__secondary-text--clickable {
+    color: ${t.blue} !important;
+}
+.ipc-list-card h3,
+.ipc-list-card h3 *,
+.ipc-list-card .ipc-title__text,
+.ipc-list-card [class*="list-card__title"],
+.ipc-list-card [class*="title-text"],
+.ipc-slate-card h3,
+.ipc-slate-card h3 *,
+.ipc-slate-card .ipc-title__text,
+.ipc-slate-card [class*="slate-card__title"],
+.ipc-slate-card [class*="title-text"],
+.ipc-primary-image-list-card__title {
+    color: ${t.tx0} !important;
+}
+.ipc-list-card h3:hover,
+.ipc-list-card h3:hover *,
+.ipc-list-card [class*="title"]:hover,
+.ipc-slate-card h3:hover,
+.ipc-slate-card h3:hover *,
+.ipc-slate-card [class*="title"]:hover,
+.ipc-primary-image-list-card__title:hover {
+    color: ${t.blueHi} !important;
+}
+.ipc-btn--core-base,
+.ipc-btn--core-baseAlt {
+    background: ${t.sf1} !important;
+    border-color: ${t.bd1} !important;
+    color: ${t.tx1} !important;
+}
+
+/* Cast cards use generated classes for the text, so anchor inheritance is
+   intentionally pinned to stable data-testid/class hooks. */
+[data-testid="title-cast-item__actor"] {
+    color: ${t.tx0} !important;
+}
+[data-testid="title-cast-item__actor"]:hover {
+    color: ${t.blueHi} !important;
+}
+[data-testid="title-cast-item"] .title-cast-item__characters-list,
+[data-testid="title-cast-item"] .title-cast-item__characters-list * {
+    color: ${t.blue} !important;
+}
+[data-testid="title-cast-item"] [data-testid*="eps-toggle"],
+[data-testid="title-cast-item"] > div:last-child span {
+    color: ${t.tx2} !important;
+}
 
 /* Generic list cards → transparent or elevation 0 */
 .ipc-list-card--border-line { border-color: ${t.bd0} !important; }

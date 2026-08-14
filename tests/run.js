@@ -786,6 +786,15 @@ test('theme text tokens remain readable on elevated surfaces', () => {
     assert(!script.includes('.enh-score-widget--muted { opacity:'), 'muted status widgets should not reduce all text below the theme contrast target');
 });
 
+test('theme overrides native IMDb surfaces and generated card text', () => {
+    assert(script.includes('--ipc-listCard-base-bg: ${t.sf1};'), 'native list-card surface token should follow the active theme');
+    assert(script.includes('--ipc-pageSection-baseAlt-bg: ${t.sf0};'), 'native baseAlt section token should follow the active theme');
+    assert(/\.ipc-list-card,\s*\.ipc-slate-card,\s*\.ipc-poster-card/.test(script), 'shared native card surfaces need an explicit dark-theme override');
+    assert(script.includes('.ipc-primary-image-list-card__title'), 'image list card titles need a theme-aware foreground');
+    assert(script.includes('[data-testid="title-cast-item__actor"]'), 'cast actor names need a stable theme-aware foreground');
+    assert(script.includes('.text-on-light'), 'native light-surface utility classes need to be remapped inside themed cards');
+});
+
 test('branded controls keep readable text across themes and score states', () => {
     const hooks = loadScriptTestHooks();
     const contrast = (foreground, background) => {

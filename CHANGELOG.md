@@ -1,5 +1,11 @@
 # Changelog
 
+## 2.10.6 — 2026-08-14
+
+### Fixed
+
+- Repaired dark-theme inheritance across IMDb's native cast, user-list, poll, recommendation, and sidebar cards so dark surfaces no longer carry black text or white tiles.
+
 ## 2.10.5 — 2026-08-14
 
 ### Fixed
