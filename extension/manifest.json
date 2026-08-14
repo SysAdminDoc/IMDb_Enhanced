@@ -1,9 +1,15 @@
 {
   "manifest_version": 3,
   "name": "IMDb Enhanced",
-  "version": "2.10.1",
+  "version": "2.10.2",
   "description": "A premium, decluttered IMDb experience with configurable title links, score widgets, private marks, local media integrations, and stronger ad-request blocking.",
   "author": "SysAdminDoc",
+  "icons": {
+    "16": "icons/icon16.png",
+    "32": "icons/icon32.png",
+    "48": "icons/icon48.png",
+    "128": "icons/icon128.png"
+  },
   "permissions": [
     "storage",
     "clipboardWrite",
@@ -34,7 +40,11 @@
     "service_worker": "background.js"
   },
   "action": {
-    "default_title": "IMDb Enhanced"
+    "default_title": "IMDb Enhanced",
+    "default_icon": {
+      "16": "icons/icon16.png",
+      "32": "icons/icon32.png"
+    }
   },
   "content_scripts": [
     {

@@ -13,6 +13,15 @@ assert.strictEqual(manifest.manifest_version, 3, 'extension must use Manifest V3
 assert.strictEqual(manifest.version, pkg.version, 'extension manifest version must match package version');
 assert(manifest.permissions.includes('storage'), 'extension storage permission missing');
 assert(manifest.permissions.includes('declarativeNetRequestWithHostAccess'), 'extension request-blocking permission missing');
+assert.strictEqual(manifest.icons['16'], 'icons/icon16.png', 'extension 16px icon missing');
+assert.strictEqual(manifest.icons['128'], 'icons/icon128.png', 'extension 128px icon missing');
+assert.strictEqual(manifest.action.default_icon['16'], 'icons/icon16.png', 'toolbar icon missing');
+new Set([
+    ...Object.values(manifest.icons),
+    ...Object.values(manifest.action.default_icon),
+]).forEach(iconPath => {
+    assert(fs.existsSync(path.join(root, 'extension', iconPath)), `extension icon asset missing: ${iconPath}`);
+});
 assert(manifest.host_permissions.includes('https://www.imdb.com/*'), 'IMDb host permission missing');
 assert(manifest.host_permissions.includes('https://backend.metacritic.com/*'), 'Metacritic host permission missing');
 assert(manifest.host_permissions.includes('https://*.amazon-adsystem.com/*'), 'ad-rule host permission missing');

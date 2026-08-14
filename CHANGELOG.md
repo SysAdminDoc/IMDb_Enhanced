@@ -1,5 +1,11 @@
 # Changelog
 
+## 2.10.2 — 2026-08-14
+
+### Added
+
+- Added a gold-and-black IMDb Enhanced film-frame icon in Chromium’s standard toolbar and extension sizes.
+
 ## 2.10.1 — 2026-08-14
 
 ### Fixed
