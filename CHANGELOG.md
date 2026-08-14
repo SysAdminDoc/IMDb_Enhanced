@@ -5,9 +5,11 @@
 ### Added
 
 - Extended themes, cleanup, and layout options to IMDb's search, advanced-search, and homepage routes, which previously lost every enhancement mid-navigation.
+- Added a one-way import that turns the IMDb Watched titles visible on the current page into private local Seen marks, keeping any mark you already made.
 
 ### Changed
 
+- Private mark controls and badges now step aside on cards where IMDb draws its own Watched control, so the native account action stays clickable.
 - Documented the Chromium "Allow User Scripts" toggle that Manifest V3 requires before any userscript manager can run, including the outdated "Developer mode" banner Tampermonkey still shows on Chrome 138+.
 
 ## 2.10.6 — 2026-08-14

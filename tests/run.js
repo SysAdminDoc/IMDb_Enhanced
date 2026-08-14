@@ -93,6 +93,8 @@ function loadScriptTestHooks() {
         cacheGC,
         getUserMarks,
         setUserMark,
+        readNativeWatchedControl,
+        collectNativeWatchedTitles,
         normalizeUserMarkEntries,
         USER_MARKS_SCAN_LIMIT,
         getSectionCollapseState,
@@ -401,6 +403,48 @@ test('feature activation is scoped to the current IMDb surface', () => {
 
     hooks.setTestPath('/fr/name/nm0000206/');
     assert.strictEqual(hooks.getPageSurface(), 'name', 'localized name routes should retain secondary-page scoping');
+});
+
+test('native IMDb Watched state is read only when the control positively says so', () => {
+    const hooks = loadScriptTestHooks();
+    const button = (testId, label, text = '') => ({
+        getAttribute: name => (name === 'data-testid' ? testId : name === 'aria-label' ? label : null),
+        textContent: text,
+    });
+
+    // The one state confirmed against a captured live title page.
+    const unwatched = hooks.readNativeWatchedControl(
+        button('watched-button-tt2085059', 'Mark Black Mirror as watched', 'Mark as watched'));
+    assert.strictEqual(unwatched.imdbId, 'tt2085059', 'the IMDb ID should come from the native test id');
+    assert.strictEqual(unwatched.watched, false, '"Mark as watched" means the title is NOT watched');
+    assert.strictEqual(unwatched.title, 'Black Mirror', 'the accessible label should yield the title');
+
+    assert.strictEqual(
+        hooks.readNativeWatchedControl(button('watched-button-tt0133093', 'Remove The Matrix from watched')).watched,
+        true, 'a removal label marks the title as watched');
+    assert.strictEqual(
+        hooks.readNativeWatchedControl(button('watched-button-tt0133093', 'Mark The Matrix as not watched')).watched,
+        true, 'an undo label marks the title as watched');
+    assert.strictEqual(
+        hooks.readNativeWatchedControl(button('watched-button-tt0133093', '', 'Watched')).watched,
+        true, 'a bare Watched label marks the title as watched');
+    assert.strictEqual(
+        hooks.readNativeWatchedControl(button('watched-button-tt0133093', 'Some future wording')).watched,
+        null, 'unrecognized wording must stay unknown rather than defaulting to watched');
+    assert.strictEqual(
+        hooks.readNativeWatchedControl(button('some-other-button-tt0133093', 'Watched')),
+        null, 'only IMDb watched controls should be read');
+
+    const scope = {
+        querySelectorAll: () => [
+            button('watched-button-tt0133093', 'Remove The Matrix from watched'),
+            button('watched-button-tt2085059', 'Mark Black Mirror as watched', 'Mark as watched'),
+            button('watched-button-tt0903747', 'Unknown future wording'),
+        ],
+    };
+    const collected = hooks.collectNativeWatchedTitles(scope);
+    assert.deepStrictEqual([...collected.keys()], ['tt0133093'], 'only positively watched titles should be collected');
+    assert.strictEqual(collected.get('tt0133093'), 'The Matrix');
 });
 
 test('browse surfaces receive presentation and cleanup without title tools', () => {

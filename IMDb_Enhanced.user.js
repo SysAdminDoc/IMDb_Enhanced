@@ -357,6 +357,46 @@
             console.warn('[IMDb Enhanced] cache GC failed:', e);
         }
     }
+    /* IMDb's own account-backed Watched control. The captured 2026 desktop DOM
+       exposes it as `data-testid="watched-button-tt<id>"` with an accessible
+       label of "Mark <title> as watched" while the title is unwatched. Only the
+       unwatched wording is confirmed against a live capture, so the reader below
+       treats a title as watched exclusively when the control positively says so;
+       an unrecognized label is reported as unknown rather than watched. Guessing
+       the other way would silently invent Seen marks the user never made. */
+    const NATIVE_WATCHED_SELECTOR = '[data-testid^="watched-button-tt"]';
+    const NATIVE_WATCHED_ON = /(?:remove\b[^]*\bfrom\s+watched|mark\b[^]*\bas\s+(?:not\s+watched|unwatched)|^\s*watched\s*$)/i;
+    const NATIVE_WATCHED_OFF = /mark\b[^]*\bas\s+watched/i;
+    const NATIVE_WATCHED_SCAN_LIMIT = 5000;
+
+    function readNativeWatchedControl(button) {
+        if (!button) return null;
+        const testId = String(button.getAttribute('data-testid') || '');
+        const imdbId = /^watched-button-(tt\d{5,12})$/i.exec(testId)?.[1];
+        if (!imdbId) return null;
+        const label = String(button.getAttribute('aria-label') || '').slice(0, 300);
+        const text = String(button.textContent || '').replace(/\s+/g, ' ').trim().slice(0, 300);
+        let watched = null;
+        if (NATIVE_WATCHED_OFF.test(label) || NATIVE_WATCHED_OFF.test(text)) watched = false;
+        else if (NATIVE_WATCHED_ON.test(label) || NATIVE_WATCHED_ON.test(text)) watched = true;
+        const named = /^mark\s+(.+?)\s+as\s+(?:not\s+)?(?:un)?watched$/i.exec(label)
+            || /^remove\s+(.+?)\s+from\s+watched$/i.exec(label);
+        return { imdbId, watched, title:named?.[1]?.trim().slice(0, 160) || '' };
+    }
+
+    function collectNativeWatchedTitles(scope = document) {
+        const found = new Map();
+        const buttons = scope?.querySelectorAll?.(NATIVE_WATCHED_SELECTOR) || [];
+        let inspected = 0;
+        for (const button of buttons) {
+            if (++inspected > NATIVE_WATCHED_SCAN_LIMIT) break;
+            const state = readNativeWatchedControl(button);
+            if (!state || state.watched !== true) continue;
+            if (!found.has(state.imdbId)) found.set(state.imdbId, state.title);
+        }
+        return found;
+    }
+
     function normalizeUserMark(record) {
         if (record === 'watched' || record === 'skip') return { state: record, title: '', ts: 0 };
         if (!record || typeof record !== 'object') return null;
@@ -4712,6 +4752,11 @@ section[id*="quote" i] .ipc-list-card { padding: 4px 0 !important; margin: 2px 0
                     pointer-events:none;
                 }
                 .enh-mark-badge--skip{background:${t.red};color:${readableTextColor(t.red)}}
+                /* IMDb draws its own Watched control on the same corner of a card.
+                   Where one is present, the local controls and badge step aside so
+                   the native account action stays clickable and unambiguous. */
+                .enh-markable-card[data-enh-native-watched="true"] .enh-mark-controls{top:44px}
+                .enh-markable-card[data-enh-native-watched="true"] .enh-mark-badge{left:auto;right:6px}
             `, 'enh-watchedMarking');
 
             this._clickHandler = (e) => {
@@ -4799,6 +4844,7 @@ section[id*="quote" i] .ipc-list-card { padding: 4px 0 !important; margin: 2px 0
             card.dataset.enhMarkId = imdbId;
             card.dataset.enhMarkTitle = title || imdbId;
             card.classList.add('enh-markable-card');
+            card.dataset.enhNativeWatched = String(Boolean(card.querySelector(NATIVE_WATCHED_SELECTOR)));
 
             if (!Array.from(card.children).some(child => child.classList?.contains('enh-mark-controls'))) {
                 const controls = makeEl('div', { className: 'enh-mark-controls' },
@@ -4878,6 +4924,7 @@ section[id*="quote" i] .ipc-list-card { padding: 4px 0 !important; margin: 2px 0
                 card.classList.remove('enh-markable-card', 'enh-marked', 'enh-marked--watched', 'enh-marked--skip');
                 delete card.dataset.enhMarkId;
                 delete card.dataset.enhMarkTitle;
+                delete card.dataset.enhNativeWatched;
                 card.querySelectorAll('.enh-mark-controls,.enh-mark-badge').forEach(el => el.remove());
             });
         }
@@ -7346,6 +7393,40 @@ section[data-testid="hero-parent"].enh-editorial-native-hidden { display: none !
             },
         }, 'Clear all');
 
+        /* One-way: IMDb's account Watched state can seed local Seen marks, never
+           the reverse. Existing marks win, so an imported title can never
+           overwrite a deliberate Skip. */
+        const importNative = makeEl('button', {
+            type:'button',
+            className:'enh-settings-footer-btn',
+            'aria-label':'Import IMDb Watched titles shown on this page into private Seen marks',
+            onClick: () => {
+                const found = collectNativeWatchedTitles(document);
+                if (!found.size) {
+                    showToast('No IMDb Watched titles found on this page. Sign in and open a list, chart, or title that shows the Watched control.');
+                    return;
+                }
+                const marks = { ...getUserMarks(true) };
+                let imported = 0;
+                let kept = 0;
+                found.forEach((title, id) => {
+                    if (marks[id]) { kept++; return; }
+                    marks[id] = { state:'watched', title:String(title || '').trim().slice(0, USER_MARK_TITLE_LIMIT), ts:Date.now() };
+                    imported++;
+                });
+                if (!imported) {
+                    showToast(`All ${kept} IMDb Watched ${kept === 1 ? 'title' : 'titles'} on this page already have a local mark`);
+                    return;
+                }
+                if (!setUserMarks(marks)) return;
+                refreshFeature('watchedMarking');
+                render();
+                showToast(kept
+                    ? `Imported ${imported} as local Seen; kept ${kept} existing ${kept === 1 ? 'mark' : 'marks'}`
+                    : `Imported ${imported} IMDb Watched ${imported === 1 ? 'title' : 'titles'} as local Seen`);
+            },
+        }, 'Import from page');
+
         const render = () => {
             disarmClearAll();
             const entries = getUserMarkEntries();
@@ -7392,7 +7473,12 @@ section[data-testid="hero-parent"].enh-editorial-native-hidden { display: none !
 
         panel.appendChild(makeEl('div', { className:'enh-marks-panel__header' },
             makeEl('div', { className:'enh-marks-panel__title' }, 'Private title marks'),
-            makeEl('div', { className:'enh-site-editor__actions' }, count, clearAll)
+            makeEl('div', { className:'enh-site-editor__actions' }, count, importNative, clearAll)
+        ));
+        panel.appendChild(makeEl('div', { className:'enh-servarr-note' },
+            'These marks stay on this device and never change your IMDb account. '
+            + 'Import from page copies the IMDb Watched titles visible on the page behind the settings dialog into local Seen marks; '
+            + 'existing marks are kept, and nothing is ever sent back to IMDb.'
         ));
         panel.appendChild(rows);
         document.addEventListener('imdb-enhanced:marks-updated', render);
