@@ -1,7 +1,7 @@
 // ==UserScript==
 // @name         IMDb Enhanced
 // @namespace    https://github.com/SysAdminDoc
-// @version      2.10.2
+// @version      2.10.3
 // @updateURL    https://raw.githubusercontent.com/SysAdminDoc/IMDb_Enhanced/main/IMDb_Enhanced.user.js
 // @downloadURL  https://raw.githubusercontent.com/SysAdminDoc/IMDb_Enhanced/main/IMDb_Enhanced.user.js
 // @description  Premium IMDb overhaul: cleaner pages, modern themes, refined score widgets, media library indicators, quick navigation, richer external links, TV tools, search shortcuts, and polished settings import/export
@@ -42,7 +42,7 @@
     // =========================================================================
     //  CONSTANTS & CONFIG
     // =========================================================================
-    const VERSION = '2.10.2';
+    const VERSION = '2.10.3';
     const PREFIX  = 'imdb_enh_';
     const CINEBY_QUERY_KEY = PREFIX + 'cineby_query';
     const CINEBY_QUERY_TTL = 10 * 60 * 1000;
@@ -172,7 +172,7 @@
         themeVariant: 'dark', // dark | oled | midnight | light | highContrast
         themeAuto: false,
         // Sections
-        collapsibleSections: true, sectionCollapseState: {}, spoilerBlur: true, quickNav: true,
+        collapsibleSections: true, sectionCollapseState: {}, spoilerBlur: false, quickNav: true,
         // Scores
         inlineRTScore: true, inlineLetterboxdScore: true, inlineMetacriticScore: true,
         ratingHistogram: true, streamAvailability: true,
@@ -240,7 +240,7 @@
         watchedMarking: 'Adds private Seen and Skip marks that stay in this userscript and do not change IMDb Watched.',
         servarrIntegration: 'Adds optional local Radarr/Sonarr quick-add buttons with library status indicator when API settings are configured.',
         mediaServerIntegration: 'Checks configured local Plex, Jellyfin, and Emby servers and shows whether the title is already in your library.',
-        tvEpisodeTools: 'Blurs episode synopses and surfaces the highest-rated episodes where episode data is present.',
+        tvEpisodeTools: 'Surfaces the highest-rated episodes; synopsis blur remains opt-in through Spoiler blur on plot.',
         tvShowEnhancements: 'Adds TV-specific lookup shortcuts on series pages.',
         subtitleLinks: 'Adds subtitle lookup links in the details section.',
         quickCopyID: 'Adds a visible IMDb ID copy button beside the title.',
@@ -5084,7 +5084,7 @@ section[id*="quote" i] .ipc-list-card { padding: 4px 0 !important; margin: 2px 0
             const run = () => {
                 if (!isCurrent()) return;
                 const episodes = this._collectEpisodes();
-                this._blurPlots(episodes);
+                if (get('spoilerBlur')) this._blurPlots(episodes);
                 this._renderBestEpisodes(episodes);
             };
             waitFor('main, body').then(run).catch(() => { if (isCurrent()) run(); });

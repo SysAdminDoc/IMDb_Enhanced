@@ -725,6 +725,12 @@ test('editorial title layout owns a stable full-width title surface', () => {
     assert(/function findRatingBar\(\)[\s\S]*?const editorialRail = document\.getElementById\('enh-editorial-score-rail'\)[\s\S]*?if \(editorialRail\) return editorialRail/.test(script), 'rating features should target the editorial score rail');
 });
 
+test('blur is opt-in and never part of the default title or episode experience', () => {
+    assert(/sectionCollapseState: \{\}, spoilerBlur: false/.test(script), 'plot spoiler blur must be disabled by default');
+    assert(/const episodes = this\._collectEpisodes\(\);[\s\S]*?if \(get\('spoilerBlur'\)\) this\._blurPlots\(episodes\);/.test(script), 'episode synopsis blur must respect the opt-in setting');
+    assert(readme.includes('Synopsis blur is opt-in and off by default.'), 'README should explain the non-blurring default');
+});
+
 test('all enhancements respect the operating-system reduced-motion preference', () => {
     const hooks = loadScriptTestHooks();
     assert.strictEqual(hooks.getEnhancementScrollBehavior(), 'smooth');

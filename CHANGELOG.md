@@ -1,5 +1,11 @@
 # Changelog
 
+## 2.10.3 — 2026-08-14
+
+### Changed
+
+- Disabled plot and episode-synopsis blur in the default experience; both remain available as explicit settings.
+
 ## 2.10.2 — 2026-08-14
 
 ### Added
