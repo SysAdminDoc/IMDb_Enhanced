@@ -4,6 +4,7 @@
 
 ### Added
 
+- Added a reproducible Chromium Manifest V3 extension build with extension storage, background cross-origin requests, and dynamic ad-request rules alongside the existing userscript.
 - Added category-aware destination metadata for Watch, Reviews & ratings, Availability, Trailers & video, Info & research, and Other.
 - Added show/hide controls, compact ordering controls, and category selectors to both editable site lists; enabled destinations now render in purpose-grouped title-page sections.
 - Added UFlix, FlixMomo, Movies2Watch, WatchLuna, and 1Movies to the default watch destinations and refreshed the LookMovie label to LookMovie2.

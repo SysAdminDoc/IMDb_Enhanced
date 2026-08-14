@@ -4,11 +4,11 @@
 
 # IMDb Enhanced
 
-A desktop IMDb overhaul delivered as a single userscript. Cleaner pages, modern themes, aggregated scores from Rotten Tomatoes, Letterboxd, and Metacritic, streaming site quick-search, Radarr/Sonarr integration, Plex/Jellyfin/Emby library indicators, and more.
+A desktop IMDb overhaul delivered as a single userscript and a Chromium Manifest V3 extension. Cleaner pages, modern themes, aggregated scores from Rotten Tomatoes, Letterboxd, and Metacritic, streaming site quick-search, Radarr/Sonarr integration, Plex/Jellyfin/Emby library indicators, and more.
 
 ## Features
 
-**Page Cleanup** - Removes current IMDb ad shells, sticky placements, tracking pixels, IMDbPro upsells, news modules, app prompts, sponsored content, and contribution prompts at `document-start`. Known ad and measurement requests are also cancelled when the userscript manager exposes `GM_webRequest`; Chromium Tampermonkey 5.2+ does not expose that API, so a userscript cannot guarantee network-level blocking there.
+**Page Cleanup** - Removes current IMDb ad shells, sticky placements, tracking pixels, IMDbPro upsells, news modules, app prompts, sponsored content, and contribution prompts at `document-start`. The extension build also uses Manifest V3 dynamic request rules for the known ad and measurement hosts; the userscript keeps the manager-dependent `GM_webRequest` path.
 
 **Theme System** - Five themes (Dark, OLED, Midnight, Light, High Contrast) with a full design system: semantic colors, 3-tier elevation, 4px grid spacing, squircle avatars, hover lifts, and smooth transitions. Auto-theme follows OS preference.
 
@@ -36,13 +36,24 @@ Third-party lookups omit destination cookies. Responses are rendered as text, ou
 
 **Extras** - Collapsible sections with remembered state, keyboard-revealable spoiler blur, a keyboard-complete expanded-links menu, quick navigation sidebar, wider layout, compact header, subtitle links, copy IMDb ID button, and settings import/export.
 
-## Install
+## Userscript install
 
 1. On a desktop browser, install [Tampermonkey](https://www.tampermonkey.net/) or [Violentmonkey](https://violentmonkey.github.io/).
 2. [Click here to install the userscript](https://raw.githubusercontent.com/SysAdminDoc/IMDb_Enhanced/main/IMDb_Enhanced.user.js).
 3. Visit any IMDb title page. Open settings with the gear icon.
 
 Updates are delivered automatically via the `@updateURL` metadata.
+
+## Chromium extension
+
+The extension build is generated locally from the same userscript source and adds proper extension storage, privileged cross-origin lookups, and stronger request blocking.
+
+1. Install Node.js 18 or newer.
+2. From the repository root, run `npm run build:extension`.
+3. Open `chrome://extensions`, enable **Developer mode**, choose **Load unpacked**, and select the repository's `extension` folder.
+4. Open or refresh an IMDb page. After source changes, run the build command again and use the extension card's reload button before refreshing IMDb.
+
+The extension does not auto-update from GitHub; reload the unpacked build after local changes. Its permissions are limited to the supported IMDb/Cineby pages, the on-demand score/trailer services, the known ad hosts, and localhost/127.0.0.1 media integrations.
 
 ## Configuration
 
@@ -86,7 +97,7 @@ Click the gear icon on any covered IMDb page to open the six-section settings wo
 
 - Desktop `www.imdb.com` title, person, list/watchlist, chart, and episode-list routes, including localized desktop paths.
 - Desktop Tampermonkey and Violentmonkey. Mobile IMDb domains are intentionally outside the match scope.
-- Full request cancellation is manager-dependent. Visual ad cleanup remains active when `GM_webRequest` is unavailable.
+- Chromium Manifest V3 extension builds use the background service worker for cross-origin requests and dynamic ad rules; userscript request cancellation remains manager-dependent. Visual ad cleanup remains active when `GM_webRequest` is unavailable.
 
 ## License
 

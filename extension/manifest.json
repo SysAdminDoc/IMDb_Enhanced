@@ -1,0 +1,62 @@
+{
+  "manifest_version": 3,
+  "name": "IMDb Enhanced",
+  "version": "2.7.0",
+  "description": "A premium, decluttered IMDb experience with configurable title links, score widgets, private marks, local media integrations, and stronger ad-request blocking.",
+  "author": "SysAdminDoc",
+  "permissions": [
+    "storage",
+    "clipboardWrite",
+    "declarativeNetRequestWithHostAccess"
+  ],
+  "host_permissions": [
+    "https://www.imdb.com/*",
+    "https://www.cineby.at/*",
+    "https://www.rottentomatoes.com/*",
+    "https://backend.metacritic.com/*",
+    "https://www.metacritic.com/*",
+    "https://letterboxd.com/*",
+    "https://www.justwatch.com/*",
+    "https://www.youtube.com/*",
+    "https://*.amazon-adsystem.com/*",
+    "https://advertising.amazon.dev/*",
+    "https://images-na.ssl-images-amazon.com/*",
+    "https://sb.scorecardresearch.com/*",
+    "https://fls-na.amazon.com/*",
+    "https://unagi.amazon.com/*",
+    "https://unagi-na.amazon.com/*",
+    "http://localhost/*",
+    "https://localhost/*",
+    "http://127.0.0.1/*",
+    "https://127.0.0.1/*"
+  ],
+  "background": {
+    "service_worker": "background.js"
+  },
+  "action": {
+    "default_title": "IMDb Enhanced"
+  },
+  "content_scripts": [
+    {
+      "matches": [
+        "https://www.imdb.com/title/*",
+        "https://www.imdb.com/name/*",
+        "https://www.imdb.com/*/title/*",
+        "https://www.imdb.com/*/name/*",
+        "https://www.imdb.com/user/*/watchlist*",
+        "https://www.imdb.com/list/*",
+        "https://www.imdb.com/chart/*",
+        "https://www.imdb.com/*/user/*/watchlist*",
+        "https://www.imdb.com/*/list/*",
+        "https://www.imdb.com/*/chart/*",
+        "https://www.cineby.at/*"
+      ],
+      "js": [
+        "content.js"
+      ],
+      "run_at": "document_start",
+      "all_frames": false
+    }
+  ],
+  "minimum_chrome_version": "110"
+}

@@ -1,11 +1,13 @@
 {
   "name": "imdb-enhanced",
   "version": "2.7.0",
-  "description": "Desktop IMDb enhancement userscript",
+  "description": "Desktop IMDb enhancement userscript and Chromium extension",
   "private": true,
   "scripts": {
-    "test": "node tests/run.js",
-    "version": "node scripts/sync-version.js && git add IMDb_Enhanced.user.js"
+    "build:extension": "node scripts/build-extension.js",
+    "test:extension": "node scripts/build-extension.js --check && node tests/extension.js",
+    "test": "node scripts/build-extension.js && node tests/run.js && node tests/extension.js",
+    "version": "node scripts/sync-version.js && node scripts/build-extension.js && git add IMDb_Enhanced.user.js extension/content.js extension/manifest.json"
   },
   "license": "MIT",
   "repository": {
