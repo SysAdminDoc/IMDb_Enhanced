@@ -86,7 +86,7 @@
     // =========================================================================
     //  CONSTANTS & CONFIG
     // =========================================================================
-    const VERSION = '2.10.6';
+    const VERSION = '2.11.0';
     const PREFIX  = 'imdb_enh_';
     const CINEBY_QUERY_KEY = PREFIX + 'cineby_query';
     const CINEBY_QUERY_TTL = 10 * 60 * 1000;

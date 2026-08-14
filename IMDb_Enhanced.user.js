@@ -1,7 +1,7 @@
 // ==UserScript==
 // @name         IMDb Enhanced
 // @namespace    https://github.com/SysAdminDoc
-// @version      2.10.6
+// @version      2.11.0
 // @updateURL    https://raw.githubusercontent.com/SysAdminDoc/IMDb_Enhanced/main/IMDb_Enhanced.user.js
 // @downloadURL  https://raw.githubusercontent.com/SysAdminDoc/IMDb_Enhanced/main/IMDb_Enhanced.user.js
 // @description  Premium IMDb overhaul: cleaner pages, modern themes, refined score widgets, media library indicators, quick navigation, richer external links, TV tools, search shortcuts, and polished settings import/export
@@ -49,7 +49,7 @@
     // =========================================================================
     //  CONSTANTS & CONFIG
     // =========================================================================
-    const VERSION = '2.10.6';
+    const VERSION = '2.11.0';
     const PREFIX  = 'imdb_enh_';
     const CINEBY_QUERY_KEY = PREFIX + 'cineby_query';
     const CINEBY_QUERY_TTL = 10 * 60 * 1000;
