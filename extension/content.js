@@ -86,7 +86,7 @@
     // =========================================================================
     //  CONSTANTS & CONFIG
     // =========================================================================
-    const VERSION = '2.9.0';
+    const VERSION = '2.10.0';
     const PREFIX  = 'imdb_enh_';
     const CINEBY_QUERY_KEY = PREFIX + 'cineby_query';
     const CINEBY_QUERY_TTL = 10 * 60 * 1000;
@@ -210,7 +210,7 @@
         removeRelatedInterests: true, removeContribution: true,
         removeSponsoredRecs: true, removeAppBanner: true,
         // Appearance
-        modernUI: true, compactHeader: true, enhancedRatingDisplay: true,
+        modernUI: true, editorialTitleSurface: true, compactHeader: true, enhancedRatingDisplay: true,
         widerLayout: true, ratingColorCoding: true,
         // Theme
         themeVariant: 'dark', // dark | oled | midnight | light | highContrast
@@ -264,6 +264,7 @@
         removeSponsoredRecs: 'Suppresses sponsored recommendation blocks where IMDb inserts them.',
         removeAppBanner: 'Hides app-install prompts shown on desktop pages.',
         modernUI: 'Applies the selected theme, typography, focus, and component treatment.',
+        editorialTitleSurface: 'Rebuilds title pages into a stable editorial hero with dedicated action, rating, and research regions.',
         compactHeader: 'Slims the IMDb header while keeping it readable and stable.',
         enhancedRatingDisplay: 'Elevates IMDb rating and popularity blocks with clearer emphasis.',
         widerLayout: 'Uses more horizontal room across normal desktop window sizes.',
@@ -572,6 +573,231 @@
         return heading?.parentElement || title.parentElement || title;
     }
 
+    function getEditorialPosterSource(root = document) {
+        const poster = root?.querySelector?.('[data-testid="hero-media__poster"] img');
+        const source = poster?.currentSrc || poster?.src || poster?.getAttribute?.('src') || '';
+        try {
+            const url = new URL(source, location.href);
+            return /^https?:$/.test(url.protocol) ? url.href : '';
+        } catch { return ''; }
+    }
+
+    function getEditorialBackdropValue(source) {
+        if (!source) return '';
+        return `url("${source.replace(/["\\)]/g, character => `\\${character}`)}")`;
+    }
+
+    function getEditorialMetadata() {
+        const ld = getLDData();
+        const values = [];
+        const rawType = Array.isArray(ld?.['@type']) ? ld['@type'].join(' ') : String(ld?.['@type'] || '');
+        const type = isTVType()
+            ? (rawType.includes('TVMiniSeries') ? 'TV Mini Series' : 'TV Series')
+            : 'Movie';
+        if (type) values.push(type);
+        const year = getTitleYear();
+        if (year) values.push(year);
+        const nativeMeta = document.querySelector('[data-testid="hero__pageTitle"]')?.textContent || '';
+        const contentRating = typeof ld?.contentRating === 'string'
+            ? ld.contentRating.trim()
+            : nativeMeta.match(/\b(?:TV-Y|TV-Y7|TV-G|TV-PG|TV-14|TV-MA|G|PG|PG-13|R|NC-17)\b/i)?.[0] || '';
+        if (contentRating) values.push(contentRating);
+        const duration = String(ld?.duration || '').match(/^PT(?:(\d+)H)?(?:(\d+)M)?$/i);
+        if (duration) {
+            const hours = Number(duration[1] || 0);
+            const minutes = Number(duration[2] || 0);
+            const formatted = hours ? `${hours}h${minutes ? ` ${minutes}m` : ''}` : minutes ? `${minutes}m` : '';
+            if (formatted) values.push(formatted);
+        }
+        return values;
+    }
+
+    function getEditorialSynopsis() {
+        const plot = document.querySelector('[data-testid="plot-l"], [data-testid="plot-xl"], [data-testid="plot"]');
+        const visible = plot?.textContent?.replace(/\s+/g, ' ').trim();
+        if (visible) return visible.slice(0, 900);
+        try {
+            const description = String(getLDData()?.description || '').replace(/\s+/g, ' ').trim();
+            return description.slice(0, 900);
+        } catch { return ''; }
+    }
+
+    function getEditorialLinkData(selector, limit = 4) {
+        const links = [];
+        for (const anchor of document.querySelectorAll(selector)) {
+            if (links.length >= limit) break;
+            const label = anchor.textContent?.replace(/\s+/g, ' ').trim();
+            if (!label) continue;
+            try {
+                const url = new URL(anchor.href, location.href);
+                if (url.origin !== location.origin) continue;
+                links.push({ label, href:url.href });
+            } catch { /* ignore incomplete hydration links */ }
+        }
+        return links;
+    }
+
+    function ensureEditorialSurface() {
+        const existing = document.getElementById('enh-editorial-surface');
+        if (existing) return existing;
+        const nativeHero = document.querySelector('section[data-testid="hero-parent"]');
+        const imdbId = getIMDbID();
+        const title = getTitleText();
+        if (!nativeHero?.parentElement || !imdbId || !title) return null;
+
+        const posterSource = getEditorialPosterSource(nativeHero);
+        const surface = makeEl('section', {
+            id:'enh-editorial-surface',
+            className:'enh-editorial-surface',
+            role:'region',
+            'aria-label':`${title} title surface`,
+        });
+        if (posterSource) surface.style.setProperty('--enh-editorial-backdrop', getEditorialBackdropValue(posterSource));
+
+        const subnav = makeEl('div', { className:'enh-editorial-subnav' });
+        const subnavLeft = makeEl('nav', { className:'enh-editorial-subnav__left', 'aria-label':'Title navigation' });
+        if (isTVType()) {
+            subnavLeft.appendChild(makeEl('a', {
+                href:`/title/${imdbId}/episodes/`,
+                className:'enh-editorial-subnav__link',
+            }, 'Episode guide'));
+        }
+        const subnavRight = makeEl('nav', { className:'enh-editorial-subnav__right', 'aria-label':'Title topics' });
+        [
+            ['Cast & crew', `/title/${imdbId}/fullcredits/`],
+            ['User reviews', `/title/${imdbId}/reviews/`],
+            ['Trivia', `/title/${imdbId}/trivia/`],
+        ].forEach(([label, href]) => subnavRight.appendChild(makeEl('a', {
+            href, className:'enh-editorial-subnav__link',
+        }, label)));
+        subnav.append(subnavLeft, subnavRight);
+
+        const poster = makeEl('div', { className:'enh-editorial-poster' });
+        if (posterSource) {
+            poster.appendChild(makeEl('img', {
+                src:posterSource,
+                alt:`${title} poster`,
+                loading:'eager',
+            }));
+        }
+
+        const identity = makeEl('div', { className:'enh-editorial-identity' },
+            makeEl('h1', { className:'enh-editorial-title' }, title),
+            makeEl('div', { className:'enh-editorial-meta' }, getEditorialMetadata().join('  ·  ')),
+            makeEl('div', { id:'enh-editorial-action-slot' }),
+            makeEl('div', { id:'enh-editorial-standalone-slot' })
+        );
+        const scoreRail = makeEl('div', {
+            id:'enh-editorial-score-rail',
+            role:'group',
+            'aria-label':'Title ratings and availability',
+        });
+        const hero = makeEl('div', { className:'enh-editorial-hero' }, poster, identity, scoreRail);
+
+        const about = makeEl('section', {
+            className:'enh-editorial-about',
+            'aria-labelledby':'enh-editorial-about-title',
+        }, makeEl('h2', { id:'enh-editorial-about-title' }, 'About this title'));
+        const synopsis = getEditorialSynopsis();
+        if (synopsis) about.appendChild(makeEl('p', { className:'enh-editorial-synopsis' }, synopsis));
+        const cast = getEditorialLinkData('[data-testid="title-cast-item"] a', 3);
+        if (cast.length) {
+            const row = makeEl('div', { className:'enh-editorial-detail-row' }, makeEl('strong', {}, 'Stars'));
+            cast.forEach((person, index) => {
+                if (index) row.appendChild(makeEl('span', { className:'enh-editorial-detail-separator', 'aria-hidden':'true' }, '·'));
+                row.appendChild(makeEl('a', { href:person.href }, person.label));
+            });
+            about.appendChild(row);
+        }
+        about.appendChild(makeEl('a', {
+            href:`/title/${imdbId}/fullcredits/`,
+            className:'enh-editorial-about-link',
+        }, 'View full cast & crew'));
+
+        const watch = makeEl('section', {
+            className:'enh-editorial-watch',
+            'aria-labelledby':'enh-editorial-watch-title',
+        },
+            makeEl('div', { className:'enh-editorial-watch__header' },
+                makeEl('h2', { id:'enh-editorial-watch-title' }, 'Where to watch'),
+                makeEl('p', {}, 'Reviews, availability, trailers and research')
+            ),
+            makeEl('div', { id:'enh-editorial-research-slot' })
+        );
+        const details = makeEl('div', { className:'enh-editorial-details' }, about, watch);
+        surface.append(subnav, hero, details);
+        nativeHero.parentElement.insertBefore(surface, nativeHero);
+        return surface;
+    }
+
+    function refreshEditorialSurface(surface, nativeHero = document) {
+        if (!surface) return;
+        const title = getTitleText();
+        const titleNode = surface.querySelector('.enh-editorial-title');
+        if (title && titleNode && titleNode.textContent !== title) {
+            titleNode.textContent = title;
+            surface.setAttribute('aria-label', `${title} title surface`);
+            const poster = surface.querySelector('.enh-editorial-poster img');
+            if (poster) poster.alt = `${title} poster`;
+        }
+
+        const posterSource = getEditorialPosterSource(nativeHero);
+        const poster = surface.querySelector('.enh-editorial-poster');
+        if (posterSource && poster) {
+            let image = poster.querySelector('img');
+            if (!image) {
+                image = makeEl('img', {
+                    src:posterSource,
+                    alt:`${title || 'Title'} poster`,
+                    loading:'eager',
+                });
+                poster.appendChild(image);
+            } else if (image.src !== posterSource) {
+                image.src = posterSource;
+            }
+            surface.style.setProperty('--enh-editorial-backdrop', getEditorialBackdropValue(posterSource));
+        }
+
+        const metadataNode = surface.querySelector('.enh-editorial-meta');
+        const metadata = getEditorialMetadata().join('  ·  ');
+        if (metadataNode && metadata && metadataNode.textContent !== metadata) metadataNode.textContent = metadata;
+
+        const about = surface.querySelector('.enh-editorial-about');
+        const synopsis = getEditorialSynopsis();
+        if (about && synopsis) {
+            const synopsisNode = about.querySelector('.enh-editorial-synopsis');
+            if (synopsisNode) synopsisNode.textContent = synopsis;
+            else about.insertBefore(makeEl('p', { className:'enh-editorial-synopsis' }, synopsis), about.querySelector('.enh-editorial-about-link'));
+        }
+
+        const cast = getEditorialLinkData('[data-testid="title-cast-item"] a', 3);
+        if (about && cast.length) {
+            const signature = cast.map(person => `${person.label}|${person.href}`).join('||');
+            if (about.dataset.editorialCastSignature !== signature) {
+                const row = makeEl('div', { className:'enh-editorial-detail-row' }, makeEl('strong', {}, 'Stars'));
+                cast.forEach((person, index) => {
+                    if (index) row.appendChild(makeEl('span', { className:'enh-editorial-detail-separator', 'aria-hidden':'true' }, '·'));
+                    row.appendChild(makeEl('a', { href:person.href }, person.label));
+                });
+                const current = about.querySelector('.enh-editorial-detail-row');
+                if (current) current.replaceWith(row);
+                else about.insertBefore(row, about.querySelector('.enh-editorial-about-link'));
+                about.dataset.editorialCastSignature = signature;
+            }
+        }
+
+        const subnavLeft = surface.querySelector('.enh-editorial-subnav__left');
+        const episodeLink = subnavLeft?.querySelector('a[href*="/episodes/"]');
+        if (isTVType() && subnavLeft && !episodeLink) {
+            subnavLeft.appendChild(makeEl('a', {
+                href:`/title/${getIMDbID()}/episodes/`,
+                className:'enh-editorial-subnav__link',
+            }, 'Episode guide'));
+        } else if (!isTVType()) {
+            episodeLink?.remove();
+        }
+    }
+
     function insertAfter(anchor, node) {
         if (!anchor?.parentElement || !node) return false;
         anchor.parentElement.insertBefore(node, anchor.nextSibling);
@@ -581,6 +807,12 @@
     function getOrCreateTitleStack() {
         const existing = document.getElementById('enh-title-stack');
         if (existing) return existing;
+        const standalone = document.getElementById('enh-editorial-standalone-slot');
+        if (standalone) {
+            const stack = makeEl('div', { id:'enh-title-stack' });
+            standalone.appendChild(stack);
+            return stack;
+        }
         const anchor = getTitleActionAnchor();
         if (!anchor) return null;
         const stack = makeEl('div', { id:'enh-title-stack' });
@@ -588,8 +820,14 @@
     }
 
     function appendTitleStackItem(node, order) {
-        const stack = getOrCreateTitleStack();
-        if (!stack || !node) return false;
+        if (!node) return false;
+        const slot = node.id === 'enh-search-buttons'
+            ? document.getElementById('enh-editorial-action-slot')
+            : node.id === 'enh-external-links'
+                ? document.getElementById('enh-editorial-research-slot')
+                : null;
+        const stack = slot || getOrCreateTitleStack();
+        if (!stack) return false;
         node.dataset.titleStackOrder = String(order);
         const next = Array.from(stack.children).find(child =>
             Number(child.dataset.titleStackOrder || Number.MAX_SAFE_INTEGER) > order
@@ -2303,6 +2541,114 @@ html[data-imdb-enhanced="active"] .ipc-page-background {
     });
 
     reg({
+        key: 'editorialTitleSurface', name: 'Editorial title layout', group: 'Appearance',
+        _observer: null,
+        _surface: null,
+        _nativeHero: null,
+        _nativeRatingState: [],
+        _syncQueued: false,
+        init() {
+            if (!isIMDbHost() || getPageSurface() !== 'title') return;
+            const isCurrent = createFeatureGuard(this);
+            this._nativeRatingState = [];
+            const mount = () => {
+                if (!isCurrent()) return false;
+                const surface = ensureEditorialSurface();
+                const rail = surface?.querySelector('#enh-editorial-score-rail');
+                if (!surface || !rail) return false;
+                this._surface = surface;
+                this._nativeHero = document.querySelector('section[data-testid="hero-parent"]');
+                const sync = () => {
+                    if (!isCurrent() || !rail.isConnected) return;
+                    refreshEditorialSurface(surface, this._nativeHero || document);
+                    const standalone = surface.querySelector('#enh-editorial-standalone-slot');
+                    const legacyStack = document.getElementById('enh-title-stack');
+                    if (standalone && legacyStack && !surface.contains(legacyStack)) {
+                        Array.from(legacyStack.children).forEach(node => {
+                            if (node.id === 'enh-search-buttons' || node.id === 'enh-external-links') {
+                                const order = Number(node.dataset.titleStackOrder);
+                                const fallback = node.id === 'enh-search-buttons'
+                                    ? TITLE_STACK_ORDER.searchButtons
+                                    : TITLE_STACK_ORDER.externalLinks;
+                                appendTitleStackItem(node, Number.isFinite(order) ? order : fallback);
+                            } else standalone.appendChild(node);
+                        });
+                        legacyStack.remove();
+                    }
+                    ['enh-search-buttons', 'enh-external-links'].forEach(id => {
+                        const node = document.getElementById(id);
+                        if (!node || surface.contains(node)) return;
+                        const order = Number(node.dataset.titleStackOrder);
+                        const fallback = id === 'enh-search-buttons'
+                            ? TITLE_STACK_ORDER.searchButtons
+                            : TITLE_STACK_ORDER.externalLinks;
+                        appendTitleStackItem(node, Number.isFinite(order) ? order : fallback);
+                    });
+                    pruneTitleStack();
+                    [
+                        document.querySelector('[data-testid="hero-rating-bar__aggregate-rating"]'),
+                        document.querySelector('[data-testid="hero-rating-bar__popularity"]'),
+                    ].forEach(node => {
+                        if (!node || rail.contains(node)) return;
+                        if (!this._nativeRatingState.some(state => state.node === node)) {
+                            this._nativeRatingState.push({ node, parent:node.parentElement });
+                        }
+                        rail.appendChild(node);
+                    });
+                    document.querySelectorAll('.enh-score-widget').forEach(widget => {
+                        if (!rail.contains(widget)) rail.appendChild(widget);
+                    });
+                };
+                this._sync = sync;
+                sync();
+                this._observer = new MutationObserver(() => {
+                    if (this._syncQueued) return;
+                    this._syncQueued = true;
+                    queueMicrotask(() => {
+                        this._syncQueued = false;
+                        sync();
+                    });
+                });
+                this._observer.observe(document.body, { childList:true, subtree:true });
+                this._nativeHero?.classList.add('enh-editorial-native-hidden');
+                return true;
+            };
+            if (!mount()) waitForTitleSurface().then(mount).catch(() => {});
+        },
+        destroy() {
+            this._observer?.disconnect();
+            this._observer = null;
+            this._sync = null;
+            this._syncQueued = false;
+            this._nativeHero?.classList.remove('enh-editorial-native-hidden');
+            this._nativeRatingState.forEach(({ node, parent }) => {
+                if (node?.isConnected && parent?.isConnected && !parent.contains(node)) parent.appendChild(node);
+            });
+
+            const preserved = [];
+            const addChildren = parent => Array.from(parent?.children || []).forEach(node => {
+                if (node.id === 'enh-title-stack') Array.from(node.children).forEach(child => preserved.push(child));
+                else preserved.push(node);
+            });
+            addChildren(this._surface?.querySelector('#enh-editorial-action-slot'));
+            addChildren(this._surface?.querySelector('#enh-editorial-research-slot'));
+            addChildren(this._surface?.querySelector('#enh-editorial-standalone-slot'));
+            this._surface?.remove();
+            const seen = new Set();
+            preserved.forEach(node => {
+                if (!node || seen.has(node)) return;
+                seen.add(node);
+                const order = Number(node.dataset.titleStackOrder);
+                appendTitleStackItem(node, Number.isFinite(order) ? order : TITLE_STACK_ORDER.externalLinks);
+            });
+            this._surface = null;
+            this._nativeHero = null;
+            this._nativeRatingState = [];
+            pruneTitleStack();
+        }
+    });
+
+    reg({
         key: 'compactHeader', name: 'Compact header', group: 'Appearance',
         init() {
             addThemedCSS(t => `
@@ -2971,6 +3317,8 @@ section[id*="quote" i] .ipc-list-card { padding: 4px 0 !important; margin: 2px 0
     }
 
     function findRatingBar() {
+        const editorialRail = document.getElementById('enh-editorial-score-rail');
+        if (editorialRail) return editorialRail;
         const agg = document.querySelector('[data-testid="hero-rating-bar__aggregate-rating"]');
         if (!agg) return null;
         // Walk up to find the flex container holding all rating widgets
@@ -5364,6 +5712,135 @@ section[id*="quote" i] .ipc-list-card { padding: 4px 0 !important; margin: 2px 0
 }
 #enh-toast.visible { transform: translateY(0); opacity: 1; }
 
+/* ════ Editorial Title Surface ════ */
+section[data-testid="hero-parent"].enh-editorial-native-hidden { display: none !important; }
+#enh-editorial-surface {
+    position: relative; isolation: isolate; overflow: hidden;
+    width: 100%; max-width: 1600px; margin: 0 auto; padding: 0 40px 28px;
+    color: ${t.tx1}; background-color: ${t.bg};
+    background-image: var(--enh-editorial-backdrop, none);
+    background-position: center; background-size: cover; background-blend-mode: multiply;
+    border-bottom: 1px solid ${t.bd0};
+}
+#enh-editorial-surface::before {
+    content: ''; position: absolute; inset: 0; z-index: 0;
+    background: ${t.bg}; opacity: .78; pointer-events: none;
+}
+#enh-editorial-surface > * { position: relative; z-index: 1; }
+.enh-editorial-subnav {
+    display: flex; align-items: center; justify-content: space-between; gap: 20px;
+    min-height: 58px; border-bottom: 1px solid ${t.bd0};
+}
+.enh-editorial-subnav__left,
+.enh-editorial-subnav__right { display: flex; flex-wrap: wrap; align-items: center; gap: 14px; min-width: 0; }
+.enh-editorial-subnav__right { justify-content: flex-end; }
+.enh-editorial-subnav__link {
+    color: ${t.blue} !important; font: 700 13px/1.3 -apple-system, BlinkMacSystemFont, 'Segoe UI', sans-serif;
+    text-decoration: none !important; white-space: nowrap;
+}
+.enh-editorial-subnav__link:hover { color: ${t.blueHi} !important; }
+.enh-editorial-hero {
+    display: grid; grid-template-columns: 240px minmax(300px, 1fr) minmax(330px, .82fr);
+    align-items: center; gap: 30px; min-height: 470px; padding: 34px 0 38px;
+}
+.enh-editorial-poster {
+    width: 240px; aspect-ratio: 2 / 3; overflow: hidden;
+    border: 1px solid ${t.bd1}; border-radius: 12px; background: ${t.sf1}; box-shadow: ${t.sh3};
+}
+.enh-editorial-poster img { display: block; width: 100%; height: 100%; object-fit: cover; }
+.enh-editorial-identity { min-width: 0; display: flex; flex-direction: column; align-items: flex-start; }
+.enh-editorial-title {
+    max-width: 100%; margin: 0; color: ${t.tx0};
+    font: 800 clamp(42px, 5vw, 72px)/.98 -apple-system, BlinkMacSystemFont, 'Segoe UI', sans-serif;
+    letter-spacing: -.045em; white-space: nowrap; overflow: hidden; text-overflow: ellipsis;
+}
+.enh-editorial-meta {
+    margin-top: 15px; color: ${t.tx2}; font: 600 14px/1.4 -apple-system, BlinkMacSystemFont, 'Segoe UI', sans-serif;
+}
+#enh-editorial-action-slot { width: min(100%, 340px); margin-top: 24px; }
+#enh-editorial-standalone-slot { width: min(100%, 340px); }
+#enh-editorial-standalone-slot > #enh-title-stack {
+    display: flex; flex-direction: column; gap: 8px; width: 100%; max-width: 100%; margin: 0;
+}
+#enh-editorial-standalone-slot > #enh-title-stack > * { width: 100%; }
+#enh-editorial-score-rail {
+    display: flex; flex-direction: column; align-self: stretch; justify-content: center;
+    min-width: 0; padding-left: 24px; border-left: 1px solid ${t.bd0};
+}
+#enh-editorial-score-rail > [data-testid="hero-rating-bar__aggregate-rating"],
+#enh-editorial-score-rail > [data-testid="hero-rating-bar__popularity"],
+#enh-editorial-score-rail > .enh-score-widget {
+    display: flex !important; align-items: flex-start !important; justify-content: center !important;
+    min-width: 0 !important; max-width: none !important; padding: 15px 0 !important;
+    background: transparent !important; border: 0 !important; border-bottom: 1px solid ${t.bd0} !important;
+    border-radius: 0 !important; box-shadow: none !important;
+}
+#enh-editorial-score-rail > :last-child { border-bottom: 0 !important; }
+#enh-editorial-score-rail .enh-score-widget__label { margin-bottom: 4px; }
+#enh-editorial-score-rail .enh-score-widget__score { justify-content: flex-start; }
+#enh-editorial-score-rail .enh-score-widget__value--availability { max-width: 260px; }
+.enh-editorial-details {
+    display: grid; grid-template-columns: minmax(0, 1fr) minmax(0, 1.15fr);
+    border-top: 1px solid ${t.bd0};
+}
+.enh-editorial-about { min-width: 0; padding: 25px 38px 10px 0; }
+.enh-editorial-watch { min-width: 0; padding: 25px 0 10px 38px; border-left: 1px solid ${t.bd0}; }
+.enh-editorial-about h2,
+.enh-editorial-watch h2 {
+    margin: 0; color: ${t.tx0}; font: 750 23px/1.15 -apple-system, BlinkMacSystemFont, 'Segoe UI', sans-serif;
+    letter-spacing: -.02em;
+}
+.enh-editorial-watch__header { display: flex; flex-wrap: wrap; align-items: baseline; gap: 10px; margin-bottom: 16px; }
+.enh-editorial-watch__header p { margin: 0; color: ${t.tx3}; font: 500 12px/1.4 -apple-system, BlinkMacSystemFont, 'Segoe UI', sans-serif; }
+.enh-editorial-synopsis { max-width: 720px; margin: 14px 0 18px; color: ${t.tx1}; font: 400 15px/1.6 -apple-system, BlinkMacSystemFont, 'Segoe UI', sans-serif; }
+.enh-editorial-detail-row {
+    display: flex; flex-wrap: wrap; align-items: baseline; gap: 8px;
+    padding: 11px 0; border-top: 1px solid ${t.bd0}; color: ${t.tx2};
+    font: 600 13px/1.4 -apple-system, BlinkMacSystemFont, 'Segoe UI', sans-serif;
+}
+.enh-editorial-detail-row strong { min-width: 48px; color: ${t.tx0}; }
+.enh-editorial-detail-row a,
+.enh-editorial-about-link { color: ${t.blue} !important; text-decoration: none !important; }
+.enh-editorial-detail-row a:hover,
+.enh-editorial-about-link:hover { color: ${t.blueHi} !important; }
+.enh-editorial-detail-separator { color: ${t.tx3}; }
+.enh-editorial-about-link { display: inline-flex; margin-top: 10px; font: 700 12px/1.4 -apple-system, BlinkMacSystemFont, 'Segoe UI', sans-serif; }
+#enh-editorial-research-slot #enh-external-links { padding: 0; border: 0; }
+#enh-editorial-research-slot #enh-external-links .enh-external-links__header { display: none; }
+#enh-editorial-research-slot .enh-external-groups { grid-template-columns: repeat(2, minmax(0, 1fr)); gap: 0 20px; }
+#enh-editorial-research-slot .enh-external-group { padding: 10px 0; }
+
+@media (max-width: 1250px) {
+    #enh-editorial-surface { padding-left: 24px; padding-right: 24px; }
+    .enh-editorial-hero { grid-template-columns: 190px minmax(260px, 1fr); gap: 24px; }
+    .enh-editorial-poster { width: 190px; }
+    #enh-editorial-score-rail { grid-column: 1 / -1; display: grid; grid-template-columns: repeat(3, minmax(0, 1fr)); gap: 0 18px; padding: 14px 0 0; border-top: 1px solid ${t.bd0}; border-left: 0; }
+    #enh-editorial-score-rail > [data-testid="hero-rating-bar__aggregate-rating"],
+    #enh-editorial-score-rail > [data-testid="hero-rating-bar__popularity"],
+    #enh-editorial-score-rail > .enh-score-widget { border-bottom: 0 !important; border-left: 1px solid ${t.bd0} !important; padding: 8px 14px !important; }
+    #enh-editorial-score-rail > :first-child { border-left: 0 !important; }
+}
+@media (max-width: 760px) {
+    #enh-editorial-surface { padding-left: 18px; padding-right: 18px; }
+    .enh-editorial-subnav { align-items: flex-start; flex-direction: column; justify-content: center; gap: 8px; padding: 12px 0; }
+    .enh-editorial-subnav__right { justify-content: flex-start; gap: 10px; }
+    .enh-editorial-hero { grid-template-columns: 1fr; gap: 20px; padding-top: 24px; }
+    .enh-editorial-poster { width: 150px; }
+    .enh-editorial-title { font-size: clamp(36px, 12vw, 56px); white-space: normal; }
+    #enh-editorial-action-slot, #enh-editorial-standalone-slot { width: 100%; }
+    #enh-editorial-score-rail { grid-template-columns: repeat(2, minmax(0, 1fr)); }
+    .enh-editorial-details { grid-template-columns: 1fr; }
+    .enh-editorial-about { padding: 22px 0 10px; }
+    .enh-editorial-watch { padding: 22px 0 10px; border-top: 1px solid ${t.bd0}; border-left: 0; }
+    #enh-editorial-research-slot .enh-external-groups { grid-template-columns: 1fr; }
+}
+@media (max-width: 480px) {
+    #enh-editorial-score-rail { grid-template-columns: 1fr; }
+    #enh-editorial-score-rail > [data-testid="hero-rating-bar__aggregate-rating"],
+    #enh-editorial-score-rail > [data-testid="hero-rating-bar__popularity"],
+    #enh-editorial-score-rail > .enh-score-widget { border-left: 0 !important; border-bottom: 1px solid ${t.bd0} !important; padding: 12px 0 !important; }
+}
+
 /* ════ Stream Panel ════ */
 #enh-title-stack {
     display: grid;
@@ -6224,6 +6701,10 @@ section[id*="quote" i] .ipc-list-card { padding: 4px 0 !important; margin: 2px 0
 }
 .enh-search-btn:focus-visible,
 .enh-ext-link:focus-visible,
+.enh-editorial-action:focus-visible,
+.enh-editorial-subnav__link:focus-visible,
+.enh-editorial-detail-row a:focus-visible,
+.enh-editorial-about-link:focus-visible,
 #enh-trailer-btn:focus-visible,
 .enh-trailer-close:focus-visible,
 #enh-watchlist-copy:focus-visible,
@@ -7066,7 +7547,7 @@ section[id*="quote" i] .ipc-list-card { padding: 4px 0 !important; margin: 2px 0
             'removeContribution', 'removeSponsoredRecs', 'removeAppBanner',
         ], true));
         experienceGrid.appendChild(makeFeatureCard('Tune the interface', 'Refine how content looks and is presented.', 'Desktop', [
-            'modernUI', 'compactHeader', 'enhancedRatingDisplay', 'widerLayout', 'ratingColorCoding',
+            'modernUI', 'editorialTitleSurface', 'compactHeader', 'enhancedRatingDisplay', 'widerLayout', 'ratingColorCoding',
             'collapsibleSections', 'spoilerBlur', 'quickNav',
         ], true));
         experiencePage.appendChild(experienceGrid);

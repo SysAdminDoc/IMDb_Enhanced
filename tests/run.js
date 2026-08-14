@@ -712,6 +712,18 @@ test('editorial title surface keeps primary actions and configurable destination
     assert(/key: 'searchButtons'[\s\S]*?const trailer = wrap\?\.querySelector\('#enh-trailer-btn'\)/.test(script), 'search cleanup should preserve independent trailer controls');
 });
 
+test('editorial title layout owns a stable full-width title surface', () => {
+    assert(script.includes("key: 'editorialTitleSurface'"), 'editorial title layout feature is not registered');
+    assert(script.includes("id:'enh-editorial-surface'"), 'editorial title surface root is missing');
+    assert(script.includes("section[data-testid=\"hero-parent\"].enh-editorial-native-hidden"), 'native hero should be hidden after its content is rehomed');
+    assert(script.includes("id:'enh-editorial-action-slot'"), 'editorial hero needs a dedicated action slot');
+    assert(script.includes("id:'enh-editorial-score-rail'"), 'editorial hero needs a dedicated score rail');
+    assert(script.includes("id:'enh-editorial-research-slot'"), 'editorial details need a dedicated research slot');
+    assert(script.includes('refreshEditorialSurface(surface, this._nativeHero || document)'), 'hydrated poster and title data should refresh the surface');
+    assert(script.includes("appendTitleStackItem(node, Number.isFinite(order) ? order : fallback)"), 'late title controls should be rehomed into the editorial surface');
+    assert(/function findRatingBar\(\)[\s\S]*?const editorialRail = document\.getElementById\('enh-editorial-score-rail'\)[\s\S]*?if \(editorialRail\) return editorialRail/.test(script), 'rating features should target the editorial score rail');
+});
+
 test('all enhancements respect the operating-system reduced-motion preference', () => {
     const hooks = loadScriptTestHooks();
     assert.strictEqual(hooks.getEnhancementScrollBehavior(), 'smooth');

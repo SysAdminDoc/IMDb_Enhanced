@@ -1,5 +1,13 @@
 # Changelog
 
+## 2.10.0 — 2026-08-14
+
+### Fixed
+
+- Repaired title-page layout failures that could collapse the watch panel, wrap titles one character at a time, and overlap score or external-link content.
+- Added a dedicated poster-led editorial title surface with reserved action, rating, and research regions that remains stable while IMDb hydrates the page.
+- Rehomed existing native rating data and configurable title tools into the new surface without removing the underlying IMDb actions.
+
 ## 2.9.0 — 2026-08-14
 
 ### Changed
