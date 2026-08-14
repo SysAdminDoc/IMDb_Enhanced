@@ -201,6 +201,7 @@
         embyUrl: 'http://localhost:8096', embyApiKey: '',
         // TV
         tvEpisodeTools: true, tvShowEnhancements: true, subtitleLinks: true,
+        castAges: true,
         // Utility
         quickCopyID: true, watchlistBatch: true, listMultiSearch: true,
         keyboardShortcuts: false,
@@ -245,6 +246,7 @@
         externalLinks: 'Adds trusted research and trailer links near the title.',
         expandedLinkMenu: 'Groups additional movie, review, subtitle, and TV lookup links.',
         trailerPopover: 'Adds an in-page trailer modal backed by a click-to-fetch YouTube lookup.',
+        castAges: 'Shows a living person’s current age next to their birth date. IMDb already prints the age at death for people who have died.',
         watchedMarking: 'Adds private Seen and Skip marks on title cards across titles, charts, lists, watchlists, filmographies, and search results. Marks stay in this userscript and do not change IMDb Watched.',
         servarrIntegration: 'Adds optional local Radarr/Sonarr quick-add buttons with library status indicator when API settings are configured.',
         mediaServerIntegration: 'Checks configured local Plex, Jellyfin, and Emby servers and shows whether the title is already in your library.',
@@ -6047,6 +6049,62 @@ section[id*="quote" i] .ipc-list-card { padding: 4px 0 !important; margin: 2px 0
         }
     });
 
+    /* Verified against live person pages on 2026-08-14: IMDb already prints the age
+       at death next to a death date (`birth-and-death-death-age`), but a living
+       person's page shows only the birth date. So the only gap worth filling is the
+       current age, and it can be computed from data the page already carries — the
+       embedded application state exposes an ISO `birthDate.date`, with the visible
+       `birth-and-death-birthdate` text as a fallback. No extra requests. */
+    function computeCurrentAge(birthISO, now = new Date()) {
+        const match = /^(\d{4})-(\d{2})-(\d{2})$/.exec(String(birthISO || ''));
+        if (!match) return null;
+        const [, y, m, d] = match.map(Number);
+        const year = Number(y);
+        if (!year || year < 1800) return null;
+        const birth = new Date(Date.UTC(year, m - 1, d));
+        if (Number.isNaN(birth.getTime()) || birth.getUTCMonth() !== m - 1 || birth.getUTCDate() !== d) return null;
+        let age = now.getUTCFullYear() - year;
+        const beforeBirthday = now.getUTCMonth() < m - 1
+            || (now.getUTCMonth() === m - 1 && now.getUTCDate() < d);
+        if (beforeBirthday) age -= 1;
+        return age >= 0 && age <= 130 ? age : null;
+    }
+
+    function readPersonBirthDate(doc = document) {
+        const script = doc.getElementById('__NEXT_DATA__');
+        const text = typeof script?.textContent === 'string' ? script.textContent : '';
+        if (text && text.length <= EXTERNAL_RESPONSE_TEXT_LIMIT) {
+            const index = text.indexOf('"birthDate"');
+            if (index >= 0) {
+                const iso = /"date":"(\d{4}-\d{2}-\d{2})"/.exec(text.slice(index, index + 400));
+                if (iso) return { iso:iso[1], deceased:/"deathStatus":"(?!ALIVE)/.test(text.slice(0, 200000)) };
+            }
+        }
+        return null;
+    }
+
+    reg({
+        key: 'castAges', name: 'Person age', group: 'Features',
+        init() {
+            if (!isIMDbHost() || getPageSurface() !== 'name') return;
+            const isCurrent = createFeatureGuard(this);
+            const birth = readPersonBirthDate();
+            if (!birth || birth.deceased) return;
+            const age = computeCurrentAge(birth.iso);
+            if (age === null) return;
+            const host = document.querySelector('[data-testid="birth-and-death-birthdate"]');
+            if (!host || !isCurrent() || host.querySelector('.enh-person-age')) return;
+            addThemedCSS(t => `
+                .enh-person-age { color: ${t.tx2}; font-weight: 700; margin-left: 6px; }
+            `, 'enh-castAges');
+            host.appendChild(makeEl('span', { className:'enh-person-age' }, `(age ${age})`));
+        },
+        destroy() {
+            removeCSS('enh-castAges');
+            document.querySelectorAll('.enh-person-age').forEach(node => node.remove());
+        }
+    });
+
     reg({
         key: 'quickCopyID', name: 'Quick copy IMDb ID', group: 'Utility',
         init() {
@@ -8401,7 +8459,7 @@ section[data-testid="hero-parent"].enh-editorial-native-hidden { display: none !
         ...UNIVERSAL_FEATURE_KEYS, 'watchlistBatch', 'listMultiSearch', 'watchedMarking',
     ]);
     const SECONDARY_PAGE_FEATURE_KEYS = new Set([
-        ...UNIVERSAL_FEATURE_KEYS, 'collapsibleSections', 'quickNav', 'watchedMarking',
+        ...UNIVERSAL_FEATURE_KEYS, 'collapsibleSections', 'quickNav', 'watchedMarking', 'castAges',
     ]);
     const EPISODE_LIST_FEATURE_KEYS = new Set([
         ...SECONDARY_PAGE_FEATURE_KEYS, 'tvEpisodeTools',

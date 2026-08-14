@@ -5,6 +5,7 @@
 ### Added
 
 - Extended themes, cleanup, and layout options to IMDb's search, advanced-search, and homepage routes, which previously lost every enhancement mid-navigation.
+- Person pages now show a living person's current age beside their birth date, computed from data already on the page. IMDb prints the age at death itself, so those pages are left alone.
 - Added Overseerr and Jellyseerr as a request backend. Configure the instance under Integrations and title pages gain a Request button that reports whether a title is already available, processing, or requested; your instance resolves the IMDb ID, so no third-party API key is involved.
 - Radarr, Sonarr, and Overseerr buttons now read as a state machine — add, pending, requested, processing, or in library — with colour on the border and a status dot rather than the label, and accessible names that change with the state.
 - Rotten Tomatoes and Metacritic lookups now resolve the exact page through Wikidata's published IMDb-to-service identifier mapping, skipping title search and its ranking guesswork. Titles without a mapping keep using the existing validated search path, and every result is still checked for matching title, media type, and year before it is shown.

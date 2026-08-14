@@ -97,6 +97,7 @@ function loadScriptTestHooks() {
         cacheSet,
         cacheGet,
         cacheGC,
+        computeCurrentAge,
         getUserMarks,
         setUserMark,
         readNativeWatchedControl,
@@ -426,6 +427,24 @@ test('private marks decorate title cards on every card-bearing surface', () => {
         hooks.setTestPath(path);
         assert(hooks.shouldInitFeature(marks), `private marks should run on ${label}`);
     });
+});
+
+test('a living person shows a current age computed from page data alone', () => {
+    const hooks = loadScriptTestHooks();
+    const at = iso => new Date(iso + 'T12:00:00Z');
+
+    assert.strictEqual(hooks.computeCurrentAge('1964-09-02', at('2026-08-14')), 61, 'a birthday already passed this year counts');
+    assert.strictEqual(hooks.computeCurrentAge('1964-12-25', at('2026-08-14')), 61, 'a birthday still ahead this year is not counted yet');
+    assert.strictEqual(hooks.computeCurrentAge('1964-08-14', at('2026-08-14')), 62, 'the birthday itself counts');
+    assert.strictEqual(hooks.computeCurrentAge('1889-04-16', at('2026-08-14')), null, 'ages beyond a plausible lifespan are rejected');
+    assert.strictEqual(hooks.computeCurrentAge('not-a-date'), null);
+    assert.strictEqual(hooks.computeCurrentAge('1964-02-31', at('2026-08-14')), null, 'impossible calendar dates are rejected');
+    assert.strictEqual(hooks.computeCurrentAge(''), null);
+
+    // The feature reads the page it is already on; it must never fan out per person.
+    assert(/key: 'castAges'[\s\S]*?getPageSurface\(\) !== 'name'/.test(script), 'person ages belong to person pages');
+    assert(!/key: 'castAges'[\s\S]{0,1200}httpGet\(/.test(script), 'person ages must not issue network requests');
+    assert(/if \(!birth \|\| birth\.deceased\) return;/.test(script), 'IMDb already prints age at death, so the feature must skip those pages');
 });
 
 test('Overseerr requests report media state and build valid bodies', () => {
