@@ -1,7 +1,7 @@
 // ==UserScript==
 // @name         IMDb Enhanced
 // @namespace    https://github.com/SysAdminDoc
-// @version      2.10.4
+// @version      2.10.5
 // @updateURL    https://raw.githubusercontent.com/SysAdminDoc/IMDb_Enhanced/main/IMDb_Enhanced.user.js
 // @downloadURL  https://raw.githubusercontent.com/SysAdminDoc/IMDb_Enhanced/main/IMDb_Enhanced.user.js
 // @description  Premium IMDb overhaul: cleaner pages, modern themes, refined score widgets, media library indicators, quick navigation, richer external links, TV tools, search shortcuts, and polished settings import/export
@@ -42,7 +42,7 @@
     // =========================================================================
     //  CONSTANTS & CONFIG
     // =========================================================================
-    const VERSION = '2.10.4';
+    const VERSION = '2.10.5';
     const PREFIX  = 'imdb_enh_';
     const CINEBY_QUERY_KEY = PREFIX + 'cineby_query';
     const CINEBY_QUERY_TTL = 10 * 60 * 1000;
@@ -1900,6 +1900,7 @@
             red:    '#e84057',  // ratings, alerts
             redMuted: 'rgba(232,64,87,0.10)',
             green:  '#3dd68c',  // positive
+            heroScrim: 'rgba(16,16,20,0.86)',
             // Header / chrome
             hdr:    'rgba(16,16,20,0.82)',
             hdrBorder: 'rgba(255,255,255,0.04)',
@@ -1933,6 +1934,7 @@
             red:    '#d63850',
             redMuted: 'rgba(214,56,80,0.08)',
             green:  '#30c47c',
+            heroScrim: 'rgba(0,0,0,0.90)',
             hdr:    'rgba(0,0,0,0.92)',
             hdrBorder: 'rgba(255,255,255,0.03)',
             sT:     '#1a1a22', sH: '#2a2a34',
@@ -1963,6 +1965,7 @@
             red:    '#f06070',
             redMuted: 'rgba(240,96,112,0.10)',
             green:  '#48e098',
+            heroScrim: 'rgba(10,14,28,0.88)',
             hdr:    'rgba(10,14,28,0.88)',
             hdrBorder: 'rgba(120,160,255,0.05)',
             sT:     '#1c2444', sH: '#283460',
@@ -1993,6 +1996,7 @@
             red:    '#b91c1c',
             redMuted: 'rgba(185,28,28,0.10)',
             green:  '#047857',
+            heroScrim: 'rgba(246,247,249,0.84)',
             hdr:    'rgba(255,255,255,0.92)',
             hdrBorder: 'rgba(15,23,42,0.10)',
             sT:     '#c7ced8', sH: '#98a2b3',
@@ -2023,6 +2027,7 @@
             red:    '#ff5a66',
             redMuted: 'rgba(255,90,102,0.20)',
             green:  '#00ff87',
+            heroScrim: 'rgba(0,0,0,0.94)',
             hdr:    'rgba(0,0,0,0.98)',
             hdrBorder: '#ffffff',
             sT:     '#ffffff', sH: '#ffd400',
@@ -5678,12 +5683,12 @@ section[data-testid="hero-parent"].enh-editorial-native-hidden { display: none !
     width: 100%; max-width: 1600px; margin: 0 auto; padding: 0 40px 28px;
     color: ${t.tx1}; background-color: ${t.bg};
     background-image: var(--enh-editorial-backdrop, none);
-    background-position: center; background-size: cover; background-blend-mode: multiply;
+    background-position: center; background-size: cover; background-blend-mode: normal;
     border-bottom: 1px solid ${t.bd0};
 }
 #enh-editorial-surface::before {
     content: ''; position: absolute; inset: 0; z-index: 0;
-    background: ${t.bg}; opacity: .78; pointer-events: none;
+    background: ${t.heroScrim}; pointer-events: none;
 }
 #enh-editorial-surface > * { position: relative; z-index: 1; }
 .enh-editorial-subnav {

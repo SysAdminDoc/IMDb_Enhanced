@@ -1,5 +1,11 @@
 # Changelog
 
+## 2.10.5 — 2026-08-14
+
+### Fixed
+
+- Tuned dark-theme hero scrims and stopped multiplying poster artwork into the canvas, keeping OLED genuinely black without erasing the title artwork.
+
 ## 2.10.4 — 2026-08-14
 
 ### Fixed
