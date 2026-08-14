@@ -190,6 +190,7 @@
         cinebyHost: CINEBY_HOSTS[0].url,
         watchedMarking: true, userMarks: {},
         servarrIntegration: false,
+        seerrUrl: 'http://localhost:5055', seerrApiKey: '',
         radarrUrl: 'http://localhost:7878', radarrApiKey: '',
         radarrRootFolderPath: '', radarrQualityProfileId: '1',
         sonarrUrl: 'http://localhost:8989', sonarrApiKey: '',
@@ -205,13 +206,13 @@
         keyboardShortcuts: false,
     };
     const LOCAL_SERVICE_URL_KEYS = new Set([
-        'radarrUrl', 'sonarrUrl', 'plexUrl', 'jellyfinUrl', 'embyUrl',
+        'radarrUrl', 'sonarrUrl', 'seerrUrl', 'plexUrl', 'jellyfinUrl', 'embyUrl',
     ]);
     const POSITIVE_INTEGER_SETTING_KEYS = new Set([
         'radarrQualityProfileId', 'sonarrQualityProfileId',
     ]);
     const CREDENTIAL_SETTING_KEYS = new Set([
-        'radarrApiKey', 'sonarrApiKey', 'plexToken', 'jellyfinApiKey', 'embyApiKey',
+        'radarrApiKey', 'sonarrApiKey', 'seerrApiKey', 'plexToken', 'jellyfinApiKey', 'embyApiKey',
     ]);
     const COLLAPSIBLE_SECTION_IDS = [
         'title-cast', 'UserReviews', 'MoreLikeThis', 'Details', 'BoxOffice',
@@ -1667,6 +1668,75 @@
             },
         };
     }
+    /* Overseerr and Jellyseerr expose the same v1 API, and a request there is often
+       what a user actually wants: it goes through their approval workflow instead
+       of writing straight into Radarr/Sonarr. The instance also resolves an IMDb ID
+       to TMDB itself, so this integration needs no third-party API key of its own.
+       Media status uses Overseerr's documented enum. */
+    const SEERR_STATUS = { UNKNOWN:1, PENDING:2, PROCESSING:3, PARTIALLY_AVAILABLE:4, AVAILABLE:5 };
+    const SEERR_SEASON_LIMIT = 100;
+
+    function getSeerrConfig() {
+        return {
+            baseUrl: normalizeLocalServiceUrl(get('seerrUrl')),
+            apiKey: normalizeCredentialValue(get('seerrApiKey')),
+        };
+    }
+    function isSeerrConfigured() {
+        const cfg = getSeerrConfig();
+        return Boolean(cfg.baseUrl && cfg.apiKey);
+    }
+    function mapSeerrMediaState(mediaInfo) {
+        const status = Number(mediaInfo?.status) || 0;
+        if (status === SEERR_STATUS.AVAILABLE) return 'library';
+        if (status === SEERR_STATUS.PARTIALLY_AVAILABLE) return 'partial';
+        if (status === SEERR_STATUS.PROCESSING) return 'processing';
+        if (status === SEERR_STATUS.PENDING) return 'queued';
+        return 'add';
+    }
+    function selectSeerrSearchResult(results, imdbId, mediaType) {
+        if (!Array.isArray(results)) return null;
+        const wanted = mediaType === 'tv' ? 'tv' : 'movie';
+        for (const item of results.slice(0, EXTERNAL_RESULT_SCAN_LIMIT)) {
+            if (!item || typeof item !== 'object') continue;
+            if (String(item.mediaType || '').toLowerCase() !== wanted) continue;
+            const id = Number(item.id);
+            if (!Number.isInteger(id) || id <= 0) continue;
+            return { tmdbId:id, mediaInfo:item.mediaInfo || null };
+        }
+        return null;
+    }
+    function buildSeerrRequestBody(mediaType, tmdbId, seasons = []) {
+        const id = Number(tmdbId);
+        if (!Number.isInteger(id) || id <= 0) return null;
+        const body = { mediaType: mediaType === 'tv' ? 'tv' : 'movie', mediaId:id };
+        if (body.mediaType === 'tv') {
+            const list = Array.isArray(seasons)
+                ? [...new Set(seasons.map(Number).filter(value => Number.isInteger(value) && value > 0))].slice(0, SEERR_SEASON_LIMIT)
+                : [];
+            body.seasons = list.length ? list : 'all';
+        }
+        return body;
+    }
+    async function seerrRequest(path, opts = {}) {
+        const cfg = getSeerrConfig();
+        if (!isLocalServarrUrl(cfg.baseUrl)) {
+            throw new Error('Only localhost and 127.0.0.1 Overseerr/Jellyseerr URLs are allowed by this userscript build.');
+        }
+        return httpRequest(buildLocalServiceUrl(cfg.baseUrl, `api/v1/${String(path).replace(/^\/+/, '')}`, opts.query), {
+            method: opts.method || 'GET',
+            body: opts.body,
+            timeout: opts.timeout || 15000,
+            cancelOnRouteChange: Boolean(opts.cancelOnRouteChange),
+            headers: {
+                Accept: 'application/json',
+                'X-Api-Key': cfg.apiKey,
+                ...(opts.body ? { 'Content-Type':'application/json' } : {}),
+                ...(opts.headers || {}),
+            },
+        });
+    }
+
     function buildServarrUrl(cfg, path, query = {}) {
         const url = new URL(`${cfg.baseUrl}/api/v3/${path.replace(/^\/+/, '')}`);
         Object.entries(query).forEach(([key, value]) => {
@@ -5068,6 +5138,7 @@ section[id*="quote" i] .ipc-list-card { padding: 4px 0 !important; margin: 2px 0
                 const actions = [];
                 if (!isTVType(type) && isServarrConfigured('radarr')) actions.push({ kind:'radarr', label:'Add Radarr' });
                 if (isTVType(type) && isServarrConfigured('sonarr')) actions.push({ kind:'sonarr', label:'Add Sonarr' });
+                if (isSeerrConfigured()) actions.push({ kind:'seerr', label:'Request' });
                 if (!actions.length) return;
 
                 addThemedCSS(t => `
@@ -5095,7 +5166,33 @@ section[id*="quote" i] .ipc-list-card { padding: 4px 0 !important; margin: 2px 0
                         transition: background .15s ease, border-color .15s ease, color .15s ease, transform .15s ease;
                     }
                     .enh-servarr-btn:hover { background: ${t.sf2}; border-color: ${t.accentBorder}; color: ${t.accent}; transform: translateY(-1px); }
-                    .enh-servarr-btn:disabled { cursor: progress; opacity: .62; transform: none; }
+                    .enh-servarr-btn:disabled { cursor: progress; transform: none; }
+                    /* The button reports where a title stands rather than only what
+                       the click does, so state reads at a glance. Colours stay on
+                       the border and a leading dot; label text keeps the tested
+                       theme foreground instead of inheriting a status hue. */
+                    .enh-servarr-btn[data-state] { gap: 6px; }
+                    .enh-servarr-btn[data-state]::before {
+                        content: ''; width: 7px; height: 7px; border-radius: 50%; background: currentColor; opacity: .85;
+                    }
+                    .enh-servarr-btn[data-state="add"]::before { background: ${t.tx3}; }
+                    .enh-servarr-btn[data-state="pending"]::before { background: ${t.accent}; }
+                    .enh-servarr-btn[data-state="queued"]::before,
+                    .enh-servarr-btn[data-state="processing"]::before,
+                    .enh-servarr-btn[data-state="partial"]::before { background: ${t.accent}; }
+                    .enh-servarr-btn[data-state="library"]::before,
+                    .enh-servarr-btn[data-state="done"]::before { background: ${t.green}; }
+                    .enh-servarr-btn[data-state="library"],
+                    .enh-servarr-btn[data-state="done"] { border-color: ${t.green}; }
+                    .enh-servarr-btn[data-state="queued"],
+                    .enh-servarr-btn[data-state="processing"],
+                    .enh-servarr-btn[data-state="partial"] { border-color: ${t.accent}; }
+                    .enh-servarr-btn[data-state="library"]:disabled,
+                    .enh-servarr-btn[data-state="queued"]:disabled,
+                    .enh-servarr-btn[data-state="processing"]:disabled,
+                    .enh-servarr-btn[data-state="partial"]:disabled,
+                    .enh-servarr-btn[data-state="done"]:disabled { cursor: default; opacity: 1; }
+                    .enh-servarr-btn[data-state="pending"]:disabled { opacity: .72; }
                 `, 'enh-servarrIntegration');
 
                 const bar = makeEl('div', { id:'enh-servarr-actions' },
@@ -5105,42 +5202,92 @@ section[id*="quote" i] .ipc-list-card { padding: 4px 0 !important; margin: 2px 0
                     const btn = makeEl('button', {
                         type:'button',
                         className:'enh-servarr-btn',
-                        dataset:{ kind:action.kind },
+                        dataset:{ kind:action.kind, state:'add' },
                         'aria-label': `${action.label} for ${title}`,
                         'aria-live':'polite',
                         'aria-atomic':'true',
                         onClick: async () => {
                             const original = btn.textContent;
                             const originalLabel = btn.getAttribute('aria-label');
-                            const service = action.kind === 'radarr' ? 'Radarr' : 'Sonarr';
-                            btn.disabled = true;
-                            btn.textContent = 'Adding...';
-                            btn.setAttribute('aria-busy', 'true');
-                            btn.setAttribute('aria-label', `Adding ${title} to ${service}`);
+                            const service = action.kind === 'radarr' ? 'Radarr'
+                                : action.kind === 'sonarr' ? 'Sonarr' : 'Overseerr';
+                            const busyVerb = action.kind === 'seerr' ? 'Requesting' : 'Adding';
+                            this._setState(btn, 'pending', `${busyVerb}...`, `${busyVerb} ${title} through ${service}`, { busy:true });
                             try {
-                                const added = await this._add(action.kind, imdbId, title, year, isCurrent);
-                                if (!added || !isCurrent()) return;
-                                showToast(`${title} sent to ${service}`);
-                                btn.textContent = 'Added';
-                                btn.removeAttribute('aria-busy');
-                                btn.setAttribute('aria-label', `${title} added to ${service}`);
-                                btn.disabled = true;
+                                const done = action.kind === 'seerr'
+                                    ? await this._request(imdbId, title, year, isCurrent)
+                                    : await this._add(action.kind, imdbId, title, year, isCurrent);
+                                if (!done || !isCurrent()) return;
+                                showToast(action.kind === 'seerr'
+                                    ? `${title} requested through ${service}`
+                                    : `${title} sent to ${service}`);
+                                this._setState(btn, 'done',
+                                    action.kind === 'seerr' ? 'Requested' : 'Added',
+                                    action.kind === 'seerr'
+                                        ? `${title} has been requested through ${service}`
+                                        : `${title} added to ${service}`);
                             } catch (error) {
                                 if (!isCurrent()) return;
-                                console.warn('[IMDb Enhanced] Servarr add failed:', error);
-                                showToast(`${service} add failed: ${getRequestErrorMessage(error)}`, 4500);
-                                btn.disabled = false;
-                                btn.textContent = original;
-                                btn.removeAttribute('aria-busy');
-                                btn.setAttribute('aria-label', originalLabel);
+                                console.warn('[IMDb Enhanced] integration action failed:', error);
+                                showToast(`${service} ${action.kind === 'seerr' ? 'request' : 'add'} failed: ${getRequestErrorMessage(error)}`, 4500);
+                                this._setState(btn, 'add', original, originalLabel, { enabled:true });
                             }
                         },
                     }, action.label);
                     bar.appendChild(btn);
-                    this._checkLibrary(action.kind, { imdbId, title, year }, btn, bar, isCurrent);
+                    if (action.kind === 'seerr') this._checkSeerr({ imdbId, title, year, type }, btn, isCurrent);
+                    else this._checkLibrary(action.kind, { imdbId, title, year }, btn, bar, isCurrent);
                 });
                 appendTitleStackItem(bar, TITLE_STACK_ORDER.servarrIntegration);
             }).catch(() => {});
+        },
+        _setState(btn, state, text, label, { busy = false, enabled = false } = {}) {
+            if (!btn) return;
+            btn.dataset.state = state;
+            if (text) btn.textContent = text;
+            if (label) btn.setAttribute('aria-label', label);
+            btn.disabled = !enabled;
+            if (busy) btn.setAttribute('aria-busy', 'true');
+            else btn.removeAttribute('aria-busy');
+        },
+        async _checkSeerr(ctx, btn, isCurrent) {
+            try {
+                const mediaType = isTVType(ctx.type) ? 'tv' : 'movie';
+                const response = await seerrRequest('search', {
+                    query:{ query: ctx.imdbId },
+                    cancelOnRouteChange:true,
+                });
+                if (!isCurrent()) return;
+                const payload = parseJSONResponse(response);
+                const match = selectSeerrSearchResult(payload?.results, ctx.imdbId, mediaType);
+                if (!match) return;
+                btn.dataset.tmdbId = String(match.tmdbId);
+                const state = mapSeerrMediaState(match.mediaInfo);
+                if (state === 'add') return;
+                const copy = {
+                    library:['Available', `${ctx.title} is already available`],
+                    partial:['Partly available', `${ctx.title} is partly available`],
+                    processing:['Processing', `${ctx.title} is being processed`],
+                    queued:['Requested', `${ctx.title} has already been requested`],
+                }[state];
+                if (copy) this._setState(btn, state, copy[0], copy[1]);
+            } catch { /* status is best-effort; the request button still works */ }
+        },
+        async _request(imdbId, title, year, isCurrent) {
+            const mediaType = isTVType(getMediaType()) ? 'tv' : 'movie';
+            let tmdbId = Number(document.querySelector(`#enh-servarr-actions [data-kind="seerr"]`)?.dataset.tmdbId) || 0;
+            if (!tmdbId) {
+                const response = await seerrRequest('search', { query:{ query:imdbId }, cancelOnRouteChange:true });
+                if (!isCurrent()) return false;
+                const match = selectSeerrSearchResult(parseJSONResponse(response)?.results, imdbId, mediaType);
+                if (!match) throw new Error('The Overseerr instance did not recognize this IMDb title');
+                tmdbId = match.tmdbId;
+            }
+            const body = buildSeerrRequestBody(mediaType, tmdbId);
+            if (!body) throw new Error('The Overseerr instance returned an unusable title id');
+            if (!isCurrent()) return false;
+            await seerrRequest('request', { method:'POST', body:JSON.stringify(body) });
+            return true;
         },
         async _checkLibrary(kind, ctx, btn, bar, isCurrent) {
             try {
@@ -5154,14 +5301,8 @@ section[id*="quote" i] .ipc-list-card { padding: 4px 0 !important; margin: 2px 0
                 if (!Array.isArray(items) || !items.length) return;
                 const found = selectServarrLookupResult(items, ctx, true);
                 if (found) {
-                    btn.textContent = 'In Library';
-                    btn.disabled = true;
                     const label = kind === 'radarr' ? 'Radarr' : 'Sonarr';
-                    btn.setAttribute('aria-label', `${ctx.title} is already in ${label}`);
-                    const status = makeEl('span', { className:'enh-servarr-status', title:`Already in ${label}`, 'aria-hidden':'true' },
-                        makeEl('span', { className:'enh-servarr-status--dot' }),
-                    );
-                    bar.insertBefore(status, btn);
+                    this._setState(btn, 'library', 'In Library', `${ctx.title} is already in ${label}`);
                 }
             } catch { /* library check is best-effort */ }
         },
@@ -7444,9 +7585,17 @@ section[data-testid="hero-parent"].enh-editorial-native-hidden { display: none !
                     { key:'sonarrQualityProfileId', label:'Quality profile ID', type:'number' },
                 ],
             },
+            {
+                id:'seerr', title:'Overseerr', fields:[
+                    { key:'seerrUrl', label:'URL', wide:true, placeholder:'http://localhost:5055' },
+                    { key:'seerrApiKey', label:'API key', type:'password', wide:true },
+                ],
+            },
         ], createSettingsInput, 'servarr');
         panel.appendChild(makeEl('div', { className:'enh-servarr-note' },
-            'Credentials stay local and requests are limited to localhost or 127.0.0.1.'
+            'Credentials stay local and requests are limited to localhost or 127.0.0.1. '
+            + 'Overseerr and Jellyseerr both use these fields; a request there goes through your instance\'s approval workflow '
+            + 'instead of writing straight into Radarr or Sonarr, and your instance resolves the IMDb ID itself.'
         ));
         panel.addEventListener('submit', e => e.preventDefault());
         return panel;

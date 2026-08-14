@@ -26,7 +26,7 @@ Third-party lookups omit destination cookies. Responses are rendered as text, ou
 
 **Trailer Popover** - In-page trailer dialog backed by YouTube search, with focus containment, Escape/overlay close, opener restoration, and stale-result protection. No page navigation needed.
 
-**Radarr/Sonarr Integration** - Quick-add buttons with library status indicator (green dot when a title is already in your library). Localhost-only for security.
+**Radarr/Sonarr/Overseerr Integration** - Quick-add and request buttons that report state: add, pending, requested, processing, or already in your library. Overseerr and Jellyseerr are supported as a request backend and resolve the IMDb ID themselves, so no third-party API key is needed. Localhost-only for security.
 
 **Media Server Indicator** - Optional Plex, Jellyfin, and Emby checks show whether the current title already exists in your local media library. Localhost-only for security; access tokens are sent in request headers, not URLs.
 
@@ -125,7 +125,7 @@ The redesigned visual reference set covers every menu page: [Experience](design/
 
 **Cineby** - The exact Cineby root uses a one-time, ten-minute local title handoff that is consumed as soon as Cineby opens. A second Cineby navigation is held back while the first handoff is pending so it cannot replace the earlier title. Edit or remove its watch-site row to use an ordinary URL template instead.
 
-**Radarr/Sonarr** - URL, API key, root folder, and quality profile for each. Localhost/127.0.0.1 only. Current Sonarr v4+ language selection belongs in quality-profile custom formats; retired v3 language profiles are not configured.
+**Radarr/Sonarr/Overseerr** - URL, API key, root folder, and quality profile for Radarr and Sonarr; URL and API key for an Overseerr or Jellyseerr instance. Localhost/127.0.0.1 only. Current Sonarr v4+ language selection belongs in quality-profile custom formats; retired v3 language profiles are not configured.
 
 **Media Servers** - Plex URL/token and Jellyfin/Emby URL/API key fields for local library checks. Localhost/127.0.0.1 only.
 

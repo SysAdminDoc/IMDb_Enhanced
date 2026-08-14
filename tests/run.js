@@ -37,6 +37,9 @@ function loadScriptTestHooks() {
         collectProviderIds,
         mediaItemMatches,
         selectServarrLookupResult,
+        mapSeerrMediaState,
+        selectSeerrSearchResult,
+        buildSeerrRequestBody,
         parseMediaServerItems,
         parseJSONResponse,
         getRequestErrorMessage,
@@ -425,6 +428,40 @@ test('private marks decorate title cards on every card-bearing surface', () => {
     });
 });
 
+test('Overseerr requests report media state and build valid bodies', () => {
+    const hooks = loadScriptTestHooks();
+
+    // Overseerr's documented media status enum.
+    assert.strictEqual(hooks.mapSeerrMediaState({ status:5 }), 'library');
+    assert.strictEqual(hooks.mapSeerrMediaState({ status:4 }), 'partial');
+    assert.strictEqual(hooks.mapSeerrMediaState({ status:3 }), 'processing');
+    assert.strictEqual(hooks.mapSeerrMediaState({ status:2 }), 'queued');
+    assert.strictEqual(hooks.mapSeerrMediaState({ status:1 }), 'add');
+    assert.strictEqual(hooks.mapSeerrMediaState(null), 'add', 'an unknown status must stay actionable');
+
+    const results = [
+        { mediaType:'person', id:99 },
+        { mediaType:'tv', id:1396, mediaInfo:{ status:2 } },
+    ];
+    const picked = hooks.selectSeerrSearchResult(results, 'tt0903747', 'tv');
+    assert.strictEqual(picked.tmdbId, 1396, 'the matching media type should decide the result');
+    assert.strictEqual(hooks.selectSeerrSearchResult(results, 'tt0133093', 'movie'), null, 'a mismatched media type must not be requested');
+    assert.strictEqual(hooks.selectSeerrSearchResult([{ mediaType:'movie', id:0 }], 'tt0133093', 'movie'), null, 'invalid ids must be rejected');
+
+    assert.strictEqual(JSON.stringify(hooks.buildSeerrRequestBody('movie', 603)), JSON.stringify({ mediaType:'movie', mediaId:603 }));
+    assert.strictEqual(JSON.stringify(hooks.buildSeerrRequestBody('tv', 1396)),
+        JSON.stringify({ mediaType:'tv', mediaId:1396, seasons:'all' }), 'series default to every season');
+    assert.strictEqual(JSON.stringify(hooks.buildSeerrRequestBody('tv', 1396, [1, 2, 2, -3])),
+        JSON.stringify({ mediaType:'tv', mediaId:1396, seasons:[1, 2] }), 'season lists are deduplicated and bounded');
+    assert.strictEqual(hooks.buildSeerrRequestBody('movie', 'not-a-number'), null, 'a bad id must not produce a request body');
+
+    // The Overseerr URL and key must obey the same boundaries as every other
+    // local integration, at edit time and at import time.
+    assert(script.includes("'radarrUrl', 'sonarrUrl', 'seerrUrl'"), 'the Overseerr URL must be localhost-validated like its peers');
+    assert(script.includes("'radarrApiKey', 'sonarrApiKey', 'seerrApiKey'"), 'the Overseerr key must be credential-normalized like its peers');
+    assert(script.includes('Only localhost and 127.0.0.1 Overseerr/Jellyseerr URLs are allowed'), 'the Overseerr request boundary must enforce loopback');
+});
+
 test('Wikidata resolves external service IDs without trusting arbitrary values', () => {
     const hooks = loadScriptTestHooks();
 
@@ -631,8 +668,12 @@ test('pending route work and lazy score lookups are cancellable', () => {
     assert(script.includes("startFeature(feature, { context:'settings', notify:true })"), 'settings-triggered feature failures should be visible');
     assert(script.includes("startFeature(feature, { context:'refresh', notify:true })"), 'settings-triggered feature refresh failures should be visible');
     assert(
-        /const added = await this\._add\(action\.kind, imdbId, title, year, isCurrent\);\s*if \(!added \|\| !isCurrent\(\)\) return;/.test(script),
-        'Servarr add results must not update a later route'
+        /const done = action\.kind === 'seerr'\s*\?\s*await this\._request\(imdbId, title, year, isCurrent\)\s*:\s*await this\._add\(action\.kind, imdbId, title, year, isCurrent\);\s*if \(!done \|\| !isCurrent\(\)\) return;/.test(script),
+        'Servarr and Overseerr results must not update a later route'
+    );
+    assert(
+        /await seerrRequest\('search', \{ query:\{ query:imdbId \}, cancelOnRouteChange:true \}\);\s*if \(!isCurrent\(\)\) return false;/.test(script),
+        'Overseerr identity lookups must be cancellable and route guarded before a request is sent'
     );
     assert(
         /async _lookup\(kind, ctx, isCurrent\)[\s\S]*?query:\{ term \},\s*cancelOnRouteChange:true,[\s\S]*?if \(!isCurrent\(\)\) return null;/.test(script),
@@ -1736,7 +1777,8 @@ test('media server integration is configurable and local-only', () => {
     assert(script.includes('Only localhost and 127.0.0.1 media server URLs are allowed'), 'media server local-only guard missing');
     assert(/className:'enh-media-server-pill',[\s\S]*?role:'status',[\s\S]*?'aria-live':'polite'/.test(script), 'async media-server state should be announced');
     assert(script.includes("className:'enh-media-server-pill__dot', 'aria-hidden':'true'"), 'decorative media-server dots should stay out of the accessibility tree');
-    assert(script.includes("btn.setAttribute('aria-label', `${ctx.title} is already in ${label}`)"), 'Servarr library state should replace the stale Add accessible name');
+    assert(script.includes("this._setState(btn, 'library', 'In Library', `${ctx.title} is already in ${label}`)"), 'Servarr library state should replace the stale Add accessible name');
+    assert(/_setState\(btn, state, text, label[\s\S]*?if \(label\) btn\.setAttribute\('aria-label', label\)/.test(script), 'every integration state change must carry its accessible name');
     assert(script.includes("btn.setAttribute('aria-busy', 'true')"), 'Servarr adds should expose their pending state');
 });
 
