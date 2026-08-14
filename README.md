@@ -40,11 +40,33 @@ Third-party lookups omit destination cookies. Responses are rendered as text, ou
 
 ## Userscript install
 
-1. On a desktop browser, install [Tampermonkey](https://www.tampermonkey.net/) or [Violentmonkey](https://violentmonkey.github.io/).
-2. [Click here to install the userscript](https://raw.githubusercontent.com/SysAdminDoc/IMDb_Enhanced/main/IMDb_Enhanced.user.js).
-3. Visit any IMDb title page. Open settings with the gear icon.
+1. On a desktop browser, install [Tampermonkey](https://www.tampermonkey.net/), [Violentmonkey](https://violentmonkey.github.io/), or [ScriptCat](https://github.com/scriptscat/scriptcat).
+2. **On Chrome, Edge, Brave, and other Chromium browsers, turn on user scripts first** — see the next section. Firefox needs no extra step.
+3. [Click here to install the userscript](https://raw.githubusercontent.com/SysAdminDoc/IMDb_Enhanced/main/IMDb_Enhanced.user.js).
+4. Visit any IMDb title page. Open settings with the gear icon.
 
 Updates are delivered automatically via the `@updateURL` metadata.
+
+### Chromium: enable user scripts
+
+Manifest V3 removed the old permissions that userscript managers relied on, so
+Chromium browsers now require one manual switch before any userscript runs. The
+manager itself must also be a Manifest V3 build (Tampermonkey 5.x, Violentmonkey
+2026.7 or newer, or ScriptCat).
+
+- **Chrome 138 and newer:** open `chrome://extensions`, click **Details** on your
+  userscript manager, and turn on **Allow User Scripts**.
+- **Chrome 137 and older:** open `chrome://extensions` and turn on **Developer
+  mode** in the top-right corner.
+- **Then reload any IMDb tabs you already had open.** Scripts do not start in
+  tabs that loaded before the switch was flipped.
+
+Tampermonkey may show a "Developer mode required" banner on Chrome 138+ even when
+Developer mode is already on. The message is out of date — the **Allow User
+Scripts** toggle described above is the setting it actually needs.
+
+If you would rather not manage that switch, install the Chromium extension below
+instead; it needs none of these steps.
 
 ## Chromium extension
 
