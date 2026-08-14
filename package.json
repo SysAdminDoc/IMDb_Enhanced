@@ -1,6 +1,6 @@
 {
   "name": "imdb-enhanced",
-  "version": "2.8.0",
+  "version": "2.9.0",
   "description": "Desktop IMDb enhancement userscript and Chromium extension",
   "private": true,
   "scripts": {

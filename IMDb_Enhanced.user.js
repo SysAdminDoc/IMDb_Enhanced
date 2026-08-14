@@ -1,7 +1,7 @@
 // ==UserScript==
 // @name         IMDb Enhanced
 // @namespace    https://github.com/SysAdminDoc
-// @version      2.8.0
+// @version      2.9.0
 // @updateURL    https://raw.githubusercontent.com/SysAdminDoc/IMDb_Enhanced/main/IMDb_Enhanced.user.js
 // @downloadURL  https://raw.githubusercontent.com/SysAdminDoc/IMDb_Enhanced/main/IMDb_Enhanced.user.js
 // @description  Premium IMDb overhaul: cleaner pages, modern themes, refined score widgets, media library indicators, quick navigation, richer external links, TV tools, search shortcuts, and polished settings import/export
@@ -42,7 +42,7 @@
     // =========================================================================
     //  CONSTANTS & CONFIG
     // =========================================================================
-    const VERSION = '2.8.0';
+    const VERSION = '2.9.0';
     const PREFIX  = 'imdb_enh_';
     const CINEBY_QUERY_KEY = PREFIX + 'cineby_query';
     const CINEBY_QUERY_TTL = 10 * 60 * 1000;
@@ -1925,10 +1925,44 @@ section[data-testid="PersonalDetails"] {
 
 /* Hero section */
 section[data-testid="hero-parent"] {
-    background: linear-gradient(180deg, ${t.sf0} 0%, ${t.bg} 100%) !important;
-    border-radius: 0 0 16px 16px !important;
-    padding-bottom: 24px !important;
+    position: relative !important;
+    background: ${t.bg} !important;
+    border-radius: 0 !important;
+    padding-top: 30px !important;
+    padding-bottom: 28px !important;
     border-bottom: 1px solid ${t.bd0} !important;
+    box-shadow: inset 0 -18px 34px -34px ${t.tx0} !important;
+}
+section[data-testid="hero-parent"]::before {
+    content: '';
+    position: absolute;
+    inset: 0;
+    z-index: 0;
+    pointer-events: none;
+    background-image: linear-gradient(90deg, ${t.bg} 0%, color-mix(in srgb, ${t.bg} 88%, transparent) 40%, color-mix(in srgb, ${t.bg} 28%, transparent) 100%), var(--enh-hero-backdrop, none);
+    background-position: center, center;
+    background-size: 100% 100%, cover;
+    opacity: .36;
+    filter: saturate(.82) contrast(.96);
+}
+section[data-testid="hero-parent"] > * { position: relative; z-index: 1; }
+section[data-testid="hero-parent"] [data-testid="hero__pageTitle"] {
+    max-width: min(100%, 820px) !important;
+    margin-bottom: 16px !important;
+}
+section[data-testid="hero-parent"] [data-testid="hero__primary-text"] {
+    font-size: clamp(42px, 5vw, 72px) !important;
+    font-weight: 800 !important;
+    letter-spacing: -0.045em !important;
+    line-height: .98 !important;
+}
+section[data-testid="hero-parent"] [data-testid="hero-media__poster"] {
+    border-radius: 12px !important;
+    overflow: hidden !important;
+}
+section[data-testid="hero-parent"] [data-testid="hero-media__poster"] img {
+    border-radius: 12px !important;
+    box-shadow: 0 18px 42px rgba(0,0,0,.34) !important;
 }
 
 /* Transparent base sections (prevent double-backgrounds) */
@@ -2199,8 +2233,25 @@ html[data-imdb-enhanced="active"] .ipc-page-background {
         init() {
             injectEarlyThemeShell();
             applyThemeStyles({ refreshDependent: false });
+            const isCurrent = createFeatureGuard(this);
+            waitForTitleSurface().then(() => {
+                if (!isCurrent()) return;
+                const hero = document.querySelector('section[data-testid="hero-parent"]');
+                const poster = hero?.querySelector('[data-testid="hero-media__poster"] img');
+                const source = poster?.currentSrc || poster?.src || '';
+                if (!hero || !source) return;
+                try {
+                    const url = new URL(source, location.href);
+                    if (!/^https?:$/.test(url.protocol)) return;
+                    const escaped = url.href.replace(/["\\)]/g, character => `\\${character}`);
+                    hero.style.setProperty('--enh-hero-backdrop', `url("${escaped}")`);
+                    this._heroBackdrop = hero;
+                } catch { /* an unavailable poster should not block the title surface */ }
+            }).catch(() => {});
         },
         destroy() {
+            this._heroBackdrop?.style.removeProperty('--enh-hero-backdrop');
+            this._heroBackdrop = null;
             removeCSS('enh-modernUI');
             removeCSS('enh-early-shell');
             delete document.documentElement.dataset.imdbEnhanced;
@@ -2229,24 +2280,28 @@ html[data-imdb-enhanced="active"] .ipc-page-background {
         init() {
             addThemedCSS(t => `
                 [data-testid="hero-rating-bar__aggregate-rating"] {
-                    background: ${t.accentMuted} !important;
-                    border: 1px solid ${t.accentBorder} !important;
-                    border-radius: 12px !important;
-                    padding: 8px 16px !important;
-                    box-shadow: 0 0 24px ${t.accentMuted} !important;
-                    transition: background .2s ease, box-shadow .2s ease !important;
+                    background: transparent !important;
+                    border: 0 !important;
+                    border-radius: 0 !important;
+                    padding: 12px 20px !important;
+                    box-shadow: none !important;
+                    min-width: 150px !important;
+                    border-left: 1px solid ${t.bd0} !important;
+                    transition: color .2s ease !important;
                 }
                 [data-testid="hero-rating-bar__aggregate-rating"]:hover {
-                    background: rgba(245,197,24,0.16) !important;
-                    box-shadow: 0 0 32px rgba(245,197,24,0.12) !important;
+                    background: ${t.sf0} !important;
                 }
                 [data-testid="hero-rating-bar__aggregate-rating__score"] span:first-child {
                     font-size: 1.6em !important; font-weight: 800 !important;
                 }
                 [data-testid="hero-rating-bar__popularity"] {
-                    background: ${t.blueMuted} !important;
-                    border: 1px solid rgba(77,168,240,0.12) !important;
-                    border-radius: 12px !important; padding: 8px 16px !important;
+                    background: transparent !important;
+                    border: 0 !important;
+                    border-radius: 0 !important;
+                    padding: 12px 20px !important;
+                    min-width: 150px !important;
+                    border-left: 1px solid ${t.bd0} !important;
                 }
             `, 'enh-enhRating');
         },
@@ -3529,13 +3584,14 @@ section[id*="quote" i] .ipc-list-card { padding: 4px 0 !important; margin: 2px 0
         ],
         init() {
             addThemedCSS(t => `
-                #enh-quicknav{position:fixed;right:16px;top:50%;transform:translateY(-50%);
-                    z-index:99999;display:flex;flex-direction:column;gap:4px}
-                .enh-qn-dot{width:36px;height:36px;border-radius:10px;
-                    background:${t.sf0};border:1px solid ${t.bd1};
-                    color:${t.tx3};font-size:11px;font-weight:800;letter-spacing:.04em;cursor:pointer;
+                #enh-quicknav{position:fixed;right:18px;top:50%;transform:translateY(-50%);
+                    z-index:99999;display:flex;flex-direction:column;gap:5px;padding:6px;
+                    background:${t.sf0};border:1px solid ${t.bd0};border-radius:14px;box-shadow:${t.sh2}}
+                .enh-qn-dot{width:70px;min-height:34px;border-radius:8px;
+                    background:transparent;border:1px solid transparent;
+                    color:${t.tx3};font-size:10px;font-weight:700;letter-spacing:.01em;cursor:pointer;
                     display:flex;align-items:center;justify-content:center;transition:background .15s ease,border-color .15s ease,color .15s ease,transform .15s ease;
-                    text-decoration:none;position:relative;padding:0;font-family:inherit}
+                    text-decoration:none;position:relative;padding:0 5px;font-family:inherit}
                 .enh-qn-dot:hover,.enh-qn-dot:focus-visible{background:${t.accentMuted};border-color:${t.accentBorder};
                     color:${t.accent};transform:translateX(-2px)}
                 .enh-qn-dot::before{content:attr(data-label);position:absolute;right:calc(100% + 8px);
@@ -3551,7 +3607,7 @@ section[id*="quote" i] .ipc-list-card { padding: 4px 0 !important; margin: 2px 0
                 const sec = document.querySelector(`section[data-testid="${s.id}"]`);
                 if (!sec) return;
                 nav.appendChild(makeEl('button', {
-                    className:'enh-qn-dot', type:'button', dataset:{ label:s.label }, textContent:s.icon,
+                    className:'enh-qn-dot', type:'button', dataset:{ label:s.label }, textContent:s.label,
                     title: s.label, 'aria-label': `Jump to ${s.label}`,
                     onClick: () => sec.scrollIntoView({ behavior:getEnhancementScrollBehavior(), block:'start' })
                 }));
@@ -3587,34 +3643,89 @@ section[id*="quote" i] .ipc-list-card { padding: 4px 0 !important; margin: 2px 0
                 });
                 const label = makeEl('div', { className:'enh-stream-label' },
                     makeEl('span', { className:'enh-stream-label__dot' }),
-                    'WATCH MOVIES & SHOWS'
+                    'WATCH'
                 );
                 const groups = makeEl('div', { className:'enh-link-groups' });
                 const siteGroups = groupSitesByCategory(sites);
-                siteGroups.forEach(groupData => {
-                    const group = makeEl('div', { className:'enh-link-group' });
-                    if (siteGroups.length > 1 || groupData.category !== 'watch') {
-                        group.appendChild(makeEl('div', { className:'enh-link-group__label' }, getSiteCategoryLabel(groupData.category)));
+                const primaryGroup = siteGroups.find(groupData => groupData.category === 'watch') || siteGroups[0];
+                const primarySite = primaryGroup?.sites?.[0];
+                const createSiteButton = (site, className = 'enh-search-btn') => {
+                    const url = site.storeQuery ? getCinebyHost() : applyLinkTemplate(site.url, ctx);
+                    const primary = className.includes('enh-search-btn--primary');
+                    const contents = primary
+                        ? [
+                            makeEl('span', { className:'enh-search-btn__action' }, 'Watch'),
+                            makeEl('span', { className:'enh-search-btn__site' }, site.name),
+                            makeEl('span', { className:'enh-search-btn__arrow', 'aria-hidden':'true' }, '→'),
+                        ]
+                        : [makeEl('span', {}, site.name)];
+                    return makeEl('a', {
+                        href:url,
+                        target:'_blank',
+                        rel:'noopener noreferrer',
+                        className,
+                        dataset:{ url, storeQuery:String(Boolean(site.storeQuery)) },
+                        style:{ '--btn-color':site.color },
+                        title:`Search ${site.name} for ${title}`,
+                        'aria-label': `Open ${site.name} search for ${title}`,
+                    }, ...contents);
+                };
+                const findNativeTitleAction = patterns => {
+                    const hero = document.querySelector('section[data-testid="hero-parent"]') || document;
+                    const candidates = hero.querySelectorAll('button, a, [role="button"]');
+                    let inspected = 0;
+                    for (const candidate of candidates) {
+                        if (++inspected > 200 || candidate.id?.startsWith('enh-') || candidate.closest?.('[id^="enh-"]')) continue;
+                        const haystack = [candidate.getAttribute('aria-label'), candidate.getAttribute('title'), candidate.textContent]
+                            .filter(Boolean).join(' ').slice(0, 400).toLowerCase();
+                        if (patterns.some(pattern => haystack.includes(pattern))) return candidate;
                     }
-                    const row = makeEl('div', { className:'enh-search-row' });
-                    groupData.sites.forEach(site => {
-                        const url = site.storeQuery ? getCinebyHost() : applyLinkTemplate(site.url, ctx);
-                        const btn = makeEl('a', {
-                            href:url,
-                            target:'_blank',
-                            rel:'noopener noreferrer',
-                            className:'enh-search-btn',
-                            dataset:{ url, storeQuery:String(Boolean(site.storeQuery)) },
-                            style:{ '--btn-color':site.color },
-                            title:`Search ${site.name} for ${title}`,
-                            'aria-label': `Open ${site.name} search for ${title}`,
-                        }, makeEl('span', {}, site.name));
-                        row.appendChild(btn);
+                    return null;
+                };
+                const actions = makeEl('div', { id:'enh-editorial-actions' });
+                if (primarySite) actions.appendChild(createSiteButton(primarySite, 'enh-search-btn enh-search-btn--primary'));
+                actions.appendChild(makeEl('button', {
+                    type:'button',
+                    className:'enh-editorial-action',
+                    onClick: () => {
+                        const rating = document.querySelector('[data-testid="hero-rating-bar__aggregate-rating"]');
+                        rating?.scrollIntoView({ behavior:getEnhancementScrollBehavior(), block:'center' });
+                        rating?.querySelector('button, a, [tabindex]:not([tabindex="-1"])')?.focus?.();
+                    },
+                }, 'Rate'));
+                actions.appendChild(makeEl('button', {
+                    type:'button',
+                    className:'enh-editorial-action',
+                    onClick: () => {
+                        const watchlist = findNativeTitleAction(['watchlist', 'watch list', 'add to watch']);
+                        if (watchlist) watchlist.click();
+                        else showToast('IMDb watchlist controls are unavailable on this title surface', 3500);
+                    },
+                }, 'Add to watchlist'));
+
+                const secondarySites = sites.filter(site => site !== primarySite);
+                if (secondarySites.length) {
+                    const options = makeEl('details', { className:'enh-watch-options' });
+                    options.appendChild(makeEl('summary', { className:'enh-watch-options__summary' },
+                        makeEl('span', {}, 'More watch options'),
+                        makeEl('span', { className:'enh-watch-options__count' }, `${secondarySites.length} sites`)
+                    ));
+                    const optionGroups = makeEl('div', { className:'enh-watch-options__groups' });
+                    groupSitesByCategory(secondarySites).forEach(groupData => {
+                        const group = makeEl('div', { className:'enh-link-group' });
+                        if (groupData.category !== 'watch') {
+                            group.appendChild(makeEl('div', { className:'enh-link-group__label' }, getSiteCategoryLabel(groupData.category)));
+                        }
+                        const row = makeEl('div', { className:'enh-search-row enh-search-row--compact' });
+                        groupData.sites.forEach(site => row.appendChild(createSiteButton(site, 'enh-search-btn enh-search-btn--compact')));
+                        group.appendChild(row);
+                        optionGroups.appendChild(group);
                     });
-                    group.appendChild(row);
-                    groups.appendChild(group);
-                });
+                    options.appendChild(optionGroups);
+                    groups.appendChild(options);
+                }
                 wrap.appendChild(label);
+                wrap.appendChild(actions);
                 wrap.appendChild(groups);
                 appendTitleStackItem(wrap, TITLE_STACK_ORDER.searchButtons);
                 wrap.querySelectorAll('.enh-search-btn').forEach(btn => {
@@ -3626,7 +3737,18 @@ section[id*="quote" i] .ipc-list-card { padding: 4px 0 !important; margin: 2px 0
                 });
             }).catch(() => {});
         },
-        destroy() { document.getElementById('enh-search-buttons')?.remove(); pruneTitleStack(); }
+        destroy() {
+            const wrap = document.getElementById('enh-search-buttons');
+            const trailer = wrap?.querySelector('#enh-trailer-btn');
+            const menu = wrap?.querySelector('#enh-link-menu-wrap');
+            if (trailer) appendTitleStackItem(trailer, TITLE_STACK_ORDER.trailerPopover);
+            if (menu) {
+                menu.classList.add('enh-link-menu-wrap--standalone');
+                appendTitleStackItem(menu, TITLE_STACK_ORDER.expandedLinkMenu);
+            }
+            wrap?.remove();
+            pruneTitleStack();
+        }
     });
 
     reg({
@@ -3641,9 +3763,21 @@ section[id*="quote" i] .ipc-list-card { padding: 4px 0 !important; margin: 2px 0
                 const ctx = getLinkContext(title, imdbId, year);
                 const links = filterSitesForMediaType(getSiteList('externalSites', DEFAULT_EXTERNAL_SITES))
                     .filter(link => link.enabled !== false);
-                const bar = makeEl('div', { id:'enh-external-links' });
+                const bar = makeEl('section', {
+                    id:'enh-external-links',
+                    role:'region',
+                    'aria-label':'Where to watch and research',
+                });
+                bar.appendChild(makeEl('div', { className:'enh-external-links__header' },
+                    makeEl('div', { className:'enh-external-links__title' }, 'Where to watch'),
+                    makeEl('div', { className:'enh-external-links__hint' }, 'Reviews, availability, trailers and research')
+                ));
+                const externalGroups = makeEl('div', { className:'enh-external-groups' });
                 groupSitesByCategory(links).forEach(groupData => {
-                    const group = makeEl('div', { className:'enh-external-group' });
+                    const group = makeEl('div', {
+                        className:'enh-external-group',
+                        dataset:{ category:groupData.category },
+                    });
                     group.appendChild(makeEl('div', { className:'enh-link-group__label' }, getSiteCategoryLabel(groupData.category)));
                     const row = makeEl('div', { className:'enh-external-group__row' });
                     groupData.sites.forEach(link => {
@@ -3657,8 +3791,9 @@ section[id*="quote" i] .ipc-list-card { padding: 4px 0 !important; margin: 2px 0
                         }, link.name));
                     });
                     group.appendChild(row);
-                    bar.appendChild(group);
+                    externalGroups.appendChild(group);
                 });
+                bar.appendChild(externalGroups);
                 appendTitleStackItem(bar, TITLE_STACK_ORDER.externalLinks);
                 const trailer = document.getElementById('enh-trailer-btn');
                 const menu = document.getElementById('enh-link-menu-wrap');
@@ -3748,8 +3883,10 @@ section[id*="quote" i] .ipc-list-card { padding: 4px 0 !important; margin: 2px 0
                     'aria-expanded':'false',
                     onClick: () => this._open(),
                 }, 'Trailer');
+                const editorialActions = document.getElementById('enh-editorial-actions');
                 const extBar = document.getElementById('enh-external-links');
-                if (extBar) extBar.appendChild(btn);
+                if (editorialActions) editorialActions.appendChild(btn);
+                else if (extBar) extBar.appendChild(btn);
                 else appendTitleStackItem(btn, TITLE_STACK_ORDER.trailerPopover);
             }).catch(() => {});
         },
@@ -4022,8 +4159,10 @@ section[id*="quote" i] .ipc-list-card { padding: 4px 0 !important; margin: 2px 0
 
                 container.appendChild(trigger);
                 container.appendChild(dropdown);
+                const editorialActions = document.getElementById('enh-editorial-actions');
                 const extBar = document.getElementById('enh-external-links');
-                if (extBar) extBar.appendChild(container);
+                if (editorialActions) editorialActions.appendChild(container);
+                else if (extBar) extBar.appendChild(container);
                 else {
                     container.classList.add('enh-link-menu-wrap--standalone');
                     appendTitleStackItem(container, TITLE_STACK_ORDER.expandedLinkMenu);
@@ -5183,41 +5322,80 @@ section[id*="quote" i] .ipc-list-card { padding: 4px 0 !important; margin: 2px 0
 
 /* ════ Stream Panel ════ */
 #enh-title-stack {
-    display: flex;
-    flex-direction: column;
-    align-items: flex-start;
-    gap: 8px;
-    margin: 12px 0 14px;
-    max-width: min(100%, 920px);
+    display: grid;
+    grid-template-columns: minmax(230px, 300px) minmax(0, 1fr);
+    align-items: start;
+    column-gap: 28px;
+    row-gap: 16px;
+    margin: 18px 0 24px;
+    max-width: min(100%, 1120px);
 }
-#enh-title-stack > * { width: 100%; }
+#enh-title-stack > * { width: 100%; min-width: 0; }
 #enh-title-stack #enh-copy-id {
-    width: auto;
+    grid-column: 1 / -1;
+    width: fit-content;
     margin: 0;
+}
+#enh-title-stack #enh-search-buttons { grid-column: 1; }
+#enh-title-stack #enh-external-links { grid-column: 2; }
+#enh-title-stack #enh-tv-bar,
+#enh-title-stack #enh-servarr-actions,
+#enh-title-stack #enh-media-server-status {
+    grid-column: 1 / -1;
 }
 #enh-title-stack #enh-search-buttons,
 #enh-title-stack #enh-external-links,
-#enh-title-stack #enh-tv-bar {
+#enh-title-stack #enh-tv-bar,
+#enh-title-stack #enh-servarr-actions,
+#enh-title-stack #enh-media-server-status {
     margin: 0;
 }
 
 #enh-search-buttons {
-    margin: 12px 0 8px;
-    padding: 10px 12px 11px;
-    background: ${t.sf0};
-    border: 1px solid ${t.accentBorder};
-    border-radius: 10px;
-    box-shadow: ${t.sh1};
+    padding: 0;
+    background: transparent;
+    border: 0;
+    border-radius: 0;
+    box-shadow: none;
 }
 .enh-stream-label {
     display: flex; align-items: center; gap: 6px;
-    font: 700 9px/1 -apple-system, BlinkMacSystemFont, 'Segoe UI', sans-serif;
+    font: 700 10px/1 -apple-system, BlinkMacSystemFont, 'Segoe UI', sans-serif;
     text-transform: uppercase; letter-spacing: 0.14em;
-    color: ${t.tx2};
-    margin: 0 0 8px 2px;
+    color: ${t.tx3};
+    margin: 0 0 10px 2px;
 }
 .enh-stream-label__dot {
-    color: ${t.accent}; font-size: 10px; line-height: 1;
+    width: 6px; height: 6px; border-radius: 50%;
+    background: ${t.accent}; box-shadow: 0 0 0 4px ${t.accentMuted};
+}
+#enh-editorial-actions { display: flex; flex-direction: column; gap: 6px; }
+.enh-editorial-action {
+    display: flex; align-items: center; justify-content: flex-start;
+    width: 100%; min-height: 40px; padding: 8px 14px;
+    background: ${t.sf1}; border: 1px solid ${t.bd1}; border-radius: 8px;
+    color: ${t.tx1}; cursor: pointer; text-align: left;
+    font: 700 12px/1.2 -apple-system, BlinkMacSystemFont, 'Segoe UI', sans-serif;
+    transition: background .15s ease, border-color .15s ease, color .15s ease, transform .15s ease;
+}
+.enh-editorial-action:hover,
+.enh-editorial-action:focus-visible {
+    background: ${t.sf2}; border-color: ${t.accentBorder}; color: ${t.accent};
+    transform: translateY(-1px);
+}
+#enh-editorial-actions #enh-trailer-btn,
+#enh-editorial-actions #enh-link-menu-wrap {
+    width: 100%; margin: 0;
+}
+#enh-editorial-actions #enh-trailer-btn,
+#enh-editorial-actions #enh-link-menu-trigger {
+    width: 100%; min-height: 40px; padding: 8px 14px;
+    text-align: left; border-radius: 8px;
+}
+#enh-editorial-actions #enh-link-menu-wrap { display: flex; }
+#enh-editorial-actions #enh-link-menu-wrap .enh-link-dropdown {
+    top: auto; bottom: calc(100% + 8px); left: 0; right: auto;
+    max-height: min(60vh, 520px); overflow: auto;
 }
 .enh-link-groups { display: flex; flex-direction: column; gap: 8px; }
 .enh-link-group { min-width: 0; }
@@ -5237,8 +5415,8 @@ section[id*="quote" i] .ipc-list-card { padding: 4px 0 !important; margin: 2px 0
     display: flex; align-items: center; justify-content: center;
     min-height: 38px;
     padding: 8px 8px;
-    background: color-mix(in srgb, var(--btn-color) 14%, ${t.sf1});
-    border: 1px solid color-mix(in srgb, var(--btn-color) 24%, transparent);
+    background: ${t.sf1};
+    border: 1px solid ${t.bd1};
     border-radius: 8px;
     color: ${t.tx1};
     font: 600 12px/1.2 -apple-system, BlinkMacSystemFont, 'Segoe UI', sans-serif;
@@ -5247,33 +5425,122 @@ section[id*="quote" i] .ipc-list-card { padding: 4px 0 !important; margin: 2px 0
     text-align: center; white-space: nowrap; min-width: 0;
 }
 .enh-search-btn:hover {
-    background: color-mix(in srgb, var(--btn-color) 26%, ${t.sf1});
-    border-color: color-mix(in srgb, var(--btn-color) 48%, transparent);
-    transform: translateY(-2px);
-    box-shadow: 0 4px 14px color-mix(in srgb, var(--btn-color) 22%, transparent);
+    background: ${t.sf2};
+    border-color: ${t.accentBorder};
+    color: ${t.tx0};
+    transform: translateY(-1px);
+    box-shadow: ${t.sh1};
 }
 .enh-search-btn:active { transform: translateY(0); }
+.enh-search-btn--primary {
+    display: grid; grid-template-columns: auto minmax(0, 1fr) auto;
+    align-items: center; justify-content: initial; gap: 10px;
+    min-height: 58px; padding: 10px 14px;
+    background: ${t.accent}; border-color: ${t.accent};
+    color: ${readableTextColor(t.accent)};
+    box-shadow: 0 10px 26px ${t.accentMuted};
+    text-align: left;
+}
+.enh-search-btn--primary:hover {
+    background: ${t.accent}; border-color: ${t.accent};
+    color: ${readableTextColor(t.accent)};
+    filter: brightness(1.08); box-shadow: 0 12px 30px ${t.accentMuted};
+}
+.enh-search-btn__action { font-size: 15px; font-weight: 800; }
+.enh-search-btn__site {
+    overflow: hidden; text-overflow: ellipsis;
+    font-size: 11px; font-weight: 600; opacity: .78;
+}
+.enh-search-btn__arrow { font-size: 18px; line-height: 1; opacity: .86; }
+.enh-watch-options {
+    overflow: hidden; border: 1px solid ${t.bd1};
+    border-radius: 8px; background: ${t.sf0};
+}
+.enh-watch-options__summary {
+    display: flex; align-items: center; justify-content: space-between; gap: 10px;
+    min-height: 38px; padding: 8px 11px; cursor: pointer;
+    color: ${t.tx1}; font: 700 11px/1.2 -apple-system, BlinkMacSystemFont, 'Segoe UI', sans-serif;
+    list-style: none;
+}
+.enh-watch-options__summary::-webkit-details-marker { display: none; }
+.enh-watch-options__summary::after { content: '+'; color: ${t.tx3}; font-size: 16px; line-height: 1; }
+.enh-watch-options[open] .enh-watch-options__summary::after { content: '−'; color: ${t.accent}; }
+.enh-watch-options__summary:hover { color: ${t.accent}; background: ${t.sf1}; }
+.enh-watch-options__count { color: ${t.tx3}; font-weight: 600; margin-left: auto; }
+.enh-watch-options__groups {
+    display: flex; flex-direction: column; gap: 10px;
+    padding: 0 10px 10px; border-top: 1px solid ${t.bd0};
+}
+.enh-search-row--compact { grid-template-columns: repeat(2, minmax(0, 1fr)); gap: 5px; }
+.enh-search-btn--compact {
+    min-height: 32px; padding: 6px 8px; justify-content: flex-start;
+    background: color-mix(in srgb, var(--btn-color) 8%, ${t.sf1});
+    border-color: color-mix(in srgb, var(--btn-color) 18%, ${t.bd1});
+    font-size: 11px; text-align: left;
+}
+.enh-search-btn--compact:hover {
+    background: color-mix(in srgb, var(--btn-color) 16%, ${t.sf2});
+    border-color: color-mix(in srgb, var(--btn-color) 34%, ${t.accentBorder});
+}
 /* ════ External Links ════ */
 #enh-external-links {
-    display: flex; flex-wrap: wrap; align-items: flex-end; gap: 10px;
-    margin: 6px 0 4px;
+    min-width: 0; padding: 0 0 0 26px;
+    border-left: 1px solid ${t.bd0};
 }
-.enh-external-group { display: flex; flex-direction: column; gap: 5px; min-width: 0; }
+.enh-external-links__header {
+    display: flex; flex-wrap: wrap; align-items: baseline; gap: 9px;
+    padding-bottom: 10px; border-bottom: 1px solid ${t.bd0};
+}
+.enh-external-links__title {
+    color: ${t.tx0}; font: 700 18px/1.2 -apple-system, BlinkMacSystemFont, 'Segoe UI', sans-serif;
+}
+.enh-external-links__hint { color: ${t.tx3}; font: 500 11px/1.4 -apple-system, BlinkMacSystemFont, 'Segoe UI', sans-serif; }
+.enh-external-groups { display: flex; flex-direction: column; }
+.enh-external-group { display: flex; flex-direction: column; gap: 7px; min-width: 0; padding: 12px 0; border-bottom: 1px solid ${t.bd0}; }
+.enh-external-group:last-child { border-bottom: 0; }
 .enh-external-group__row { display: flex; flex-wrap: wrap; align-items: center; gap: 5px; }
 .enh-ext-link {
-    padding: 4px 11px; border-radius: 6px;
-    font: 500 11px/1.5 -apple-system, BlinkMacSystemFont, 'Segoe UI', sans-serif;
+    padding: 7px 11px; border-radius: 7px;
+    font: 600 11px/1.3 -apple-system, BlinkMacSystemFont, 'Segoe UI', sans-serif;
     color: ${t.tx1} !important;
-    background: color-mix(in srgb, var(--link-color) 8%, transparent);
-    border: 1px solid color-mix(in srgb, var(--link-color) 14%, transparent);
+    background: ${t.sf1}; border: 1px solid ${t.bd1};
     text-decoration: none !important;
     transition: background .15s ease, border-color .15s ease, color .15s ease, transform .15s cubic-bezier(.4,0,.2,1);
 }
 .enh-ext-link:hover {
-    background: color-mix(in srgb, var(--link-color) 20%, transparent);
-    border-color: color-mix(in srgb, var(--link-color) 32%, transparent);
+    background: ${t.sf2};
+    border-color: ${t.accentBorder};
     color: ${t.tx0} !important;
     transform: translateY(-1px);
+}
+#enh-external-links > #enh-trailer-btn,
+#enh-external-links > #enh-link-menu-wrap {
+    margin-top: 10px;
+}
+
+@media (max-width: 900px) {
+    #enh-title-stack {
+        grid-template-columns: minmax(0, 1fr);
+        max-width: 100%;
+        gap: 14px;
+    }
+    #enh-title-stack #enh-search-buttons,
+    #enh-title-stack #enh-external-links,
+    #enh-title-stack #enh-tv-bar,
+    #enh-title-stack #enh-servarr-actions,
+    #enh-title-stack #enh-media-server-status {
+        grid-column: 1;
+    }
+    #enh-external-links {
+        padding: 16px 0 0;
+        border-left: 0;
+        border-top: 1px solid ${t.bd0};
+    }
+}
+@media (max-width: 560px) {
+    .enh-search-row--compact { grid-template-columns: minmax(0, 1fr); }
+    .enh-external-links__header { display: block; }
+    .enh-external-links__hint { margin-top: 5px; }
 }
 
 /* ════ More Links trigger (lives in external-links row) ════ */
@@ -5342,10 +5609,11 @@ section[id*="quote" i] .ipc-list-card { padding: 4px 0 !important; margin: 2px 0
 /* ════ Score Widgets ════ */
 .enh-score-widget {
     display: inline-flex; flex-direction: column; align-items: center;
-    padding: 8px 16px; min-width: 80px;
+    padding: 12px 20px; min-width: 104px;
+    border-left: 1px solid ${t.bd0};
 }
 .enh-score-widget--availability {
-    min-width: 132px; max-width: 220px;
+    min-width: 150px; max-width: 240px;
 }
 .enh-score-widget__label {
     font-size: 10px; font-weight: 600; letter-spacing: .05em;
@@ -5353,7 +5621,7 @@ section[id*="quote" i] .ipc-list-card { padding: 4px 0 !important; margin: 2px 0
 }
 .enh-score-widget__score {
     display: flex; align-items: center; gap: 4px; text-decoration: none !important;
-    color: var(--score-color, ${t.tx2}) !important; font-size: 20px; font-weight: 800;
+    color: var(--score-color, ${t.tx2}) !important; font-size: 18px; font-weight: 800;
     transition: transform .15s cubic-bezier(.4,0,.2,1), opacity .15s ease;
 }
 .enh-score-widget__score:hover { transform: translateY(-1px); }
@@ -5367,8 +5635,8 @@ section[id*="quote" i] .ipc-list-card { padding: 4px 0 !important; margin: 2px 0
     font-size: 12px; line-height: 1.25;
 }
 .enh-score-widget__badge {
-    display: inline-block; padding: 2px 10px; border-radius: 6px;
-    font-size: 18px; font-weight: 800; min-width: 36px; text-align: center;
+    display: inline-block; padding: 2px 9px; border-radius: 6px;
+    font-size: 16px; font-weight: 800; min-width: 34px; text-align: center;
 }
 .enh-score-widget__badge--outline {
     border: 1px solid currentColor;

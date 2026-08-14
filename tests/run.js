@@ -701,6 +701,17 @@ test('independent title tools survive external-link toggles', () => {
     );
 });
 
+test('editorial title surface keeps primary actions and configurable destinations available', () => {
+    assert(script.includes("id:'enh-editorial-actions'"), 'title actions should have a dedicated editorial dock');
+    assert(script.includes("enh-search-btn enh-search-btn--primary"), 'watch destinations should expose one primary action');
+    assert(script.includes("className:'enh-watch-options'"), 'secondary watch destinations should stay available in a disclosure');
+    assert(script.includes("'aria-label':'Where to watch and research'"), 'research links should expose a named category surface');
+    assert(script.includes("textContent:s.label"), 'section navigation should show readable labels instead of cryptic glyphs');
+    assert(script.includes("candidate.closest?.('[id^=\"enh-\"]')"), 'native action discovery should not recurse into enhancement controls');
+    assert(script.includes("editorialActions.appendChild(btn)"), 'the trailer action should join the editorial action dock when available');
+    assert(/key: 'searchButtons'[\s\S]*?const trailer = wrap\?\.querySelector\('#enh-trailer-btn'\)/.test(script), 'search cleanup should preserve independent trailer controls');
+});
+
 test('all enhancements respect the operating-system reduced-motion preference', () => {
     const hooks = loadScriptTestHooks();
     assert.strictEqual(hooks.getEnhancementScrollBehavior(), 'smooth');

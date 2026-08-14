@@ -1,5 +1,13 @@
 # Changelog
 
+## 2.9.0 — 2026-08-14
+
+### Changed
+
+- Reimagined the IMDb title surface around an editorial hero hierarchy with a calmer score rail, readable section navigator, and a compact two-column action area.
+- Replaced the equal-weight watch-site button wall with one primary Watch destination and an accessible More watch options disclosure; all configured destinations remain editable and functional.
+- Added a categorized Where to watch and research surface for reviews, availability, trailers, and research links, plus a committed visual reference for the selected editorial direction.
+
 ## 2.8.0 — 2026-08-14
 
 ### Added
