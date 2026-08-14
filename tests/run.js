@@ -403,6 +403,54 @@ test('feature activation is scoped to the current IMDb surface', () => {
     assert.strictEqual(hooks.getPageSurface(), 'name', 'localized name routes should retain secondary-page scoping');
 });
 
+test('browse surfaces receive presentation and cleanup without title tools', () => {
+    const hooks = loadScriptTestHooks();
+
+    const browsePaths = [
+        ['/find', 'search'],
+        ['/find/', 'search'],
+        ['/search/title/', 'search'],
+        ['/search/name/', 'search'],
+        ['/de/search/title/', 'search'],
+        ['/es/find', 'search'],
+        ['/', 'home'],
+        ['/de/', 'home'],
+    ];
+
+    browsePaths.forEach(([path, expected]) => {
+        hooks.setTestPath(path);
+        assert.strictEqual(hooks.getPageSurface(), expected, `${path} should classify as ${expected}`);
+        assert(hooks.shouldInitFeature({ key:'removeAds', group:'Cleanup' }), `cleanup should run on ${path}`);
+        assert(hooks.shouldInitFeature({ key:'modernUI', group:'Appearance' }), `themes should run on ${path}`);
+        assert(hooks.shouldInitFeature({ key:'compactHeader', group:'Appearance' }), `header styling should run on ${path}`);
+        assert(!hooks.shouldInitFeature({ key:'searchButtons', group:'Features' }), `title watch buttons must not run on ${path}`);
+        assert(!hooks.shouldInitFeature({ key:'trailerPopover', group:'Features' }), `trailer tools must not run on ${path}`);
+        assert(!hooks.shouldInitFeature({ key:'listMultiSearch', group:'Utility' }), `list queue tools must not run on ${path}`);
+    });
+
+    hooks.setTestPath('/search/title/?title_type=feature');
+    assert.strictEqual(hooks.getPageSurface(), 'search', 'query strings must not change advanced-search classification');
+
+    hooks.setTestPath('/title/tt0133093/');
+    assert.strictEqual(hooks.getPageSurface(), 'title', 'title routes must not be absorbed by browse matching');
+});
+
+test('userscript and extension cover the browse routes they classify', () => {
+    const manifest = JSON.parse(fs.readFileSync(path.join(root, 'extension', 'manifest.json'), 'utf8'));
+    const matches = manifest.content_scripts[0].matches;
+    const required = [
+        'https://www.imdb.com/find*',
+        'https://www.imdb.com/search/*',
+        'https://www.imdb.com/*/find*',
+        'https://www.imdb.com/*/search/*',
+        'https://www.imdb.com/',
+    ];
+    required.forEach(pattern => {
+        assert(script.includes(`// @match        ${pattern}`), `userscript metadata must match ${pattern}`);
+        assert(matches.includes(pattern), `extension manifest must match ${pattern}`);
+    });
+});
+
 test('async feature guards expire across route and feature generations', () => {
     const hooks = loadScriptTestHooks();
     const feature = { key:'searchButtons', group:'Features' };

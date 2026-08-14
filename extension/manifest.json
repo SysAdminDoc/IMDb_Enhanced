@@ -59,6 +59,12 @@
         "https://www.imdb.com/*/user/*/watchlist*",
         "https://www.imdb.com/*/list/*",
         "https://www.imdb.com/*/chart/*",
+        "https://www.imdb.com/find*",
+        "https://www.imdb.com/search/*",
+        "https://www.imdb.com/*/find*",
+        "https://www.imdb.com/*/search/*",
+        "https://www.imdb.com/",
+        "https://www.imdb.com/?*",
         "https://www.cineby.at/*"
       ],
       "js": [

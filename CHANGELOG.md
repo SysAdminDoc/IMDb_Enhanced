@@ -1,5 +1,15 @@
 # Changelog
 
+## 2.11.0 — 2026-08-14
+
+### Added
+
+- Extended themes, cleanup, and layout options to IMDb's search, advanced-search, and homepage routes, which previously lost every enhancement mid-navigation.
+
+### Changed
+
+- Documented the Chromium "Allow User Scripts" toggle that Manifest V3 requires before any userscript manager can run, including the outdated "Developer mode" banner Tampermonkey still shows on Chrome 138+.
+
 ## 2.10.6 — 2026-08-14
 
 ### Fixed

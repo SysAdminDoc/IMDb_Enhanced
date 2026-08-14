@@ -16,6 +16,12 @@
 // @match        https://www.imdb.com/*/user/*/watchlist*
 // @match        https://www.imdb.com/*/list/*
 // @match        https://www.imdb.com/*/chart/*
+// @match        https://www.imdb.com/find*
+// @match        https://www.imdb.com/search/*
+// @match        https://www.imdb.com/*/find*
+// @match        https://www.imdb.com/*/search/*
+// @match        https://www.imdb.com/
+// @match        https://www.imdb.com/?*
 // @match        https://www.cineby.at/*
 // @grant        GM_getValue
 // @grant        GM_setValue
@@ -8038,6 +8044,12 @@ section[data-testid="hero-parent"].enh-editorial-native-hidden { display: none !
     const EPISODE_LIST_FEATURE_KEYS = new Set([
         ...SECONDARY_PAGE_FEATURE_KEYS, 'tvEpisodeTools',
     ]);
+    /* Search, advanced search, and the homepage are browse surfaces: they carry
+       IMDb's own cards rather than one title, so they take presentation and
+       cleanup work without any title-scoped control. */
+    const BROWSE_FEATURE_KEYS = new Set([
+        ...UNIVERSAL_FEATURE_KEYS,
+    ]);
 
     function getPageSurface() {
         const path = location.pathname;
@@ -8047,6 +8059,8 @@ section[data-testid="hero-parent"].enh-editorial-native-hidden { display: none !
         if (new RegExp(`^/${locale}title/tt\\d+/`, 'i').test(path)) return 'title-subpage';
         if (new RegExp(`^/${locale}name/nm\\d+`, 'i').test(path)) return 'name';
         if (/\/(watchlist|list\/|chart\/)/i.test(path)) return 'collection';
+        if (new RegExp(`^/${locale}(?:find|search)(?:/|$)`, 'i').test(path)) return 'search';
+        if (new RegExp(`^/${locale}$`, 'i').test(path)) return 'home';
         return 'other';
     }
 
@@ -8057,6 +8071,7 @@ section[data-testid="hero-parent"].enh-editorial-native-hidden { display: none !
         if (surface === 'episodes') return EPISODE_LIST_FEATURE_KEYS.has(feature.key);
         if (surface === 'collection') return COLLECTION_FEATURE_KEYS.has(feature.key);
         if (surface === 'name' || surface === 'title-subpage') return SECONDARY_PAGE_FEATURE_KEYS.has(feature.key);
+        if (surface === 'search' || surface === 'home') return BROWSE_FEATURE_KEYS.has(feature.key);
         return UNIVERSAL_FEATURE_KEYS.has(feature.key);
     }
 
