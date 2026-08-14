@@ -8,6 +8,10 @@ const sourcePath = path.join(root, 'IMDb_Enhanced.user.js');
 const manifestPath = path.join(extensionDir, 'manifest.json');
 const contentPath = path.join(extensionDir, 'content.js');
 const checkOnly = process.argv.includes('--check');
+const buildFirefox = process.argv.includes('--firefox');
+const firefoxDir = path.join(root, 'extension-firefox');
+const FIREFOX_ADDON_ID = 'imdb-enhanced@sysadmindoc';
+const FIREFOX_MIN_VERSION = '142.0';
 
 const source = fs.readFileSync(sourcePath, 'utf8');
 const metadata = source.match(/^\/\/ ==UserScript==[\s\S]*?^\/\/ ==\/UserScript==\r?\n?/m);
@@ -100,7 +104,59 @@ const manifest = JSON.parse(fs.readFileSync(manifestPath, 'utf8'));
 manifest.version = packageJson.version;
 const serializedManifest = `${JSON.stringify(manifest, null, 2)}\n`;
 
-if (checkOnly) {
+/* Firefox implements Manifest V3 with event pages rather than service workers and
+   asks the user to opt into host permissions after install, so its manifest needs
+   its own background key, add-on id, and the permissions popup that Chromium does
+   not require. Everything else — content script, background logic, icons — is the
+   same build. */
+function toFirefoxManifest(base) {
+    const firefox = JSON.parse(JSON.stringify(base));
+    firefox.background = { scripts:[base.background.service_worker] };
+    firefox.browser_specific_settings = {
+        gecko: {
+            id: FIREFOX_ADDON_ID,
+            strict_min_version: FIREFOX_MIN_VERSION,
+            // Everything stays in local extension storage; nothing is transmitted
+            // anywhere, so the add-on declares no data collection at all.
+            data_collection_permissions: { required:['none'] },
+        },
+    };
+    firefox.action = { ...base.action, default_popup:'permissions.html' };
+    delete firefox.minimum_chrome_version;
+    return firefox;
+}
+
+const FIREFOX_COPIED_FILES = ['background.js', 'permissions.html', 'permissions.js'];
+
+function buildFirefoxBuild() {
+    const firefoxManifest = toFirefoxManifest(manifest);
+    fs.mkdirSync(firefoxDir, { recursive:true });
+    fs.writeFileSync(path.join(firefoxDir, 'manifest.json'), `${JSON.stringify(firefoxManifest, null, 2)}\n`, 'utf8');
+    fs.writeFileSync(path.join(firefoxDir, 'content.js'), content, 'utf8');
+    FIREFOX_COPIED_FILES.forEach(name => {
+        fs.copyFileSync(path.join(extensionDir, name), path.join(firefoxDir, name));
+    });
+    // Ship only the icons the manifest actually declares; the master artwork is a
+    // source asset and has no business inside a distributable build.
+    const shipped = new Set([
+        ...Object.values(firefoxManifest.icons || {}),
+        ...Object.values(firefoxManifest.action?.default_icon || {}),
+    ]);
+    shipped.forEach(relative => {
+        const source = path.join(extensionDir, relative);
+        if (!fs.existsSync(source)) return;
+        const target = path.join(firefoxDir, relative);
+        fs.mkdirSync(path.dirname(target), { recursive:true });
+        fs.copyFileSync(source, target);
+    });
+    return firefoxManifest;
+}
+
+module.exports = { toFirefoxManifest, FIREFOX_ADDON_ID, FIREFOX_MIN_VERSION, FIREFOX_COPIED_FILES };
+
+if (require.main !== module) {
+    // Imported for its manifest contract only; do not touch the working tree.
+} else if (checkOnly) {
     const currentContent = fs.readFileSync(contentPath, 'utf8');
     const currentManifest = fs.readFileSync(manifestPath, 'utf8');
     if (currentContent !== content) throw new Error('extension/content.js is stale; run npm run build:extension.');
@@ -111,4 +167,8 @@ if (checkOnly) {
     fs.writeFileSync(contentPath, content, 'utf8');
     fs.writeFileSync(manifestPath, serializedManifest, 'utf8');
     console.log(`Built extension/content.js and synchronized extension/manifest.json to v${packageJson.version}.`);
+    if (buildFirefox) {
+        buildFirefoxBuild();
+        console.log(`Built extension-firefox/ for Firefox ${FIREFOX_MIN_VERSION}+ at v${packageJson.version}.`);
+    }
 }

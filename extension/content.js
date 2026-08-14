@@ -2983,6 +2983,9 @@ section[id*="quote" i] .ipc-list-card { padding: 4px 0 !important; margin: 2px 0
         return String(count);
     }
     function decodeHTML(text) {
+        /* A detached textarea parses its content as raw character data, so entities
+           decode while markup stays literal text and nothing can execute. The
+           element is never inserted into the document. */
         const ta = document.createElement('textarea');
         ta.innerHTML = String(text || '');
         return ta.value;

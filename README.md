@@ -79,6 +79,26 @@ The extension build is generated locally from the same userscript source and add
 
 The extension does not auto-update from GitHub; reload the unpacked build after local changes. Its permissions are limited to the supported IMDb/Cineby pages, the on-demand score/trailer services, the known ad hosts, and localhost/127.0.0.1 media integrations.
 
+## Firefox extension
+
+Firefox implements Manifest V3 with event pages instead of service workers and
+asks you to approve site access after installing, so it gets its own generated
+build. Firefox 142 or newer is required.
+
+1. Run `npm run build:firefox` to generate the `extension-firefox` folder.
+2. Open `about:debugging#/runtime/this-firefox`, choose **Load Temporary
+   Add-on**, and select `extension-firefox/manifest.json`.
+3. Click the IMDb Enhanced toolbar button and choose **Grant site access**.
+   Firefox withholds host permissions until you approve them, so the extension
+   stays inactive until this step is done.
+4. Reload any IMDb tabs that were already open.
+
+Temporary add-ons are removed when Firefox restarts. The build passes
+`web-ext lint` with no errors and declares no data collection.
+
+The userscript remains the better option on Firefox for permanent installs,
+since Mozilla continues to support the Manifest V2 userscript managers.
+
 ## Configuration
 
 Click the gear icon on any covered IMDb page to open the six-section settings workspace. Changes save automatically with visible feedback, the vertical navigation supports arrow/Home/End keys, and the dialog traps focus until it is closed.

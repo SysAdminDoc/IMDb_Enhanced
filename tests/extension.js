@@ -42,4 +42,27 @@ assert(background.includes("credentials: 'omit'"), 'background requests must omi
 assert(background.includes("ALLOWED_CONTENT_HOSTS"), 'background messages must be sender-scoped');
 assert(source.includes("category:'watch'"), 'userscript source should remain the extension source of truth');
 
+// Firefox implements MV3 with event pages and opt-in host permissions, so its
+// manifest must diverge from the Chromium one in exactly these ways.
+const { toFirefoxManifest, FIREFOX_ADDON_ID, FIREFOX_COPIED_FILES } = require('../scripts/build-extension.js');
+const firefox = toFirefoxManifest(manifest);
+assert.deepStrictEqual(firefox.background, { scripts:['background.js'] }, 'Firefox needs an event page, not a service worker');
+assert.strictEqual(firefox.browser_specific_settings.gecko.id, FIREFOX_ADDON_ID, 'Firefox build needs a stable add-on id');
+assert.strictEqual(firefox.browser_specific_settings.gecko.strict_min_version, '142.0', 'the data-collection declaration AMO requires needs Firefox 140+ (Android 142+)');
+assert.deepStrictEqual(
+    firefox.browser_specific_settings.gecko.data_collection_permissions,
+    { required:['none'] },
+    'Firefox reviews require an explicit data-collection declaration');
+assert.strictEqual(firefox.action.default_popup, 'permissions.html', 'Firefox needs a surface that can request opt-in host permissions');
+assert.strictEqual(firefox.minimum_chrome_version, undefined, 'Chromium-only keys must not ship to Firefox');
+assert.strictEqual(firefox.manifest_version, 3, 'Firefox build must remain Manifest V3');
+assert.deepStrictEqual(firefox.host_permissions, manifest.host_permissions, 'both builds must request the same origins');
+assert.deepStrictEqual(firefox.content_scripts, manifest.content_scripts, 'both builds must cover the same routes');
+FIREFOX_COPIED_FILES.forEach(name => {
+    assert(fs.existsSync(path.join(root, 'extension', name)), `Firefox build input missing: ${name}`);
+});
+const permissionsScript = fs.readFileSync(path.join(root, 'extension', 'permissions.js'), 'utf8');
+assert(permissionsScript.includes('permissions.request'), 'the popup must be able to request the opt-in origins');
+assert(permissionsScript.includes('getManifest'), 'the popup must derive origins from the manifest rather than a second hard-coded list');
+
 console.log(`Extension manifest and generated content are valid at v${pkg.version}.`);
