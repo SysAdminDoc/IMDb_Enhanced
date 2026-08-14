@@ -1,5 +1,16 @@
 # Changelog
 
+## 2.8.0 — 2026-08-14
+
+### Added
+
+- Added six ImageGen design references for the settings menu and carried the same premium, decluttered visual system through Experience, Ratings, Tools, Sites, Integrations, and Data.
+
+### Changed
+
+- Widened and rebalanced the settings workspace with a quieter header, compact navigation markers, pill toggles, stronger grouping, and more readable spacing.
+- Reworked destination editing into a labeled table surface so visibility, purpose, URL templates, color, ordering, and removal are visible at once.
+
 ## 2.7.0 — 2026-08-14
 
 ### Added

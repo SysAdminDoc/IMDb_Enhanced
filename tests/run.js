@@ -607,6 +607,16 @@ test('settings use six accessible desktop destinations', () => {
     assert(/function destroySettingsChrome\(\)[\s\S]*?document\.documentElement\.style\.overflow = previousDocumentOverflow/.test(script), 'route teardown must restore scroll if settings were open');
 });
 
+test('settings visual system keeps the redesigned control hierarchy', () => {
+    assert(script.includes('className:\'enh-site-editor__columns\''), 'site editors should expose readable column labels');
+    ['Clean up', 'Tune the interface', 'Preview', 'Watch & stream', 'Research & reviews', 'Add destination'].forEach(label => {
+        assert(script.includes(label), `redesigned settings label missing: ${label}`);
+    });
+    assert(script.includes('grid-template-columns: 42px minmax(120px, .7fr)'), 'site editor rows should use the spacious table layout');
+    assert(script.includes('border-radius: 999px'), 'settings toggles should use the compact pill treatment');
+    assert(script.includes('width: min(1120px, calc(100vw - 48px))'), 'settings workspace should use the wider desktop canvas');
+});
+
 test('trailer dialog contains focus, restores page state, and ignores stale lookups', () => {
     const hooks = loadScriptTestHooks();
     let selector = '';

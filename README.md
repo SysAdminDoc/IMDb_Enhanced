@@ -1,4 +1,4 @@
-[![Version](https://img.shields.io/badge/version-2.7.0-blue)](https://github.com/SysAdminDoc/IMDb_Enhanced)
+[![Version](https://img.shields.io/badge/version-2.8.0-blue)](https://github.com/SysAdminDoc/IMDb_Enhanced)
 [![License](https://img.shields.io/badge/license-MIT-green)](LICENSE)
 [![Platform](https://img.shields.io/badge/platform-Tampermonkey%20%7C%20Violentmonkey-yellow)](https://www.tampermonkey.net/)
 
@@ -59,7 +59,9 @@ The extension does not auto-update from GitHub; reload the unpacked build after 
 
 Click the gear icon on any covered IMDb page to open the six-section settings workspace. Changes save automatically with visible feedback, the vertical navigation supports arrow/Home/End keys, and the dialog traps focus until it is closed.
 
-![IMDb Enhanced Experience settings](design/mockups/built-experience-1440x900.png)
+![IMDb Enhanced Experience settings](design/mockups/14-redesign-experience-1536x1024.png)
+
+The redesigned visual reference set covers every menu page: [Experience](design/mockups/14-redesign-experience-1536x1024.png), [Ratings](design/mockups/15-redesign-ratings-1536x1024.png), [Tools](design/mockups/16-redesign-tools-1536x1024.png), [Sites](design/mockups/17-redesign-sites-1536x1024.png), [Integrations](design/mockups/18-redesign-integrations-1536x1024.png), and [Data](design/mockups/19-redesign-data-1536x1024.png).
 
 **Experience** - Theme, cleanup, appearance, and layout controls. Theme choices include a system-following mode.
 

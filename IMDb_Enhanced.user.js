@@ -1,7 +1,7 @@
 // ==UserScript==
 // @name         IMDb Enhanced
 // @namespace    https://github.com/SysAdminDoc
-// @version      2.7.0
+// @version      2.8.0
 // @updateURL    https://raw.githubusercontent.com/SysAdminDoc/IMDb_Enhanced/main/IMDb_Enhanced.user.js
 // @downloadURL  https://raw.githubusercontent.com/SysAdminDoc/IMDb_Enhanced/main/IMDb_Enhanced.user.js
 // @description  Premium IMDb overhaul: cleaner pages, modern themes, refined score widgets, media library indicators, quick navigation, richer external links, TV tools, search shortcuts, and polished settings import/export
@@ -42,7 +42,7 @@
     // =========================================================================
     //  CONSTANTS & CONFIG
     // =========================================================================
-    const VERSION = '2.7.0';
+    const VERSION = '2.8.0';
     const PREFIX  = 'imdb_enh_';
     const CINEBY_QUERY_KEY = PREFIX + 'cineby_query';
     const CINEBY_QUERY_TTL = 10 * 60 * 1000;
@@ -5411,7 +5411,7 @@ section[id*="quote" i] .ipc-list-card { padding: 4px 0 !important; margin: 2px 0
 /* ════ Settings Overlay ════ */
 #enh-settings-overlay {
     position: fixed; inset: 0;
-    background: rgba(0,0,0,0.82);
+    background: rgba(3,5,8,0.86);
     z-index: 2147483640; opacity: 0; visibility: hidden;
     transition: opacity .22s ease, visibility 0s linear .22s; pointer-events: none;
 }
@@ -5426,9 +5426,9 @@ section[id*="quote" i] .ipc-list-card { padding: 4px 0 !important; margin: 2px 0
     transform: translate(-50%, -50%) scale(0.985);
     background: ${t.sf0}; color: ${t.tx1};
     border: 1px solid ${t.bd1};
-    border-radius: 14px; z-index: 2147483641;
-    width: min(1000px, calc(100vw - 64px));
-    height: min(812px, calc(100vh - 48px));
+    border-radius: 16px; z-index: 2147483641;
+    width: min(1120px, calc(100vw - 48px));
+    height: min(850px, calc(100vh - 40px));
     box-shadow: ${t.sh3};
     font-family: -apple-system, BlinkMacSystemFont, 'Segoe UI', sans-serif;
     opacity: 0;
@@ -5440,18 +5440,19 @@ section[id*="quote" i] .ipc-list-card { padding: 4px 0 !important; margin: 2px 0
 }
 .enh-settings-header {
     display: flex; justify-content: space-between; align-items: center;
-    min-height: 66px;
-    padding: 12px 18px 12px 22px;
+    min-height: 72px;
+    padding: 18px 22px;
     border-bottom: 1px solid ${t.bd0}; flex-shrink: 0;
+    background: color-mix(in srgb, ${t.sf1} 34%, ${t.sf0});
 }
 .enh-settings-header h2 {
-    font-size: 15px; font-weight: 750; margin: 0;
+    font-size: 17px; font-weight: 780; margin: 0;
     color: ${t.tx0}; letter-spacing: -0.015em;
 }
 .enh-settings-subtitle {
     margin: 3px 0 0;
     color: ${t.tx2};
-    font-size: 11px;
+    font-size: 10px;
     line-height: 1.35;
 }
 .enh-settings-header-actions {
@@ -5471,10 +5472,10 @@ section[id*="quote" i] .ipc-list-card { padding: 4px 0 !important; margin: 2px 0
     background: ${t.red}; box-shadow: 0 0 0 3px color-mix(in srgb, ${t.red} 14%, transparent);
 }
 .enh-settings-close {
-    background: ${t.sf1}; border: 1px solid ${t.bd0};
-    min-width: 58px; height: 32px; padding: 0 10px; border-radius: 8px;
+    background: ${t.sf1}; border: 1px solid ${t.bd1};
+    width: 34px; height: 34px; padding: 0; border-radius: 9px;
     color: ${t.tx2}; cursor: pointer;
-    font: 650 11px/1 -apple-system, BlinkMacSystemFont, 'Segoe UI', sans-serif;
+    font: 500 22px/1 -apple-system, BlinkMacSystemFont, 'Segoe UI', sans-serif;
     display: flex; align-items: center; justify-content: center;
     transition: background .15s ease, border-color .15s ease, color .15s ease;
 }
@@ -5482,22 +5483,27 @@ section[id*="quote" i] .ipc-list-card { padding: 4px 0 !important; margin: 2px 0
 
 .enh-settings-shell { display: flex; min-height: 0; flex: 1; }
 .enh-settings-nav {
-    width: 210px; flex: 0 0 210px;
-    padding: 14px 10px;
-    background: color-mix(in srgb, ${t.sf1} 48%, ${t.sf0});
+    width: 216px; flex: 0 0 216px;
+    padding: 18px 12px;
+    background: color-mix(in srgb, ${t.sf1} 54%, ${t.sf0});
     border-right: 1px solid ${t.bd0};
 }
 .enh-settings-nav-btn {
     position: relative; width: 100%; min-height: 42px;
     display: flex; align-items: center;
-    padding: 0 14px; margin: 2px 0;
+    padding: 0 14px 0 18px; margin: 3px 0;
     border: 0; border-radius: 8px;
     background: transparent; color: ${t.tx2}; cursor: pointer;
     font: 650 13px/1 -apple-system, BlinkMacSystemFont, 'Segoe UI', sans-serif;
     text-align: left;
-    transition: background .15s ease, color .15s ease;
+    transition: background .15s ease, color .15s ease, transform .15s ease;
 }
-.enh-settings-nav-btn:hover { background: ${t.sf1}; color: ${t.tx0}; }
+.enh-settings-nav-btn::after {
+    content: ''; width: 5px; height: 5px; margin-right: 11px; order: -1;
+    border-radius: 50%; background: ${t.bd2};
+    transition: background .15s ease, box-shadow .15s ease;
+}
+.enh-settings-nav-btn:hover { background: ${t.sf1}; color: ${t.tx0}; transform: translateX(1px); }
 .enh-settings-nav-btn[aria-selected="true"] {
     background: ${t.sf2}; color: ${t.tx0};
 }
@@ -5505,37 +5511,40 @@ section[id*="quote" i] .ipc-list-card { padding: 4px 0 !important; margin: 2px 0
     content: ''; position: absolute; left: 0; top: 8px; bottom: 8px;
     width: 3px; border-radius: 2px; background: ${t.accent};
 }
+.enh-settings-nav-btn[aria-selected="true"]::after {
+    background: ${t.accent}; box-shadow: 0 0 0 3px ${t.accentMuted};
+}
 .enh-settings-main { min-width: 0; flex: 1; overflow: hidden; }
-.enh-settings-body { height: 100%; padding: 18px 22px; overflow-y: auto; }
+.enh-settings-body { height: 100%; padding: 28px 30px 34px; overflow-y: auto; }
 .enh-settings-page[hidden] { display: none !important; }
-.enh-settings-page-header { margin: 0 0 16px; }
+.enh-settings-page-header { margin: 0 0 22px; }
 .enh-settings-page-title {
     margin: 0; color: ${t.tx0};
-    font: 750 22px/1.2 -apple-system, BlinkMacSystemFont, 'Segoe UI', sans-serif;
+    font: 780 26px/1.15 -apple-system, BlinkMacSystemFont, 'Segoe UI', sans-serif;
     letter-spacing: -.025em;
 }
 .enh-settings-page-description {
-    margin: 5px 0 0; color: ${t.tx2};
+    margin: 6px 0 0; color: ${t.tx2};
     font: 500 13px/1.4 -apple-system, BlinkMacSystemFont, 'Segoe UI', sans-serif;
 }
-.enh-settings-grid { display: grid; grid-template-columns: repeat(2, minmax(0, 1fr)); gap: 12px; }
-.enh-settings-grid--three { grid-template-columns: repeat(3, minmax(0, 1fr)); }
+.enh-settings-grid { display: grid; grid-template-columns: repeat(2, minmax(0, 1fr)); gap: 14px; }
+.enh-settings-grid--three { grid-template-columns: repeat(3, minmax(0, 1fr)); gap: 14px; }
 .enh-settings-grid--experience { grid-template-columns: minmax(0, 1.05fr) minmax(0, .95fr); align-items: start; }
-.enh-settings-stack { display: flex; flex-direction: column; gap: 12px; }
+.enh-settings-stack { display: flex; flex-direction: column; gap: 14px; }
 .enh-settings-card {
-    min-width: 0; padding: 14px;
-    border: 1px solid ${t.bd1}; border-radius: 11px;
-    background: ${t.sf1};
+    min-width: 0; padding: 18px;
+    border: 1px solid ${t.bd1}; border-radius: 12px;
+    background: color-mix(in srgb, ${t.sf1} 78%, ${t.sf0});
 }
 .enh-settings-card--flush { padding: 0; overflow: hidden; }
 .enh-settings-card--span { grid-column: 1 / -1; }
 .enh-settings-card-header {
     display: flex; justify-content: space-between; align-items: flex-start;
-    gap: 12px; margin-bottom: 8px;
+    gap: 12px; margin-bottom: 12px;
 }
 .enh-settings-card-title {
     color: ${t.tx0};
-    font: 700 14px/1.3 -apple-system, BlinkMacSystemFont, 'Segoe UI', sans-serif;
+    font: 740 16px/1.3 -apple-system, BlinkMacSystemFont, 'Segoe UI', sans-serif;
 }
 .enh-settings-card-description {
     margin-top: 3px; color: ${t.tx3};
@@ -5556,27 +5565,27 @@ section[id*="quote" i] .ipc-list-card { padding: 4px 0 !important; margin: 2px 0
 }
 .enh-settings-row {
     display: flex; align-items: center; justify-content: space-between;
-    min-height: 50px; padding: 8px 0; gap: 12px;
+    min-height: 54px; padding: 9px 0; gap: 12px;
     border-bottom: 1px solid ${t.bd0};
 }
 .enh-settings-row:last-child { border-bottom: none; }
 .enh-settings-label { font-size: 13px; font-weight: 650; color: ${t.tx1}; }
 .enh-settings-row-copy { display: flex; flex-direction: column; gap: 3px; min-width: 0; }
-.enh-settings-help { font-size: 10px; line-height: 1.35; color: ${t.tx3}; max-width: 360px; }
+.enh-settings-help { font-size: 10px; line-height: 1.35; color: ${t.tx3}; max-width: 420px; }
 .enh-settings-card--compact .enh-settings-row { min-height: 42px; padding: 6px 0; }
 .enh-settings-card--compact .enh-settings-help { display: none; }
 
 /* Toggle switch */
-.enh-toggle { position: relative; width: 42px; height: 24px; flex-shrink: 0; }
+.enh-toggle { position: relative; width: 40px; height: 22px; flex-shrink: 0; }
 .enh-toggle input { opacity: 0; width: 0; height: 0; position: absolute; }
 .enh-toggle-track {
     position: absolute; inset: 0;
-    background: ${t.sf2}; border-radius: 8px;
+    background: ${t.sf2}; border-radius: 999px;
     transition: background .2s ease; cursor: pointer;
 }
 .enh-toggle-track::after {
     content: ''; position: absolute; top: 2px; left: 2px;
-    width: 20px; height: 20px;
+    width: 18px; height: 18px;
     background: ${t.tx3}; border-radius: 50%;
     transition: transform .2s cubic-bezier(.4,0,.2,1), background .2s ease;
 }
@@ -5590,10 +5599,10 @@ section[id*="quote" i] .ipc-list-card { padding: 4px 0 !important; margin: 2px 0
 }
 
 /* ════ Theme Swatches ════ */
-.enh-theme-selector { display: grid; grid-template-columns: repeat(5, minmax(64px, 1fr)); gap: 8px; margin-top: 10px; }
+.enh-theme-selector { display: grid; grid-template-columns: repeat(5, minmax(64px, 1fr)); gap: 12px; margin-top: 14px; }
 .enh-theme-option { display: flex; flex-direction: column; gap: 6px; color: ${t.tx2}; font-size: 10px; text-align: center; }
 .enh-theme-swatch {
-    width: 100%; height: 48px; border-radius: 9px; cursor: pointer;
+    width: 100%; height: 54px; border-radius: 10px; cursor: pointer;
     border: 2px solid transparent;
     padding: 0;
     appearance: none;
@@ -5602,26 +5611,21 @@ section[id*="quote" i] .ipc-list-card { padding: 4px 0 !important; margin: 2px 0
 }
 .enh-theme-swatch.active { border-color: ${t.accent}; box-shadow: 0 0 12px ${t.accentMuted}; }
 .enh-theme-swatch:hover { transform: translateY(-1px); }
-.enh-theme-auto-row { margin-top: 10px; padding-top: 10px; border-top: 1px solid ${t.bd0}; }
-.enh-settings-page--experience .enh-settings-page-header { margin-bottom: 10px; }
-.enh-settings-page--experience .enh-settings-card { padding: 11px 12px; }
-.enh-settings-page--experience .enh-settings-card-header { margin-bottom: 5px; }
-.enh-settings-page--experience .enh-settings-row { min-height: 36px; padding: 3px 0; }
-.enh-settings-page--experience .enh-theme-selector { margin-top: 6px; }
-.enh-settings-page--experience .enh-theme-swatch { height: 38px; }
-.enh-settings-page--experience .enh-theme-auto-row { margin-top: 6px; padding-top: 6px; }
-.enh-settings-page--experience .enh-settings-stack { gap: 8px; }
-.enh-settings-page--experience .enh-settings-grid--experience { gap: 8px; }
+.enh-theme-auto-row { margin-top: 14px; padding-top: 14px; border-top: 1px solid ${t.bd0}; }
+.enh-settings-page--experience .enh-settings-card { padding: 18px; }
+.enh-settings-page--experience .enh-settings-card--compact .enh-settings-row { min-height: 45px; padding: 6px 0; }
+.enh-settings-page--experience .enh-settings-help { display: none; }
+.enh-settings-page--experience .enh-settings-grid--experience { gap: 14px; }
 
 .enh-score-preview { display: grid; grid-template-columns: repeat(5, minmax(0, 1fr)); }
-.enh-score-preview-item { padding: 8px 10px; text-align: center; border-right: 1px solid ${t.bd0}; }
+.enh-score-preview-item { padding: 14px 10px; text-align: center; border-right: 1px solid ${t.bd0}; }
 .enh-score-preview-item:last-child { border-right: 0; }
-.enh-score-preview-value { color: ${t.tx0}; font-size: 17px; font-weight: 800; }
+.enh-score-preview-value { color: ${t.tx0}; font-size: 18px; font-weight: 800; }
 .enh-score-preview-label { margin-top: 4px; color: ${t.tx3}; font-size: 10px; }
 .enh-settings-callout {
     display: flex; align-items: center; gap: 12px;
-    padding: 11px 13px; border: 1px solid ${t.bd1}; border-radius: 10px;
-    background: ${t.sf1}; color: ${t.tx2}; font-size: 11px; line-height: 1.45;
+    padding: 12px 14px; border: 1px solid ${t.bd1}; border-radius: 10px;
+    background: color-mix(in srgb, ${t.sf1} 72%, ${t.sf0}); color: ${t.tx2}; font-size: 11px; line-height: 1.45;
 }
 .enh-settings-callout strong { color: ${t.tx0}; }
 .enh-settings-kbd {
@@ -5636,14 +5640,14 @@ section[id*="quote" i] .ipc-list-card { padding: 4px 0 !important; margin: 2px 0
 
 /* ════ Settings Footer ════ */
 .enh-settings-footer {
-    min-height: 38px; padding: 8px 20px; border-top: 1px solid ${t.bd0};
+    min-height: 42px; padding: 9px 22px; border-top: 1px solid ${t.bd0};
     display: flex; justify-content: space-between; align-items: center;
     flex-shrink: 0; gap: 8px;
 }
 .enh-settings-footer span { font-size: 11px; color: ${t.tx3}; }
 .enh-settings-footer-actions { display: flex; gap: 6px; }
 .enh-settings-footer-btn {
-    min-height: 32px; padding: 6px 12px; border-radius: 7px;
+    min-height: 32px; padding: 6px 12px; border-radius: 8px;
     font: 600 11px -apple-system, sans-serif;
     background: ${t.sf1}; border: 1px solid ${t.bd1};
     color: ${t.tx2}; cursor: pointer;
@@ -5688,33 +5692,49 @@ section[id*="quote" i] .ipc-list-card { padding: 4px 0 !important; margin: 2px 0
 .enh-sites-grid--single { grid-template-columns: minmax(0, 1fr); }
 .enh-site-editor {
     margin: 0;
-    padding: 14px;
+    padding: 0;
     border: 1px solid ${t.bd1};
-    border-radius: 11px;
-    background: ${t.sf1};
+    border-radius: 12px;
+    background: color-mix(in srgb, ${t.sf1} 78%, ${t.sf0});
     min-width: 0;
+    overflow: hidden;
 }
 .enh-site-editor__header {
     display: flex;
     justify-content: space-between;
     align-items: center;
     gap: 10px;
-    margin-bottom: 10px;
+    padding: 16px 18px 12px;
+    border-bottom: 1px solid ${t.bd0};
 }
 .enh-site-editor__title {
-    color: ${t.tx1};
-    font: 700 12px/1.3 -apple-system, BlinkMacSystemFont, 'Segoe UI', sans-serif;
+    color: ${t.tx0};
+    font: 740 16px/1.3 -apple-system, BlinkMacSystemFont, 'Segoe UI', sans-serif;
 }
 .enh-site-editor__title-wrap { display: flex; align-items: center; gap: 8px; min-width: 0; }
 .enh-site-editor__actions { display: flex; gap: 6px; flex-shrink: 0; }
-.enh-site-editor__hint { margin: 0 0 10px; color: ${t.tx3}; font: 500 11px/1.35 -apple-system, BlinkMacSystemFont, 'Segoe UI', sans-serif; }
-.enh-site-editor__rows { display: flex; flex-direction: column; gap: 7px; max-height: 380px; overflow: auto; padding-right: 2px; }
+.enh-site-editor__hint { margin: 0; padding: 10px 18px; color: ${t.tx3}; font: 500 11px/1.35 -apple-system, BlinkMacSystemFont, 'Segoe UI', sans-serif; border-bottom: 1px solid ${t.bd0}; }
+.enh-site-editor__columns,
 .enh-site-row {
     display: grid;
-    grid-template-columns: 30px minmax(110px, .6fr) minmax(200px, 1.35fr) minmax(132px, .78fr) 34px 56px 58px;
-    gap: 6px;
+    grid-template-columns: 42px minmax(120px, .7fr) minmax(150px, .85fr) minmax(240px, 1.4fr) 36px 58px 58px;
+    gap: 8px;
     align-items: center;
 }
+.enh-site-editor__columns {
+    padding: 10px 18px 8px;
+    color: ${t.tx3};
+    font: 700 9px/1.2 -apple-system, BlinkMacSystemFont, 'Segoe UI', sans-serif;
+    letter-spacing: .06em;
+    text-transform: uppercase;
+    border-bottom: 1px solid ${t.bd0};
+}
+.enh-site-editor__rows { display: flex; flex-direction: column; gap: 0; max-height: 380px; overflow: auto; padding: 0 18px; }
+.enh-site-row {
+    min-height: 52px;
+    border-bottom: 1px solid ${t.bd0};
+}
+.enh-site-row:last-child { border-bottom: 0; }
 .enh-site-input {
     min-width: 0;
     height: 30px;
@@ -5767,7 +5787,24 @@ section[id*="quote" i] .ipc-list-card { padding: 4px 0 !important; margin: 2px 0
     box-shadow: 0 0 0 2px ${t.redMuted};
 }
 @media (max-width: 900px) {
-    .enh-site-row { grid-template-columns: 30px minmax(100px, .65fr) minmax(150px, 1.35fr) minmax(116px, .8fr) 34px 56px 58px; }
+    .enh-site-editor__columns,
+    .enh-site-row { grid-template-columns: 34px minmax(100px, .7fr) minmax(130px, .85fr) minmax(190px, 1.35fr) 34px 54px 54px; }
+}
+@media (max-width: 1100px) {
+    #enh-settings-panel { width: min(1120px, calc(100vw - 28px)); }
+    .enh-settings-body { padding-left: 20px; padding-right: 20px; }
+    .enh-site-editor__columns,
+    .enh-site-row { grid-template-columns: 34px minmax(100px, .7fr) minmax(125px, .8fr) minmax(180px, 1.2fr) 32px 52px 52px; gap: 6px; }
+}
+@media (max-width: 820px) {
+    #enh-settings-panel { height: min(850px, calc(100vh - 24px)); }
+    .enh-settings-nav { width: 174px; flex-basis: 174px; }
+    .enh-settings-body { padding: 22px 16px 28px; }
+    .enh-settings-grid--three,
+    .enh-integration-summary,
+    .enh-integration-grid { grid-template-columns: minmax(0, 1fr); }
+    .enh-site-editor__columns,
+    .enh-site-row { grid-template-columns: 32px minmax(90px, .7fr) minmax(116px, .8fr) minmax(150px, 1.15fr) 30px 48px 50px; gap: 5px; }
 }
 
 /* ════ Mark Review Panel ════ */
@@ -5813,8 +5850,8 @@ section[id*="quote" i] .ipc-list-card { padding: 4px 0 !important; margin: 2px 0
 .enh-marks-empty { color: ${t.tx3}; font: 500 11px/1.4 -apple-system, BlinkMacSystemFont, 'Segoe UI', sans-serif; }
 
 /* ════ Servarr Settings ════ */
-.enh-integration-summary { display: grid; grid-template-columns: repeat(2, minmax(0, 1fr)); gap: 12px; }
-.enh-integration-grid { display: grid; grid-template-columns: repeat(2, minmax(0, 1fr)); gap: 12px; align-items: start; }
+.enh-integration-summary { display: grid; grid-template-columns: repeat(2, minmax(0, 1fr)); gap: 14px; }
+.enh-integration-grid { display: grid; grid-template-columns: repeat(2, minmax(0, 1fr)); gap: 14px; align-items: start; }
 .enh-integration-card { min-width: 0; }
 .enh-integration-card > .enh-servarr-panel {
     margin-top: 8px; padding: 0; border: 0; border-radius: 0; background: transparent;
@@ -5837,7 +5874,7 @@ section[id*="quote" i] .ipc-list-card { padding: 4px 0 !important; margin: 2px 0
 }
 .enh-servarr-panel {
     margin: 0;
-    padding: 14px;
+    padding: 14px 0 0;
     border: 1px solid ${t.bd1};
     border-radius: 10px;
     background: ${t.sf1};
@@ -5945,6 +5982,15 @@ section[id*="quote" i] .ipc-list-card { padding: 4px 0 !important; margin: 2px 0
     function createSiteEditor({ title, key, defaults, featureKey }) {
         const editor = makeEl('div', { className:'enh-site-editor' });
         const rows = makeEl('div', { className:'enh-site-editor__rows' });
+        const columns = makeEl('div', { className:'enh-site-editor__columns', 'aria-hidden':'true' },
+            makeEl('span', {}, 'Visible'),
+            makeEl('span', {}, 'Name'),
+            makeEl('span', {}, 'Purpose'),
+            makeEl('span', {}, 'URL template'),
+            makeEl('span', {}, 'Color'),
+            makeEl('span', {}, 'Move'),
+            makeEl('span', {}, 'Remove')
+        );
         const defaultCategory = key === 'watchSites' ? 'watch' : 'other';
         const count = makeEl('span', {
             className:'enh-settings-route-badge', role:'status', 'aria-live':'polite', 'aria-atomic':'true',
@@ -6166,7 +6212,7 @@ section[id*="quote" i] .ipc-list-card { padding: 4px 0 !important; margin: 2px 0
                 updateCount();
                 row.querySelector('[data-field="name"]')?.focus();
             },
-        }, 'Add');
+        }, 'Add destination');
         const reset = makeEl('button', {
             type:'button',
             className:'enh-settings-footer-btn',
@@ -6190,11 +6236,12 @@ section[id*="quote" i] .ipc-list-card { padding: 4px 0 !important; margin: 2px 0
             makeEl('div', { className:'enh-site-editor__actions' }, add, reset)
         ));
         editor.appendChild(makeEl('div', { className:'enh-site-editor__hint' },
-            'Show only the destinations you use, choose a purpose, and move the essentials to the front.'
+            'Edit every destination directly. Hide, categorize, reorder, or remove links without changing the rest of IMDb Enhanced.'
         ));
 
         getSiteList(key, defaults).forEach(site => addRow(site));
         updateCount();
+        editor.appendChild(columns);
         editor.appendChild(rows);
         return editor;
     }
@@ -6455,7 +6502,7 @@ section[id*="quote" i] .ipc-list-card { padding: 4px 0 !important; margin: 2px 0
         };
 
         panel.appendChild(makeEl('div', { className:'enh-marks-panel__header' },
-            makeEl('div', { className:'enh-marks-panel__title' }, 'My private title marks'),
+            makeEl('div', { className:'enh-marks-panel__title' }, 'Private title marks'),
             makeEl('div', { className:'enh-site-editor__actions' }, count, clearAll)
         ));
         panel.appendChild(rows);
@@ -6477,11 +6524,11 @@ section[id*="quote" i] .ipc-list-card { padding: 4px 0 !important; margin: 2px 0
             <div class="enh-settings-header">
                 <div>
                     <h2 id="enh-settings-title">IMDb Enhanced</h2>
-                    <p class="enh-settings-subtitle">Cleaner pages. Better controls.</p>
+                    <p class="enh-settings-subtitle">Focused controls for your IMDb workspace.</p>
                 </div>
                 <div class="enh-settings-header-actions">
                     <span class="enh-settings-save-state" id="enh-settings-save-state" role="status" aria-live="polite" aria-atomic="true">Saved locally</span>
-                    <button type="button" class="enh-settings-close" title="Close settings" aria-label="Close settings">Close</button>
+                    <button type="button" class="enh-settings-close" title="Close settings" aria-label="Close settings">×</button>
                 </div>
             </div>
             <div class="enh-settings-shell">
@@ -6509,8 +6556,8 @@ section[id*="quote" i] .ipc-list-card { padding: 4px 0 !important; margin: 2px 0
         const pageMeta = [
             { id:'experience', label:'Experience', title:'Experience', description:'Shape how IMDb looks and feels.' },
             { id:'ratings', label:'Ratings', title:'Ratings', description:'Bring trusted scores into the title page.' },
-            { id:'tools', label:'Tools', title:'Tools', description:'Choose the shortcuts and title-page utilities you use.' },
-            { id:'sites', label:'Sites', title:'Sites', description:'Control where title searches and research links open.' },
+            { id:'tools', label:'Tools', title:'Tools', description:'Turn on only the shortcuts and title-page utilities you use.' },
+            { id:'sites', label:'Sites', title:'Sites', description:'Choose where title searches and research links open.' },
             { id:'integrations', label:'Integrations', title:'Integrations', description:'Connect the local services you already run.' },
             { id:'data', label:'Data', title:'Data', description:'Review, back up, or clear what IMDb Enhanced stores locally.' },
         ];
@@ -6645,7 +6692,7 @@ section[id*="quote" i] .ipc-list-card { padding: 4px 0 !important; margin: 2px 0
 
         const experiencePage = pages.get('experience');
         experiencePage.classList.add('enh-settings-page--experience');
-        const themeCard = makeCard('Theme', 'Choose the tonal base for IMDb Enhanced surfaces.');
+        const themeCard = makeCard('Appearance', 'Choose the tonal base for IMDb Enhanced surfaces.');
         const themeSelector = makeEl('div', { className:'enh-theme-selector' });
         const curTheme = getActiveThemeId();
         [
@@ -6702,22 +6749,18 @@ section[id*="quote" i] .ipc-list-card { padding: 4px 0 !important; margin: 2px 0
         themeCard.appendChild(autoThemeRow);
         experiencePage.appendChild(themeCard);
         const experienceGrid = makeEl('div', { className:'enh-settings-grid enh-settings-grid--experience', style:{ marginTop:'12px' } });
-        experienceGrid.appendChild(makeFeatureCard('Page cleanup', 'Remove noise so you can focus on what matters.', 'All pages', [
+        experienceGrid.appendChild(makeFeatureCard('Clean up', 'Remove noise so you can focus on what matters.', 'All pages', [
             'removeAds', 'removeProUpsell', 'removeNewsSection', 'removeRelatedInterests',
             'removeContribution', 'removeSponsoredRecs', 'removeAppBanner',
         ], true));
-        experienceGrid.appendChild(makeEl('div', { className:'enh-settings-stack' },
-            makeFeatureCard('Appearance', 'Refine how content looks and is presented.', 'Desktop', [
-                'modernUI', 'compactHeader', 'enhancedRatingDisplay', 'widerLayout', 'ratingColorCoding',
-            ], true),
-            makeFeatureCard('Layout', 'Adjust structure and content presentation.', 'Detail pages', [
-                'collapsibleSections', 'spoilerBlur', 'quickNav',
-            ], true)
-        ));
+        experienceGrid.appendChild(makeFeatureCard('Tune the interface', 'Refine how content looks and is presented.', 'Desktop', [
+            'modernUI', 'compactHeader', 'enhancedRatingDisplay', 'widerLayout', 'ratingColorCoding',
+            'collapsibleSections', 'spoilerBlur', 'quickNav',
+        ], true));
         experiencePage.appendChild(experienceGrid);
 
         const ratingsPage = pages.get('ratings');
-        const previewCard = makeCard('At a glance', 'Sample preview of how ratings appear on a title page — not live data.');
+        const previewCard = makeCard('Preview', 'Sample source values — not live title data.');
         const preview = makeEl('div', { className:'enh-score-preview' });
         [
             ['8.7 /10', 'IMDb'], ['88%', 'Rotten Tomatoes'], ['4.2 /5', 'Letterboxd'], ['73 /100', 'Metacritic'], ['4 services', 'Streaming'],
@@ -6759,13 +6802,9 @@ section[id*="quote" i] .ipc-list-card { padding: 4px 0 !important; margin: 2px 0
             makeEl('strong', {}, 'Cineby handoff'),
             'The exact Cineby root uses a one-time local title handoff. Edit or remove its row below to use an ordinary URL template.'
         ));
-        sitesPage.appendChild(makeEl('div', { className:'enh-settings-callout', style:{ marginTop:'8px' } },
-            makeEl('strong', {}, 'Keep it focused'),
-            'Untick a destination to hide its page button without deleting it. Categories group the visible links by purpose, and the arrows set their order.'
-        ));
         const sitesGrid = makeEl('div', { className:'enh-sites-grid enh-sites-grid--single', style:{ marginTop:'12px' } },
-            createSiteEditor({ title:'Watch search sites', key:'watchSites', defaults:DEFAULT_WATCH_SITES, featureKey:'searchButtons' }),
-            createSiteEditor({ title:'External link sites', key:'externalSites', defaults:DEFAULT_EXTERNAL_SITES, featureKey:'externalLinks' })
+            createSiteEditor({ title:'Watch & stream', key:'watchSites', defaults:DEFAULT_WATCH_SITES, featureKey:'searchButtons' }),
+            createSiteEditor({ title:'Research & reviews', key:'externalSites', defaults:DEFAULT_EXTERNAL_SITES, featureKey:'externalLinks' })
         );
         sitesPage.append(sitesGrid, makeEl('div', { className:'enh-settings-callout', style:{ marginTop:'12px' } },
             makeEl('strong', {}, 'Templates'),
@@ -6806,7 +6845,7 @@ section[id*="quote" i] .ipc-list-card { padding: 4px 0 !important; margin: 2px 0
                 makeEl('div', { className:'enh-data-summary-value' }, 'Stored locally')
             ),
             makeEl('div', { className:'enh-data-summary-item' },
-                makeEl('div', { className:'enh-data-summary-label' }, 'Marks'),
+                makeEl('div', { className:'enh-data-summary-label' }, 'Private marks'),
                 makeEl('div', { className:'enh-data-summary-value', id:'enh-data-marks-count' }, `${getUserMarkEntries().length} titles`)
             ),
             makeEl('div', { className:'enh-data-summary-item' },
