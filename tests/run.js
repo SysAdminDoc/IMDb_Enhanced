@@ -45,6 +45,11 @@ function loadScriptTestHooks() {
         getRequestErrorMessage,
         getLinkedTitleId,
         findNativeTitleAction,
+        runSettingsMigrations,
+        readSettingsSchemaVersion,
+        SETTINGS_SCHEMA_VERSION,
+        getExportSettings,
+        prepareSettingsImport,
         readHeatmapSeasons,
         summarizeHeatmapSeason,
         buildDiagnosticsReport,
@@ -427,6 +432,30 @@ test('the episode heatmap reads ratings from link text and scopes to the ratings
     assert.deepStrictEqual(seasons, [[9, 8.6], [7.9, 5.1]], 'unrated cells are skipped, translated labels ignored');
     assert.strictEqual(hooks.summarizeHeatmapSeason([{ rating:9 }, { rating:8 }]), 8.5);
     assert.strictEqual(hooks.summarizeHeatmapSeason([]), null);
+});
+
+/* The cache has been versioned since v2.6; settings were not, so a future change to a
+   stored value's shape would be coerced back to its default with no record. */
+test('settings carry a schema version that gates migration and import', () => {
+    const hooks = loadScriptTestHooks();
+
+    assert.strictEqual(hooks.runSettingsMigrations(), hooks.SETTINGS_SCHEMA_VERSION);
+    assert.strictEqual(hooks.getStoredSetting('settingsSchemaVersion'), hooks.SETTINGS_SCHEMA_VERSION,
+        'the version must be recorded so a later build can detect the shape it is reading');
+
+    const backup = hooks.getExportSettings();
+    assert.strictEqual(backup.settingsSchemaVersion, hooks.SETTINGS_SCHEMA_VERSION,
+        'a backup must state the schema it was written against');
+
+    // A backup this build cannot understand is refused, not silently coerced.
+    assert.throws(
+        () => hooks.prepareSettingsImport({ ...backup, settingsSchemaVersion: hooks.SETTINGS_SCHEMA_VERSION + 5 }),
+        /newer version/i,
+        'a newer backup must be refused rather than partially applied');
+
+    // Its own export still round-trips, and the marker is not treated as a setting.
+    const prepared = hooks.prepareSettingsImport(backup);
+    assert.strictEqual(prepared.ignored, 0, 'the schema marker must not count as an unrecognized field');
 });
 
 test('IMDb title data selection ignores unrelated or malformed structured data', () => {
@@ -1377,7 +1406,10 @@ test('settings exports are canonical and fully re-importable', () => {
     assert.strictEqual(exported.radarrQualityProfileId, '1', 'invalid legacy values should export as safe defaults');
     const prepared = hooks.prepareSettingsImport(exported);
     assert.strictEqual(prepared.ignored, 0, 'a generated export should never contain fields its importer rejects');
-    assert.strictEqual(prepared.entries.length, Object.keys(exported).length, 'every exported setting should be restorable');
+    /* The export also carries the schema marker, which describes the payload rather
+       than being a restorable setting. */
+    assert.strictEqual(prepared.entries.length, Object.keys(exported).length - 1,
+        'every exported setting except the schema marker should be restorable');
     assert(script.includes('JSON.stringify(getExportSettings(), null, 2)'), 'clipboard export should use canonical schema data');
 
     const legacyPrepared = hooks.prepareSettingsImport({

@@ -336,6 +336,40 @@
             return false;
         }
     }
+    /* The cache has carried a schema version since v2.6 and rejects entries that do not
+       match it. Settings never had one, so a future change to a stored value's shape
+       would be silently coerced back to its default by normalizeImportedSetting with no
+       record that it happened. Version them, and give migrations one ordered place to
+       live instead of the ad hoc one-offs scattered through startup.
+
+       Adding a migration: bump SETTINGS_SCHEMA_VERSION and append { to, run } here. run()
+       may throw — the version is only advanced once every pending step has succeeded, so
+       a failed migration is retried on the next load rather than skipped. */
+    const SETTINGS_SCHEMA_VERSION = 1;
+    const SETTINGS_SCHEMA_KEY = 'settingsSchemaVersion';
+    const SETTINGS_MIGRATIONS = [];
+
+    function readSettingsSchemaVersion() {
+        const stored = Number(GM_getValue(PREFIX + SETTINGS_SCHEMA_KEY, null));
+        if (Number.isInteger(stored) && stored > 0) return stored;
+        // A store with no marker predates versioning; treat it as the first schema.
+        return GM_listValues().some(key => key.startsWith(PREFIX)) ? 1 : SETTINGS_SCHEMA_VERSION;
+    }
+
+    function runSettingsMigrations() {
+        let from = readSettingsSchemaVersion();
+        if (from >= SETTINGS_SCHEMA_VERSION) {
+            if (from === SETTINGS_SCHEMA_VERSION) GM_setValue(PREFIX + SETTINGS_SCHEMA_KEY, SETTINGS_SCHEMA_VERSION);
+            return from;
+        }
+        SETTINGS_MIGRATIONS
+            .filter(step => step.to > from && step.to <= SETTINGS_SCHEMA_VERSION)
+            .sort((a, b) => a.to - b.to)
+            .forEach(step => { step.run(); from = step.to; });
+        GM_setValue(PREFIX + SETTINGS_SCHEMA_KEY, from);
+        return from;
+    }
+
     function cacheSetUnavailable(key) {
         cacheSet(key, { unavailable: true }, CACHE_UNAVAILABLE_TTL);
     }
@@ -1322,9 +1356,17 @@
         if (!data || Array.isArray(data) || typeof data !== 'object') {
             throw new Error('Settings JSON must be an object.');
         }
+        /* A backup written by a newer version can contain shapes this build would
+           quietly coerce to defaults. Refusing is recoverable; silently rewriting the
+           user's settings is not. */
+        const payloadVersion = Number(data[SETTINGS_SCHEMA_KEY]);
+        if (Number.isFinite(payloadVersion) && payloadVersion > SETTINGS_SCHEMA_VERSION) {
+            throw new Error(`This backup was written by a newer version of IMDb Enhanced (settings schema ${payloadVersion}). Update first, then import.`);
+        }
         const entries = [];
         let ignored = 0;
         Object.entries(data).forEach(([key, value]) => {
+            if (key === SETTINGS_SCHEMA_KEY) return;
             const normalized = normalizeImportedSetting(key, value);
             if (normalized) entries.push(normalized);
             else ignored++;
@@ -1356,6 +1398,7 @@
             const normalized = normalizeImportedSetting(key, current);
             data[key] = cloneSettingValue(normalized ? normalized.value : DEFAULTS[key]);
         });
+        data[SETTINGS_SCHEMA_KEY] = SETTINGS_SCHEMA_VERSION;
         return data;
     }
 
@@ -9058,6 +9101,10 @@ section[data-testid="hero-parent"].enh-editorial-native-hidden { display: none !
         activeRouteGeneration += 1;
         _ldData = null;
         cacheGC();
+        /* Before any feature reads a setting, so a migration cannot race a consumer.
+           A failure leaves the stored version untouched and is retried next load. */
+        try { runSettingsMigrations(); }
+        catch (error) { console.warn('[IMDb Enhanced] settings migration deferred:', error); }
         try { getSectionCollapseState(); }
         catch (error) { console.warn('[IMDb Enhanced] section-state migration deferred:', error); }
 
