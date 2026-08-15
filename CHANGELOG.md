@@ -14,6 +14,8 @@
 
 ### Fixed
 
+- The Firefox build is now verified from the files it actually ships rather than from a manifest computed during the test run, and `npm test` builds it. Nothing previously read that directory, so a stale build and a broken generator looked identical without rebuilding by hand.
+
 - A feature that fails while a page loads now says so once, instead of reporting only to the browser console and leaving a silently missing feature. IMDb changes its markup without notice, so this is the expected failure rather than an exceptional one.
 - The cached-lookup count is available outside the settings panel, so the diagnostics report states it instead of reporting it as unavailable.
 

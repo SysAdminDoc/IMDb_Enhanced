@@ -106,4 +106,26 @@ const permissionsScript = fs.readFileSync(path.join(root, 'extension', 'permissi
 assert(permissionsScript.includes('permissions.request'), 'the popup must be able to request the opt-in origins');
 assert(permissionsScript.includes('getManifest'), 'the popup must derive origins from the manifest rather than a second hard-coded list');
 
-console.log(`Extension manifest and generated content are valid at v${pkg.version}.`);
+/* The Firefox assertions above check a manifest computed in this process, which says
+   nothing about the directory that actually ships. Read the built files instead — a
+   stale extension-firefox/ is otherwise indistinguishable from a broken generator
+   without rebuilding by hand. `npm test` builds it with --firefox first. */
+const firefoxDir = path.join(root, 'extension-firefox');
+assert(fs.existsSync(firefoxDir),
+    'extension-firefox/ is missing; npm test must build it with --firefox before validating it');
+const builtFirefoxManifest = JSON.parse(fs.readFileSync(path.join(firefoxDir, 'manifest.json'), 'utf8'));
+assert.strictEqual(builtFirefoxManifest.version, pkg.version, 'the built Firefox manifest is a release behind');
+assert.deepStrictEqual(builtFirefoxManifest, firefox, 'the built Firefox manifest diverges from the generator');
+assert.strictEqual(
+    fs.readFileSync(path.join(firefoxDir, 'content.js'), 'utf8'),
+    content,
+    'both builds must ship the same generated content script');
+assert.strictEqual(
+    fs.readFileSync(path.join(firefoxDir, 'boot.css'), 'utf8'),
+    bootCss,
+    'the Firefox build must ship the same synchronous boot stylesheet');
+[...FIREFOX_COPIED_FILES, ...Object.values(builtFirefoxManifest.icons || {})].forEach(name => {
+    assert(fs.existsSync(path.join(firefoxDir, name)), `Firefox build is missing ${name}`);
+});
+
+console.log(`Extension manifest and generated content are valid at v${pkg.version}, for both builds.`);
