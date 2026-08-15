@@ -217,6 +217,8 @@
         // Utility
         quickCopyID: true, watchlistBatch: true, listMultiSearch: true,
         keyboardShortcuts: false,
+        // Extension builds only: the userscript updates itself through its manager.
+        updateNotice: true, updateDismissedVersion: '',
     };
     const LOCAL_SERVICE_URL_KEYS = new Set([
         'radarrUrl', 'sonarrUrl', 'seerrUrl', 'plexUrl', 'jellyfinUrl', 'embyUrl',
@@ -1666,6 +1668,40 @@
        they cannot host their own live region — a region only speaks if it already
        existed in the accessibility tree when its text changed. One persistent
        announcer, created up front, reports each result as it lands. */
+    /* An unpacked extension has no update mechanism — Chrome only allows off-store
+       hosting on Linux — so the build that cannot update itself at least says so.
+       The service worker records what the published userscript reports; this only
+       reads that record. The userscript build never runs any of it. */
+    function getUpdateNotice() {
+        if (!IS_EXTENSION_BUILD || get('updateNotice') === false) return null;
+        const state = GM_getValue(PREFIX + 'updateState', null);
+        if (!state || typeof state !== 'object' || !state.available) return null;
+        const latest = String(state.latest || '').slice(0, 20);
+        if (!/^[0-9]+(?:\.[0-9]+){0,3}$/.test(latest)) return null;
+        return latest === String(get('updateDismissedVersion') || '') ? null : latest;
+    }
+
+    function showUpdateNotice() {
+        const latest = getUpdateNotice();
+        if (!latest || document.getElementById('enh-update-notice') || !document.body) return;
+        const notice = makeEl('div', { id:'enh-update-notice', role:'status' },
+            makeEl('span', {}, `IMDb Enhanced ${latest} is available — this build is ${VERSION}.`),
+            makeEl('a', {
+                className:'enh-update-notice__link',
+                href:'https://github.com/SysAdminDoc/IMDb_Enhanced/releases',
+                target:'_blank', rel:'noopener noreferrer',
+            }, 'Get it'),
+            makeEl('button', {
+                type:'button', className:'enh-update-notice__dismiss', 'aria-label':`Dismiss the ${latest} update notice`,
+                onClick: () => {
+                    trySaveSetting('updateDismissedVersion', latest, { notify:false });
+                    document.getElementById('enh-update-notice')?.remove();
+                },
+            }, 'Dismiss')
+        );
+        document.body.appendChild(notice);
+    }
+
     function ensureScoreAnnouncer() {
         const existing = document.getElementById('enh-score-announcer');
         if (existing) return existing;
@@ -6728,6 +6764,22 @@ section[id*="quote" i] .ipc-list-card { padding: 4px 0 !important; margin: 2px 0
 #enh-toast.visible { transform: translateY(0); opacity: 1; }
 /* Announced, never drawn. Kept in the layout tree (not display:none) so the live
    region stays in the accessibility tree between messages. */
+#enh-update-notice {
+    position: fixed; right: 16px; bottom: 16px; z-index: 2147483000;
+    display: flex; align-items: center; gap: 12px;
+    max-width: min(420px, calc(100vw - 32px));
+    padding: 10px 14px; border-radius: 10px;
+    background: ${t.sf1}; border: 1px solid ${t.accentBorder}; color: ${t.tx1};
+    font: 600 12px/1.45 -apple-system, BlinkMacSystemFont, 'Segoe UI', sans-serif;
+    box-shadow: 0 10px 30px rgba(0,0,0,.35);
+}
+.enh-update-notice__link { color: ${t.accent}; text-decoration: underline; white-space: nowrap; }
+.enh-update-notice__dismiss {
+    background: ${t.sf2}; border: 1px solid ${t.bd1}; color: ${t.tx2};
+    border-radius: 6px; padding: 4px 10px; cursor: pointer; white-space: nowrap;
+}
+.enh-update-notice__dismiss:hover { background: ${t.s2}; color: ${t.tx0}; }
+
 #enh-toast-announcer, #enh-score-announcer {
     position: fixed; bottom: 0; left: 0; width: 1px; height: 1px; padding: 0;
     overflow: hidden; clip-path: inset(50%); white-space: nowrap; border: 0;
@@ -8813,6 +8865,34 @@ section[data-testid="hero-parent"].enh-editorial-native-hidden { display: none !
             makeEl('button', { type:'button', className:'enh-settings-footer-btn', id:'enh-clearcache-btn', title:'Clear cached third-party lookups' }, 'Clear cache'),
             makeEl('div', { className:'enh-settings-card-description', id:'enh-cache-status', style:{ marginTop:'8px' } }, `${cacheCount()} entries currently cached.`)
         );
+        /* Only the extension builds can be stale — the userscript updates through its
+           manager — so the control exists only where it means something. */
+        if (IS_EXTENSION_BUILD) {
+            const updateCard = makeCard('Updates', 'This build cannot update itself, so it checks once a day whether a newer release has been published.');
+            const updateRow = makeEl('div', { className:'enh-settings-row' },
+                makeEl('div', { className:'enh-settings-row-copy' },
+                    makeEl('span', { className:'enh-settings-label' }, 'Tell me about new versions'),
+                    makeEl('span', { className:'enh-settings-help' }, 'Reads the published version once a day. Nothing about you is sent.')
+                )
+            );
+            const updateToggle = makeEl('label', { className:'enh-toggle' });
+            const updateInput = makeEl('input', { id:'enh-update-notice-toggle', type:'checkbox', 'aria-label':'Tell me about new versions' });
+            updateInput.checked = get('updateNotice') !== false;
+            updateInput.addEventListener('change', () => {
+                const enabled = updateInput.checked;
+                if (!trySaveSetting('updateNotice', enabled)) {
+                    updateInput.checked = !enabled;
+                    return;
+                }
+                if (!enabled) document.getElementById('enh-update-notice')?.remove();
+                markSaved();
+            });
+            updateToggle.append(updateInput, makeEl('span', { className:'enh-toggle-track' }));
+            updateRow.appendChild(updateToggle);
+            updateCard.appendChild(updateRow);
+            dataPage.appendChild(updateCard);
+        }
+
         const diagnosticsCard = makeCard('Diagnostics', 'A readable summary for bug reports. Credentials, marked titles, and the page query string are never included.');
         diagnosticsCard.append(
             makeEl('button', {
@@ -9210,6 +9290,7 @@ section[data-testid="hero-parent"].enh-editorial-native-hidden { display: none !
         // Same rule as the toast region: it only speaks if it was already in the
         // accessibility tree when its text changed, so it cannot be created on demand.
         ensureScoreAnnouncer();
+        showUpdateNotice();
         const enabledFeatures = features.filter(f => get(f.key) && shouldInitFeature(f));
         enabledFeatures.forEach(feature => startFeature(feature, { context:'route' }));
         createSettingsPanel();

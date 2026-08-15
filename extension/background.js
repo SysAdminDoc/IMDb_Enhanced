@@ -161,8 +161,54 @@ function sendHttpRequest(message, sender, sendResponse) {
     });
 }
 
-chrome.runtime.onInstalled.addListener(() => { syncAdBlockingFromStorage(); });
-chrome.runtime.onStartup.addListener(() => { syncAdBlockingFromStorage(); });
+/* An extension installed unpacked can never update itself, and Chrome only permits
+   off-store hosting on Linux, so the only honest mitigation is to notice and say so.
+   The published userscript is the version of record; raw.githubusercontent.com serves
+   it with Access-Control-Allow-Origin: *, so this needs no host permission and no
+   manifest change. It is a read of a public file — no identifiers are sent. */
+const UPDATE_SOURCE_URL = 'https://raw.githubusercontent.com/SysAdminDoc/IMDb_Enhanced/main/IMDb_Enhanced.user.js';
+const UPDATE_CHECK_INTERVAL = 24 * 60 * 60 * 1000;
+const UPDATE_STATE_KEY = `${STORAGE_PREFIX}updateState`;
+const UPDATE_SETTING_KEY = `${STORAGE_PREFIX}updateNotice`;
+const UPDATE_HEAD_BYTES = 2048;
+
+function parseUserscriptVersion(text) {
+    const match = String(text || '').slice(0, UPDATE_HEAD_BYTES).match(/^\/\/\s*@version\s+([0-9]+(?:\.[0-9]+){0,3})\s*$/m);
+    return match ? match[1] : '';
+}
+
+/* Numeric, segment-wise: '2.9.0' must not compare as newer than '2.13.0'. */
+function isNewerVersion(candidate, current) {
+    const a = String(candidate).split('.').map(Number);
+    const b = String(current).split('.').map(Number);
+    if (a.some(Number.isNaN) || b.some(Number.isNaN)) return false;
+    for (let i = 0; i < Math.max(a.length, b.length); i += 1) {
+        const left = a[i] || 0;
+        const right = b[i] || 0;
+        if (left !== right) return left > right;
+    }
+    return false;
+}
+
+async function checkForUpdate() {
+    const stored = await callApi(chrome.storage.local, 'get', [UPDATE_STATE_KEY, UPDATE_SETTING_KEY]).catch(() => null);
+    if (!stored || stored[UPDATE_SETTING_KEY] === false) return;
+    const previous = stored[UPDATE_STATE_KEY] || {};
+    const now = Date.now();
+    if (Number.isFinite(previous.checkedAt) && now - previous.checkedAt < UPDATE_CHECK_INTERVAL) return;
+    const current = chrome.runtime.getManifest().version;
+    let latest = '';
+    try {
+        const response = await fetch(UPDATE_SOURCE_URL, { credentials:'omit', cache:'no-cache' });
+        if (response.ok) latest = parseUserscriptVersion(await response.text());
+    } catch { /* offline or blocked: record the attempt and try again tomorrow */ }
+    await callApi(chrome.storage.local, 'set', {
+        [UPDATE_STATE_KEY]: { checkedAt:now, latest, available: Boolean(latest) && isNewerVersion(latest, current) },
+    }).catch(() => { /* a failed write only costs one skipped check */ });
+}
+
+chrome.runtime.onInstalled.addListener(() => { syncAdBlockingFromStorage(); checkForUpdate(); });
+chrome.runtime.onStartup.addListener(() => { syncAdBlockingFromStorage(); checkForUpdate(); });
 chrome.storage.onChanged.addListener((changes, areaName) => {
     if (areaName !== 'local' || !Object.prototype.hasOwnProperty.call(changes, `${STORAGE_PREFIX}removeAds`)) return;
     updateAdBlocking(changes[`${STORAGE_PREFIX}removeAds`].newValue !== false).catch(error => {

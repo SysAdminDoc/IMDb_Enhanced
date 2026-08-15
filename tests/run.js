@@ -45,6 +45,7 @@ function loadScriptTestHooks() {
         getRequestErrorMessage,
         getLinkedTitleId,
         findNativeTitleAction,
+        getUpdateNotice,
         runSettingsMigrations,
         readSettingsSchemaVersion,
         SETTINGS_SCHEMA_VERSION,
@@ -504,6 +505,24 @@ test('README states the trust posture the build actually has', () => {
     // The claims have to stay true: a dependency block would silently falsify them.
     assert(!packageJson.dependencies, 'README claims zero runtime dependencies');
     assert(!packageJson.devDependencies, 'README claims the build uses only the Node standard library');
+});
+
+/* An unpacked extension can never update itself and Chrome only permits off-store
+   hosting on Linux, so noticing and saying so is the only available mitigation. */
+test('the update notice is extension-only, dismissible, and validates what it renders', () => {
+    const hooks = loadScriptTestHooks();
+    // The userscript build updates through its manager and must never run this.
+    hooks.seedRawStorage('imdb_enh_updateState', { available:true, latest:'2.99.0' });
+    assert.strictEqual(hooks.getUpdateNotice(), null, 'the userscript build must not show an update notice');
+
+    assert.strictEqual((script.match(/id:'enh-update-notice'/g) || []).length, 1,
+        'the notice element id must be unique — the settings toggle must not reuse it');
+    assert(script.includes("id:'enh-update-notice-toggle'"), 'the settings control needs its own id');
+    assert(/if \(IS_EXTENSION_BUILD\) \{[\s\S]{0,400}?Tell me about new versions/.test(script),
+        'the control belongs only in the build that can be stale');
+    // A version string is interpolated into the page, so it is validated on read.
+    assert(/\^\[0-9\]\+\(\?:\\.\[0-9\]\+\)\{0,3\}\$/.test(script),
+        'the reported version must be shape-checked before it reaches the DOM');
 });
 
 test('IMDb title data selection ignores unrelated or malformed structured data', () => {

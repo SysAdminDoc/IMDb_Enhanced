@@ -1,5 +1,11 @@
 # Changelog
 
+## Unreleased
+
+### Added
+
+- Extension builds now notice when a newer version has been published and say so, once, with a link and a Dismiss button. An unpacked extension has no way to update itself and Chrome only permits off-store hosting on Linux, so this is the only available mitigation. It reads the published version at most once a day, sends nothing about you, fails silently offline, and can be turned off under Settings → Data → Updates. The userscript build omits it entirely — it updates through its manager.
+
 ## 2.13.0 — 2026-08-15
 
 ### Added
