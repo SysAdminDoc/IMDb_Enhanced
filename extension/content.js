@@ -948,6 +948,61 @@
         if (stack && !stack.children.length) stack.remove();
     }
 
+    /* The action dock is shared: the editorial surface owns it and the page actions
+       inside it, while the watch destinations, trailer, and link menu are contributed
+       by their own features. Whoever needs it first creates it. */
+    function ensureEditorialActions() {
+        const existing = document.getElementById('enh-editorial-actions');
+        if (existing) return existing;
+        const slot = document.getElementById('enh-editorial-action-slot');
+        if (!slot) return null;
+        const actions = makeEl('div', { id:'enh-editorial-actions' });
+        slot.appendChild(actions);
+        return actions;
+    }
+
+    function findNativeTitleAction(patterns) {
+        const hero = document.querySelector('section[data-testid="hero-parent"]') || document;
+        const candidates = hero.querySelectorAll('button, a, [role="button"]');
+        let inspected = 0;
+        for (const candidate of candidates) {
+            if (++inspected > 200 || candidate.id?.startsWith('enh-') || candidate.closest?.('[id^="enh-"]')) continue;
+            const haystack = [candidate.getAttribute('aria-label'), candidate.getAttribute('title'), candidate.textContent]
+                .filter(Boolean).join(' ').slice(0, 400).toLowerCase();
+            if (patterns.some(pattern => haystack.includes(pattern))) return candidate;
+        }
+        return null;
+    }
+
+    /* These delegate to IMDb's own hero controls, which the editorial layout hides.
+       They therefore belong to the feature that does the hiding — tying them to an
+       optional watch-destination list once left title pages with no way to rate a
+       title or add it to a watchlist. */
+    function createTitlePageActions() {
+        return makeEl('div', { className:'enh-title-page-actions' },
+            makeEl('button', {
+                type:'button',
+                className:'enh-editorial-action',
+                onClick: () => {
+                    const rating = document.querySelector('[data-testid="hero-rating-bar__aggregate-rating"]');
+                    rating?.scrollIntoView({ behavior:getEnhancementScrollBehavior(), block:'center' });
+                    rating?.querySelector('button, a, [tabindex]:not([tabindex="-1"])')?.focus?.();
+                },
+            }, 'Rate'),
+            makeEl('button', {
+                type:'button',
+                className:'enh-editorial-action',
+                onClick: () => {
+                    const watchlist = findNativeTitleAction(['watchlist', 'watch list', 'add to watch']);
+                    if (watchlist) {
+                        watchlist.click();
+                        showToast('Sent to your IMDb watchlist');
+                    } else showToast('IMDb watchlist controls are unavailable on this title surface', 3500);
+                },
+            }, 'Add to watchlist')
+        );
+    }
+
     function waitForTitleSurface(timeout = 20000) {
         return waitForMatch(getTitleSurface, timeout);
     }
@@ -2295,7 +2350,7 @@
         else {
             removeCSS('enh-modernUI');
             removeCSS('enh-early-shell');
-            delete document.documentElement.dataset.imdbEnhanced;
+            if (document.documentElement) delete document.documentElement.dataset.imdbEnhanced;
         }
         injectGlobalStyles();
         injectEarlyThemeShell();
@@ -2810,7 +2865,10 @@ a:focus-visible, button:focus-visible, .ipc-chip:focus-visible {
     function injectEarlyThemeShell() {
         if (!isIMDbHost() || !get('modernUI')) return;
         const t = getTheme();
-        document.documentElement.dataset.imdbEnhanced = 'active';
+        /* At document-start the root element is not guaranteed to exist yet — the same
+           condition addCSS already queues around. The marker is re-applied from
+           applyThemeStyles once the document is up, so skipping it here is safe. */
+        if (document.documentElement) document.documentElement.dataset.imdbEnhanced = 'active';
         addCSS(`
 html[data-imdb-enhanced="active"] { color-scheme: ${t.scheme}; background: ${t.bg}; }
 html[data-imdb-enhanced="active"] body,
@@ -2853,7 +2911,7 @@ html[data-imdb-enhanced="active"] .ipc-page-background {
             this._heroBackdrop = null;
             removeCSS('enh-modernUI');
             removeCSS('enh-early-shell');
-            delete document.documentElement.dataset.imdbEnhanced;
+            if (document.documentElement) delete document.documentElement.dataset.imdbEnhanced;
         }
     });
 
@@ -2878,6 +2936,12 @@ html[data-imdb-enhanced="active"] .ipc-page-background {
                 const sync = () => {
                     if (!isCurrent() || !rail.isConnected) return;
                     refreshEditorialSurface(surface, this._nativeHero || document);
+                    /* This surface hides IMDb's hero, so it owns the replacements for
+                       the controls it hid. They must not depend on any other feature. */
+                    const dock = ensureEditorialActions();
+                    if (dock && !dock.querySelector('.enh-title-page-actions')) {
+                        dock.appendChild(createTitlePageActions());
+                    }
                     const standalone = surface.querySelector('#enh-editorial-standalone-slot');
                     const legacyStack = document.getElementById('enh-title-stack');
                     if (standalone && legacyStack && !surface.contains(legacyStack)) {
@@ -2941,6 +3005,11 @@ html[data-imdb-enhanced="active"] .ipc-page-background {
             this._nativeRatingState.forEach(({ node, parent }) => {
                 if (node?.isConnected && parent?.isConnected && !parent.contains(node)) parent.appendChild(node);
             });
+
+            /* The native hero returns with this surface, so the stand-ins for its own
+               controls go with it; everything else in the dock belongs to other
+               features and is re-homed below. */
+            this._surface?.querySelector('.enh-title-page-actions')?.remove();
 
             const preserved = [];
             const addChildren = parent => Array.from(parent?.children || []).forEach(node => {
@@ -4489,7 +4558,7 @@ section[id*="quote" i] .ipc-list-card { padding: 4px 0 !important; margin: 2px 0
                     role:'region',
                     'aria-label':'Watch movie and show sites',
                 });
-                const label = makeEl('div', { className:'enh-stream-label' },
+                const label = makeEl('div', { id:'enh-watch-label', className:'enh-stream-label' },
                     makeEl('span', { className:'enh-stream-label__dot' }),
                     'WATCH'
                 );
@@ -4518,38 +4587,15 @@ section[id*="quote" i] .ipc-list-card { padding: 4px 0 !important; margin: 2px 0
                         'aria-label': `Open ${site.name} search for ${title}`,
                     }, ...contents);
                 };
-                const findNativeTitleAction = patterns => {
-                    const hero = document.querySelector('section[data-testid="hero-parent"]') || document;
-                    const candidates = hero.querySelectorAll('button, a, [role="button"]');
-                    let inspected = 0;
-                    for (const candidate of candidates) {
-                        if (++inspected > 200 || candidate.id?.startsWith('enh-') || candidate.closest?.('[id^="enh-"]')) continue;
-                        const haystack = [candidate.getAttribute('aria-label'), candidate.getAttribute('title'), candidate.textContent]
-                            .filter(Boolean).join(' ').slice(0, 400).toLowerCase();
-                        if (patterns.some(pattern => haystack.includes(pattern))) return candidate;
-                    }
-                    return null;
-                };
-                const actions = makeEl('div', { id:'enh-editorial-actions' });
-                if (primarySite) actions.appendChild(createSiteButton(primarySite, 'enh-search-btn enh-search-btn--primary'));
-                actions.appendChild(makeEl('button', {
-                    type:'button',
-                    className:'enh-editorial-action',
-                    onClick: () => {
-                        const rating = document.querySelector('[data-testid="hero-rating-bar__aggregate-rating"]');
-                        rating?.scrollIntoView({ behavior:getEnhancementScrollBehavior(), block:'center' });
-                        rating?.querySelector('button, a, [tabindex]:not([tabindex="-1"])')?.focus?.();
-                    },
-                }, 'Rate'));
-                actions.appendChild(makeEl('button', {
-                    type:'button',
-                    className:'enh-editorial-action',
-                    onClick: () => {
-                        const watchlist = findNativeTitleAction(['watchlist', 'watch list', 'add to watch']);
-                        if (watchlist) watchlist.click();
-                        else showToast('IMDb watchlist controls are unavailable on this title surface', 3500);
-                    },
-                }, 'Add to watchlist'));
+                /* The dock may already exist and belong to the editorial surface; this
+                   feature only ever contributes the primary watch destination to it. */
+                const sharedActions = ensureEditorialActions();
+                const actions = sharedActions || makeEl('div', { id:'enh-editorial-actions' });
+                if (primarySite) {
+                    const primaryButton = createSiteButton(primarySite, 'enh-search-btn enh-search-btn--primary');
+                    primaryButton.id = 'enh-primary-watch-btn';
+                    actions.insertBefore(primaryButton, actions.firstChild);
+                }
 
                 const secondarySites = sites.filter(site => site !== primarySite);
                 if (secondarySites.length) {
@@ -4572,17 +4618,25 @@ section[id*="quote" i] .ipc-list-card { padding: 4px 0 !important; margin: 2px 0
                     options.appendChild(optionGroups);
                     groups.appendChild(options);
                 }
-                wrap.appendChild(label);
-                wrap.appendChild(actions);
+                /* Only adopt the dock when this feature created it; otherwise it is
+                   already mounted in the editorial action slot and owned elsewhere, and
+                   the section heading leads it so the original reading order survives:
+                   WATCH, the primary destination, then the page actions. */
+                if (sharedActions) actions.insertBefore(label, actions.firstChild);
+                else {
+                    wrap.appendChild(label);
+                    wrap.appendChild(actions);
+                }
                 wrap.appendChild(groups);
                 appendTitleStackItem(wrap, TITLE_STACK_ORDER.searchButtons);
-                wrap.querySelectorAll('.enh-search-btn').forEach(btn => {
-                    btn.addEventListener('click', event => {
-                        if (btn.dataset.storeQuery !== 'true' || storeCinebyQuery(title)) return;
-                        event.preventDefault();
-                        showToast(getCinebyHandoffFailureMessage(), 4500);
+                [...wrap.querySelectorAll('.enh-search-btn'), ...actions.querySelectorAll('.enh-search-btn')]
+                    .forEach(btn => {
+                        btn.addEventListener('click', event => {
+                            if (btn.dataset.storeQuery !== 'true' || storeCinebyQuery(title)) return;
+                            event.preventDefault();
+                            showToast(getCinebyHandoffFailureMessage(), 4500);
+                        });
                     });
-                });
             }).catch(() => {});
         },
         destroy() {
@@ -4594,6 +4648,9 @@ section[id*="quote" i] .ipc-list-card { padding: 4px 0 !important; margin: 2px 0
                 menu.classList.add('enh-link-menu-wrap--standalone');
                 appendTitleStackItem(menu, TITLE_STACK_ORDER.expandedLinkMenu);
             }
+            // The heading and primary button may live in a dock this feature does not own.
+            document.getElementById('enh-primary-watch-btn')?.remove();
+            document.getElementById('enh-watch-label')?.remove();
             wrap?.remove();
             pruneTitleStack();
         }
@@ -6483,6 +6540,9 @@ section[data-testid="hero-parent"].enh-editorial-native-hidden { display: none !
     background: ${t.accent}; box-shadow: 0 0 0 4px ${t.accentMuted};
 }
 #enh-editorial-actions { display: flex; flex-direction: column; gap: 6px; }
+/* The page actions are a grouping for ownership, not for layout — their buttons
+   take part in the dock's own column so the rhythm is unchanged. */
+.enh-title-page-actions { display: contents; }
 .enh-editorial-action {
     display: flex; align-items: center; justify-content: flex-start;
     width: 100%; min-height: 40px; padding: 8px 14px;

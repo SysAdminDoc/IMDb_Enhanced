@@ -4,6 +4,8 @@
 
 ### Fixed
 
+- Title pages keep their Rate and Add to watchlist controls when Watch buttons are turned off or every watch destination is hidden. The editorial layout hides IMDb's own hero, but the stand-ins for those controls belonged to the watch-destination feature, so switching it off left the page with no way to rate a title or add it to a watchlist.
+- Hardened the theme shell against running before the document root exists, which threw at document-start and aborted the rest of the script.
 - The person-age addition on name pages now has a toggle, under Tools → People. It shipped enabled with no way to turn it off short of editing storage by hand.
 - Settings → Sites: destination rows put the Purpose and URL template fields under the wrong column headers, which also squeezed the long URL template into the narrow track meant for the category selector.
 - Extension build: a rejected storage write is no longer silently discarded. Quota or permission failures now reach the "Save failed" state and the settings-import rollback instead of leaving the UI reporting "Saved".

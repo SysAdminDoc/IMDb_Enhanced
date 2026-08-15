@@ -1279,6 +1279,31 @@ test('core features remain registered', () => {
     ].forEach(token => assert(script.includes(token), `${token} missing`));
 });
 
+test('title page actions survive without any watch destination', () => {
+    /* The editorial layout hides IMDb's hero, so the stand-ins for Rate and Add to
+       watchlist have to belong to that feature. Owning them from searchButtons meant
+       turning off Watch buttons — or hiding every watch site, which returns early at
+       `if (!sites.length)` — left the page with no rating or watchlist control. */
+    const surface = script.slice(
+        script.indexOf("key: 'editorialTitleSurface'"),
+        script.indexOf("key: 'compactHeader'"));
+    assert(surface.includes('createTitlePageActions()'), 'the surface that hides the hero must mount the replacement actions');
+    assert(surface.includes('enh-editorial-native-hidden'), 'this test should still be guarding the feature that hides the native hero');
+
+    const watchButtons = script.slice(
+        script.indexOf("key: 'searchButtons'"),
+        script.indexOf("key: 'externalLinks'"));
+    assert(watchButtons.includes('if (!sites.length) return;'), 'the early return this protects against should still exist');
+    assert(!watchButtons.includes("'Add to watchlist'"), 'the watchlist action must not depend on the watch-site list');
+    assert(!watchButtons.includes("}, 'Rate'"), 'the rate action must not depend on the watch-site list');
+
+    // Teardown must be symmetric: the stand-ins go when the native hero comes back,
+    // and the watch button goes with its own feature even from a dock it does not own.
+    assert(surface.includes(".enh-title-page-actions')?.remove()"), 'page actions must be removed when the native hero returns');
+    assert(watchButtons.includes("getElementById('enh-primary-watch-btn')?.remove()"), 'the primary watch button must be removed from a shared dock');
+    assert(watchButtons.includes("getElementById('enh-watch-label')?.remove()"), 'the watch heading must be removed from a shared dock');
+});
+
 test('every registered feature is reachable from the settings workspace', () => {
     const hooks = loadScriptTestHooks();
     /* makeFeatureCard resolves its keys with features.find(...).filter(Boolean), so a
