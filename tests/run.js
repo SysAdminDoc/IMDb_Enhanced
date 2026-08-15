@@ -44,6 +44,8 @@ function loadScriptTestHooks() {
         parseJSONResponse,
         getRequestErrorMessage,
         getLinkedTitleId,
+        findNativeTitleAction,
+        NATIVE_WATCHLIST_SELECTORS,
         isIMDbHost,
         isCinebyHost,
         getPageSurface,
@@ -227,6 +229,37 @@ function loadScriptTestHooks() {
     sandbox.window.__enhTest.getStorageKeys = () => [...sandboxValues.keys()];
     sandbox.window.__enhTest.getCapturedRequests = () => [...sandboxRequests];
     sandbox.window.__enhTest.setTestHostname = hostname => { location.hostname = hostname; };
+    /* Builds a minimal hero subtree so control-resolution can be exercised for real
+       rather than asserted against the source text. Each node carries the attributes
+       findNativeTitleAction actually reads, and matching is limited to the selector
+       shapes the userscript uses. */
+    sandbox.window.__enhTest.setHeroFixture = nodes => {
+        const elements = (nodes || []).map(node => ({
+            id: node.id || '',
+            attrs: { 'data-testid': node.testid || null, 'aria-label': node.ariaLabel || null, title: node.title || null },
+            textContent: node.text || '',
+            getAttribute(name) { return this.attrs[name] ?? null; },
+            closest: () => null,
+            matches(selector) {
+                const exact = selector.match(/^\[data-testid="([^"]+)"\]$/);
+                if (exact) return this.attrs['data-testid'] === exact[1];
+                const prefix = selector.match(/^\[data-testid\^="([^"]+)"\]$/);
+                if (prefix) return String(this.attrs['data-testid'] || '').startsWith(prefix[1]);
+                return false;
+            },
+        }));
+        const hero = {
+            querySelector: selector => elements.find(el => el.matches(selector)) || null,
+            querySelectorAll: () => elements,
+        };
+        sandbox.document.querySelector = selector =>
+            (selector === 'section[data-testid="hero-parent"]' ? hero : null);
+        sandbox.document.querySelectorAll = () => elements;
+    };
+    sandbox.window.__enhTest.clearHeroFixture = () => {
+        sandbox.document.querySelector = () => null;
+        sandbox.document.querySelectorAll = () => [];
+    };
     sandbox.window.__enhTest.getMediaListenerCount = () => sandboxMediaListenerCount;
     return sandbox.window.__enhTest;
 }
@@ -266,6 +299,61 @@ test('IMDb theme work stays off the Cineby handoff surface', () => {
     assert(
         /function applyThemeStyles\(options = \{\}\) \{\s*if \(!isIMDbHost\(\)\) return;/.test(script),
         'theme repainting must reject non-IMDb hosts'
+    );
+});
+
+/* IMDb machine-translates page copy, so an English label match finds nothing for those
+   users. Verified live 2026-08-15: on /hi/title/tt0903747/ the watchlist button renders
+   "वॉचलिस्ट में जोड़ें" and the previous text-only lookup returned null, which stranded the
+   editorial layout (default on) with no way to add a title to a watchlist. */
+test('native title controls resolve by test id rather than English label text', () => {
+    const hooks = loadScriptTestHooks();
+    const patterns = ['watchlist', 'watch list', 'add to watch'];
+
+    hooks.setHeroFixture([
+        { testid: 'tm-box-wl-button', text: 'वॉचलिस्ट में जोड़ें40.9 लाख यूज़र द्वारा जोड़े गए' },
+    ]);
+    const localized = hooks.findNativeTitleAction(patterns, hooks.NATIVE_WATCHLIST_SELECTORS);
+    assert(localized, 'a translated watchlist control must still be found');
+    assert.strictEqual(localized.getAttribute('data-testid'), 'tm-box-wl-button');
+
+    // The same lookup without the selector list is exactly the old behaviour.
+    assert.strictEqual(
+        hooks.findNativeTitleAction(patterns),
+        null,
+        'the fixture must genuinely defeat text matching, or this test proves nothing'
+    );
+
+    hooks.setHeroFixture([
+        { testid: 'poster-watchlist-ribbon-add', ariaLabel: 'Zur Watchlist hinzufügen' },
+    ]);
+    assert.strictEqual(
+        hooks.findNativeTitleAction(patterns, hooks.NATIVE_WATCHLIST_SELECTORS)?.getAttribute('data-testid'),
+        'poster-watchlist-ribbon-add',
+        'the poster ribbon is the fallback when the hero button is absent'
+    );
+
+    // Test ids win over an earlier decoy, and enhancement-owned nodes stay excluded.
+    hooks.setHeroFixture([
+        { id: 'enh-decoy', testid: 'tm-box-wl-button', text: 'Add to watchlist' },
+        { testid: 'poster-watchlist-ribbon-add', ariaLabel: 'Add to Watchlist' },
+    ]);
+    const skipped = hooks.findNativeTitleAction(patterns, hooks.NATIVE_WATCHLIST_SELECTORS);
+    assert.strictEqual(skipped.getAttribute('data-testid'), 'poster-watchlist-ribbon-add',
+        'controls this script injected must never be treated as IMDb’s own');
+
+    hooks.clearHeroFixture();
+    assert.strictEqual(
+        hooks.findNativeTitleAction(patterns, hooks.NATIVE_WATCHLIST_SELECTORS),
+        null,
+        'an absent control must resolve to null rather than throwing'
+    );
+
+    // A prefix match would also catch poster-watchlist-ribbon-added, whose click removes.
+    assert.deepStrictEqual(
+        Array.from(hooks.NATIVE_WATCHLIST_SELECTORS),
+        ['[data-testid="tm-box-wl-button"]', '[data-testid="poster-watchlist-ribbon-add"]'],
+        'the ribbon must be matched in its add state so a click cannot remove the title'
     );
 });
 
@@ -994,7 +1082,9 @@ test('editorial title surface keeps primary actions and configurable destination
     assert(script.includes("'aria-label':'Reviews and research'"), 'research links should expose a named category surface');
     assert(!/'Where to watch'/.test(script), 'the research region must not reuse the watch section heading');
     assert(script.includes("textContent:s.label"), 'section navigation should show readable labels instead of cryptic glyphs');
-    assert(script.includes("candidate.closest?.('[id^=\"enh-\"]')"), 'native action discovery should not recurse into enhancement controls');
+    /* The exclusion moved into isEnhancementNode() so the test-id path shares it; the
+       behaviour itself is proven in "native title controls resolve by test id". */
+    assert(script.includes("node?.closest?.('[id^=\"enh-\"]')"), 'native action discovery should not recurse into enhancement controls');
     assert(script.includes("editorialActions.appendChild(btn)"), 'the trailer action should join the editorial action dock when available');
     assert(/key: 'searchButtons'[\s\S]*?const trailer = wrap\?\.querySelector\('#enh-trailer-btn'\)/.test(script), 'search cleanup should preserve independent trailer controls');
 });

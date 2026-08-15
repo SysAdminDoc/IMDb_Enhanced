@@ -1011,12 +1011,32 @@
         return actions;
     }
 
-    function findNativeTitleAction(patterns) {
+    /* IMDb machine-translates page copy — fr, de, hi, it, pt-BR and es since 2026-03-24 —
+       so locating one of its controls by an English label silently finds nothing for those
+       users, and a loanword hides the failure: "Zur Watchlist hinzufügen" still contains
+       "watchlist" while "वॉचलिस्ट में जोड़ें" does not. Resolve by test id, which IMDb does
+       not translate, and keep the text scan only for surfaces it has not tagged. The
+       ribbon is matched in its explicit add state so a second click cannot remove the
+       title from the watchlist. */
+    const NATIVE_WATCHLIST_SELECTORS = [
+        '[data-testid="tm-box-wl-button"]',
+        '[data-testid="poster-watchlist-ribbon-add"]',
+    ];
+
+    function isEnhancementNode(node) {
+        return Boolean(node?.id?.startsWith?.('enh-') || node?.closest?.('[id^="enh-"]'));
+    }
+
+    function findNativeTitleAction(patterns, selectors = []) {
         const hero = document.querySelector('section[data-testid="hero-parent"]') || document;
+        for (const selector of selectors) {
+            const tagged = hero.querySelector?.(selector);
+            if (tagged && !isEnhancementNode(tagged)) return tagged;
+        }
         const candidates = hero.querySelectorAll('button, a, [role="button"]');
         let inspected = 0;
         for (const candidate of candidates) {
-            if (++inspected > 200 || candidate.id?.startsWith('enh-') || candidate.closest?.('[id^="enh-"]')) continue;
+            if (++inspected > 200 || isEnhancementNode(candidate)) continue;
             const haystack = [candidate.getAttribute('aria-label'), candidate.getAttribute('title'), candidate.textContent]
                 .filter(Boolean).join(' ').slice(0, 400).toLowerCase();
             if (patterns.some(pattern => haystack.includes(pattern))) return candidate;
@@ -1043,7 +1063,10 @@
                 type:'button',
                 className:'enh-editorial-action',
                 onClick: () => {
-                    const watchlist = findNativeTitleAction(['watchlist', 'watch list', 'add to watch']);
+                    const watchlist = findNativeTitleAction(
+                        ['watchlist', 'watch list', 'add to watch'],
+                        NATIVE_WATCHLIST_SELECTORS
+                    );
                     if (watchlist) {
                         watchlist.click();
                         showToast('Sent to your IMDb watchlist');

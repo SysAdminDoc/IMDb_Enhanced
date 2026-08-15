@@ -1,5 +1,11 @@
 # Changelog
 
+## Unreleased
+
+### Fixed
+
+- Title pages keep a working "Add to watchlist" action when IMDb renders in a translated language. IMDb began machine-translating page copy in 2026, and the control was located by its English label, so on languages that do not keep the English loanword — Hindi renders "वॉचलिस्ट में जोड़ें" — the button found nothing and the editorial layout, which hides IMDb's own hero and is on by default, left those users with no way to add a title. Native controls are now resolved by test id.
+
 ## 2.12.0 — 2026-08-15
 
 ### Fixed
