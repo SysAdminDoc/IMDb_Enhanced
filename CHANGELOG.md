@@ -4,6 +4,7 @@
 
 ### Fixed
 
+- The editorial title layout keeps IMDb's own hero video. Hiding the native hero removed the player from the page entirely; it is now re-homed into the rebuilt surface and handed back when the layout is turned off.
 - Editing a destination in Settings → Sites no longer writes to storage on every keystroke. Typing a 14-character name committed 14 full-list writes; it now commits one, and blurring the field still saves immediately.
 - Toast messages are announced reliably by screen readers. Each toast used to insert a brand-new live region, which assistive technology may not read; there is now one region, created up front, whose text changes.
 - Storage, clipboard, and local-service messages name the right host for the build you are running instead of always pointing at a userscript manager.

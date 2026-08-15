@@ -356,7 +356,12 @@ test('fragile selectors and global Cineby key stay removed', () => {
 });
 
 test('ad cleanup preserves core media and covers current IMDb shells', () => {
-    assert(!script.includes('[data-testid="inline-video-playback-container"]'), 'native IMDb video must never be treated as an ad');
+    /* The intent is that IMDb's own player is never classified as advertising. Scope
+       the check to the ad selector list rather than the whole file, so legitimate uses
+       — the editorial surface re-homes the player instead of losing it — still pass. */
+    const adSelector = script.slice(script.indexOf('const AD_SHELL_SELECTOR'), script.indexOf('const AD_REQUEST_RULES'));
+    assert(!adSelector.includes('inline-video-playback-container'), 'native IMDb video must never be treated as an ad');
+    assert(!/removeAds[\s\S]{0,600}?inline-video-playback-container/.test(script), 'ad cleanup must not target the native player');
     [
         'AD_SHELL_SELECTOR',
         'Bottom Sponsored Advertisement',
@@ -1280,6 +1285,20 @@ test('core features remain registered', () => {
         'themeAuto',
         'cacheGC',
     ].forEach(token => assert(script.includes(token), `${token} missing`));
+});
+
+test('the editorial layout keeps IMDb\'s own hero video', () => {
+    const surface = script.slice(script.indexOf("key: 'editorialTitleSurface'"), script.indexOf("key: 'compactHeader'"));
+    /* The repo already established that inline-video-playback-container is core media
+       rather than an ad. Hiding the native hero took it off the page entirely, and the
+       Trailer popover is a separate opt-in fetching a guessed YouTube match. */
+    assert(surface.includes('inline-video-playback-container'), 'the native player must be re-homed, not hidden');
+    assert(surface.includes("surface.querySelector('#enh-editorial-media-slot')"), 'it needs a slot in the rebuilt surface');
+    assert(script.includes("id:'enh-editorial-media-slot'"), 'the surface should build that slot');
+    assert(script.includes('#enh-editorial-media-slot:empty { display: none; }'), 'titles without video must not show an empty frame');
+    // Adoption is reversible: destroy restores every borrowed node to its own parent.
+    assert(surface.includes('this._adoptedNodes.push({ node, parent:node.parentElement })'), 'adopted nodes must record their origin');
+    assert(surface.includes('parent.appendChild(node)'), 'destroy must return adopted nodes to the native hero');
 });
 
 test('site editing does not commit a durable write per keystroke', () => {

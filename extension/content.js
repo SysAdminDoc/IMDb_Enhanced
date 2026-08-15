@@ -808,7 +808,8 @@
         const about = makeEl('section', {
             className:'enh-editorial-about',
             'aria-labelledby':'enh-editorial-about-title',
-        }, makeEl('h2', { id:'enh-editorial-about-title' }, 'About this title'));
+        }, makeEl('h2', { id:'enh-editorial-about-title' }, 'About this title'),
+            makeEl('div', { id:'enh-editorial-media-slot' }));
         const synopsis = getEditorialSynopsis();
         if (synopsis) about.appendChild(makeEl('p', { className:'enh-editorial-synopsis' }, synopsis));
         const cast = getEditorialLinkData('[data-testid="title-cast-item"] a', 3);
@@ -2956,12 +2957,12 @@ html[data-imdb-enhanced="active"] .ipc-page-background {
         _observer: null,
         _surface: null,
         _nativeHero: null,
-        _nativeRatingState: [],
+        _adoptedNodes: [],
         _syncQueued: false,
         init() {
             if (!isIMDbHost() || getPageSurface() !== 'title') return;
             const isCurrent = createFeatureGuard(this);
-            this._nativeRatingState = [];
+            this._adoptedNodes = [];
             const mount = () => {
                 if (!isCurrent()) return false;
                 const surface = ensureEditorialSurface();
@@ -3002,16 +3003,24 @@ html[data-imdb-enhanced="active"] .ipc-page-background {
                         appendTitleStackItem(node, Number.isFinite(order) ? order : fallback);
                     });
                     pruneTitleStack();
+                    const adopt = (node, host) => {
+                        if (!node || !host || host.contains(node)) return;
+                        if (!this._adoptedNodes.some(state => state.node === node)) {
+                            this._adoptedNodes.push({ node, parent:node.parentElement });
+                        }
+                        host.appendChild(node);
+                    };
                     [
                         document.querySelector('[data-testid="hero-rating-bar__aggregate-rating"]'),
                         document.querySelector('[data-testid="hero-rating-bar__popularity"]'),
-                    ].forEach(node => {
-                        if (!node || rail.contains(node)) return;
-                        if (!this._nativeRatingState.some(state => state.node === node)) {
-                            this._nativeRatingState.push({ node, parent:node.parentElement });
-                        }
-                        rail.appendChild(node);
-                    });
+                    ].forEach(node => adopt(node, rail));
+                    /* IMDb's own hero player is core media, not chrome — hiding the
+                       native hero would take it off the page entirely, and the Trailer
+                       popover is a separate opt-in that fetches a guessed match from
+                       YouTube rather than playing this clip. */
+                    adopt(
+                        document.querySelector('[data-testid="inline-video-playback-container"]'),
+                        surface.querySelector('#enh-editorial-media-slot'));
                     document.querySelectorAll('.enh-score-widget').forEach(widget => {
                         if (!rail.contains(widget)) rail.appendChild(widget);
                     });
@@ -3038,7 +3047,7 @@ html[data-imdb-enhanced="active"] .ipc-page-background {
             this._sync = null;
             this._syncQueued = false;
             this._nativeHero?.classList.remove('enh-editorial-native-hidden');
-            this._nativeRatingState.forEach(({ node, parent }) => {
+            this._adoptedNodes.forEach(({ node, parent }) => {
                 if (node?.isConnected && parent?.isConnected && !parent.contains(node)) parent.appendChild(node);
             });
 
@@ -3065,7 +3074,7 @@ html[data-imdb-enhanced="active"] .ipc-page-background {
             });
             this._surface = null;
             this._nativeHero = null;
-            this._nativeRatingState = [];
+            this._adoptedNodes = [];
             pruneTitleStack();
         }
     });
@@ -6523,6 +6532,16 @@ section[data-testid="hero-parent"].enh-editorial-native-hidden { display: none !
 }
 .enh-editorial-watch__header { display: flex; flex-wrap: wrap; align-items: baseline; gap: 10px; margin-bottom: 16px; }
 .enh-editorial-watch__header p { margin: 0; color: ${t.tx3}; font: 500 12px/1.4 -apple-system, BlinkMacSystemFont, 'Segoe UI', sans-serif; }
+/* Holds IMDb's own hero player once the native hero is hidden. Collapses to nothing
+   on titles that have no video, so it never leaves a gap. */
+#enh-editorial-media-slot:empty { display: none; }
+#enh-editorial-media-slot {
+    max-width: 560px; margin: 16px 0 4px;
+    border: 1px solid ${t.bd1}; border-radius: 10px; overflow: hidden; background: ${t.sf1};
+}
+#enh-editorial-media-slot > * { width: 100% !important; max-width: 100% !important; display: block; }
+#enh-editorial-media-slot video,
+#enh-editorial-media-slot iframe { width: 100%; height: auto; display: block; }
 .enh-editorial-synopsis { max-width: 720px; margin: 14px 0 18px; color: ${t.tx1}; font: 400 15px/1.6 -apple-system, BlinkMacSystemFont, 'Segoe UI', sans-serif; }
 .enh-editorial-detail-row {
     display: flex; flex-wrap: wrap; align-items: baseline; gap: 8px;
