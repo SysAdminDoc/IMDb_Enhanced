@@ -4,6 +4,8 @@
 
 ### Added
 
+- README documents the project's trust posture — no telemetry, no runtime dependencies, no remote code, unminified source, local-only storage — states exactly which cross-origin lookups happen and why, and explains how to verify that a shipped build matches its tag. A test fails if a dependency is ever added, so the claims cannot quietly go stale.
+
 - Windows High Contrast and "increase contrast" are honoured. Forced colours previously removed the focus rings entirely and left rating colours to be substituted arbitrarily; controls now keep a system-coloured outline, heatmap and rating chips stay legible with a visible border, and a request for more contrast replaces the translucent surfaces with opaque ones.
 
 - Settings now carry a schema version, with one ordered place for future migrations to live. Backups record the schema they were written against, and a backup from a newer version is refused with an explanation instead of being partially applied — previously an unrecognized shape would have been quietly replaced by its default.

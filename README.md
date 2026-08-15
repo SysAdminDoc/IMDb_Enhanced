@@ -139,6 +139,27 @@ The redesigned visual reference set covers every menu page: [Experience](design/
 |---|---|---|---|---|
 | Deep charcoal surfaces | True black backgrounds | Navy blue tones | Clean white | Maximum-contrast black and yellow |
 
+## Privacy and trust
+
+- **No telemetry, ever.** Nothing is transmitted to any IMDb Enhanced service, because there isn't one. There are no analytics, no error reporting, no accounts, and no remote configuration. Settings → Data can copy a diagnostics report for a bug report, and that report only reaches your clipboard.
+- **No runtime dependencies.** The userscript is one file with zero third-party libraries, and the extension builds are generated from it using only the Node standard library. Nothing is fetched at install or at runtime to make the project work.
+- **No remote code.** Everything that executes ships in the file you installed. Nothing is `eval`'d and no script is loaded from a CDN, which is also what keeps the extension builds compliant with Chrome Web Store and AMO policy.
+- **Unminified and readable.** The shipped userscript is the source. You can read every line of what you are running.
+- **Local-only storage.** Preferences, private Seen/Skip marks, and cached lookups live in your userscript manager or `chrome.storage.local`. Integration credentials for Radarr, Sonarr, Overseerr, Plex, Jellyfin, and Emby are restricted to `localhost`/`127.0.0.1` and are sent only to those services, as request headers rather than in URLs.
+- **What does leave your browser:** anonymous, cookie-free lookups to Rotten Tomatoes, Metacritic, Letterboxd, JustWatch, YouTube, and Wikidata, made only for the title you are looking at and only for the score sources you have enabled. Each one is cached locally so a repeat visit makes no request at all. Turn a source off and it is never contacted.
+
+### Verifying a build
+
+Both extension builds are generated deterministically from the userscript, so you can confirm that a build matches the source:
+
+```bash
+git checkout v<version>
+npm run build:extension        # regenerates extension/
+git status --short             # no output means the shipped build matches the tag
+```
+
+`extension/content.js`, `extension/boot.css`, and `extension/manifest.json` are committed, so any difference between a release artifact and a rebuild from its tag shows up as a diff.
+
 ## Compatibility
 
 - Desktop `www.imdb.com` title, person, list/watchlist, chart, and episode-list routes, including localized desktop paths.
