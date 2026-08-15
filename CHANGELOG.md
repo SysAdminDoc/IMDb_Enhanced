@@ -4,6 +4,11 @@
 
 ### Fixed
 
+- Toggling Spoiler blur now blurs or reveals episode synopses immediately instead of waiting for a reload.
+- A title containing a rating word — "PG: Psycho Goreman" — no longer reports a fabricated certificate. Certifications come from the element IMDb publishes them in, and are omitted when there is none.
+- Long synopses end on a word boundary with an ellipsis rather than being cut mid-word, and an ellipsized title exposes its full text on hover.
+- The list-page search buttons, Servarr actions, "More watch options" disclosure, and saved-mark Open links use the same focus ring as every other control.
+- Feature descriptions on the Experience page are available to screen readers and as tooltips again; they were hidden outright to keep the cards dense.
 - The Firefox build no longer assumes browser APIs return promises. Gecko's `chrome.*` alias is callback-style, so the storage preload and the ad-rule sync could fail there; both now use the callback form both engines accept.
 - Dropped the `www.metacritic.com` host permission and proxy entry, which nothing ever requested. Lookups go to `backend.metacritic.com`.
 - Extension build: IMDb no longer flashes its ad placeholders and default light chrome before the extension's styles load. The bridge has to await browser storage, which pushed everything past first paint; the anti-flash rules now ship as a stylesheet the browser applies synchronously, gated by an attribute cleared as soon as settings are known (or by a timeout, so a storage failure can never leave the page hidden).
@@ -27,6 +32,9 @@
 
 ### Changed
 
+- Renamed the research region from "Where to watch" to "Reviews & research", which is what it contains — the watch destinations sit beside it.
+- Collapsible sections only give a containing block to the sections they decorate, instead of every section on the page.
+- Media-server status pills derive their colours from the active theme instead of fixed values, and stylesheets for two replaced components were removed.
 - Dynamic ad rules are now removed across a reserved id band, so a rule dropped in a future release cannot linger on existing installs.
 - `npm version` stages the README badge it rewrites, and version sync fails loudly instead of reporting success when a string no longer matches.
 

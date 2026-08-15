@@ -733,10 +733,16 @@
         if (type) values.push(type);
         const year = getTitleYear();
         if (year) values.push(year);
-        const nativeMeta = document.querySelector('[data-testid="hero__pageTitle"]')?.textContent || '';
-        const contentRating = typeof ld?.contentRating === 'string'
+        /* The fallback used to match a rating pattern against the page heading, which
+           is the title text — so "PG: Psycho Goreman" reported a PG certificate. Read
+           the element IMDb actually publishes it in, and show nothing when there is
+           none rather than inferring one. */
+        const publishedRating = document.querySelector(
+            'section[data-testid="hero-parent"] a[href*="parentalguide"]'
+        )?.textContent?.trim() || '';
+        const contentRating = typeof ld?.contentRating === 'string' && ld.contentRating.trim()
             ? ld.contentRating.trim()
-            : nativeMeta.match(/\b(?:TV-Y|TV-Y7|TV-G|TV-PG|TV-14|TV-MA|G|PG|PG-13|R|NC-17)\b/i)?.[0] || '';
+            : (/^(?:TV-Y7|TV-Y|TV-G|TV-PG|TV-14|TV-MA|NC-17|PG-13|G|PG|R)$/i.test(publishedRating) ? publishedRating : '');
         if (contentRating) values.push(contentRating);
         const duration = String(ld?.duration || '').match(/^PT(?:(\d+)H)?(?:(\d+)M)?$/i);
         if (duration) {
@@ -748,13 +754,22 @@
         return values;
     }
 
+    /* A hard slice ends mid-word with no sign that anything was removed. */
+    function truncateAtWord(text, limit) {
+        const value = String(text || '');
+        if (value.length <= limit) return value;
+        const cut = value.slice(0, limit);
+        const boundary = cut.lastIndexOf(' ');
+        return `${(boundary > limit * 0.6 ? cut.slice(0, boundary) : cut).replace(/[\s,;:.]+$/, '')}…`;
+    }
+
     function getEditorialSynopsis() {
         const plot = document.querySelector('[data-testid="plot-l"], [data-testid="plot-xl"], [data-testid="plot"]');
         const visible = plot?.textContent?.replace(/\s+/g, ' ').trim();
-        if (visible) return visible.slice(0, 900);
+        if (visible) return truncateAtWord(visible, 900);
         try {
             const description = String(getLDData()?.description || '').replace(/\s+/g, ' ').trim();
-            return description.slice(0, 900);
+            return truncateAtWord(description, 900);
         } catch { return ''; }
     }
 
@@ -818,7 +833,7 @@
         }
 
         const identity = makeEl('div', { className:'enh-editorial-identity' },
-            makeEl('h1', { className:'enh-editorial-title' }, title),
+            makeEl('h1', { className:'enh-editorial-title', title }, title),
             makeEl('div', { className:'enh-editorial-meta' }, getEditorialMetadata().join('  ·  ')),
             makeEl('div', { id:'enh-editorial-action-slot' }),
             makeEl('div', { id:'enh-editorial-standalone-slot' })
@@ -856,8 +871,8 @@
             'aria-labelledby':'enh-editorial-watch-title',
         },
             makeEl('div', { className:'enh-editorial-watch__header' },
-                makeEl('h2', { id:'enh-editorial-watch-title' }, 'Where to watch'),
-                makeEl('p', {}, 'Reviews, availability, trailers and research')
+                makeEl('h2', { id:'enh-editorial-watch-title' }, 'Reviews & research'),
+                makeEl('p', {}, 'Scores, availability and reference')
             ),
             makeEl('div', { id:'enh-editorial-research-slot' })
         );
@@ -873,6 +888,8 @@
         const titleNode = surface.querySelector('.enh-editorial-title');
         if (title && titleNode && titleNode.textContent !== title) {
             titleNode.textContent = title;
+            // The heading is ellipsized on desktop, so the full text has to stay readable.
+            titleNode.title = title;
             surface.setAttribute('aria-label', `${title} title surface`);
             const poster = surface.querySelector('.enh-editorial-poster img');
             if (poster) poster.alt = `${title} poster`;
@@ -4458,7 +4475,7 @@ section[id*="quote" i] .ipc-list-card { padding: 4px 0 !important; margin: 2px 0
                 .enh-collapse-btn:hover{background:${t.sf2};border-color:${t.accentBorder};color:${t.tx0}}
                 .enh-section--collapsed>*:not(.ipc-title):not(.enh-collapse-btn):not([class*="title"]):not(h3):not(header){display:none!important}
                 .enh-section--collapsed{min-height:auto!important;padding-bottom:12px!important}
-                section[data-testid]{position:relative}
+                ${COLLAPSIBLE_SECTION_IDS.map(id => `section[data-testid="${id}"]`).join(',')}{position:relative}
             `, 'enh-collapsible');
 
             const collapseState = getSectionCollapseState();
@@ -4755,11 +4772,11 @@ section[id*="quote" i] .ipc-list-card { padding: 4px 0 !important; margin: 2px 0
                 const bar = makeEl('section', {
                     id:'enh-external-links',
                     role:'region',
-                    'aria-label':'Where to watch and research',
+                    'aria-label':'Reviews and research',
                 });
                 bar.appendChild(makeEl('div', { className:'enh-external-links__header' },
-                    makeEl('div', { className:'enh-external-links__title' }, 'Where to watch'),
-                    makeEl('div', { className:'enh-external-links__hint' }, 'Reviews, availability, trailers and research')
+                    makeEl('div', { className:'enh-external-links__title' }, 'Reviews & research'),
+                    makeEl('div', { className:'enh-external-links__hint' }, 'Scores, availability and reference')
                 ));
                 const externalGroups = makeEl('div', { className:'enh-external-groups' });
                 groupSitesByCategory(links).forEach(groupData => {
@@ -5417,15 +5434,6 @@ section[id*="quote" i] .ipc-list-card { padding: 4px 0 !important; margin: 2px 0
                         font: 700 10px/1 -apple-system, BlinkMacSystemFont, 'Segoe UI', sans-serif;
                         letter-spacing: .08em; color: ${t.tx3};
                     }
-                    .enh-servarr-status {
-                        display: inline-flex; align-items: center; gap: 5px;
-                        font: 700 11px/1 -apple-system, BlinkMacSystemFont, 'Segoe UI', sans-serif;
-                        color: ${t.green}; padding: 0 4px;
-                    }
-                    .enh-servarr-status--dot {
-                        width: 8px; height: 8px; border-radius: 50%; background: ${t.green};
-                        box-shadow: 0 0 6px ${t.green};
-                    }
                     .enh-servarr-btn {
                         display: inline-flex; align-items: center; justify-content: center;
                         min-height: 28px; padding: 0 11px; border-radius: 7px;
@@ -5649,10 +5657,18 @@ section[id*="quote" i] .ipc-list-card { padding: 4px 0 !important; margin: 2px 0
                     .enh-media-server-pill__dot {
                         width: 8px; height: 8px; border-radius: 50%; background: ${t.tx3};
                     }
-                    .enh-media-server-pill--found { color: ${t.green}; border-color: rgba(34,197,94,.35); background: rgba(34,197,94,.08); }
+                    .enh-media-server-pill--found {
+                        color: ${t.green};
+                        border-color: color-mix(in srgb, ${t.green} 35%, transparent);
+                        background: color-mix(in srgb, ${t.green} 12%, transparent);
+                    }
                     .enh-media-server-pill--found .enh-media-server-pill__dot { background: ${t.green}; box-shadow: 0 0 6px ${t.green}; }
                     .enh-media-server-pill--missing { color: ${t.tx3}; }
-                    .enh-media-server-pill--error { color: ${t.red}; border-color: rgba(239,68,68,.35); background: rgba(239,68,68,.08); }
+                    .enh-media-server-pill--error {
+                        color: ${t.red};
+                        border-color: color-mix(in srgb, ${t.red} 35%, transparent);
+                        background: color-mix(in srgb, ${t.red} 12%, transparent);
+                    }
                     .enh-media-server-pill--error .enh-media-server-pill__dot { background: ${t.red}; }
                 `, 'enh-mediaServerIntegration');
 
@@ -6927,7 +6943,6 @@ section[data-testid="hero-parent"].enh-editorial-native-hidden { display: none !
 .enh-score-widget__score--availability {
     justify-content: center; max-width: 100%;
 }
-.enh-score-widget__icon { font-size: 18px; }
 .enh-score-widget__value { color: var(--score-color, ${t.tx2}); }
 .enh-score-widget__value--availability {
     max-width: 150px; white-space: normal; text-align: left;
@@ -7140,7 +7155,13 @@ section[data-testid="hero-parent"].enh-editorial-native-hidden { display: none !
 .enh-settings-row-copy { display: flex; flex-direction: column; gap: 3px; min-width: 0; }
 .enh-settings-help { font-size: 10px; line-height: 1.35; color: ${t.tx3}; max-width: 420px; }
 .enh-settings-card--compact .enh-settings-row { min-height: 42px; padding: 6px 0; }
-.enh-settings-card--compact .enh-settings-help { display: none; }
+.enh-settings-card--compact .enh-settings-help,
+.enh-settings-page--experience .enh-settings-help {
+    /* Hidden from view to keep these dense cards short, but still reachable: the row
+       carries it as a tooltip and each toggle points at it with aria-describedby. */
+    position: absolute; width: 1px; height: 1px; padding: 0;
+    overflow: hidden; clip-path: inset(50%); white-space: nowrap;
+}
 
 /* Toggle switch */
 .enh-toggle { position: relative; width: 40px; height: 22px; flex-shrink: 0; }
@@ -7181,7 +7202,6 @@ section[data-testid="hero-parent"].enh-editorial-native-hidden { display: none !
 .enh-theme-auto-row { margin-top: 14px; padding-top: 14px; border-top: 1px solid ${t.bd0}; }
 .enh-settings-page--experience .enh-settings-card { padding: 18px; }
 .enh-settings-page--experience .enh-settings-card--compact .enh-settings-row { min-height: 45px; padding: 6px 0; }
-.enh-settings-page--experience .enh-settings-help { display: none; }
 .enh-settings-page--experience .enh-settings-grid--experience { gap: 14px; }
 
 .enh-score-preview { display: grid; grid-template-columns: repeat(5, minmax(0, 1fr)); }
@@ -7478,6 +7498,10 @@ section[data-testid="hero-parent"].enh-editorial-native-hidden { display: none !
     box-shadow: ${t.sh3};
 }
 .enh-search-btn:focus-visible,
+.enh-multi-search-btn:focus-visible,
+.enh-servarr-btn:focus-visible,
+.enh-watch-options__summary:focus-visible,
+.enh-mark-row__link:focus-visible,
 .enh-ext-link:focus-visible,
 .enh-editorial-action:focus-visible,
 .enh-editorial-subnav__link:focus-visible,
@@ -8261,14 +8285,20 @@ section[data-testid="hero-parent"].enh-editorial-native-hidden { display: none !
             )
         );
         const makeFeatureRow = feature => {
-            const row = makeEl('div', { className:'enh-settings-row' },
+            const detail = FEATURE_DETAILS[feature.key] || '';
+            const helpId = `enh-help-${feature.key}`;
+            const row = makeEl('div', { className:'enh-settings-row', ...(detail ? { title:detail } : {}) },
                 makeEl('div', { className:'enh-settings-row-copy' },
                     makeEl('span', { className:'enh-settings-label' }, feature.name),
-                    makeEl('span', { className:'enh-settings-help' }, FEATURE_DETAILS[feature.key] || '')
+                    makeEl('span', { className:'enh-settings-help', id:helpId }, detail)
                 )
             );
             const toggle = makeEl('label', { className:'enh-toggle' });
-            const input = makeEl('input', { type:'checkbox', 'aria-label':feature.name });
+            const input = makeEl('input', {
+                type:'checkbox',
+                'aria-label':feature.name,
+                ...(detail ? { 'aria-describedby':helpId } : {}),
+            });
             input.checked = get(feature.key);
             input.addEventListener('change', () => {
                 const enabled = input.checked;
@@ -8281,12 +8311,17 @@ section[data-testid="hero-parent"].enh-editorial-native-hidden { display: none !
                 } else if (!enabled) {
                     stopFeature(feature);
                 }
+                (FEATURE_DEPENDENTS[feature.key] || []).forEach(refreshFeature);
                 markSaved();
             });
             toggle.append(input, makeEl('span', { className:'enh-toggle-track' }));
             row.appendChild(toggle);
             return row;
         };
+        /* tvEpisodeTools reads spoilerBlur at run time to decide whether to blur
+           episode synopses, so toggling that setting has to restart it — otherwise the
+           change only appears after a reload. */
+        const FEATURE_DEPENDENTS = { spoilerBlur:['tvEpisodeTools'] };
         const makeFeatureCard = (title, description, badge, keys, compact = false) => {
             const card = makeCard(title, description, badge);
             if (compact) card.classList.add('enh-settings-card--compact');

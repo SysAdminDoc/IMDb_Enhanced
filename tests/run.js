@@ -81,6 +81,7 @@ function loadScriptTestHooks() {
         getListTitlesFromLinks,
         buildListSearchEntries,
         getEnhancementScrollBehavior,
+        truncateAtWord,
         applyThemeStyles,
         setupThemeAutoSync,
         THEMES,
@@ -987,7 +988,11 @@ test('editorial title surface keeps primary actions and configurable destination
     assert(script.includes("id:'enh-editorial-actions'"), 'title actions should have a dedicated editorial dock');
     assert(script.includes("enh-search-btn enh-search-btn--primary"), 'watch destinations should expose one primary action');
     assert(script.includes("className:'enh-watch-options'"), 'secondary watch destinations should stay available in a disclosure');
-    assert(script.includes("'aria-label':'Where to watch and research'"), 'research links should expose a named category surface');
+    /* The region is named for what it holds — its defaults are Rotten Tomatoes,
+       Letterboxd, TMDB, Wikipedia and Trakt, so "Where to watch" described the
+       neighbouring watch section instead. */
+    assert(script.includes("'aria-label':'Reviews and research'"), 'research links should expose a named category surface');
+    assert(!/'Where to watch'/.test(script), 'the research region must not reuse the watch section heading');
     assert(script.includes("textContent:s.label"), 'section navigation should show readable labels instead of cryptic glyphs');
     assert(script.includes("candidate.closest?.('[id^=\"enh-\"]')"), 'native action discovery should not recurse into enhancement controls');
     assert(script.includes("editorialActions.appendChild(btn)"), 'the trailer action should join the editorial action dock when available');
@@ -1285,6 +1290,51 @@ test('core features remain registered', () => {
         'themeAuto',
         'cacheGC',
     ].forEach(token => assert(script.includes(token), `${token} missing`));
+});
+
+test('polish: focus rings, scoped layout rules, and reachable help copy', () => {
+    const focusStart = script.indexOf('.enh-search-btn:focus-visible');
+    const focusBlock = script.slice(focusStart, script.indexOf('@media (prefers-reduced-motion', focusStart));
+    ['.enh-multi-search-btn', '.enh-servarr-btn', '.enh-watch-options__summary', '.enh-mark-row__link']
+        .forEach(selector => assert(focusBlock.includes(`${selector}:focus-visible`), `${selector} needs the shared focus ring`));
+
+    /* The collapse button is absolutely positioned inside nine known sections; the rule
+       used to give every section[data-testid] on the page a containing block. */
+    assert(!/^\s*section\[data-testid\]\{position:relative\}/m.test(script), 'the containing block must not apply page-wide');
+    assert(script.includes('COLLAPSIBLE_SECTION_IDS.map(id => `section[data-testid="${id}"]`)'), 'it should be generated from the id list');
+
+    // Density is fine; hiding the copy from assistive technology as well is not.
+    assert(!/\.enh-settings-card--compact \.enh-settings-help \{ display: none; \}/.test(script), 'help copy must stay in the accessibility tree');
+    assert(script.includes("'aria-describedby':helpId"), 'each toggle should point at its description');
+    assert(/className:'enh-settings-row', \.\.\.\(detail \? \{ title:detail \}/.test(script), 'the row should carry the description as a tooltip');
+
+    // Status pills derive both surface and foreground from the theme, like every peer.
+    assert(!/rgba\(34,197,94/.test(script) && !/rgba\(239,68,68/.test(script), 'status pills must not hardcode colours');
+
+    // Replaced components should not keep shipping their stylesheets.
+    assert(!script.includes('.enh-servarr-status'), 'dead servarr status rules should be gone');
+    assert(!script.includes('.enh-score-widget__icon'), 'dead score icon rule should be gone');
+});
+
+test('polish: truncation, certifications, and dependent settings', () => {
+    const hooks = loadScriptTestHooks();
+
+    // A hard slice ended mid-word with no sign that anything had been removed.
+    assert.strictEqual(hooks.truncateAtWord('short text', 900), 'short text');
+    const long = 'word '.repeat(400).trim();
+    const cut = hooks.truncateAtWord(long, 900);
+    assert(cut.length <= 901 && cut.endsWith('…'), 'a truncated synopsis should be marked');
+    assert(!/\s…$/.test(cut) && !cut.includes('wor…'), 'truncation should land on a word boundary');
+    assert(script.includes("className:'enh-editorial-title', title }"), 'an ellipsized heading needs its full text available');
+
+    /* The certification fallback matched a rating pattern against the page heading,
+       which is the title — so a title containing "PG" reported a PG certificate. */
+    assert(!/nativeMeta\.match/.test(script), 'the title-text rating fallback must be gone');
+    assert(script.includes("a[href*=\"parentalguide\"]"), 'certifications should come from the element IMDb publishes them in');
+
+    // A setting another feature reads at run time has to restart that feature.
+    assert(script.includes("const FEATURE_DEPENDENTS = { spoilerBlur:['tvEpisodeTools'] };"), 'spoiler blur should declare its dependent');
+    assert(script.includes('(FEATURE_DEPENDENTS[feature.key] || []).forEach(refreshFeature);'), 'toggling must refresh dependents');
 });
 
 test('the editorial layout keeps IMDb\'s own hero video', () => {
