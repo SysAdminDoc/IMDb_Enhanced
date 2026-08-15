@@ -457,6 +457,17 @@ test('settings carry a schema version that gates migration and import', () => {
         /newer version/i,
         'a newer backup must be refused rather than partially applied');
 
+    /* First real use of the hook: a retired feature's preference is deleted rather
+       than orphaned in storage, where export would carry it forever. */
+    const upgrading = loadScriptTestHooks();
+    upgrading.seedRawStorage('imdb_enh_ratingHistogram', true);
+    upgrading.seedStoredSetting('settingsSchemaVersion', 1);
+    upgrading.runSettingsMigrations();
+    assert.strictEqual(upgrading.getStoredSetting('settingsSchemaVersion'), 2,
+        'a pending migration advances the stored version');
+    assert(!upgrading.getStorageKeys().includes('imdb_enh_ratingHistogram'),
+        'the retired preference must be removed by the migration');
+
     // Its own export still round-trips, and the marker is not treated as a setting.
     const prepared = hooks.prepareSettingsImport(backup);
     assert.strictEqual(prepared.ignored, 0, 'the schema marker must not count as an unrecognized field');
@@ -582,6 +593,11 @@ test('the unweighted mean is derived from histogram buckets', () => {
     assert(hooks.shouldInitFeature({ key:'ratingGap', group:'Scores' }), 'the gap belongs on the ratings route');
     hooks.setTestPath('/title/tt0133093/');
     assert(!hooks.shouldInitFeature({ key:'ratingGap', group:'Scores' }), 'title pages carry no distribution to compare');
+    /* The standalone chart is retired: IMDb stopped publishing the distribution on
+       title pages, and draws its own chart where the data moved. */
+    assert(!/key: 'ratingHistogram'/.test(script), 'the retired widget must no longer be registered');
+    assert(/to: 2,\s*run\(\) \{ GM_deleteValue\(`\$\{PREFIX\}ratingHistogram`\); \}/.test(script),
+        'its stored preference must be migrated away, not orphaned');
     assert(/sits 0\.5 below it/.test(hooks.describeRatingGap(9.0, 8.5)), 'a negative gap reads as weighting below');
     assert(/same as the displayed rating/.test(hooks.describeRatingGap(8.0, 8.0)), 'no gap says so plainly');
     assert.strictEqual(hooks.describeRatingGap(null, 8.7), null, 'no unweighted mean means no claim');
@@ -664,7 +680,10 @@ test('rating histogram extraction is bounded and normalizes a 1-10 distribution'
         'histogram discovery should not inspect scripts beyond its finite budget'
     );
     assert(/function findHistogramData[\s\S]*?appendBoundedObjectChildren\(queue, node, maxNodes\)/.test(script), 'histogram traversal must not materialize every child before slicing');
-    assert(script.includes("'aria-label':'IMDb vote distribution from 1 to 10'"), 'histogram should expose its meaning to assistive technology');
+    /* The standalone chart is retired; the distribution now reaches users as the
+       weighted-vs-unweighted comparison, which must still carry its own meaning. */
+    assert(script.includes("makeEl('div', { id:'enh-rating-gap', role:'note' }"),
+        'the rating comparison should expose itself as a note to assistive technology');
 });
 
 test('fragile selectors and global Cineby key stay removed', () => {

@@ -193,7 +193,7 @@
         collapsibleSections: true, sectionCollapseState: {}, spoilerBlur: false, quickNav: true,
         // Scores
         inlineRTScore: true, inlineLetterboxdScore: true, inlineMetacriticScore: true,
-        ratingHistogram: true, streamAvailability: true,
+        streamAvailability: true,
         // Links
         searchButtons: true, externalLinks: true, expandedLinkMenu: true,
         trailerPopover: true,
@@ -251,7 +251,6 @@
         collapsibleSections: 'Adds per-section collapse controls and remembers each state.',
         spoilerBlur: 'Softens long plot text until you intentionally reveal it.',
         quickNav: 'Adds a right-side section navigator on wide screens.',
-        ratingHistogram: 'Shows a compact 1-10 vote distribution bar chart beside the IMDb rating.',
         inlineRTScore: 'Shows Rotten Tomatoes score feedback inline when available.',
         inlineLetterboxdScore: 'Shows Letterboxd average ratings inline for films when available.',
         inlineMetacriticScore: 'Shows Metacritic score feedback inline when available.',
@@ -348,9 +347,19 @@
        Adding a migration: bump SETTINGS_SCHEMA_VERSION and append { to, run } here. run()
        may throw — the version is only advanced once every pending step has succeeded, so
        a failed migration is retried on the next load rather than skipped. */
-    const SETTINGS_SCHEMA_VERSION = 1;
+    const SETTINGS_SCHEMA_VERSION = 2;
     const SETTINGS_SCHEMA_KEY = 'settingsSchemaVersion';
-    const SETTINGS_MIGRATIONS = [];
+    const SETTINGS_MIGRATIONS = [
+        {
+            /* v2: the standalone vote-distribution chart is retired. IMDb stopped
+               publishing the distribution on title pages, where the widget lived, and
+               draws its own chart on the ratings tab, where the data moved — so the
+               widget had nowhere left to be useful. Its preference is deleted rather
+               than left behind as an orphan key that export would carry forever. */
+            to: 2,
+            run() { GM_deleteValue(`${PREFIX}ratingHistogram`); },
+        },
+    ];
 
     function readSettingsSchemaVersion() {
         const stored = Number(GM_getValue(PREFIX + SETTINGS_SCHEMA_KEY, null));
@@ -4179,42 +4188,6 @@ section[id*="quote" i] .ipc-list-card { padding: 4px 0 !important; margin: 2px 0
             .slice(0, STRUCTURED_DATA_SCRIPT_LIMIT);
         return parseHistogramScriptTexts(scripts.map(script => script.textContent));
     }
-
-    reg({
-        key: 'ratingHistogram', name: 'Rating histogram', group: 'Scores',
-        async init() {
-            const isCurrent = createFeatureGuard(this);
-            if (document.getElementById('enh-histogram')) return;
-            const bar = await waitForRatingBar(isCurrent);
-            if (!bar || !isCurrent() || document.getElementById('enh-histogram')) return;
-            const histogram = getHistogramData();
-            if (!histogram?.length) return;
-
-            const maxVotes = Math.max(...histogram.map(bucket => bucket.voteCount), 1);
-            const w = makeEl('div', { id: 'enh-histogram', className: 'enh-score-widget' });
-            const label = makeEl('div', { className: 'enh-score-widget__label' }, 'VOTES');
-            const chart = makeEl('div', {
-                className:'enh-histogram-chart', role:'list',
-                'aria-label':'IMDb vote distribution from 1 to 10',
-            });
-            histogram.forEach(bucket => {
-                const { rating, voteCount:votes } = bucket;
-                const pct = Math.max((votes / maxVotes) * 100, 2);
-                const description = `${rating} out of 10: ${votes.toLocaleString()} votes`;
-                const col = makeEl('div', {
-                    className:'enh-histogram-col', role:'listitem', title:description, 'aria-label':description,
-                },
-                    makeEl('div', { className: 'enh-histogram-bar', style: { height: pct + '%' } }),
-                    makeEl('div', { className: 'enh-histogram-label' }, String(rating))
-                );
-                chart.appendChild(col);
-            });
-            w.appendChild(label);
-            w.appendChild(chart);
-            bar.appendChild(w);
-        },
-        destroy() { document.getElementById('enh-histogram')?.remove(); }
-    });
 
     reg({
         key: 'inlineRTScore', name: 'Rotten Tomatoes scores', group: 'Scores',
@@ -8849,8 +8822,8 @@ section[data-testid="hero-parent"].enh-editorial-native-hidden { display: none !
         )));
         previewCard.appendChild(preview);
         ratingsPage.append(previewCard,
-            makeEl('div', { style:{ marginTop:'12px' } }, makeFeatureCard('Score sources', 'Choose which ratings and availability information to show.', 'Title pages', [
-                'ratingHistogram', 'ratingGap', 'inlineRTScore', 'inlineLetterboxdScore', 'inlineMetacriticScore', 'streamAvailability',
+            makeEl('div', { style:{ marginTop:'12px' } }, makeFeatureCard('Score sources', 'Choose which ratings and availability information to show. The vote-distribution controls apply to a title’s Ratings tab.', 'Title pages', [
+                'ratingGap', 'inlineRTScore', 'inlineLetterboxdScore', 'inlineMetacriticScore', 'streamAvailability',
             ])),
             makeEl('div', { className:'enh-settings-callout', style:{ marginTop:'12px' } },
                 makeEl('strong', {}, 'Privacy'),
@@ -9305,6 +9278,8 @@ section[data-testid="hero-parent"].enh-editorial-native-hidden { display: none !
         if (feature.group === 'Cleanup') return true;
         const surface = getPageSurface();
         // episodeHeatmap would otherwise wait out its selector timeout on every title page.
+        /* ratingGap needs the vote distribution, which IMDb stopped shipping on title
+           pages — verified 2026-08-15 that no script there carries histogramData. */
         if (surface === 'title') return !['watchlistBatch', 'listMultiSearch', 'episodeHeatmap', 'ratingGap'].includes(feature.key);
         if (surface === 'episodes') return EPISODE_LIST_FEATURE_KEYS.has(feature.key);
         if (surface === 'ratings') return RATINGS_FEATURE_KEYS.has(feature.key);

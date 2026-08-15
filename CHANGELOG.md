@@ -6,6 +6,10 @@
 
 - The Ratings tab now compares IMDb's displayed rating with the unweighted mean of the raw votes and says which way the weighting leans. IMDb publishes the unweighted figure there in small type and draws no comparison; a wide gap is the clearest public signal that a title's votes were pushed. Computed from the distribution already on the page — no request. Toggle: Ratings → Score sources.
 
+### Removed
+
+- The standalone vote-distribution chart is retired. It rendered on title pages, and IMDb no longer publishes the distribution there — verified on 2026-08-15 that no script on a title page carries it — so the widget had been shipping enabled while drawing nothing. IMDb draws its own chart on the Ratings tab, where the data moved, so a replacement would only have duplicated it. Its stored preference is removed automatically by a settings migration rather than left behind.
+
 ### Fixed
 
 - The rating distribution is found again on pages that publish it. IMDb's ratings payload is a ~736 KB application-data blob and the distribution sits deeper in it than the parser's traversal budget reached, so it read as absent; the one array is now sliced out by key under its own bound.
