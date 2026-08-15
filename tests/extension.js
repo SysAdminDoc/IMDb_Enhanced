@@ -41,6 +41,16 @@ assert(content.includes('globalThis.GM_xmlhttpRequest'), 'extension bridge must 
 assert(content.includes('chrome.storage.onChanged.addListener'), 'extension bridge must follow storage changes made by other tabs');
 assert(/__state\[key\]\s*=\s*change\.newValue/.test(content), 'storage changes from other tabs must update the bridge mirror');
 assert(content.includes('__pendingChanges'), 'storage changes arriving during the initial read must not be dropped');
+/* Every save-failure path in the userscript keys off GM_setValue throwing, and
+   copyTextToClipboard reports success from its call returning. A swallowed promise
+   rejection turns both into optimistic lies about durable state. */
+assert(content.includes('imdb-enhanced:settings-save-failed'), 'a rejected extension storage write must reach the save-state UI');
+assert(!/chrome\.storage\.local\.(set|remove)\([^)]*\)\.catch\(\(\) => \{\}\)/.test(content), 'extension storage writes must not swallow rejections');
+assert(content.includes('imdb-enhanced:clipboard-failed'), 'a refused clipboard write must be reported rather than dropped');
+assert(!/navigator\.clipboard\.writeText\([^)]*\)\.catch\(\(\) => \{\}\)/.test(content), 'clipboard rejections must not be swallowed');
+/* Five call sites read finalUrl to re-validate a URL after redirects; the bridge
+   previously emitted only the platform-native responseURL, so every one fell back. */
+assert(content.includes('finalUrl:String(response.responseURL'), 'the bridge must expose finalUrl for post-redirect URL validation');
 assert(content.includes("const VERSION = '" + pkg.version + "'"), 'generated content must include the current source');
 assert(!/\beval\s*\(/.test(content), 'MV3 content must not depend on eval');
 assert(background.includes('declarativeNetRequest.updateDynamicRules'), 'background worker must manage dynamic ad rules');

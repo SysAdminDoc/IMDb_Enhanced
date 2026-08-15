@@ -55,20 +55,53 @@ const bridge = String.raw`
     globalThis.GM_getValue = (key, fallback) => Object.prototype.hasOwnProperty.call(__state, key)
         ? __clone(__state[key])
         : __clone(fallback);
+    /* The userscript's whole save-failure layer — trySaveSetting, the settings-import
+       rollback, the "Save failed" header state — keys off GM_setValue throwing. A
+       promise rejection swallowed here would make every one of those paths dead code
+       and let the UI report "Saved" after a quota error. Storage is async, so the
+       rejection is reported two ways: the failure event fires immediately, and the next
+       synchronous write throws so the calling control sees it. */
+    let __writeFailure = null;
+    const __reportWriteFailure = error => {
+        __writeFailure = error instanceof Error ? error : new Error(String(error && error.message || 'Extension storage write failed'));
+        try { document.dispatchEvent(new CustomEvent('imdb-enhanced:settings-save-failed')); }
+        catch { /* the next synchronous write still surfaces it */ }
+    };
+    const __takeWriteFailure = () => {
+        if (!__writeFailure) return;
+        const error = __writeFailure;
+        __writeFailure = null;
+        throw error;
+    };
     globalThis.GM_setValue = (key, value) => {
+        __takeWriteFailure();
         __state[key] = __clone(value);
-        chrome.storage.local.set({ [key]:__state[key] }).catch(() => {});
+        chrome.storage.local.set({ [key]:__state[key] }).catch(__reportWriteFailure);
         if (key === 'imdb_enh_removeAds') __sendAdState(value !== false);
     };
     globalThis.GM_listValues = () => Object.keys(__state);
     globalThis.GM_deleteValue = key => {
+        __takeWriteFailure();
         delete __state[key];
-        chrome.storage.local.remove(key).catch(() => {});
+        chrome.storage.local.remove(key).catch(__reportWriteFailure);
         if (key === 'imdb_enh_removeAds') __sendAdState(true);
     };
+    /* copyTextToClipboard reports success from this call returning, so a rejected
+       write has to be surfaced rather than dropped: the next copy throws, and the
+       toast layer is told about the one that actually failed. */
+    let __clipboardFailure = null;
     globalThis.GM_setClipboard = text => {
         if (!navigator.clipboard?.writeText) throw new Error('Clipboard API unavailable');
-        navigator.clipboard.writeText(String(text ?? '')).catch(() => {});
+        if (__clipboardFailure) {
+            const error = __clipboardFailure;
+            __clipboardFailure = null;
+            throw error;
+        }
+        navigator.clipboard.writeText(String(text ?? '')).catch(error => {
+            __clipboardFailure = error instanceof Error ? error : new Error('Clipboard write was refused');
+            try { document.dispatchEvent(new CustomEvent('imdb-enhanced:clipboard-failed')); }
+            catch { /* the next copy still throws */ }
+        });
     };
     let __requestSequence = 0;
     globalThis.GM_xmlhttpRequest = (options = {}) => {
@@ -99,6 +132,9 @@ const bridge = String.raw`
                     finish(options.onload, {
                         status:Number(response.status) || 0,
                         responseText:String(response.responseText || ''),
+                        // finalUrl is the property every consumer reads; responseURL is
+                        // kept as the platform-native alias.
+                        finalUrl:String(response.responseURL || options.url || ''),
                         responseURL:String(response.responseURL || options.url || ''),
                     });
                     return;

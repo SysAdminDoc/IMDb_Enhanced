@@ -1518,6 +1518,16 @@
         }
     }
 
+    /* Userscript managers write the clipboard synchronously, so a failure is already
+       the thrown value above. The extension build can only learn of a refusal after
+       the call returned true, so it announces the one that actually failed. Host-gated:
+       only IMDb owns this presentation layer, and the Cineby handoff must stay silent. */
+    if (isIMDbHost()) {
+        document.addEventListener('imdb-enhanced:clipboard-failed', () => {
+            showToast('Copy failed. Check this page’s clipboard permission.', 4500);
+        });
+    }
+
     // =========================================================================
     //  ASYNC HTTP
     // =========================================================================

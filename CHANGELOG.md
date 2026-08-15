@@ -4,6 +4,9 @@
 
 ### Fixed
 
+- Extension build: a rejected storage write is no longer silently discarded. Quota or permission failures now reach the "Save failed" state and the settings-import rollback instead of leaving the UI reporting "Saved".
+- Extension build: a refused clipboard write is reported instead of announcing a successful copy.
+- Extension build: cross-origin lookups can validate the URL they were actually redirected to again. The bridge exposed the resolved address under a name none of the five consumers read, so each fell back to the pre-redirect guess.
 - The Overseerr/Jellyseerr Request button works. Its request body was serialized twice, so the instance received a JSON string where it expected an object and rejected every request.
 - Extension build: private Seen/Skip marks are no longer lost when two IMDb tabs are open. The extension mirrored browser storage once at page load and never updated it, so the second tab to save a mark overwrote whatever the first had added. The mirror now follows storage for the life of the page, which also stops a consumed Cineby handoff from blocking later Cineby links in the tab that opened it.
 

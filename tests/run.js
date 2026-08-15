@@ -163,6 +163,8 @@ function loadScriptTestHooks() {
             documentElement: {},
             querySelector: () => null,
             querySelectorAll: () => [],
+            addEventListener: () => {},
+            removeEventListener: () => {},
             dispatchEvent: () => true,
             createElement: tag => {
                 if (tag !== 'textarea') return {};
