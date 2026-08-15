@@ -35,6 +35,12 @@ assert(!manifest.content_scripts[0].matches.includes('https://www.imdb.com/*'), 
 assert(!content.includes('==UserScript=='), 'generated extension content must not retain userscript metadata');
 assert(content.includes('chrome.storage.local.get(null)'), 'extension content must preload extension storage');
 assert(content.includes('globalThis.GM_xmlhttpRequest'), 'extension bridge must provide the shared request API');
+/* The userscript's cross-tab defences (setUserMark's forced re-read, the single-slot
+   Cineby handoff) assume GM_getValue reflects live manager storage. A snapshot silently
+   turns those into no-ops, so the mirror has to track storage for the page lifetime. */
+assert(content.includes('chrome.storage.onChanged.addListener'), 'extension bridge must follow storage changes made by other tabs');
+assert(/__state\[key\]\s*=\s*change\.newValue/.test(content), 'storage changes from other tabs must update the bridge mirror');
+assert(content.includes('__pendingChanges'), 'storage changes arriving during the initial read must not be dropped');
 assert(content.includes("const VERSION = '" + pkg.version + "'"), 'generated content must include the current source');
 assert(!/\beval\s*\(/.test(content), 'MV3 content must not depend on eval');
 assert(background.includes('declarativeNetRequest.updateDynamicRules'), 'background worker must manage dynamic ad rules');
