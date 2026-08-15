@@ -458,6 +458,23 @@ test('settings carry a schema version that gates migration and import', () => {
     assert.strictEqual(prepared.ignored, 0, 'the schema marker must not count as an unrecognized field');
 });
 
+/* Forced colours drop box-shadow outright, so a ring drawn as a shadow vanishes; the
+   product also ships a high-contrast theme, which made the absence of any forced-colors
+   handling the larger gap. */
+test('themes honour forced colours and a request for more contrast', () => {
+    const globalStyles = script.slice(script.indexOf('FOCUS STATES (accessibility)'));
+    const forced = globalStyles.slice(globalStyles.indexOf('@media (forced-colors: active)'));
+    assert(forced.indexOf('outline: 3px solid Highlight') < forced.indexOf('@media (prefers-contrast'),
+        'forced colours must restore a focus ring in a system colour');
+    assert(/box-shadow: none !important/.test(forced.slice(0, forced.indexOf('@media (prefers-contrast'))),
+        'shadow-based decoration must not be relied on under forced colours');
+    assert(/ButtonText !important/.test(forced.slice(0, forced.indexOf('@media (prefers-contrast'))),
+        'rating and heatmap colours must stay legible against a substituted palette');
+    const contrast = globalStyles.slice(globalStyles.indexOf('@media (prefers-contrast: more)'));
+    assert(/backdrop-filter: none !important/.test(contrast.slice(0, 400)),
+        'a request for more contrast must drop the glass surfaces');
+});
+
 test('IMDb title data selection ignores unrelated or malformed structured data', () => {
     const hooks = loadScriptTestHooks();
     const selected = hooks.parseIMDbTitleStructuredData([

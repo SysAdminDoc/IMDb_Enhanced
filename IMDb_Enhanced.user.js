@@ -2968,6 +2968,42 @@ a:focus-visible, button:focus-visible, .ipc-chip:focus-visible {
     outline-offset: 2px !important;
 }
 
+/* Windows High Contrast substitutes the whole palette and drops box-shadow, so any
+   ring drawn as a shadow disappears entirely. Every control below therefore also
+   carries an outline in a system colour, and decorative surfaces step out of the way
+   rather than competing with the user's chosen scheme. */
+@media (forced-colors: active) {
+    a:focus-visible, button:focus-visible, .ipc-chip:focus-visible,
+    [id^="enh-"] a:focus-visible, [id^="enh-"] button:focus-visible,
+    [class^="enh-"]:focus-visible, [class*=" enh-"]:focus-visible {
+        outline: 3px solid Highlight !important;
+        outline-offset: 2px !important;
+    }
+    [id^="enh-"], [class^="enh-"], [class*=" enh-"] {
+        forced-color-adjust: auto;
+        text-shadow: none !important;
+        box-shadow: none !important;
+    }
+    /* Rating and heatmap colours are data, not decoration — keep them legible by
+       letting the system pick the pair rather than forcing our own. */
+    td.enh-heatmap-cell a, .enh-heatmap-chip, #enh-rating-badge {
+        background: ButtonFace !important;
+        color: ButtonText !important;
+        border: 1px solid ButtonText !important;
+    }
+}
+
+/* Users asking for more contrast get the tested opaque path rather than glass. */
+@media (prefers-contrast: more) {
+    [id^="enh-"], [class^="enh-"], [class*=" enh-"] {
+        backdrop-filter: none !important;
+        -webkit-backdrop-filter: none !important;
+    }
+    a:focus-visible, button:focus-visible, .ipc-chip:focus-visible {
+        outline-width: 3px !important;
+    }
+}
+
 @media (prefers-reduced-motion: reduce) {
     html { scroll-behavior: auto !important; }
     *, *::before, *::after {

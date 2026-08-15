@@ -4,6 +4,8 @@
 
 ### Added
 
+- Windows High Contrast and "increase contrast" are honoured. Forced colours previously removed the focus rings entirely and left rating colours to be substituted arbitrarily; controls now keep a system-coloured outline, heatmap and rating chips stay legible with a visible border, and a request for more contrast replaces the translucent surfaces with opaque ones.
+
 - Settings now carry a schema version, with one ordered place for future migrations to live. Backups record the schema they were written against, and a backup from a newer version is refused with an explanation instead of being partially applied — previously an unrecognized shape would have been quietly replaced by its default.
 
 - The Ratings tab of a TV series now colour-grades IMDb's own season-by-episode grid and adds a season-average strip and a colour key. IMDb renders the whole series in one table but leaves every cell the same colour; this needs no network request at all. Series pages gain a "Ratings Grid" quick link to it. Toggle: Tools -> TV.
