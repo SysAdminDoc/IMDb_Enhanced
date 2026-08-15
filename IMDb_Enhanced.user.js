@@ -190,7 +190,7 @@
         themeVariant: 'dark', // dark | oled | midnight | light | highContrast
         themeAuto: false,
         // Sections
-        collapsibleSections: true, sectionCollapseState: {}, spoilerBlur: false, quickNav: true,
+        collapsibleSections: true, expandSummaries: false, sectionCollapseState: {}, spoilerBlur: false, quickNav: true,
         // Scores
         inlineRTScore: true, inlineLetterboxdScore: true, inlineMetacriticScore: true,
         streamAvailability: true,
@@ -249,6 +249,7 @@
         widerLayout: 'Uses more horizontal room across normal desktop window sizes.',
         ratingColorCoding: 'Adds a small quality label beside the IMDb score.',
         collapsibleSections: 'Adds per-section collapse controls and remembers each state.',
+        expandSummaries: 'Releases IMDb’s line clamp so long summaries and biographies read in full without a per-block click.',
         spoilerBlur: 'Softens long plot text until you intentionally reveal it.',
         quickNav: 'Adds a right-side section navigator on wide screens.',
         inlineRTScore: 'Shows Rotten Tomatoes score feedback inline when available.',
@@ -4700,6 +4701,33 @@ section[id*="quote" i] .ipc-list-card { padding: 4px 0 !important; margin: 2px 0
         }
     });
 
+    /* IMDb clamps long copy with its ipc-overflowText component — list-card summaries,
+       episode synopses, biographies — and the reveal is a per-block click. Verified
+       2026-08-15 that the title-page plot itself is no longer clamped, so this targets
+       the component that still is, rather than a selector for prose that now fits.
+       Purely a clamp release: it changes no text and leaves spoiler blur intact, since
+       that is a separate filter on the same nodes. */
+    reg({
+        key: 'expandSummaries', name: 'Expand truncated summaries', group: 'Layout',
+        init() {
+            addCSS(`
+                /* The clamp sits on a descendant of the component, not the component
+                   itself — verified on a person page where the bio hid 384px inside
+                   ipc-overflowText--pageSection. Scoped to IMDb's own overflow
+                   component, whose entire purpose is clamping, and never to generated
+                   class names or to ipc-title, whose two-line clamp holds card layout. */
+                .ipc-overflowText,
+                .ipc-overflowText * {
+                    -webkit-line-clamp: unset !important;
+                    line-clamp: unset !important;
+                    max-height: none !important;
+                    overflow: visible !important;
+                }
+            `, 'enh-expandSummaries');
+        },
+        destroy() { removeCSS('enh-expandSummaries'); },
+    });
+
     reg({
         key: 'spoilerBlur', name: 'Spoiler blur on plot', group: 'Layout',
         _plot: null,
@@ -8807,7 +8835,7 @@ section[data-testid="hero-parent"].enh-editorial-native-hidden { display: none !
         ], true));
         experienceGrid.appendChild(makeFeatureCard('Tune the interface', 'Refine how content looks and is presented.', 'Desktop', [
             'modernUI', 'editorialTitleSurface', 'compactHeader', 'enhancedRatingDisplay', 'widerLayout', 'ratingColorCoding',
-            'collapsibleSections', 'spoilerBlur', 'quickNav',
+            'collapsibleSections', 'expandSummaries', 'spoilerBlur', 'quickNav',
         ], true));
         experiencePage.appendChild(experienceGrid);
 
@@ -9244,7 +9272,7 @@ section[data-testid="hero-parent"].enh-editorial-native-hidden { display: none !
         ...UNIVERSAL_FEATURE_KEYS, 'watchlistBatch', 'listMultiSearch', 'watchedMarking',
     ]);
     const SECONDARY_PAGE_FEATURE_KEYS = new Set([
-        ...UNIVERSAL_FEATURE_KEYS, 'collapsibleSections', 'quickNav', 'watchedMarking', 'castAges',
+        ...UNIVERSAL_FEATURE_KEYS, 'collapsibleSections', 'expandSummaries', 'quickNav', 'watchedMarking', 'castAges',
     ]);
     const EPISODE_LIST_FEATURE_KEYS = new Set([
         ...SECONDARY_PAGE_FEATURE_KEYS, 'tvEpisodeTools',

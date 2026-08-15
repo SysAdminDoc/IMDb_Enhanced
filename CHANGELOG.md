@@ -4,6 +4,8 @@
 
 ### Added
 
+- An optional "Expand truncated summaries" toggle (Tools → Layout) releases IMDb's line clamp so long biographies and summaries read in full without a per-block click. Measured on a person page: 384px of hidden biography becomes visible. Scoped to IMDb's own overflow component, so card titles keep the two-line clamp that holds their layout. Off by default.
+
 - The Ratings tab now compares IMDb's displayed rating with the unweighted mean of the raw votes and says which way the weighting leans. IMDb publishes the unweighted figure there in small type and draws no comparison; a wide gap is the clearest public signal that a title's votes were pushed. Computed from the distribution already on the page — no request. Toggle: Ratings → Score sources.
 
 ### Removed
