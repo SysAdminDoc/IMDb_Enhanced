@@ -97,6 +97,10 @@ function loadScriptTestHooks() {
         cacheSet,
         cacheGet,
         cacheGC,
+        resolveExternalIds,
+        CACHE_TTL,
+        CACHE_MAX_TTL,
+        WIKIDATA_ID_TTL,
         computeCurrentAge,
         getUserMarks,
         setUserMark,
@@ -496,6 +500,32 @@ test('Overseerr requests report media state and build valid bodies', () => {
     assert.strictEqual(seerrPayload.mediaType, 'movie');
     assert.strictEqual(seerrPayload.mediaId, 603);
     assert(!/_request[\s\S]{0,400}?body:JSON\.stringify\(body\)/.test(script), 'the Overseerr request must not pre-serialize its body');
+});
+
+test('resolved service identifiers survive their own cache and are fetched once', () => {
+    const hooks = loadScriptTestHooks();
+
+    /* Identifiers outlive scores, so the envelope ceiling has to be the long TTL.
+       Validating against CACHE_TTL made every successful mapping unreadable on the
+       first read back, which turned the lookup into a permanent per-visit request. */
+    assert(hooks.WIKIDATA_ID_TTL > hooks.CACHE_TTL, 'identifier mappings should outlive volatile score data');
+    assert(hooks.WIKIDATA_ID_TTL <= hooks.CACHE_MAX_TTL, 'the identifier TTL must fit inside the envelope ceiling');
+
+    assert(hooks.cacheSet('xid_tt0133093', { rt:'m/matrix' }, hooks.WIKIDATA_ID_TTL), 'the mapping should persist');
+    assert.strictEqual(JSON.stringify(hooks.cacheGet('xid_tt0133093')), JSON.stringify({ rt:'m/matrix' }),
+        'a mapping written with its own TTL must be readable again');
+    assert(hooks.cacheSet('xid_over', { rt:'m/x' }, hooks.CACHE_MAX_TTL + 1), 'an oversized envelope still writes');
+    assert.strictEqual(hooks.cacheGet('xid_over'), null, 'an envelope above the ceiling must still be rejected');
+
+    // Both score features resolve the same title concurrently; that must be one query.
+    const before = hooks.getCapturedRequests().length;
+    const first = hooks.resolveExternalIds('tt1375666');
+    const second = hooks.resolveExternalIds('tt1375666');
+    first.catch(() => {});
+    second.catch(() => {});
+    const issued = hooks.getCapturedRequests().slice(before)
+        .filter(request => String(request.url || '').includes('query.wikidata.org'));
+    assert.strictEqual(issued.length, 1, 'concurrent consumers must share one Wikidata lookup');
 });
 
 test('Wikidata resolves external service IDs without trusting arbitrary values', () => {

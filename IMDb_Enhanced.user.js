@@ -53,7 +53,11 @@
     const PREFIX  = 'imdb_enh_';
     const CINEBY_QUERY_KEY = PREFIX + 'cineby_query';
     const CINEBY_QUERY_TTL = 10 * 60 * 1000;
-    const CACHE_TTL = 7 * 24 * 60 * 60 * 1000; // 7 days
+    const CACHE_TTL = 7 * 24 * 60 * 60 * 1000; // 7 days — default for volatile score data
+    /* Envelope ceiling, not the default. Stable cross-site identifiers are cached far
+       longer than scores; validating them against CACHE_TTL silently discarded every
+       successful Wikidata mapping on the first read back. */
+    const CACHE_MAX_TTL = 30 * 24 * 60 * 60 * 1000; // 30 days
     const CACHE_UNAVAILABLE_TTL = 24 * 60 * 60 * 1000; // 24 hours
     const CACHE_SCHEMA_VERSION = 3;
     const CACHE_MAX_ENTRIES = 120;
@@ -280,7 +284,7 @@
             const ttl = Number(entry?.ttl);
             if (!entry || entry.schema !== CACHE_SCHEMA_VERSION
                 || !Number.isFinite(ts) || ts <= 0 || ts > now + 60000
-                || !Number.isFinite(ttl) || ttl <= 0 || ttl > CACHE_TTL
+                || !Number.isFinite(ttl) || ttl <= 0 || ttl > CACHE_MAX_TTL
                 || now - ts > ttl) return null;
             return { ...entry, ts, ttl };
         } catch { return null; }
@@ -3180,7 +3184,7 @@ section[id*="quote" i] .ipc-list-card { padding: 4px 0 !important; margin: 2px 0
        search into a direct fetch; when Wikidata has no mapping, the validated
        search path still runs unchanged. */
     const WIKIDATA_ENDPOINT = 'https://query.wikidata.org/sparql';
-    const WIKIDATA_ID_TTL = 30 * 24 * 60 * 60 * 1000;
+    const WIKIDATA_ID_TTL = CACHE_MAX_TTL;
     const WIKIDATA_RESPONSE_LIMIT = 256 * 1024;
     const EXTERNAL_ID_PATTERNS = {
         rt: /^(?:m|tv)\/[a-z0-9][a-z0-9_-]{0,120}$/i,
@@ -3226,18 +3230,19 @@ section[id*="quote" i] .ipc-list-card { padding: 4px 0 !important; margin: 2px 0
         return ids;
     }
 
-    async function resolveExternalIds(imdbId, isCurrent = () => true) {
-        const query = buildWikidataIdQuery(imdbId);
-        if (!query) return {};
-        const cacheKey = 'xid_' + imdbId;
-        const cached = cacheGet(cacheKey);
-        if (cached) return cached.unavailable ? {} : cached;
+    /* The score features run in parallel and each resolves the same title, so without
+       this the page issues one identical SPARQL query per consumer. The shared promise
+       deliberately carries no feature guard — identifiers belong to the title, not to
+       whichever widget asked first — and each caller re-checks its own lifecycle after
+       awaiting. */
+    const pendingExternalIdLookups = new Map();
+
+    async function fetchExternalIds(query, cacheKey) {
         try {
             const res = await httpGet(`${WIKIDATA_ENDPOINT}?format=json&query=${encodeURIComponent(query)}`, {
                 headers: { Accept:'application/sparql-results+json' },
                 cancelOnRouteChange: true,
             });
-            if (!isCurrent()) return {};
             const ids = parseWikidataExternalIds(res.responseText);
             if (Object.keys(ids).length) cacheSet(cacheKey, ids, WIKIDATA_ID_TTL);
             else cacheSetUnavailable(cacheKey);
@@ -3245,6 +3250,22 @@ section[id*="quote" i] .ipc-list-card { padding: 4px 0 !important; margin: 2px 0
         } catch {
             return {};
         }
+    }
+
+    async function resolveExternalIds(imdbId, isCurrent = () => true) {
+        const query = buildWikidataIdQuery(imdbId);
+        if (!query) return {};
+        const cacheKey = 'xid_' + imdbId;
+        const cached = cacheGet(cacheKey);
+        if (cached) return cached.unavailable ? {} : cached;
+        let pending = pendingExternalIdLookups.get(imdbId);
+        if (!pending) {
+            pending = fetchExternalIds(query, cacheKey)
+                .finally(() => pendingExternalIdLookups.delete(imdbId));
+            pendingExternalIdLookups.set(imdbId, pending);
+        }
+        const ids = await pending;
+        return isCurrent() ? ids : {};
     }
 
     /* Slugs share prefixes — `movie/the-matrix` is a substring of
