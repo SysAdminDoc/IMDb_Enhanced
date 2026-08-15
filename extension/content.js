@@ -456,6 +456,16 @@
     function cacheSetUnavailable(key) {
         cacheSet(key, { unavailable: true }, CACHE_UNAVAILABLE_TTL);
     }
+    /* Module scope because both the Data page and the diagnostics report need it;
+       it previously lived inside the settings panel closure. */
+    function cacheCount() {
+        try {
+            return GM_listValues().filter(key =>
+                key.startsWith('cache_') && GM_getValue(key, null) !== null
+            ).length;
+        }
+        catch { return 0; }
+    }
     function cacheGC(force = false) {
         if (cacheGC._ran && !force) return;
         cacheGC._ran = true;
@@ -2177,11 +2187,90 @@
         advanceFeatureGeneration(feature);
         feature.destroy?.();
     }
+    /* IMDb rewrites its DOM without notice, so a feature whose selectors stopped
+       matching is the expected failure — not an exceptional one. Route activation
+       used to report those to the console only, which meant the user simply saw a
+       missing feature and had nothing to send anyone. Failures are now retained for
+       the diagnostics report and announced once per route, so one broken feature
+       cannot produce a stack of toasts. */
+    const FEATURE_FAILURE_LIMIT = 20;
+    const featureFailures = [];
+    let announcedFailureRoute = -1;
+
+    function recordFeatureFailure(feature, context, error) {
+        featureFailures.push({
+            key: feature.key,
+            context,
+            message: toBoundedText(error && error.message ? error.message : error, 200) || 'Unknown error',
+        });
+        if (featureFailures.length > FEATURE_FAILURE_LIMIT) {
+            featureFailures.splice(0, featureFailures.length - FEATURE_FAILURE_LIMIT);
+        }
+    }
+
+    function getFeatureFailures() {
+        return featureFailures.map(entry => ({ ...entry }));
+    }
+
+    /* A bug report a user can read before they send it, and that carries nothing they
+       would not want to publish. Credentials are reported as configured/not, never as
+       values; private marks contribute a count and no titles; and the page is reduced
+       to its path so query strings and fragments cannot leak. Nothing is transmitted —
+       this only ever reaches the clipboard. */
+    const DIAGNOSTIC_CREDENTIAL_KEYS = [
+        ['Radarr', 'radarrApiKey'], ['Sonarr', 'sonarrApiKey'], ['Overseerr', 'seerrApiKey'],
+        ['Plex', 'plexToken'], ['Jellyfin', 'jellyfinApiKey'], ['Emby', 'embyApiKey'],
+    ];
+
+    function buildDiagnosticsReport() {
+        const featureState = features.map(feature => ({ key: feature.key, on: get(feature.key) !== false }));
+        const enabled = featureState.filter(entry => entry.on).map(entry => entry.key);
+        const disabled = featureState.filter(entry => !entry.on).map(entry => entry.key);
+        const integrations = DIAGNOSTIC_CREDENTIAL_KEYS
+            .map(([label, key]) => `${label}: ${String(get(key) || '').trim() ? 'configured' : 'not configured'}`);
+        let markCount = 'unavailable';
+        // Force a re-read: a diagnostics snapshot must describe storage, not a
+        // page-lifetime render cache that may predate the problem being reported.
+        try { markCount = String(Object.keys(getUserMarks(true) || {}).length); } catch { /* reported as unavailable */ }
+        let cached = 'unavailable';
+        try { cached = String(cacheCount()); } catch { /* reported as unavailable */ }
+        const failures = getFeatureFailures();
+        return [
+            'IMDb Enhanced diagnostics',
+            `version: ${VERSION}`,
+            `build: ${IS_EXTENSION_BUILD ? 'extension' : 'userscript'}`,
+            `page: ${toBoundedText(location.pathname, 120) || '/'}`,
+            `surface: ${getPageSurface()}`,
+            `theme: ${toBoundedText(get('themeVariant'), 40)}${get('themeAuto') ? ' (auto)' : ''}`,
+            `language: ${toBoundedText(document.documentElement?.lang, 20) || 'unknown'}`,
+            `userAgent: ${toBoundedText(navigator.userAgent, 200)}`,
+            `marks stored: ${markCount}`,
+            `cache entries: ${cached}`,
+            `features off: ${disabled.length ? disabled.join(', ') : 'none'}`,
+            `features on: ${enabled.length ? enabled.join(', ') : 'none'}`,
+            `integrations: ${integrations.join(', ')}`,
+            failures.length
+                ? `recent failures:\n${failures.map(f => `  - ${f.context} ${f.key}: ${f.message}`).join('\n')}`
+                : 'recent failures: none',
+        ].join('\n');
+    }
+
     function startFeature(feature, { context = 'init', notify = false } = {}) {
         const generation = advanceFeatureGeneration(feature);
         const report = error => {
             console.warn(`[IMDb Enhanced] ${context} ${feature.key}:`, error);
-            if (notify) showToast(`${feature.name} could not start. Reload and try again.`, 4500);
+            recordFeatureFailure(feature, context, error);
+            // Announcing must never mask the failure it is announcing.
+            try {
+                if (notify) {
+                    showToast(`${feature.name} could not start. Reload and try again.`, 4500);
+                } else if (announcedFailureRoute !== activeRouteGeneration) {
+                    announcedFailureRoute = activeRouteGeneration;
+                    showToast(`${feature.name} could not start on this page. Settings → Data has a diagnostics report.`, 5000);
+                }
+            } catch (toastError) {
+                console.warn('[IMDb Enhanced] failure notice:', toastError);
+            }
         };
         const rejectCurrentGeneration = error => {
             if (featureGenerations.get(feature) === generation) {
@@ -8535,14 +8624,6 @@ section[data-testid="hero-parent"].enh-editorial-native-hidden { display: none !
         integrationsPage.appendChild(integrationGrid);
 
         const dataPage = pages.get('data');
-        const cacheCount = () => {
-            try {
-                return GM_listValues().filter(key =>
-                    key.startsWith('cache_') && GM_getValue(key, null) !== null
-                ).length;
-            }
-            catch { return 0; }
-        };
         const dataSummary = makeEl('div', { className:'enh-data-summary' },
             makeEl('div', { className:'enh-data-summary-item' },
                 makeEl('div', { className:'enh-data-summary-label' }, 'Preferences'),
@@ -8603,9 +8684,24 @@ section[data-testid="hero-parent"].enh-editorial-native-hidden { display: none !
             makeEl('button', { type:'button', className:'enh-settings-footer-btn', id:'enh-clearcache-btn', title:'Clear cached third-party lookups' }, 'Clear cache'),
             makeEl('div', { className:'enh-settings-card-description', id:'enh-cache-status', style:{ marginTop:'8px' } }, `${cacheCount()} entries currently cached.`)
         );
+        const diagnosticsCard = makeCard('Diagnostics', 'A readable summary for bug reports. Credentials, marked titles, and the page query string are never included.');
+        diagnosticsCard.append(
+            makeEl('button', {
+                type:'button', className:'enh-settings-footer-btn', id:'enh-diagnostics-btn',
+                title:'Copy a scrubbed diagnostics report to the clipboard',
+                onClick: () => {
+                    const report = buildDiagnosticsReport();
+                    showToast(copyTextToClipboard(report)
+                        ? 'Diagnostics copied. Paste it into your report.'
+                        : COPY_FAILURE_MESSAGE, 4000);
+                },
+            }, 'Copy diagnostics'),
+            makeEl('div', { className:'enh-settings-card-description', id:'enh-diagnostics-status', style:{ marginTop:'8px' } },
+                'Nothing is transmitted — the report only reaches your clipboard.')
+        );
         dataPage.appendChild(makeEl('div', { className:'enh-settings-grid' },
             createMarksPanel(registerCleanup),
-            makeEl('div', { className:'enh-settings-stack' }, backupCard, cacheCard)
+            makeEl('div', { className:'enh-settings-stack' }, backupCard, cacheCard, diagnosticsCard)
         ));
         dataPage.appendChild(makeEl('div', { className:'enh-settings-callout', style:{ marginTop:'12px' } },
             makeEl('strong', {}, 'Local only'),

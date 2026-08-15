@@ -45,6 +45,8 @@ function loadScriptTestHooks() {
         getRequestErrorMessage,
         getLinkedTitleId,
         findNativeTitleAction,
+        buildDiagnosticsReport,
+        getFeatureFailures,
         NATIVE_WATCHLIST_SELECTORS,
         isIMDbHost,
         isCinebyHost,
@@ -165,6 +167,7 @@ function loadScriptTestHooks() {
             }),
         },
         location,
+        navigator: { userAgent: 'Mozilla/5.0 (Windows NT 10.0; Win64; x64) TestRunner/1.0' },
         document: {
             readyState: 'loading',
             body: {},
@@ -355,6 +358,41 @@ test('native title controls resolve by test id rather than English label text', 
         ['[data-testid="tm-box-wl-button"]', '[data-testid="poster-watchlist-ribbon-add"]'],
         'the ribbon must be matched in its add state so a click cannot remove the title'
     );
+});
+
+/* A feature whose selectors stopped matching used to fail to the console only, so the
+   user saw a missing feature and had nothing to report with. */
+test('feature failures are retained and reportable without leaking secrets', () => {
+    const hooks = loadScriptTestHooks();
+    assert.deepStrictEqual(Array.from(hooks.getFeatureFailures()), [], 'no failures before anything runs');
+
+    const broken = { key:'streamAvailability', name:'Streaming availability', init(){ throw new Error('hero-parent selector matched nothing'); } };
+    assert.strictEqual(hooks.startFeature(broken, { context:'route' }), false);
+    const failures = Array.from(hooks.getFeatureFailures());
+    assert.strictEqual(failures.length, 1, 'a route-time failure must be retained, not only logged');
+    assert.strictEqual(failures[0].key, 'streamAvailability');
+    assert.strictEqual(failures[0].context, 'route');
+    assert(failures[0].message.includes('selector matched nothing'), 'the cause must survive into the report');
+
+    hooks.seedStoredSetting('radarrApiKey', 'SUPER-SECRET-RADARR-KEY');
+    hooks.seedStoredSetting('plexToken', 'SUPER-SECRET-PLEX-TOKEN');
+    hooks.seedStoredSetting('userMarks', { tt0903747:{ state:'watched', title:'Breaking Bad', ts:1 } });
+    const report = hooks.buildDiagnosticsReport();
+
+    assert(report.includes('IMDb Enhanced diagnostics'), 'the report should say what it is');
+    assert(report.includes('route streamAvailability: hero-parent selector matched nothing'),
+        'the failure belongs in the report');
+    assert(/Radarr: configured/.test(report), 'configured integrations are reported as booleans');
+    assert(/Plex: configured/.test(report), 'configured integrations are reported as booleans');
+    assert(!report.includes('SUPER-SECRET-RADARR-KEY'), 'credentials must never reach the clipboard');
+    assert(!report.includes('SUPER-SECRET-PLEX-TOKEN'), 'credentials must never reach the clipboard');
+    assert(!report.includes('Breaking Bad'), 'marked titles are private and must not be reported');
+    assert(report.includes('marks stored: 1'), 'a count is the useful, non-identifying form');
+    /* cacheCount() used to live inside the settings-panel closure, so calling it from
+       module scope threw a ReferenceError that the report swallowed as "unavailable". */
+    assert(/cache entries: \d+/.test(report), 'the cache count must resolve, not report unavailable');
+    assert(!/\?/.test(report.split('\n').find(line => line.startsWith('page:')) || ''),
+        'the page line must carry no query string');
 });
 
 test('IMDb title data selection ignores unrelated or malformed structured data', () => {
