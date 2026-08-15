@@ -68,6 +68,10 @@ assert(content.includes('setTimeout(__clearBoot,'), 'a storage failure must neve
 assert(content.indexOf('__clearBoot();') > awaitIndex, 'the gate must clear once real settings are known');
 assert(content.includes("const VERSION = '" + pkg.version + "'"), 'generated content must include the current source');
 assert(!/\beval\s*\(/.test(content), 'MV3 content must not depend on eval');
+/* The generated file is what ships, so the build-neutral copy has to survive
+   generation — an extension user must never be told to check a userscript manager. */
+assert(!content.includes('userscript manager'), 'generated content must not name a userscript manager');
+assert(!content.includes('userscript clipboard permission'), 'generated content must not name a userscript clipboard grant');
 assert(background.includes("callApi(chrome.declarativeNetRequest, 'updateDynamicRules'"), 'background worker must manage dynamic ad rules');
 assert(background.includes('function callApi('), 'background API calls must work on both callback- and promise-style engines');
 /* Dynamic rules outlive extension updates, so a build must clear the whole reserved
