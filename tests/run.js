@@ -603,6 +603,16 @@ test('the unweighted mean is derived from histogram buckets', () => {
     assert.strictEqual(hooks.describeRatingGap(null, 8.7), null, 'no unweighted mean means no claim');
 });
 
+/* The certification chip beside the title is already read from the parents-guide
+   link (IMDb_Enhanced.user.js reads it from the hero); this exposes the page behind it. */
+test('the title surface links to first-party subpages including the parents guide', () => {
+    ['fullcredits', 'reviews', 'trivia', 'parentalguide'].forEach(route => {
+        assert(script.includes(`/title/\${imdbId}/${route}/`), `${route} should be reachable from the title surface`);
+    });
+    assert(script.includes("['Parents guide', `/title/${imdbId}/parentalguide/`]"),
+        'the parents guide needs a readable label, not a bare route');
+});
+
 test('IMDb title data selection ignores unrelated or malformed structured data', () => {
     const hooks = loadScriptTestHooks();
     const selected = hooks.parseIMDbTitleStructuredData([

@@ -758,6 +758,9 @@
             ['Cast & crew', `/title/${imdbId}/fullcredits/`],
             ['User reviews', `/title/${imdbId}/reviews/`],
             ['Trivia', `/title/${imdbId}/trivia/`],
+            /* First-party route, stable, and the content-rating chip beside the title
+               already comes from its link — this exposes the detail behind that chip. */
+            ['Parents guide', `/title/${imdbId}/parentalguide/`],
         ].forEach(([label, href]) => subnavRight.appendChild(makeEl('a', {
             href, className:'enh-editorial-subnav__link',
         }, label)));
