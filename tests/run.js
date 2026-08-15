@@ -1282,6 +1282,21 @@ test('core features remain registered', () => {
     ].forEach(token => assert(script.includes(token), `${token} missing`));
 });
 
+test('site editing does not commit a durable write per keystroke', () => {
+    const editor = script.slice(script.indexOf('function createSiteEditor'), script.indexOf('function createSettingsInput'));
+    /* save() revalidates every row, re-reads every row, renormalizes them, and commits.
+       Running that per keystroke scales with the whole 50-destination list rather than
+       the edited row, and costs a storage round trip per character in the extension. */
+    assert(!/addEventListener\('input', \(\) => save\(false\)\)/.test(editor), 'typing must not commit directly');
+    assert(editor.includes('scheduleSave()'), 'typed edits should be debounced');
+    assert(editor.includes('validateRow(row)'), 'typing should only revalidate the edited row');
+    assert(editor.includes('cancelScheduledSave();'), 'a committed change must cancel the pending debounce');
+    assert(editor.includes('registerEditorCleanup(cancelScheduledSave)'), 'a pending write must not outlive the panel');
+    assert(script.includes('const SITE_EDITOR_SAVE_DELAY'), 'the debounce delay should be a named bound');
+    // Blur still commits synchronously, so nothing is lost when the dialog closes.
+    assert(/addEventListener\('change', \(\) => \{[\s\S]{0,200}?save\(true\)/.test(editor), 'change must still commit immediately');
+});
+
 test('user-facing copy names the right host for each build', () => {
     /* One source ships as both a userscript and an extension, so a message that names
        the userscript manager is wrong and unactionable for extension users. */

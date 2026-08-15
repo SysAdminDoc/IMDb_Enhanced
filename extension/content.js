@@ -185,6 +185,7 @@
     const EXTERNAL_RESPONSE_TEXT_LIMIT = 8 * 1024 * 1024;
     const LOCAL_RESPONSE_TEXT_LIMIT = 4 * 1024 * 1024;
     const SITE_LIST_LIMIT = 50;
+    const SITE_EDITOR_SAVE_DELAY = 250; // trailing debounce for typed destination edits
     const COLLECTION_LINK_SCAN_LIMIT = 5000;
     const LIST_SEARCH_TITLE_LIMIT = 20;
     const URL_TEMPLATE_TEXT_LIMIT = 4096;
@@ -7505,7 +7506,7 @@ section[data-testid="hero-parent"].enh-editorial-native-hidden { display: none !
         }
     }
 
-    function createSiteEditor({ title, key, defaults, featureKey }) {
+    function createSiteEditor({ title, key, defaults, featureKey }, registerEditorCleanup = () => {}) {
         const editor = makeEl('div', { className:'enh-site-editor' });
         const rows = makeEl('div', { className:'enh-site-editor__rows' });
         const columns = makeEl('div', { className:'enh-site-editor__columns', 'aria-hidden':'true' },
@@ -7550,23 +7551,22 @@ section[data-testid="hero-parent"].enh-editorial-native-hidden { display: none !
             enabled: row.querySelector('[data-field="enabled"]')?.checked !== false,
         }));
 
-        const validateRows = () => {
-            let valid = true;
-            rows.querySelectorAll('.enh-site-row').forEach(row => {
-                const nameInput = row.querySelector('[data-field="name"]');
-                const urlInput = row.querySelector('[data-field="url"]');
-                const categoryInput = row.querySelector('[data-field="category"]');
-                const nameValid = Boolean(nameInput?.value.trim());
-                const urlValid = Boolean(normalizeUrlTemplate(urlInput?.value));
-                const categoryValid = SITE_CATEGORY_KEYS.has(categoryInput?.value);
-                [[nameInput, nameValid], [urlInput, urlValid], [categoryInput, categoryValid]].forEach(([input, inputValid]) => {
-                    input?.classList.toggle('enh-site-input--invalid', !inputValid);
-                    input?.setAttribute('aria-invalid', String(!inputValid));
-                });
-                valid = valid && nameValid && urlValid && categoryValid;
+        const validateRow = row => {
+            const nameInput = row.querySelector('[data-field="name"]');
+            const urlInput = row.querySelector('[data-field="url"]');
+            const categoryInput = row.querySelector('[data-field="category"]');
+            const nameValid = Boolean(nameInput?.value.trim());
+            const urlValid = Boolean(normalizeUrlTemplate(urlInput?.value));
+            const categoryValid = SITE_CATEGORY_KEYS.has(categoryInput?.value);
+            [[nameInput, nameValid], [urlInput, urlValid], [categoryInput, categoryValid]].forEach(([input, inputValid]) => {
+                input?.classList.toggle('enh-site-input--invalid', !inputValid);
+                input?.setAttribute('aria-invalid', String(!inputValid));
             });
-            return valid;
+            return nameValid && urlValid && categoryValid;
         };
+
+        const validateRows = () => Array.from(rows.querySelectorAll('.enh-site-row'))
+            .reduce((valid, row) => validateRow(row) && valid, true);
 
         const save = (refresh = true) => {
             lastSaveFailure = '';
@@ -7582,6 +7582,20 @@ section[data-testid="hero-parent"].enh-editorial-native-hidden { display: none !
             updateCount();
             return true;
         };
+
+        let saveTimer = null;
+        const cancelScheduledSave = () => {
+            clearTimeout(saveTimer);
+            saveTimer = null;
+        };
+        const scheduleSave = () => {
+            cancelScheduledSave();
+            saveTimer = setTimeout(() => {
+                saveTimer = null;
+                save(false);
+            }, SITE_EDITOR_SAVE_DELAY);
+        };
+        registerEditorCleanup(cancelScheduledSave);
 
         const addRow = (site = {}) => {
             const row = makeEl('div', { className:'enh-site-row', role:'group' });
@@ -7705,9 +7719,18 @@ section[data-testid="hero-parent"].enh-editorial-native-hidden { display: none !
             nameInput.addEventListener('input', updateRowLabel);
             categoryInput.addEventListener('change', updateRowLabel);
 
+            /* Every keystroke used to revalidate all rows, re-read all rows, renormalize
+               them, and commit a durable write — work that scales with the whole list
+               rather than the edited row, and in the extension build costs a storage
+               round trip per character. Typing now only paints this row's validity; the
+               commit is debounced, and blur still commits synchronously. */
             [nameInput, urlInput, categoryInput, colorInput, enabledInput].forEach(input => {
-                input.addEventListener('input', () => save(false));
+                input.addEventListener('input', () => {
+                    validateRow(row);
+                    scheduleSave();
+                });
                 input.addEventListener('change', () => {
+                    cancelScheduledSave();
                     if (!save(true) && lastSaveFailure === 'validation') {
                         showToast('Enter a name, valid HTTP(S) URL, category, and supported template tokens');
                     }
@@ -8382,8 +8405,8 @@ section[data-testid="hero-parent"].enh-editorial-native-hidden { display: none !
             'The exact Cineby root uses a one-time local title handoff. Edit or remove its row below to use an ordinary URL template.'
         ));
         const sitesGrid = makeEl('div', { className:'enh-sites-grid enh-sites-grid--single', style:{ marginTop:'12px' } },
-            createSiteEditor({ title:'Watch & stream', key:'watchSites', defaults:DEFAULT_WATCH_SITES, featureKey:'searchButtons' }),
-            createSiteEditor({ title:'Research & reviews', key:'externalSites', defaults:DEFAULT_EXTERNAL_SITES, featureKey:'externalLinks' })
+            createSiteEditor({ title:'Watch & stream', key:'watchSites', defaults:DEFAULT_WATCH_SITES, featureKey:'searchButtons' }, registerCleanup),
+            createSiteEditor({ title:'Research & reviews', key:'externalSites', defaults:DEFAULT_EXTERNAL_SITES, featureKey:'externalLinks' }, registerCleanup)
         );
         sitesPage.append(sitesGrid, makeEl('div', { className:'enh-settings-callout', style:{ marginTop:'12px' } },
             makeEl('strong', {}, 'Templates'),

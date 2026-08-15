@@ -4,6 +4,7 @@
 
 ### Fixed
 
+- Editing a destination in Settings → Sites no longer writes to storage on every keystroke. Typing a 14-character name committed 14 full-list writes; it now commits one, and blurring the field still saves immediately.
 - Toast messages are announced reliably by screen readers. Each toast used to insert a brand-new live region, which assistive technology may not read; there is now one region, created up front, whose text changes.
 - Storage, clipboard, and local-service messages name the right host for the build you are running instead of always pointing at a userscript manager.
 - People who have died no longer get a current age next to their birth date. The check for a death looked at only the first 200,000 characters of the page's embedded data and ignored the death date IMDb already renders.
