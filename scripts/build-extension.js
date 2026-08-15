@@ -271,7 +271,18 @@ function buildFirefoxBuild() {
     return firefoxManifest;
 }
 
-module.exports = { toFirefoxManifest, FIREFOX_ADDON_ID, FIREFOX_MIN_VERSION, FIREFOX_COPIED_FILES };
+/* Exported so the GM contract suite can instantiate the real bridge instead of a
+   paraphrase of it. The two fragments are inseparable: the bridge closes by calling
+   __clearBoot(), which the prelude defines. */
+const EXTENSION_BRIDGE_SOURCE = `${prelude}\n${bridge}`;
+
+module.exports = {
+    toFirefoxManifest,
+    FIREFOX_ADDON_ID,
+    FIREFOX_MIN_VERSION,
+    FIREFOX_COPIED_FILES,
+    EXTENSION_BRIDGE_SOURCE,
+};
 
 if (require.main !== module) {
     // Imported for its manifest contract only; do not touch the working tree.

@@ -2,6 +2,10 @@
 
 ## Unreleased
 
+### Added
+
+- The GM API contract the userscript depends on is now asserted against both implementations — the userscript manager and the generated MV3 bridge — by one shared suite (`npm test`). Four shipped defects came from the bridge quietly dropping a guarantee while every test stayed green; each of those four now fails the suite if reintroduced.
+
 ### Fixed
 
 - Title pages keep a working "Add to watchlist" action when IMDb renders in a translated language. IMDb began machine-translating page copy in 2026, and the control was located by its English label, so on languages that do not keep the English loanword — Hindi renders "वॉचलिस्ट में जोड़ें" — the button found nothing and the editorial layout, which hides IMDb's own hero and is on by default, left those users with no way to add a title. Native controls are now resolved by test id.

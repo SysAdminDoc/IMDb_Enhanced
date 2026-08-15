@@ -6,8 +6,8 @@
   "scripts": {
     "build:extension": "node scripts/build-extension.js",
     "build:firefox": "node scripts/build-extension.js --firefox",
-    "test:extension": "node scripts/build-extension.js --check && node tests/extension.js",
-    "test": "node scripts/build-extension.js && node tests/run.js && node tests/extension.js",
+    "test:extension": "node scripts/build-extension.js --check && node tests/extension.js && node tests/gm-contract.js",
+    "test": "node scripts/build-extension.js && node tests/run.js && node tests/extension.js && node tests/gm-contract.js",
     "version": "node scripts/sync-version.js && node scripts/build-extension.js && git add IMDb_Enhanced.user.js extension/content.js extension/manifest.json extension/boot.css README.md"
   },
   "license": "MIT",
