@@ -116,6 +116,8 @@ function loadScriptTestHooks() {
         isServarrConfigured,
         buildRadarrAddBody,
         buildSonarrAddBody,
+        seerrRequest,
+        servarrRequest,
         toPositiveInteger,
         httpRequest,
         waitFor,
@@ -479,6 +481,21 @@ test('Overseerr requests report media state and build valid bodies', () => {
     assert(script.includes("'radarrUrl', 'sonarrUrl', 'seerrUrl'"), 'the Overseerr URL must be localhost-validated like its peers');
     assert(script.includes("'radarrApiKey', 'sonarrApiKey', 'seerrApiKey'"), 'the Overseerr key must be credential-normalized like its peers');
     assert(script.includes('Only localhost and 127.0.0.1 Overseerr/Jellyseerr URLs are allowed'), 'the Overseerr request boundary must enforce loopback');
+
+    /* httpRequest serializes the body itself. A caller that pre-stringifies gets its
+       payload encoded twice, and Overseerr receives a JSON string instead of an object
+       — which is what shipped in 2.11.0. Assert the wire format, not the call shape. */
+    hooks.seedStoredSetting('seerrUrl', 'http://localhost:5055');
+    hooks.seedStoredSetting('seerrApiKey', 'test-key');
+    hooks.seerrRequest('request', { method:'POST', body:hooks.buildSeerrRequestBody('movie', 603) }).catch(() => {});
+    const seerrPost = hooks.getCapturedRequests().at(-1);
+    assert.strictEqual(seerrPost.method, 'POST');
+    assert.strictEqual(seerrPost.url, 'http://localhost:5055/api/v1/request');
+    const seerrPayload = JSON.parse(seerrPost.data);
+    assert.strictEqual(typeof seerrPayload, 'object', 'the request body must reach Overseerr as an object, not a JSON string');
+    assert.strictEqual(seerrPayload.mediaType, 'movie');
+    assert.strictEqual(seerrPayload.mediaId, 603);
+    assert(!/_request[\s\S]{0,400}?body:JSON\.stringify\(body\)/.test(script), 'the Overseerr request must not pre-serialize its body');
 });
 
 test('Wikidata resolves external service IDs without trusting arbitrary values', () => {

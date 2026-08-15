@@ -4,6 +4,7 @@
 
 ### Fixed
 
+- The Overseerr/Jellyseerr Request button works. Its request body was serialized twice, so the instance received a JSON string where it expected an object and rejected every request.
 - Extension build: private Seen/Skip marks are no longer lost when two IMDb tabs are open. The extension mirrored browser storage once at page load and never updated it, so the second tab to save a mark overwrote whatever the first had added. The mirror now follows storage for the life of the page, which also stops a consumed Cineby handoff from blocking later Cineby links in the tab that opened it.
 
 ## 2.11.0 — 2026-08-14

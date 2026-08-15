@@ -5346,7 +5346,9 @@ section[id*="quote" i] .ipc-list-card { padding: 4px 0 !important; margin: 2px 0
             const body = buildSeerrRequestBody(mediaType, tmdbId);
             if (!body) throw new Error('The Overseerr instance returned an unusable title id');
             if (!isCurrent()) return false;
-            await seerrRequest('request', { method:'POST', body:JSON.stringify(body) });
+            /* httpRequest owns serialization; pre-stringifying here would encode the
+               body twice and send Overseerr a JSON string where it expects an object. */
+            await seerrRequest('request', { method:'POST', body });
             return true;
         },
         async _checkLibrary(kind, ctx, btn, bar, isCurrent) {
