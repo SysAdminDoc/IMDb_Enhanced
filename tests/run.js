@@ -104,6 +104,9 @@ function loadScriptTestHooks() {
         computeCurrentAge,
         getUserMarks,
         setUserMark,
+        readPersonBirthDate,
+        isPersonDeceased,
+        EPISODE_CODE_PATTERN,
         readNativeWatchedControl,
         collectNativeWatchedTitles,
         normalizeUserMarkEntries,
@@ -1279,6 +1282,46 @@ test('core features remain registered', () => {
     ].forEach(token => assert(script.includes(token), `${token} missing`));
 });
 
+test('a deceased person never gets a current age', () => {
+    const hooks = loadScriptTestHooks();
+    const makeDoc = (json, hasDeathElement) => ({
+        getElementById: id => (id === '__NEXT_DATA__' ? { textContent:json } : null),
+        querySelector: () => (hasDeathElement ? {} : null),
+    });
+    const birth = '"birthDate":{"date":"1930-08-05"}';
+
+    // IMDb's own rendered death markers are authoritative and cost nothing to read.
+    assert.strictEqual(hooks.readPersonBirthDate(makeDoc(`{${birth}}`, true)).deceased, true,
+        'a rendered death date must be believed even when the payload says nothing');
+
+    /* The old check sliced a fixed 200,000-character prefix, so a payload whose
+       deathStatus sat beyond it reported a dead person as living. */
+    const far = `{${birth},"pad":"${'x'.repeat(250000)}","deathStatus":"DEAD"}`;
+    assert.strictEqual(hooks.readPersonBirthDate(makeDoc(far, false)).deceased, true,
+        'deathStatus beyond the first 200KB must still be found');
+
+    const alive = `{${birth},"deathStatus":"ALIVE"}`;
+    assert.strictEqual(hooks.readPersonBirthDate(makeDoc(alive, false)).deceased, false);
+    assert.strictEqual(hooks.readPersonBirthDate(makeDoc(alive, false)).iso, '1930-08-05');
+    assert.strictEqual(hooks.readPersonBirthDate(makeDoc('{"noBirth":1}', false)), null);
+    assert(!script.includes('text.slice(0, 200000)'), 'the fixed prefix scan should be gone');
+});
+
+test('episode discovery requires an episode code on every path', () => {
+    const hooks = loadScriptTestHooks();
+    assert(hooks.EPISODE_CODE_PATTERN.test('S1.E3 Pilot'), 'a normal episode code should match');
+    assert(hooks.EPISODE_CODE_PATTERN.test('s12 . e4'), 'spacing variants should match');
+    assert(!hooks.EPISODE_CODE_PATTERN.test('The Matrix Reloaded 7.2'), 'a recommendation card is not an episode');
+    assert(!hooks.EPISODE_CODE_PATTERN.global, 'a shared pattern must not carry lastIndex between calls');
+
+    /* The ancestor walk demanded an episode code; its fallback did not, so any <li>
+       with a rating — recommendations, shovelers — could enter the episode set. */
+    const walk = script.slice(script.indexOf('_findEpisodeCard(anchor) {'), script.indexOf('_findPlot(card) {'));
+    assert(walk.includes('EPISODE_CODE_PATTERN.test(card.textContent'), 'the fallback must require an episode code too');
+    assert(!/return anchor\.closest\('\[data-testid\*="episode" i\], article, li'\);/.test(walk),
+        'the unguarded fallback return must be gone');
+});
+
 test('title page actions survive without any watch destination', () => {
     /* The editorial layout hides IMDb's hero, so the stand-ins for Rate and Add to
        watchlist have to belong to that feature. Owning them from searchButtons meant
@@ -1446,7 +1489,14 @@ test('site destinations support purpose, visibility, and ordering metadata', () 
         'https://watchluna.com/movies',
         'https://1movies.stream/home',
     ].forEach(url => assert(script.includes(url), `${url} should be available in the default watch destinations`));
-    assert(script.includes("filter(site => site.enabled !== false)"), 'disabled destinations must stay off title pages');
+    /* Hiding a destination has to hide it everywhere it is offered — the control says
+       "on IMDb pages", and collection pages are IMDb pages. Assert both consumers of
+       watchSites filter, not just the title-page one. */
+    ['searchButtons', 'listMultiSearch'].forEach(key => {
+        const feature = script.slice(script.indexOf(`key: '${key}'`), script.indexOf(`key: '${key}'`) + 2500);
+        assert(/getSiteList\('watchSites', DEFAULT_WATCH_SITES\)[\s\S]{0,200}?filter\(site => site\.enabled !== false\)/.test(feature),
+            `${key} must honour per-destination visibility`);
+    });
     assert(script.includes("dataset:{ field:'category' }"), 'site editors should expose category selection');
     assert(script.includes("dataset:{ field:'enabled' }"), 'site editors should expose per-destination visibility');
     assert(script.includes("dataset:{ action:'up' }"), 'site editors should expose destination ordering');

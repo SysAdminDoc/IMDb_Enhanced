@@ -4519,14 +4519,28 @@ section[id*="quote" i] .ipc-list-card { padding: 4px 0 !important; margin: 2px 0
                 @media(max-width:1200px){#enh-quicknav{display:none}}
             `, 'enh-quickNav');
 
+            /* The editorial layout replaces the native hero and hides it with
+               display:none, which scrollIntoView cannot act on — Overview has to aim at
+               whichever surface is actually rendered. Resolved per click rather than at
+               build time, because this feature can initialize before that surface has
+               mounted. */
+            const resolveSection = item => (item.id === 'hero-parent'
+                ? document.getElementById('enh-editorial-surface')
+                    || document.querySelector('section[data-testid="hero-parent"]')
+                : document.querySelector(`section[data-testid="${item.id}"]`));
+
             const nav = makeEl('nav', { id:'enh-quicknav', 'aria-label':'On this page' });
             this._navItems.forEach(s => {
-                const sec = document.querySelector(`section[data-testid="${s.id}"]`);
-                if (!sec) return;
+                if (!resolveSection(s)) return;
                 nav.appendChild(makeEl('button', {
                     className:'enh-qn-dot', type:'button', dataset:{ label:s.label }, textContent:s.label,
                     title: s.label, 'aria-label': `Jump to ${s.label}`,
-                    onClick: () => sec.scrollIntoView({ behavior:getEnhancementScrollBehavior(), block:'start' })
+                    onClick: () => {
+                        const target = resolveSection(s);
+                        if (target?.getClientRects().length) {
+                            target.scrollIntoView({ behavior:getEnhancementScrollBehavior(), block:'start' });
+                        }
+                    }
                 }));
             });
             if (nav.children.length) document.body.appendChild(nav);
@@ -5650,6 +5664,11 @@ section[id*="quote" i] .ipc-list-card { padding: 4px 0 !important; margin: 2px 0
     //
     // #########################################################################
 
+    /* One definition for the S<n>.E<n> code, shared by the card walk, its
+       fallback, and the label. Non-global on purpose: a /g regex would carry
+       lastIndex between calls and match intermittently. */
+    const EPISODE_CODE_PATTERN = /\bS(\d+)\s*\.\s*E(\d+)\b/i;
+
     reg({
         key: 'tvEpisodeTools', name: 'TV episode tools', group: 'TV',
         _clickHandler: null,
@@ -5752,7 +5771,7 @@ section[id*="quote" i] .ipc-list-card { padding: 4px 0 !important; margin: 2px 0
                 if (!card) return;
 
                 const rating = this._parseRating(card);
-                const episodeCode = card.textContent.match(/\bS(\d+)\s*\.\s*E(\d+)\b/i)?.[0] || '';
+                const episodeCode = card.textContent.match(EPISODE_CODE_PATTERN)?.[0] || '';
                 const title = (anchor.querySelector('.ipc-title__text') || anchor).textContent.trim();
                 const plot = this._findPlot(card);
 
@@ -5766,13 +5785,18 @@ section[id*="quote" i] .ipc-list-card { padding: 4px 0 !important; margin: 2px 0
             let node = anchor;
             for (let i = 0; i < 9 && node && node !== document.body; i++) {
                 const text = node.textContent || '';
-                const hasEpisodeCode = /\bS\d+\s*\.\s*E\d+\b/i.test(text);
+                const hasEpisodeCode = EPISODE_CODE_PATTERN.test(text);
                 const hasRating = Boolean(node.querySelector?.('.ipc-rating-star--rating, [class*="rating"]'));
                 const hasPlot = Boolean(this._findPlot(node));
                 if (hasEpisodeCode && (hasRating || hasPlot)) return node;
                 node = node.parentElement;
             }
-            return anchor.closest('[data-testid*="episode" i], article, li');
+            /* The fallback has to honour the same contract as the walk above. Accepting
+               any list-item ancestor let recommendation and shoveler cards — which are
+               also <li> and also carry a rating — enter the episode set, so "Top rated
+               episodes" could list titles that are not episodes at all. */
+            const card = anchor.closest('[data-testid*="episode" i], article, li');
+            return card && EPISODE_CODE_PATTERN.test(card.textContent || '') ? card : null;
         },
         _findPlot(card) {
             return card.querySelector?.('[class*="plot" i] p, [data-testid*="plot" i], .ipc-html-content-inner-div, .ipc-metadata-list-summary-item__plot') || null;
@@ -6024,7 +6048,9 @@ section[id*="quote" i] .ipc-list-card { padding: 4px 0 !important; margin: 2px 0
         init() {
             if (!isListPage()) return;
             if (document.getElementById('enh-multi-search')) return;
-            const sites = getSiteList('watchSites', DEFAULT_WATCH_SITES);
+            // The Visible control promises "show or hide this destination on IMDb
+            // pages" — collection pages are IMDb pages too.
+            const sites = getSiteList('watchSites', DEFAULT_WATCH_SITES).filter(site => site.enabled !== false);
             if (!sites.length) return;
 
             addThemedCSS(t => `
@@ -6254,6 +6280,19 @@ section[id*="quote" i] .ipc-list-card { padding: 4px 0 !important; margin: 2px 0
         return age >= 0 && age <= 130 ? age : null;
     }
 
+    /* IMDb renders a death date and an age at death itself, so those elements are the
+       authoritative signal and cost nothing to read. The embedded application state is
+       only a secondary check: it is searched over the same bounded text the size guard
+       already validated, because a fixed prefix slice could sit entirely before
+       deathStatus and report a dead person as living. */
+    const PERSON_DEATH_SELECTOR = '[data-testid="birth-and-death-death-age"],'
+        + '[data-testid="birth-and-death-deathdate"]';
+
+    function isPersonDeceased(doc = document, text = '') {
+        if (doc.querySelector?.(PERSON_DEATH_SELECTOR)) return true;
+        return /"deathStatus":"(?!ALIVE)/.test(text) || /"deathDate":\s*\{/.test(text);
+    }
+
     function readPersonBirthDate(doc = document) {
         const script = doc.getElementById('__NEXT_DATA__');
         const text = typeof script?.textContent === 'string' ? script.textContent : '';
@@ -6261,7 +6300,7 @@ section[id*="quote" i] .ipc-list-card { padding: 4px 0 !important; margin: 2px 0
             const index = text.indexOf('"birthDate"');
             if (index >= 0) {
                 const iso = /"date":"(\d{4}-\d{2}-\d{2})"/.exec(text.slice(index, index + 400));
-                if (iso) return { iso:iso[1], deceased:/"deathStatus":"(?!ALIVE)/.test(text.slice(0, 200000)) };
+                if (iso) return { iso:iso[1], deceased:isPersonDeceased(doc, text) };
             }
         }
         return null;

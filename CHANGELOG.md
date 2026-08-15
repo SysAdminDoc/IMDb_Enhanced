@@ -4,6 +4,10 @@
 
 ### Fixed
 
+- People who have died no longer get a current age next to their birth date. The check for a death looked at only the first 200,000 characters of the page's embedded data and ignored the death date IMDb already renders.
+- "Top rated episodes" no longer picks up recommendation and shoveler cards. The fallback used to find an episode's card accepted any list item, including ones that merely carry a rating.
+- Hiding a watch destination now also removes it from the "Search all on" bar on watchlist, list, and chart pages.
+- The section navigator's Overview entry scrolls to the editorial title surface when that layout is on. It previously targeted the hidden native hero and did nothing.
 - Title pages keep their Rate and Add to watchlist controls when Watch buttons are turned off or every watch destination is hidden. The editorial layout hides IMDb's own hero, but the stand-ins for those controls belonged to the watch-destination feature, so switching it off left the page with no way to rate a title or add it to a watchlist.
 - Hardened the theme shell against running before the document root exists, which threw at document-start and aborted the rest of the script.
 - The person-age addition on name pages now has a toggle, under Tools → People. It shipped enabled with no way to turn it off short of editing storage by hand.
