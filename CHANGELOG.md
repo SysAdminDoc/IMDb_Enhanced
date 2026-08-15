@@ -4,6 +4,8 @@
 
 ### Fixed
 
+- Toast messages are announced reliably by screen readers. Each toast used to insert a brand-new live region, which assistive technology may not read; there is now one region, created up front, whose text changes.
+- Storage, clipboard, and local-service messages name the right host for the build you are running instead of always pointing at a userscript manager.
 - People who have died no longer get a current age next to their birth date. The check for a death looked at only the first 200,000 characters of the page's embedded data and ignored the death date IMDb already renders.
 - "Top rated episodes" no longer picks up recommendation and shoveler cards. The fallback used to find an episode's card accepted any list item, including ones that merely carry a rating.
 - Hiding a watch destination now also removes it from the "Search all on" bar on watchlist, list, and chart pages.

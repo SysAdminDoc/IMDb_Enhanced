@@ -1282,6 +1282,45 @@ test('core features remain registered', () => {
     ].forEach(token => assert(script.includes(token), `${token} missing`));
 });
 
+test('user-facing copy names the right host for each build', () => {
+    /* One source ships as both a userscript and an extension, so a message that names
+       the userscript manager is wrong and unactionable for extension users. */
+    const runtimeCopy = script.slice(script.indexOf('const VERSION'));
+    [
+        'userscript manager',
+        'userscript clipboard permission',
+        'userscript storage permissions',
+        'this userscript build',
+        'as early as userscript timing allows',
+        'Marks stay in this userscript',
+    ].forEach(phrase => assert(!runtimeCopy.includes(phrase), `build-specific copy leaked: ${phrase}`));
+    assert(script.includes('const STORAGE_HOST_LABEL'), 'a build-neutral storage label should exist');
+    assert(script.includes("IS_EXTENSION_BUILD ? 'extension storage' : 'userscript storage'"),
+        'the label must resolve per build');
+    assert(script.includes('const COPY_FAILURE_MESSAGE'), 'clipboard failures should share one build-neutral message');
+});
+
+test('toast announcements reuse one live region', () => {
+    /* Assistive technology announces changes to a region already in the accessibility
+       tree; inserting a node that carries aria-live is unreliable. Every confirmation
+       in the product goes through showToast, so this is the whole announcement path. */
+    const toast = script.slice(script.indexOf('function ensureToastAnnouncer'), script.indexOf('function trySaveSetting'));
+    assert(toast.includes("id:'enh-toast-announcer'"), 'a dedicated live region should exist');
+    assert(toast.includes("'aria-live':'polite'") && toast.includes("'aria-atomic':'true'"),
+        'the region needs polite atomic announcements');
+    assert(toast.includes('announcer.textContent = message'), 'showToast must update the region rather than replace it');
+    assert(/makeEl\('div', \{ id:'enh-toast', 'aria-hidden':'true' \}/.test(toast),
+        'the animated toast should be hidden from assistive technology so only the region speaks');
+    assert(script.includes('#enh-toast-announcer'), 'the region needs a visually-hidden rule');
+    assert(!/#enh-toast-announcer \{[^}]*display:\s*none/.test(script),
+        'display:none would remove the region from the accessibility tree');
+    assert(script.includes('toastTimers.splice(0).forEach(clearTimeout)'), 'route teardown must cancel pending toast timers');
+    // Creating the region and setting its text in the same tick is the same
+    // anti-pattern, so it has to be installed during init, before anything can speak.
+    const init = script.slice(script.indexOf('function init() {'));
+    assert(init.includes('ensureToastAnnouncer();'), 'the live region must exist before the first announcement');
+});
+
 test('a deceased person never gets a current age', () => {
     const hooks = loadScriptTestHooks();
     const makeDoc = (json, hasDeathElement) => ({

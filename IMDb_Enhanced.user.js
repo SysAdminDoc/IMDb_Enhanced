@@ -49,6 +49,12 @@
     // =========================================================================
     //  CONSTANTS & CONFIG
     // =========================================================================
+    /* One source shipped as both a userscript and an extension. Storage and
+       clipboard failures have to name the right authority, or a user reading
+       the message is sent to a manager they never installed. */
+    const IS_EXTENSION_BUILD = typeof chrome !== 'undefined' && Boolean(chrome.runtime && chrome.runtime.id);
+    const STORAGE_HOST_LABEL = IS_EXTENSION_BUILD ? 'extension storage' : 'userscript storage';
+    const COPY_FAILURE_MESSAGE = 'Copy failed. Check this page’s clipboard permission.';
     const VERSION = '2.11.0';
     const PREFIX  = 'imdb_enh_';
     const CINEBY_QUERY_KEY = PREFIX + 'cineby_query';
@@ -225,7 +231,7 @@
     ];
 
     const FEATURE_DETAILS = {
-        removeAds: 'Hides current IMDb ad placements, sponsored shells, and tracking pixels as early as userscript timing allows.',
+        removeAds: 'Hides current IMDb ad placements, sponsored shells, and tracking pixels as early as the page allows.',
         removeProUpsell: 'Hides explicit IMDbPro prompts and links from title and name pages while preserving list controls.',
         removeNewsSection: 'Keeps the page focused by removing IMDb news modules.',
         removeRelatedInterests: 'Hides broad interest recommendations that dilute title and cast pages.',
@@ -251,7 +257,7 @@
         expandedLinkMenu: 'Groups additional movie, review, subtitle, and TV lookup links.',
         trailerPopover: 'Adds an in-page trailer modal backed by a click-to-fetch YouTube lookup.',
         castAges: 'Shows a living person’s current age next to their birth date. IMDb already prints the age at death for people who have died.',
-        watchedMarking: 'Adds private Seen and Skip marks on title cards across titles, charts, lists, watchlists, filmographies, and search results. Marks stay in this userscript and do not change IMDb Watched.',
+        watchedMarking: 'Adds private Seen and Skip marks on title cards across titles, charts, lists, watchlists, filmographies, and search results. Marks stay on this device and do not change IMDb Watched.',
         servarrIntegration: 'Adds optional local Radarr/Sonarr quick-add buttons with library status indicator when API settings are configured.',
         mediaServerIntegration: 'Checks configured local Plex, Jellyfin, and Emby servers and shows whether the title is already in your library.',
         tvEpisodeTools: 'Surfaces the highest-rated episodes; synopsis blur remains opt-in through Spoiler blur on plot.',
@@ -1122,7 +1128,7 @@
     function getCinebyHandoffFailureMessage() {
         return cinebyHandoffFailure === 'pending'
             ? 'Another Cineby title is still opening. Wait for that tab, then try again.'
-            : 'Could not prepare the Cineby title handoff. Check userscript storage permissions or quota.';
+            : `Could not prepare the Cineby title handoff. Check ${STORAGE_HOST_LABEL} permissions or quota.`;
     }
 
     function storeCinebyQuery(title) {
@@ -1542,12 +1548,41 @@
     // =========================================================================
     //  TOAST
     // =========================================================================
+    /* Screen readers announce changes to a live region that is already in the
+       accessibility tree; inserting a node that *is* the region is unreliable. Every
+       non-visual confirmation in the product goes through showToast, so the region is
+       created once and only its text changes. The visible toast stays a separate,
+       aria-hidden element so its enter/exit animation cannot disturb announcements. */
+    let toastTimers = [];
+    function ensureToastAnnouncer() {
+        const existing = document.getElementById('enh-toast-announcer');
+        if (existing) return existing;
+        if (!document.body) return null;
+        const announcer = makeEl('div', {
+            id:'enh-toast-announcer', role:'status', 'aria-live':'polite', 'aria-atomic':'true',
+        });
+        document.body.appendChild(announcer);
+        return announcer;
+    }
+
     function showToast(msg, duration = 2500) {
+        const message = String(msg ?? '');
+        toastTimers.splice(0).forEach(clearTimeout);
+        const announcer = ensureToastAnnouncer();
+        if (announcer) announcer.textContent = message;
+
         document.getElementById('enh-toast')?.remove();
-        const t = makeEl('div', { id: 'enh-toast', role: 'status', 'aria-live': 'polite' }, msg);
+        if (!document.body) return;
+        const t = makeEl('div', { id:'enh-toast', 'aria-hidden':'true' }, message);
         document.body.appendChild(t);
         requestAnimationFrame(() => t.classList.add('visible'));
-        setTimeout(() => { t.classList.remove('visible'); setTimeout(() => t.remove(), 350); }, duration);
+        toastTimers.push(setTimeout(() => {
+            t.classList.remove('visible');
+            toastTimers.push(setTimeout(() => {
+                t.remove();
+                if (announcer) announcer.textContent = '';
+            }, 350));
+        }, duration));
     }
 
     function trySaveSetting(key, value, { notify = true } = {}) {
@@ -1555,7 +1590,7 @@
         catch (error) {
             if (notify) {
                 console.warn(`[IMDb Enhanced] setting write failed (${key}):`, error);
-                showToast('Could not save locally. Check userscript storage permissions or quota.', 4500);
+                showToast(`Could not save locally. Check ${STORAGE_HOST_LABEL} permissions or quota.`, 4500);
             }
             try { document.dispatchEvent(new CustomEvent('imdb-enhanced:settings-save-failed', { detail:{ key } })); }
             catch { /* the write result is still returned to its control */ }
@@ -1579,7 +1614,7 @@
        only IMDb owns this presentation layer, and the Cineby handoff must stay silent. */
     if (isIMDbHost()) {
         document.addEventListener('imdb-enhanced:clipboard-failed', () => {
-            showToast('Copy failed. Check this page’s clipboard permission.', 4500);
+            showToast(COPY_FAILURE_MESSAGE, 4500);
         });
     }
 
@@ -1792,7 +1827,7 @@
     async function seerrRequest(path, opts = {}) {
         const cfg = getSeerrConfig();
         if (!isLocalServarrUrl(cfg.baseUrl)) {
-            throw new Error('Only localhost and 127.0.0.1 Overseerr/Jellyseerr URLs are allowed by this userscript build.');
+            throw new Error('Only localhost and 127.0.0.1 Overseerr/Jellyseerr URLs are allowed by this build.');
         }
         return httpRequest(buildLocalServiceUrl(cfg.baseUrl, `api/v1/${String(path).replace(/^\/+/, '')}`, opts.query), {
             method: opts.method || 'GET',
@@ -1818,7 +1853,7 @@
     async function servarrRequest(kind, path, opts = {}) {
         const cfg = getServarrConfig(kind);
         if (!isLocalServarrUrl(cfg.baseUrl)) {
-            throw new Error('Only localhost and 127.0.0.1 Servarr URLs are allowed by this userscript build.');
+            throw new Error('Only localhost and 127.0.0.1 Servarr URLs are allowed by this build.');
         }
         return httpRequest(buildServarrUrl(cfg, path, opts.query), {
             method: opts.method || 'GET',
@@ -1952,7 +1987,7 @@
     }
     async function mediaServerRequest(cfg, path, opts = {}) {
         if (!isLocalServiceUrl(cfg.baseUrl)) {
-            throw new Error('Only localhost and 127.0.0.1 media server URLs are allowed by this userscript build.');
+            throw new Error('Only localhost and 127.0.0.1 media server URLs are allowed by this build.');
         }
         const query = { ...(opts.query || {}) };
         const headers = cfg.kind === 'plex'
@@ -5881,7 +5916,7 @@ section[id*="quote" i] .ipc-list-card { padding: 4px 0 !important; margin: 2px 0
                     const ids = this._ids();
                     if (!ids.length) { showToast('No IMDb title IDs found'); return; }
                     if (!copyTextToClipboard(ids.join('\n'))) {
-                        showToast('Copy failed. Check the userscript clipboard permission.', 4500);
+                        showToast(COPY_FAILURE_MESSAGE, 4500);
                         return;
                     }
                     showToast(`Copied ${ids.length} IMDb IDs`);
@@ -6249,7 +6284,7 @@ section[id*="quote" i] .ipc-list-card { padding: 4px 0 !important; margin: 2px 0
                     innerHTML: `<svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.5" stroke-linecap="round" stroke-linejoin="round"><rect x="9" y="9" width="13" height="13" rx="2"/><path d="M5 15H4a2 2 0 0 1-2-2V4a2 2 0 0 1 2-2h9a2 2 0 0 1 2 2v1"/></svg><span>${imdbId}</span>`,
                     onClick: () => showToast(copyTextToClipboard(imdbId)
                         ? `Copied ${imdbId}`
-                        : 'Copy failed. Check the userscript clipboard permission.', 4500)
+                        : COPY_FAILURE_MESSAGE, 4500)
                 });
                 appendTitleStackItem(btn, TITLE_STACK_ORDER.quickCopyID);
             }).catch(() => {});
@@ -6274,7 +6309,7 @@ section[id*="quote" i] .ipc-list-card { padding: 4px 0 !important; margin: 2px 0
                     const id = getIMDbID();
                     if (id) showToast(copyTextToClipboard(id)
                         ? `Copied ${id}`
-                        : 'Copy failed. Check the userscript clipboard permission.', 4500);
+                        : COPY_FAILURE_MESSAGE, 4500);
                 }
                 else if (e.key === 'r') { document.querySelector('[data-testid="hero-rating-bar__aggregate-rating"]')?.scrollIntoView({ behavior:getEnhancementScrollBehavior(), block:'center' }); }
                 else if (e.key === 't') { window.scrollTo({ top:0, behavior:getEnhancementScrollBehavior() }); }
@@ -6305,6 +6340,13 @@ section[id*="quote" i] .ipc-list-card { padding: 4px 0 !important; margin: 2px 0
     pointer-events: none;
 }
 #enh-toast.visible { transform: translateY(0); opacity: 1; }
+/* Announced, never drawn. Kept in the layout tree (not display:none) so the live
+   region stays in the accessibility tree between messages. */
+#enh-toast-announcer {
+    position: fixed; bottom: 0; left: 0; width: 1px; height: 1px; padding: 0;
+    overflow: hidden; clip-path: inset(50%); white-space: nowrap; border: 0;
+    pointer-events: none;
+}
 
 /* ════ Editorial Title Surface ════ */
 section[data-testid="hero-parent"].enh-editorial-native-hidden { display: none !important; }
@@ -7980,7 +8022,7 @@ section[data-testid="hero-parent"].enh-editorial-native-hidden { display: none !
             <div class="enh-settings-footer">
                 <span>Version ${VERSION}</span>
                 <span>Changes save automatically.</span>
-                <span class="enh-settings-footer-note">Stored in your userscript manager.</span>
+                <span class="enh-settings-footer-note">Stored in ${STORAGE_HOST_LABEL}.</span>
             </div>
         </div>`;
 
@@ -8398,7 +8440,7 @@ section[data-testid="hero-parent"].enh-editorial-native-hidden { display: none !
                 const copied = copyTextToClipboard(serialized);
                 showToast(copied
                     ? 'Settings copied to clipboard'
-                    : 'Export copy failed. Check the userscript clipboard permission.', copied ? 2500 : 4500);
+                    : COPY_FAILURE_MESSAGE, copied ? 2500 : 4500);
             } catch (error) {
                 console.warn('[IMDb Enhanced] settings export failed:', error);
                 showToast('Settings could not be read for export. No backup was copied.', 4500);
@@ -8654,6 +8696,9 @@ section[data-testid="hero-parent"].enh-editorial-native-hidden { display: none !
             try { stopFeature(f); }
             catch (e) { console.warn(`[IMDb Enhanced] destroy ${f.key}:`, e); }
         });
+        // The announcer outlives routes on purpose — a live region has to already be
+        // in the accessibility tree to announce — but its timers must not.
+        toastTimers.splice(0).forEach(clearTimeout);
         document.getElementById('enh-toast')?.remove();
         destroySettingsChrome();
     }
@@ -8704,6 +8749,9 @@ section[data-testid="hero-parent"].enh-editorial-native-hidden { display: none !
         catch (error) { console.warn('[IMDb Enhanced] section-state migration deferred:', error); }
 
         injectGlobalStyles();
+        // Installed before anything can announce: a live region only speaks if it was
+        // already in the accessibility tree when its text changed.
+        ensureToastAnnouncer();
         const enabledFeatures = features.filter(f => get(f.key) && shouldInitFeature(f));
         enabledFeatures.forEach(feature => startFeature(feature, { context:'route' }));
         createSettingsPanel();
