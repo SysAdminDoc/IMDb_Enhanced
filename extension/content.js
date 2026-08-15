@@ -331,6 +331,7 @@
         embyUrl: 'http://localhost:8096', embyApiKey: '',
         // TV
         tvEpisodeTools: true, tvShowEnhancements: true, subtitleLinks: true,
+        episodeHeatmap: true,
         castAges: true,
         // Utility
         quickCopyID: true, watchlistBatch: true, listMultiSearch: true,
@@ -382,6 +383,7 @@
         mediaServerIntegration: 'Checks configured local Plex, Jellyfin, and Emby servers and shows whether the title is already in your library.',
         tvEpisodeTools: 'Surfaces the highest-rated episodes; synopsis blur remains opt-in through Spoiler blur on plot.',
         tvShowEnhancements: 'Adds TV-specific lookup shortcuts on series pages.',
+        episodeHeatmap: 'Colours IMDb’s own season×episode grid by rating and adds season averages, on the Ratings tab of a series.',
         subtitleLinks: 'Adds subtitle lookup links in the details section.',
         quickCopyID: 'Adds a visible IMDb ID copy button beside the title.',
         watchlistBatch: 'Adds a watchlist-page button that copies all visible IMDb title IDs.',
@@ -6076,6 +6078,112 @@ section[id*="quote" i] .ipc-list-card { padding: 4px 0 !important; margin: 2px 0
         }
     });
 
+    /* IMDb renders the season x episode grid itself on /title/tt…/ratings/ but leaves
+       every cell the same colour, which is the one thing a heatmap is for. The whole
+       series arrives in a single table, so this needs no request of any kind.
+       The rating is read from the link text — digits, identical in every language —
+       and never from aria-label, which IMDb translates. */
+    const HEATMAP_TABLE_SELECTOR = '[data-testid="heatmap__episode-data"]';
+    const HEATMAP_CELL_LIMIT = 2000;
+
+    function readHeatmapSeasons(table) {
+        const seasons = [];
+        const rows = table?.querySelectorAll?.('tr') || [];
+        let inspected = 0;
+        for (const row of rows) {
+            const cells = row.querySelectorAll('td.ratings-heatmap__table-data, td');
+            if (!cells.length) continue;
+            const episodes = [];
+            for (const cell of cells) {
+                if (++inspected > HEATMAP_CELL_LIMIT) break;
+                const link = cell.querySelector('a');
+                const rating = parseFloat((link?.textContent || '').trim());
+                if (Number.isFinite(rating) && rating >= 0 && rating <= 10) episodes.push({ cell, rating });
+            }
+            if (episodes.length) seasons.push(episodes);
+            if (inspected > HEATMAP_CELL_LIMIT) break;
+        }
+        return seasons;
+    }
+
+    function summarizeHeatmapSeason(episodes) {
+        if (!episodes.length) return null;
+        const total = episodes.reduce((sum, entry) => sum + entry.rating, 0);
+        return Math.round((total / episodes.length) * 10) / 10;
+    }
+
+    reg({
+        key: 'episodeHeatmap', name: 'Episode heatmap colours', group: 'TV',
+        init() {
+            const isCurrent = createFeatureGuard(this);
+            addThemedCSS(t => `
+                td.enh-heatmap-cell a {
+                    background: var(--enh-heatmap-bg) !important;
+                    color: var(--enh-heatmap-text) !important;
+                    border-radius: 4px;
+                    display: block;
+                    font-weight: 700;
+                }
+                #enh-heatmap-summary {
+                    margin-top: 12px;
+                    display: flex;
+                    flex-wrap: wrap;
+                    gap: 8px;
+                    align-items: center;
+                }
+                .enh-heatmap-chip {
+                    display: inline-flex;
+                    gap: 6px;
+                    align-items: baseline;
+                    padding: 3px 9px;
+                    border-radius: 999px;
+                    font: 700 11px/1.4 -apple-system, BlinkMacSystemFont, 'Segoe UI', sans-serif;
+                    letter-spacing: .02em;
+                }
+                .enh-heatmap-chip--label {
+                    background: ${t.s2};
+                    color: ${t.tx2};
+                    font-weight: 600;
+                }
+                .enh-heatmap-legend { color: ${t.tx3}; font: 600 11px/1.4 -apple-system, BlinkMacSystemFont, 'Segoe UI', sans-serif; }
+            `, 'enh-episodeHeatmap');
+            waitFor(HEATMAP_TABLE_SELECTOR).then(table => {
+                if (!isCurrent() || !table) return;
+                const seasons = readHeatmapSeasons(table);
+                if (!seasons.length) return;
+                seasons.forEach(episodes => episodes.forEach(({ cell, rating }) => {
+                    const colour = ratingColor(rating);
+                    cell.classList.add('enh-heatmap-cell');
+                    cell.style.setProperty('--enh-heatmap-bg', colour.bg);
+                    cell.style.setProperty('--enh-heatmap-text', colour.text);
+                }));
+                const summary = makeEl('div', { id:'enh-heatmap-summary', 'aria-label':'Season averages' });
+                summary.appendChild(makeEl('span', { className:'enh-heatmap-chip enh-heatmap-chip--label' }, 'Season average'));
+                seasons.forEach((episodes, index) => {
+                    const average = summarizeHeatmapSeason(episodes);
+                    if (average === null) return;
+                    const colour = ratingColor(average);
+                    summary.appendChild(makeEl('span', {
+                        className:'enh-heatmap-chip',
+                        style:{ background:colour.bg, color:colour.text },
+                    }, `S${index + 1} ${average.toFixed(1)}`));
+                });
+                summary.appendChild(makeEl('span', { className:'enh-heatmap-legend' },
+                    'Colours: 8+ great · 7+ good · 6+ average · 5+ below · under 5 poor'));
+                table.parentElement?.insertBefore(summary, table.nextSibling);
+            }).catch(() => { /* the grid is absent on titles without episodes */ });
+        },
+        destroy() {
+            document.getElementById('enh-heatmap-summary')?.remove();
+            document.querySelectorAll('td.enh-heatmap-cell').forEach(cell => {
+                cell.classList.remove('enh-heatmap-cell');
+                cell.style.removeProperty('--enh-heatmap-bg');
+                cell.style.removeProperty('--enh-heatmap-text');
+            });
+            removeCSS('enh-episodeHeatmap');
+        },
+    });
+
     reg({
         key: 'tvShowEnhancements', name: 'TV show quick links', group: 'TV',
         init() {
@@ -6099,6 +6207,8 @@ section[id*="quote" i] .ipc-list-card { padding: 4px 0 !important; margin: 2px 0
                 const bar = makeEl('div', { id: 'enh-tv-bar' });
                 [
                     { l:'Episodes List', u:`https://www.imdb.com/title/${imdbId}/episodes/` },
+                    // IMDb buries its whole-series episode grid one route away.
+                    { l:'Ratings Grid', u:`https://www.imdb.com/title/${imdbId}/ratings/` },
                     { l:'TheTVDB', u:`https://www.thetvdb.com/search?query=${imdbId}` },
                     { l:'TVMaze', u:`https://www.tvmaze.com/search?q=${encodeURIComponent(title)}` },
                     { l:'Trakt', u:`https://app.trakt.tv/search?query=${encodeURIComponent(title)}` },
@@ -8575,7 +8685,7 @@ section[data-testid="hero-parent"].enh-editorial-native-hidden { display: none !
                 'searchButtons', 'externalLinks', 'trailerPopover', 'expandedLinkMenu', 'watchedMarking',
             ]),
             makeFeatureCard('TV & episodes', 'Focused tools for series and episode lists.', 'TV', [
-                'tvEpisodeTools', 'tvShowEnhancements', 'subtitleLinks',
+                'tvEpisodeTools', 'tvShowEnhancements', 'subtitleLinks', 'episodeHeatmap',
             ]),
             makeFeatureCard('Lists & shortcuts', 'Batch actions and quick navigation.', 'Lists', [
                 'watchlistBatch', 'listMultiSearch', 'quickCopyID', 'keyboardShortcuts',
@@ -8959,6 +9069,10 @@ section[data-testid="hero-parent"].enh-editorial-native-hidden { display: none !
     const EPISODE_LIST_FEATURE_KEYS = new Set([
         ...SECONDARY_PAGE_FEATURE_KEYS, 'tvEpisodeTools',
     ]);
+    /* The ratings tab is a title subpage that additionally owns IMDb's episode grid. */
+    const RATINGS_FEATURE_KEYS = new Set([
+        ...SECONDARY_PAGE_FEATURE_KEYS, 'episodeHeatmap',
+    ]);
     /* Search, advanced search, and the homepage are browse surfaces: they carry
        IMDb's own cards rather than one title, so they take presentation and
        cleanup work without any title-scoped control. */
@@ -8970,6 +9084,7 @@ section[data-testid="hero-parent"].enh-editorial-native-hidden { display: none !
         const path = location.pathname;
         const locale = '(?:[a-z]{2}(?:-[a-z]{2})?/)?';
         if (new RegExp(`^/${locale}title/tt\\d+/episodes/?$`, 'i').test(path)) return 'episodes';
+        if (new RegExp(`^/${locale}title/tt\\d+/ratings/?$`, 'i').test(path)) return 'ratings';
         if (new RegExp(`^/${locale}title/tt\\d+/?$`, 'i').test(path)) return 'title';
         if (new RegExp(`^/${locale}title/tt\\d+/`, 'i').test(path)) return 'title-subpage';
         if (new RegExp(`^/${locale}name/nm\\d+`, 'i').test(path)) return 'name';
@@ -8982,8 +9097,10 @@ section[data-testid="hero-parent"].enh-editorial-native-hidden { display: none !
     function shouldInitFeature(feature) {
         if (feature.group === 'Cleanup') return true;
         const surface = getPageSurface();
-        if (surface === 'title') return !['watchlistBatch', 'listMultiSearch'].includes(feature.key);
+        // episodeHeatmap would otherwise wait out its selector timeout on every title page.
+        if (surface === 'title') return !['watchlistBatch', 'listMultiSearch', 'episodeHeatmap'].includes(feature.key);
         if (surface === 'episodes') return EPISODE_LIST_FEATURE_KEYS.has(feature.key);
+        if (surface === 'ratings') return RATINGS_FEATURE_KEYS.has(feature.key);
         if (surface === 'collection') return COLLECTION_FEATURE_KEYS.has(feature.key);
         if (surface === 'name' || surface === 'title-subpage') return SECONDARY_PAGE_FEATURE_KEYS.has(feature.key);
         if (surface === 'search' || surface === 'home') return BROWSE_FEATURE_KEYS.has(feature.key);

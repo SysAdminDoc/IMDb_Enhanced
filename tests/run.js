@@ -45,6 +45,8 @@ function loadScriptTestHooks() {
         getRequestErrorMessage,
         getLinkedTitleId,
         findNativeTitleAction,
+        readHeatmapSeasons,
+        summarizeHeatmapSeason,
         buildDiagnosticsReport,
         getFeatureFailures,
         NATIVE_WATCHLIST_SELECTORS,
@@ -393,6 +395,38 @@ test('feature failures are retained and reportable without leaking secrets', () 
     assert(/cache entries: \d+/.test(report), 'the cache count must resolve, not report unavailable');
     assert(!/\?/.test(report.split('\n').find(line => line.startsWith('page:')) || ''),
         'the page line must carry no query string');
+});
+
+/* IMDb renders the whole-series grid itself on /ratings/ but leaves every cell the
+   same colour. Ratings are read from the link text because IMDb translates the
+   aria-label — the same trap that broke the watchlist lookup. */
+test('the episode heatmap reads ratings from link text and scopes to the ratings route', () => {
+    const hooks = loadScriptTestHooks();
+
+    hooks.setTestPath('/title/tt0903747/ratings/');
+    assert.strictEqual(hooks.getPageSurface(), 'ratings');
+    assert(hooks.shouldInitFeature({ key:'episodeHeatmap', group:'TV' }), 'the heatmap belongs on the ratings route');
+    assert(hooks.shouldInitFeature({ key:'modernUI', group:'Appearance' }), 'themes must still apply there');
+    hooks.setTestPath('/hi/title/tt0903747/ratings/');
+    assert.strictEqual(hooks.getPageSurface(), 'ratings', 'localized ratings routes must classify the same');
+    hooks.setTestPath('/title/tt0903747/');
+    assert(!hooks.shouldInitFeature({ key:'episodeHeatmap', group:'TV' }), 'the grid only exists on the ratings route');
+
+    // Live cell shape: td > div > a, rating in the link text, translated aria-label.
+    const cell = (text, label) => ({
+        querySelector: () => ({ textContent: text }),
+        _label: label,
+    });
+    const table = {
+        querySelectorAll: () => [
+            { querySelectorAll: () => [cell('9.0', 'सीज़न 1 एपिसोड 1, रेटिंग 9.0'), cell('8.6'), cell('')] },
+            { querySelectorAll: () => [cell('7.9'), cell('5.1')] },
+        ],
+    };
+    const seasons = Array.from(hooks.readHeatmapSeasons(table)).map(s => Array.from(s).map(e => e.rating));
+    assert.deepStrictEqual(seasons, [[9, 8.6], [7.9, 5.1]], 'unrated cells are skipped, translated labels ignored');
+    assert.strictEqual(hooks.summarizeHeatmapSeason([{ rating:9 }, { rating:8 }]), 8.5);
+    assert.strictEqual(hooks.summarizeHeatmapSeason([]), null);
 });
 
 test('IMDb title data selection ignores unrelated or malformed structured data', () => {

@@ -4,6 +4,8 @@
 
 ### Added
 
+- The Ratings tab of a TV series now colour-grades IMDb's own season-by-episode grid and adds a season-average strip and a colour key. IMDb renders the whole series in one table but leaves every cell the same colour; this needs no network request at all. Series pages gain a "Ratings Grid" quick link to it. Toggle: Tools -> TV.
+
 - The GM API contract the userscript depends on is now asserted against both implementations — the userscript manager and the generated MV3 bridge — by one shared suite (`npm test`). Four shipped defects came from the bridge quietly dropping a guarantee while every test stayed green; each of those four now fails the suite if reintroduced.
 
 ### Added
