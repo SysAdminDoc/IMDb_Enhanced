@@ -212,7 +212,7 @@
         embyUrl: 'http://localhost:8096', embyApiKey: '',
         // TV
         tvEpisodeTools: true, tvShowEnhancements: true, subtitleLinks: true,
-        episodeHeatmap: true,
+        episodeHeatmap: true, ratingGap: true,
         castAges: true,
         // Utility
         quickCopyID: true, watchlistBatch: true, listMultiSearch: true,
@@ -267,6 +267,7 @@
         tvEpisodeTools: 'Surfaces the highest-rated episodes; synopsis blur remains opt-in through Spoiler blur on plot.',
         tvShowEnhancements: 'Adds TV-specific lookup shortcuts on series pages.',
         episodeHeatmap: 'Colours IMDb’s own season×episode grid by rating and adds season averages, on the Ratings tab of a series.',
+        ratingGap: 'On the Ratings tab, compares IMDb’s weighted rating with the unweighted mean of the raw votes.',
         subtitleLinks: 'Adds subtitle lookup links in the details section.',
         quickCopyID: 'Adds a visible IMDb ID copy button beside the title.',
         watchlistBatch: 'Adds a watchlist-page button that copies all visible IMDb title IDs.',
@@ -4071,6 +4072,48 @@ section[id*="quote" i] .ipc-list-card { padding: 4px 0 !important; margin: 2px 0
         }));
     }
 
+    /* IMDb's displayed rating is deliberately weighted to resist vote brigading, and it
+       publishes the unweighted mean only on /ratings/. The gap between the two is the
+       clearest public signal that a title's votes were pushed one way, which is what
+       2026 discussion of IMDb ratings is largely about. It needs no request and no new
+       selector: the same buckets the histogram already draws carry it. Verified against
+       IMDb's own figure on tt0133093 (8.6) and tt0903747 (9.2) on 2026-08-15. */
+    function computeUnweightedMean(buckets) {
+        if (!Array.isArray(buckets) || !buckets.length) return null;
+        let votes = 0;
+        let weighted = 0;
+        for (const bucket of buckets) {
+            const rating = Number(bucket?.rating);
+            const count = Number(bucket?.voteCount);
+            if (!Number.isFinite(rating) || !Number.isFinite(count) || count < 0) continue;
+            if (rating < 1 || rating > 10) continue;
+            votes += count;
+            weighted += rating * count;
+        }
+        if (!votes) return null;
+        return Math.round((weighted / votes) * 10) / 10;
+    }
+
+    /* The ratings route carries no JSON-LD at all (verified 2026-08-15), so the
+       weighted figure has to come from the rendered score there. Digits are
+       language-independent; the surrounding copy is not. */
+    function readDisplayedRating() {
+        const structured = Number(getIMDbRating());
+        if (Number.isFinite(structured) && structured > 0) return structured;
+        const el = document.querySelector('[data-testid="rating-button__aggregate-rating__score"]')
+            || document.querySelector('[data-testid="hero-rating-bar__aggregate-rating__score"]');
+        const parsed = parseFloat(String(el?.textContent || '').trim());
+        return Number.isFinite(parsed) && parsed > 0 && parsed <= 10 ? parsed : null;
+    }
+
+    function describeRatingGap(unweighted, displayed) {
+        if (unweighted === null || !Number.isFinite(displayed)) return null;
+        const delta = Math.round((displayed - unweighted) * 10) / 10;
+        if (!delta) return `Unweighted ${unweighted.toFixed(1)} — same as the displayed rating.`;
+        const direction = delta > 0 ? 'above' : 'below';
+        return `Unweighted ${unweighted.toFixed(1)} · IMDb's weighting sits ${Math.abs(delta).toFixed(1)} ${direction} it.`;
+    }
+
     function findHistogramData(root, maxNodes = 10000) {
         const queue = [root];
         for (let index = 0; index < queue.length && index < maxNodes; index++) {
@@ -4084,6 +4127,36 @@ section[id*="quote" i] .ipc-list-card { padding: 4px 0 !important; margin: 2px 0
         return null;
     }
 
+    /* IMDb's ratings payload is a ~736 KB application-data blob and histogramData sits
+       far deeper than the graph walk's node budget, so the generic traversal never
+       reaches it and the distribution silently reads as absent. Slicing the one array
+       out by key is both cheaper and bounded: a 10-bucket array is under a kilobyte, so
+       a generous ceiling still rejects anything malformed instead of scanning the blob.
+       Verified 2026-08-15 on /title/tt0133093/ratings/. */
+    const HISTOGRAM_VALUES_KEY = '"histogramValues":';
+    const HISTOGRAM_SLICE_LIMIT = 20000;
+
+    function extractHistogramValues(source) {
+        const start = source.indexOf(HISTOGRAM_VALUES_KEY);
+        if (start < 0) return null;
+        const open = source.indexOf('[', start + HISTOGRAM_VALUES_KEY.length);
+        if (open < 0) return null;
+        let depth = 0;
+        const ceiling = Math.min(source.length, open + HISTOGRAM_SLICE_LIMIT);
+        for (let i = open; i < ceiling; i += 1) {
+            const ch = source[i];
+            if (ch === '[') depth += 1;
+            else if (ch === ']') {
+                depth -= 1;
+                if (!depth) {
+                    try { return normalizeHistogramData(JSON.parse(source.slice(open, i + 1))); }
+                    catch { return null; }
+                }
+            }
+        }
+        return null;
+    }
+
     function parseHistogramScriptTexts(scriptTexts) {
         let inspectedScripts = 0;
         for (const text of scriptTexts || []) {
@@ -4091,6 +4164,8 @@ section[id*="quote" i] .ipc-list-card { padding: 4px 0 !important; margin: 2px 0
             inspectedScripts += 1;
             const source = toBoundedText(text, STRUCTURED_DATA_TEXT_LIMIT);
             if (!source || (!source.includes('histogramData') && !source.includes('ratingsSummary'))) continue;
+            const sliced = extractHistogramValues(source);
+            if (sliced) return sliced;
             try {
                 const data = findHistogramData(JSON.parse(source));
                 if (data) return data;
@@ -6166,6 +6241,39 @@ section[id*="quote" i] .ipc-list-card { padding: 4px 0 !important; margin: 2px 0
         const total = episodes.reduce((sum, entry) => sum + entry.rating, 0);
         return Math.round((total / episodes.length) * 10) / 10;
     }
+
+    /* IMDb publishes the unweighted mean only here, in small type, with no comparison
+       drawn. The gap against the weighted figure it displays everywhere else is the
+       clearest public signal that a title's votes were pushed. Verified 2026-08-15:
+       title pages no longer carry histogram data at all, so this belongs on /ratings/. */
+    reg({
+        key: 'ratingGap', name: 'Weighted vs unweighted rating', group: 'Scores',
+        init() {
+            const isCurrent = createFeatureGuard(this);
+            addThemedCSS(t => `
+                #enh-rating-gap {
+                    margin: 10px 0 0; padding: 8px 12px; border-radius: 8px;
+                    background: ${t.sf1}; border: 1px solid ${t.bd1}; color: ${t.tx2};
+                    font: 600 12px/1.5 -apple-system, BlinkMacSystemFont, 'Segoe UI', sans-serif;
+                }
+                #enh-rating-gap strong { color: ${t.tx0}; }
+            `, 'enh-ratingGap');
+            waitFor('[data-testid="histogram-root"]').then(root => {
+                if (!isCurrent() || !root || document.getElementById('enh-rating-gap')) return;
+                const unweighted = computeUnweightedMean(getHistogramData());
+                const gap = describeRatingGap(unweighted, readDisplayedRating());
+                if (!gap) return;
+                root.parentElement?.insertBefore(makeEl('div', { id:'enh-rating-gap', role:'note' },
+                    makeEl('strong', {}, gap),
+                    makeEl('span', {}, ' IMDb weights its displayed rating to resist vote brigading, so a wide gap means the raw votes disagree with what the page shows.')
+                ), root.nextSibling);
+            }).catch(() => { /* titles without a rating distribution */ });
+        },
+        destroy() {
+            document.getElementById('enh-rating-gap')?.remove();
+            removeCSS('enh-ratingGap');
+        },
+    });
 
     reg({
         key: 'episodeHeatmap', name: 'Episode heatmap colours', group: 'TV',
@@ -8742,7 +8850,7 @@ section[data-testid="hero-parent"].enh-editorial-native-hidden { display: none !
         previewCard.appendChild(preview);
         ratingsPage.append(previewCard,
             makeEl('div', { style:{ marginTop:'12px' } }, makeFeatureCard('Score sources', 'Choose which ratings and availability information to show.', 'Title pages', [
-                'ratingHistogram', 'inlineRTScore', 'inlineLetterboxdScore', 'inlineMetacriticScore', 'streamAvailability',
+                'ratingHistogram', 'ratingGap', 'inlineRTScore', 'inlineLetterboxdScore', 'inlineMetacriticScore', 'streamAvailability',
             ])),
             makeEl('div', { className:'enh-settings-callout', style:{ marginTop:'12px' } },
                 makeEl('strong', {}, 'Privacy'),
@@ -9170,7 +9278,7 @@ section[data-testid="hero-parent"].enh-editorial-native-hidden { display: none !
     ]);
     /* The ratings tab is a title subpage that additionally owns IMDb's episode grid. */
     const RATINGS_FEATURE_KEYS = new Set([
-        ...SECONDARY_PAGE_FEATURE_KEYS, 'episodeHeatmap',
+        ...SECONDARY_PAGE_FEATURE_KEYS, 'episodeHeatmap', 'ratingGap',
     ]);
     /* Search, advanced search, and the homepage are browse surfaces: they carry
        IMDb's own cards rather than one title, so they take presentation and
@@ -9197,7 +9305,7 @@ section[data-testid="hero-parent"].enh-editorial-native-hidden { display: none !
         if (feature.group === 'Cleanup') return true;
         const surface = getPageSurface();
         // episodeHeatmap would otherwise wait out its selector timeout on every title page.
-        if (surface === 'title') return !['watchlistBatch', 'listMultiSearch', 'episodeHeatmap'].includes(feature.key);
+        if (surface === 'title') return !['watchlistBatch', 'listMultiSearch', 'episodeHeatmap', 'ratingGap'].includes(feature.key);
         if (surface === 'episodes') return EPISODE_LIST_FEATURE_KEYS.has(feature.key);
         if (surface === 'ratings') return RATINGS_FEATURE_KEYS.has(feature.key);
         if (surface === 'collection') return COLLECTION_FEATURE_KEYS.has(feature.key);

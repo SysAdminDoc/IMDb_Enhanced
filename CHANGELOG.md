@@ -4,6 +4,12 @@
 
 ### Added
 
+- The Ratings tab now compares IMDb's displayed rating with the unweighted mean of the raw votes and says which way the weighting leans. IMDb publishes the unweighted figure there in small type and draws no comparison; a wide gap is the clearest public signal that a title's votes were pushed. Computed from the distribution already on the page — no request. Toggle: Ratings → Score sources.
+
+### Fixed
+
+- The rating distribution is found again on pages that publish it. IMDb's ratings payload is a ~736 KB application-data blob and the distribution sits deeper in it than the parser's traversal budget reached, so it read as absent; the one array is now sliced out by key under its own bound.
+
 - Extension builds now notice when a newer version has been published and say so, once, with a link and a Dismiss button. An unpacked extension has no way to update itself and Chrome only permits off-store hosting on Linux, so this is the only available mitigation. It reads the published version at most once a day, sends nothing about you, fails silently offline, and can be turned off under Settings → Data → Updates. The userscript build omits it entirely — it updates through its manager.
 
 ## 2.13.0 — 2026-08-15

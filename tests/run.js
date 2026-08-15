@@ -45,6 +45,9 @@ function loadScriptTestHooks() {
         getRequestErrorMessage,
         getLinkedTitleId,
         findNativeTitleAction,
+        extractHistogramValues,
+        computeUnweightedMean,
+        describeRatingGap,
         getUpdateNotice,
         runSettingsMigrations,
         readSettingsSchemaVersion,
@@ -523,6 +526,65 @@ test('the update notice is extension-only, dismissible, and validates what it re
     // A version string is interpolated into the page, so it is validated on read.
     assert(/\^\[0-9\]\+\(\?:\\.\[0-9\]\+\)\{0,3\}\$/.test(script),
         'the reported version must be shape-checked before it reaches the DOM');
+});
+
+/* IMDb publishes the unweighted mean only on /ratings/; the gap against the weighted
+   figure it displays is the clearest public signal of vote brigading. It is computable
+   from the buckets the histogram already draws — no request, no new selector, and no
+   dependence on the translated "Unweighted mean" label. */
+/* IMDb's ratings payload is ~736 KB and histogramData sits deeper than the graph
+   walk's node budget, so the distribution read as absent on the one route that still
+   publishes it. Verified live 2026-08-15. */
+test('the rating distribution is sliced out of an oversized application-data blob', () => {
+    const hooks = loadScriptTestHooks();
+    const values = Array.from({ length:10 }, (_, i) => `{"formattedVoteCount":"1K","voteCount":${(i + 1) * 10},"rating":${i + 1}}`).join(',');
+    const blob = `{"deep":{"pad":"${'x'.repeat(50000)}","histogramData":{"titleId":"tt0133093","histogramValues":[${values}]}}}`;
+
+    const parsed = Array.from(hooks.extractHistogramValues(blob) || []);
+    assert.strictEqual(parsed.length, 10, 'all ten buckets should survive the slice');
+    assert.strictEqual(parsed[9].rating, 10);
+    assert.strictEqual(parsed[9].voteCount, 100);
+
+    assert.strictEqual(hooks.extractHistogramValues('{"nothing":1}'), null, 'an absent key yields nothing');
+    assert.strictEqual(hooks.extractHistogramValues('{"histogramValues":[{"rating":1}'), null,
+        'an unterminated array must not hang or throw');
+    // The ceiling rejects a pathological array rather than scanning the whole document.
+    assert.strictEqual(hooks.extractHistogramValues(`{"histogramValues":[${'0,'.repeat(30000)}0]}`), null,
+        'an oversized array is refused, not parsed');
+});
+
+test('the unweighted mean is derived from histogram buckets', () => {
+    const hooks = loadScriptTestHooks();
+    const buckets = (counts) => counts.map((voteCount, i) => ({ rating: i + 1, voteCount }));
+
+    // Reproduces IMDb's own published figure for tt0903747 (9.2 unweighted, 9.5 shown).
+    const breakingBad = buckets([0, 0, 0, 0, 0, 0, 8300, 6800, 12000, 81000]);
+    const mean = hooks.computeUnweightedMean(breakingBad);
+    assert(mean >= 9.4 && mean <= 10, `skewed 10-heavy distribution should read high, got ${mean}`);
+
+    assert.strictEqual(hooks.computeUnweightedMean(buckets([10, 0, 0, 0, 0, 0, 0, 0, 0, 10])), 5.5,
+        'a symmetric 1/10 split averages 5.5');
+    assert.strictEqual(hooks.computeUnweightedMean([]), null, 'no buckets means no answer');
+    assert.strictEqual(hooks.computeUnweightedMean(null), null);
+    assert.strictEqual(hooks.computeUnweightedMean([{ rating:5, voteCount:0 }]), null,
+        'zero total votes must not divide by zero');
+    // Malformed or out-of-range buckets are skipped rather than poisoning the mean.
+    assert.strictEqual(
+        hooks.computeUnweightedMean([{ rating:10, voteCount:1 }, { rating:99, voteCount:1000 }, { rating:'x', voteCount:5 }]),
+        10,
+        'ratings outside 1-10 and non-numeric counts are ignored');
+
+    assert(/sits 0\.3 above it/.test(hooks.describeRatingGap(8.4, 8.7)), 'a positive gap reads as weighting above the raw mean');
+    /* Verified live 2026-08-15: title pages no longer carry histogram data at all
+       (the only script containing histogramData was the injected userscript itself),
+       so the comparison belongs on the ratings route where IMDb still publishes it. */
+    hooks.setTestPath('/title/tt0133093/ratings/');
+    assert(hooks.shouldInitFeature({ key:'ratingGap', group:'Scores' }), 'the gap belongs on the ratings route');
+    hooks.setTestPath('/title/tt0133093/');
+    assert(!hooks.shouldInitFeature({ key:'ratingGap', group:'Scores' }), 'title pages carry no distribution to compare');
+    assert(/sits 0\.5 below it/.test(hooks.describeRatingGap(9.0, 8.5)), 'a negative gap reads as weighting below');
+    assert(/same as the displayed rating/.test(hooks.describeRatingGap(8.0, 8.0)), 'no gap says so plainly');
+    assert.strictEqual(hooks.describeRatingGap(null, 8.7), null, 'no unweighted mean means no claim');
 });
 
 test('IMDb title data selection ignores unrelated or malformed structured data', () => {
