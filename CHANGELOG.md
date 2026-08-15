@@ -4,6 +4,7 @@
 
 ### Fixed
 
+- The person-age addition on name pages now has a toggle, under Tools → People. It shipped enabled with no way to turn it off short of editing storage by hand.
 - Settings → Sites: destination rows put the Purpose and URL template fields under the wrong column headers, which also squeezed the long URL template into the narrow track meant for the category selector.
 - Extension build: a rejected storage write is no longer silently discarded. Quota or permission failures now reach the "Save failed" state and the settings-import rollback instead of leaving the UI reporting "Saved".
 - Extension build: a refused clipboard write is reported instead of announcing a successful copy.

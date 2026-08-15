@@ -8224,6 +8224,9 @@ section[data-testid="hero-parent"].enh-editorial-native-hidden { display: none !
             ]),
             makeFeatureCard('Lists & shortcuts', 'Batch actions and quick navigation.', 'Lists', [
                 'watchlistBatch', 'listMultiSearch', 'quickCopyID', 'keyboardShortcuts',
+            ]),
+            makeFeatureCard('People', 'Additions to cast and crew pages.', 'Name pages', [
+                'castAges',
             ])
         ));
         toolsPage.appendChild(makeEl('div', { className:'enh-settings-callout', style:{ marginTop:'12px', justifyContent:'center' } },

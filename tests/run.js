@@ -112,6 +112,8 @@ function loadScriptTestHooks() {
         setSectionCollapsed,
         getDefaultSettingsEntries,
         getExportSettings,
+        getFeatureKeys: () => features.map(feature => feature.key),
+        FEATURE_DETAILS,
         SETTINGS_IMPORT_TEXT_LIMIT,
         CACHE_ENTRY_TEXT_LIMIT,
         SETTING_TEXT_LIMIT,
@@ -1275,6 +1277,21 @@ test('core features remain registered', () => {
         'themeAuto',
         'cacheGC',
     ].forEach(token => assert(script.includes(token), `${token} missing`));
+});
+
+test('every registered feature is reachable from the settings workspace', () => {
+    const hooks = loadScriptTestHooks();
+    /* makeFeatureCard resolves its keys with features.find(...).filter(Boolean), so a
+       key that is never listed is dropped in silence rather than erroring — which is
+       how a default-on feature shipped with no way to turn it off. */
+    const panel = script.slice(
+        script.indexOf('function createSettingsPanel()'),
+        script.indexOf('function createFAB()'));
+    assert(panel.length > 1000, 'the settings panel source should be locatable');
+    hooks.getFeatureKeys().forEach(key => {
+        assert(panel.includes(`'${key}'`), `${key} has no control in the settings workspace`);
+        assert(hooks.FEATURE_DETAILS[key], `${key} has no description for its settings row`);
+    });
 });
 
 test('version strings match', () => {
