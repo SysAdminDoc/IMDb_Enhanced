@@ -4,6 +4,7 @@
 
 ### Fixed
 
+- Extension build: IMDb no longer flashes its ad placeholders and default light chrome before the extension's styles load. The bridge has to await browser storage, which pushed everything past first paint; the anti-flash rules now ship as a stylesheet the browser applies synchronously, gated by an attribute cleared as soon as settings are known (or by a timeout, so a storage failure can never leave the page hidden).
 - The editorial title layout keeps IMDb's own hero video. Hiding the native hero removed the player from the page entirely; it is now re-homed into the rebuilt surface and handed back when the layout is turned off.
 - Editing a destination in Settings → Sites no longer writes to storage on every keystroke. Typing a 14-character name committed 14 full-list writes; it now commits one, and blurring the field still saves immediately.
 - Toast messages are announced reliably by screen readers. Each toast used to insert a brand-new live region, which assistive technology may not read; there is now one region, created up front, whose text changes.

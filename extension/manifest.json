@@ -72,7 +72,10 @@
         "content.js"
       ],
       "run_at": "document_start",
-      "all_frames": false
+      "all_frames": false,
+      "css": [
+        "boot.css"
+      ]
     }
   ],
   "minimum_chrome_version": "110"

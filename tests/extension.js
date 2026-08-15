@@ -51,6 +51,20 @@ assert(!/navigator\.clipboard\.writeText\([^)]*\)\.catch\(\(\) => \{\}\)/.test(c
 /* Five call sites read finalUrl to re-validate a URL after redirects; the bridge
    previously emitted only the platform-native responseURL, so every one fell back. */
 assert(content.includes('finalUrl:String(response.responseURL'), 'the bridge must expose finalUrl for post-redirect URL validation');
+/* Everything after the bridge's await runs with the parser already going, so the
+   anti-flash rules have to arrive through content_scripts.css, which the browser
+   applies synchronously at document_start. */
+const bootCss = fs.readFileSync(path.join(root, 'extension', 'boot.css'), 'utf8');
+assert.deepStrictEqual(manifest.content_scripts[0].css, ['boot.css'], 'boot styles must be injected synchronously by the browser');
+assert(fs.existsSync(path.join(root, 'extension', 'boot.css')), 'the generated boot stylesheet must ship');
+assert(bootCss.includes('html[data-imdb-enhanced-booting] body { visibility: hidden !important; }'),
+    'the boot gate must suppress the pre-theme flash');
+assert(bootCss.includes('.nas-slot'), 'boot rules must be generated from the userscript ad selectors');
+const preludeIndex = content.indexOf("setAttribute('data-imdb-enhanced-booting'");
+const awaitIndex = content.indexOf('await chrome.storage.local.get(null)');
+assert(preludeIndex > 0 && preludeIndex < awaitIndex, 'the boot gate must be set before the first await');
+assert(content.includes('setTimeout(__clearBoot,'), 'a storage failure must never leave the page hidden');
+assert(content.indexOf('__clearBoot();') > awaitIndex, 'the gate must clear once real settings are known');
 assert(content.includes("const VERSION = '" + pkg.version + "'"), 'generated content must include the current source');
 assert(!/\beval\s*\(/.test(content), 'MV3 content must not depend on eval');
 assert(background.includes('declarativeNetRequest.updateDynamicRules'), 'background worker must manage dynamic ad rules');
