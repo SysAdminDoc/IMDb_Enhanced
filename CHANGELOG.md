@@ -18,6 +18,9 @@
 
 ### Fixed
 
+- Rotten Tomatoes, Letterboxd and Metacritic results are announced to screen readers when they arrive, and each widget reports itself busy while loading. The widgets are rebuilt in place as results land, so a region inside them could never have spoken; announcements now come from one region created before any lookup starts.
+- Collapsible section toggles say which region they control, and the section navigator is a single stop in the tab order with arrow-key movement and a current-section marker, instead of one tab stop per section.
+
 - The Firefox build is now verified from the files it actually ships rather than from a manifest computed during the test run, and `npm test` builds it. Nothing previously read that directory, so a stale build and a broken generator looked identical without rebuilding by hand.
 
 - A feature that fails while a page loads now says so once, instead of reporting only to the browser console and leaving a silently missing feature. IMDb changes its markup without notice, so this is the expected failure rather than an exceptional one.

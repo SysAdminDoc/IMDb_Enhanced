@@ -1781,6 +1781,27 @@
         return announcer;
     }
 
+    /* Score widgets resolve long after the page settles and are rebuilt in place, so
+       they cannot host their own live region — a region only speaks if it already
+       existed in the accessibility tree when its text changed. One persistent
+       announcer, created up front, reports each result as it lands. */
+    function ensureScoreAnnouncer() {
+        const existing = document.getElementById('enh-score-announcer');
+        if (existing) return existing;
+        if (!document.body) return null;
+        const announcer = makeEl('div', {
+            id:'enh-score-announcer', role:'status', 'aria-live':'polite', 'aria-atomic':'true',
+        });
+        document.body.appendChild(announcer);
+        return announcer;
+    }
+
+    function announceScore(source, value) {
+        const announcer = ensureScoreAnnouncer();
+        if (!announcer) return;
+        announcer.textContent = value ? `${source}: ${value}` : `${source} unavailable`;
+    }
+
     function showToast(msg, duration = 2500) {
         const message = String(msg ?? '');
         toastTimers.splice(0).forEach(clearTimeout);
@@ -4291,6 +4312,7 @@ section[id*="quote" i] .ipc-list-card { padding: 4px 0 !important; margin: 2px 0
                 makeEl('span', { className:'enh-score-widget__value' }, hasScore ? `${score}%` : '--')
             );
             w.append(makeEl('div', { className:'enh-score-widget__label' }, 'TOMATOMETER'), scoreLink);
+            announceScore('Rotten Tomatoes', `${score}%`);
             if (hasAudience) w.appendChild(makeEl('div', { className:'enh-score-widget__sub' }, `Audience: ${audience}%`));
             bar.appendChild(w);
         },
@@ -4298,7 +4320,7 @@ section[id*="quote" i] .ipc-list-card { padding: 4px 0 !important; margin: 2px 0
             if (document.getElementById('enh-rt-widget')) return;
             const bar = findRatingBar();
             if (!bar) return;
-            const w = makeEl('div', { id: 'enh-rt-widget', className: 'enh-score-widget enh-score-widget--loading' });
+            const w = makeEl('div', { id: 'enh-rt-widget', className: 'enh-score-widget enh-score-widget--loading', 'aria-busy':'true' });
             w.innerHTML = `
                 <div class="enh-score-widget__label">TOMATOMETER</div>
                 <div class="enh-score-widget__skeleton" aria-label="Loading Rotten Tomatoes score"></div>
@@ -4383,13 +4405,14 @@ section[id*="quote" i] .ipc-list-card { padding: 4px 0 !important; margin: 2px 0
                 ),
                 makeEl('div', { className:'enh-score-widget__sub' }, count ? `${count} ratings` : 'Average rating')
             );
+            announceScore('Letterboxd', formatScore(score));
             bar.appendChild(w);
         },
         _renderLoading() {
             if (document.getElementById('enh-lb-widget')) return;
             const bar = findRatingBar();
             if (!bar) return;
-            const w = makeEl('div', { id: 'enh-lb-widget', className: 'enh-score-widget enh-score-widget--loading' });
+            const w = makeEl('div', { id: 'enh-lb-widget', className: 'enh-score-widget enh-score-widget--loading', 'aria-busy':'true' });
             w.innerHTML = `
                 <div class="enh-score-widget__label">LETTERBOXD</div>
                 <div class="enh-score-widget__skeleton" aria-label="Loading Letterboxd score"></div>
@@ -4499,13 +4522,14 @@ section[id*="quote" i] .ipc-list-card { padding: 4px 0 !important; margin: 2px 0
             if (hasUserScore) {
                 w.appendChild(makeEl('div', { className:'enh-score-widget__sub' }, `User: ${userScore.toFixed(1)}`));
             }
+            announceScore('Metascore', hasScore ? String(score) : '');
             bar.appendChild(w);
         },
         _renderLoading() {
             if (document.getElementById('enh-mc-widget')) return;
             const bar = findRatingBar();
             if (!bar) return;
-            const w = makeEl('div', { id: 'enh-mc-widget', className: 'enh-score-widget enh-score-widget--loading' });
+            const w = makeEl('div', { id: 'enh-mc-widget', className: 'enh-score-widget enh-score-widget--loading', 'aria-busy':'true' });
             w.innerHTML = `
                 <div class="enh-score-widget__label">METASCORE</div>
                 <div class="enh-score-widget__skeleton" aria-label="Loading Metacritic score"></div>
@@ -4620,7 +4644,7 @@ section[id*="quote" i] .ipc-list-card { padding: 4px 0 !important; margin: 2px 0
             if (document.getElementById('enh-jw-widget')) return;
             const bar = findRatingBar();
             if (!bar) return;
-            const w = makeEl('div', { id: 'enh-jw-widget', className: 'enh-score-widget enh-score-widget--loading enh-score-widget--availability' });
+            const w = makeEl('div', { id: 'enh-jw-widget', className: 'enh-score-widget enh-score-widget--loading enh-score-widget--availability', 'aria-busy':'true' });
             w.innerHTML = `
                 <div class="enh-score-widget__label">STREAMING</div>
                 <div class="enh-score-widget__skeleton" aria-label="Loading streaming availability"></div>
@@ -4678,8 +4702,11 @@ section[id*="quote" i] .ipc-list-card { padding: 4px 0 !important; margin: 2px 0
                 const collapsed = Boolean(collapseState[id]);
                 if (collapsed) sec.classList.add('enh-section--collapsed');
                 const sectionLabel = sec.querySelector('.ipc-title__text, h2, h3')?.textContent?.trim() || id;
+                /* aria-expanded says a region is open; aria-controls says which one. */
+                if (!sec.id) sec.id = `enh-section-${id}`;
                 const btn = makeEl('button', {
                     className: 'enh-collapse-btn', type: 'button', title: collapsed ? 'Expand section' : 'Collapse section',
+                    'aria-controls': sec.id,
                     'aria-expanded': String(!collapsed),
                     'aria-label': `${collapsed ? 'Expand' : 'Collapse'} ${sectionLabel}`,
                     textContent: collapsed ? '+' : '-',
@@ -4698,7 +4725,12 @@ section[id*="quote" i] .ipc-list-card { padding: 4px 0 !important; margin: 2px 0
         },
         destroy() {
             removeCSS('enh-collapsible');
-            document.querySelectorAll('.enh-collapse-btn').forEach(b => b.remove());
+            document.querySelectorAll('.enh-collapse-btn').forEach(b => {
+                const owned = b.getAttribute('aria-controls');
+                const section = owned && document.getElementById(owned);
+                if (section && owned.startsWith('enh-section-')) section.removeAttribute('id');
+                b.remove();
+            });
             document.querySelectorAll('.enh-section--collapsed').forEach(s => s.classList.remove('enh-section--collapsed'));
         }
     });
@@ -4815,7 +4847,32 @@ section[id*="quote" i] .ipc-list-card { padding: 4px 0 !important; margin: 2px 0
                 nav.appendChild(makeEl('button', {
                     className:'enh-qn-dot', type:'button', dataset:{ label:s.label }, textContent:s.label,
                     title: s.label, 'aria-label': `Jump to ${s.label}`,
-                    onClick: () => {
+                    /* A roving tabindex: the rail is one stop in the page's tab order and
+                       arrow keys move within it, rather than every section becoming its
+                       own stop between the page content and whatever follows. */
+                    tabIndex: -1,
+                    onKeyDown: event => {
+                        const dots = Array.from(nav.querySelectorAll('.enh-qn-dot'));
+                        const index = dots.indexOf(event.currentTarget);
+                        const step = event.key === 'ArrowDown' || event.key === 'ArrowRight' ? 1
+                            : event.key === 'ArrowUp' || event.key === 'ArrowLeft' ? -1
+                                : event.key === 'Home' ? -index
+                                    : event.key === 'End' ? dots.length - 1 - index : 0;
+                        if (!step && event.key !== 'Home' && event.key !== 'End') return;
+                        event.preventDefault();
+                        const next = dots[Math.min(dots.length - 1, Math.max(0, index + step))];
+                        if (!next) return;
+                        dots.forEach(dot => { dot.tabIndex = -1; });
+                        next.tabIndex = 0;
+                        next.focus();
+                    },
+                    onClick: event => {
+                        const dots = Array.from(nav.querySelectorAll('.enh-qn-dot'));
+                        dots.forEach(dot => {
+                            dot.tabIndex = dot === event.currentTarget ? 0 : -1;
+                            dot.removeAttribute('aria-current');
+                        });
+                        event.currentTarget.setAttribute('aria-current', 'true');
                         const target = resolveSection(s);
                         if (target?.getClientRects().length) {
                             target.scrollIntoView({ behavior:getEnhancementScrollBehavior(), block:'start' });
@@ -4823,6 +4880,8 @@ section[id*="quote" i] .ipc-list-card { padding: 4px 0 !important; margin: 2px 0
                     }
                 }));
             });
+            const firstDot = nav.querySelector('.enh-qn-dot');
+            if (firstDot) firstDot.tabIndex = 0;
             if (nav.children.length) document.body.appendChild(nav);
         },
         destroy() { removeCSS('enh-quickNav'); document.getElementById('enh-quicknav')?.remove(); }
@@ -6788,7 +6847,7 @@ section[id*="quote" i] .ipc-list-card { padding: 4px 0 !important; margin: 2px 0
 #enh-toast.visible { transform: translateY(0); opacity: 1; }
 /* Announced, never drawn. Kept in the layout tree (not display:none) so the live
    region stays in the accessibility tree between messages. */
-#enh-toast-announcer {
+#enh-toast-announcer, #enh-score-announcer {
     position: fixed; bottom: 0; left: 0; width: 1px; height: 1px; padding: 0;
     overflow: hidden; clip-path: inset(50%); white-space: nowrap; border: 0;
     pointer-events: none;
@@ -9267,6 +9326,9 @@ section[data-testid="hero-parent"].enh-editorial-native-hidden { display: none !
         // Installed before anything can announce: a live region only speaks if it was
         // already in the accessibility tree when its text changed.
         ensureToastAnnouncer();
+        // Same rule as the toast region: it only speaks if it was already in the
+        // accessibility tree when its text changed, so it cannot be created on demand.
+        ensureScoreAnnouncer();
         const enabledFeatures = features.filter(f => get(f.key) && shouldInitFeature(f));
         enabledFeatures.forEach(feature => startFeature(feature, { context:'route' }));
         createSettingsPanel();

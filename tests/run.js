@@ -475,6 +475,25 @@ test('themes honour forced colours and a request for more contrast', () => {
         'a request for more contrast must drop the glass surfaces');
 });
 
+/* Score widgets resolve after the page settles and are rebuilt in place. A live region
+   only speaks if it already existed when its text changed — the same rule that made the
+   toast announcer persistent — so it must be installed at init, not on first result. */
+test('score results are announced through a region that exists before any result', () => {
+    const initSource = script.slice(script.indexOf('function init()'));
+    const body = initSource.slice(0, initSource.indexOf('installSPARouter'));
+    assert(body.includes('ensureScoreAnnouncer()'),
+        'the score region must be installed during init, not created on first announcement');
+    assert(script.includes("id:'enh-score-announcer', role:'status', 'aria-live':'polite', 'aria-atomic':'true'"),
+        'the region must be a polite atomic status');
+    assert(/#enh-toast-announcer, #enh-score-announcer \{/.test(script),
+        'the region must use the visually-hidden rule that avoids the negative-margin guard');
+    ['Rotten Tomatoes', 'Letterboxd', 'Metascore'].forEach(source => {
+        assert(script.includes(`announceScore('${source}'`), `${source} results must be announced`);
+    });
+    assert.strictEqual((script.match(/'aria-busy':'true'/g) || []).length, 4,
+        'every loading score widget must report itself busy');
+});
+
 test('IMDb title data selection ignores unrelated or malformed structured data', () => {
     const hooks = loadScriptTestHooks();
     const selected = hooks.parseIMDbTitleStructuredData([
