@@ -1408,6 +1408,32 @@ test('site destinations support purpose, visibility, and ordering metadata', () 
     assert(script.includes("dataset:{ field:'category' }"), 'site editors should expose category selection');
     assert(script.includes("dataset:{ field:'enabled' }"), 'site editors should expose per-destination visibility');
     assert(script.includes("dataset:{ action:'up' }"), 'site editors should expose destination ordering');
+
+    /* The header row and every data row share one grid template, so their cell order
+       is a single contract: transposing two cells both mislabels the fields and gives
+       a column the track width sized for a different one. Compare the two sequences
+       rather than pinning either of them literally. */
+    const headerLabels = script
+        .slice(script.indexOf("className:'enh-site-editor__columns'"))
+        .split('\n')
+        .slice(0, 9)
+        .map(line => line.match(/makeEl\('span', \{\}, '([^']+)'\)/)?.[1])
+        .filter(Boolean);
+    const cellOrder = script
+        .slice(script.indexOf('row.appendChild(visibility);'))
+        .split('\n')
+        .slice(0, 7)
+        .map(line => line.match(/row\.appendChild\((\w+)\)/)?.[1])
+        .filter(Boolean);
+    const cellToColumn = {
+        visibility:'Visible', nameInput:'Name', categoryInput:'Purpose',
+        urlInput:'URL template', colorInput:'Color', order:'Move', remove:'Remove',
+    };
+    assert.strictEqual(headerLabels.length, 7, 'the editor should declare seven columns');
+    assert.strictEqual(
+        JSON.stringify(cellOrder.map(cell => cellToColumn[cell])),
+        JSON.stringify(headerLabels),
+        'site editor cells must appear in the same order as the column headers');
 });
 
 test('third-party response links stay on trusted HTTPS domains', () => {

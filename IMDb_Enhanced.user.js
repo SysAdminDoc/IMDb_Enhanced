@@ -7479,10 +7479,13 @@ section[data-testid="hero-parent"].enh-editorial-native-hidden { display: none !
                     updateCount();
                 });
             });
+            /* Cell order must track the header row above it — the two share one grid
+               template, so a transposition both mislabels the fields and hands the long
+               URL template the narrow track sized for the category select. */
             row.appendChild(visibility);
             row.appendChild(nameInput);
-            row.appendChild(urlInput);
             row.appendChild(categoryInput);
+            row.appendChild(urlInput);
             row.appendChild(colorInput);
             row.appendChild(order);
             row.appendChild(remove);

@@ -4,6 +4,7 @@
 
 ### Fixed
 
+- Settings → Sites: destination rows put the Purpose and URL template fields under the wrong column headers, which also squeezed the long URL template into the narrow track meant for the category selector.
 - Extension build: a rejected storage write is no longer silently discarded. Quota or permission failures now reach the "Save failed" state and the settings-import rollback instead of leaving the UI reporting "Saved".
 - Extension build: a refused clipboard write is reported instead of announcing a successful copy.
 - Extension build: cross-origin lookups can validate the URL they were actually redirected to again. The bridge exposed the resolved address under a name none of the five consumers read, so each fell back to the pre-redirect guess.
