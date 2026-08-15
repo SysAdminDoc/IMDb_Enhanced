@@ -7,6 +7,23 @@
     setTimeout(__clearBoot, 1500);
 
 
+    /* Chromium MV3 returns promises from chrome.* while Gecko's chrome.* alias is
+       callback-style, so calling .catch() on the return value is not portable —
+       permissions.js in this same build already guards for both. The callback form is
+       accepted by both engines, so every storage call goes through it. */
+    const __storage = (method, arg) => new Promise((resolve, reject) => {
+        const done = value => {
+            const failure = chrome.runtime && chrome.runtime.lastError;
+            if (failure) reject(new Error(failure.message || 'Extension storage failed'));
+            else resolve(value);
+        };
+        try {
+            const maybe = arg === undefined
+                ? chrome.storage.local[method](done)
+                : chrome.storage.local[method](arg, done);
+            if (maybe && typeof maybe.then === 'function') maybe.then(resolve, reject);
+        } catch (error) { reject(error); }
+    });
     const __clone = value => {
         if (value === undefined || value === null) return value;
         try { return structuredClone(value); } catch { return JSON.parse(JSON.stringify(value)); }
@@ -31,7 +48,7 @@
         if (!__stateReady) { __pendingChanges.push(changes); return; }
         __applyChanges(changes);
     });
-    const __extensionState = await chrome.storage.local.get(null).catch(() => ({}));
+    const __extensionState = await __storage('get', null).catch(() => ({}));
     Object.entries(__extensionState || {}).forEach(([key, value]) => { __state[key] = value; });
     __stateReady = true;
     __pendingChanges.splice(0).forEach(__applyChanges);
@@ -63,14 +80,14 @@
     globalThis.GM_setValue = (key, value) => {
         __takeWriteFailure();
         __state[key] = __clone(value);
-        chrome.storage.local.set({ [key]:__state[key] }).catch(__reportWriteFailure);
+        __storage('set', { [key]:__state[key] }).catch(__reportWriteFailure);
         if (key === 'imdb_enh_removeAds') __sendAdState(value !== false);
     };
     globalThis.GM_listValues = () => Object.keys(__state);
     globalThis.GM_deleteValue = key => {
         __takeWriteFailure();
         delete __state[key];
-        chrome.storage.local.remove(key).catch(__reportWriteFailure);
+        __storage('remove', key).catch(__reportWriteFailure);
         if (key === 'imdb_enh_removeAds') __sendAdState(true);
     };
     /* copyTextToClipboard reports success from this call returning, so a rejected

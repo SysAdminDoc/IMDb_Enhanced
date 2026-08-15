@@ -7,7 +7,6 @@ const ALLOWED_CONTENT_HOSTS = new Set(['www.imdb.com', 'www.cineby.at']);
 const ALLOWED_REQUEST_HOSTS = new Set([
     'www.rottentomatoes.com',
     'backend.metacritic.com',
-    'www.metacritic.com',
     'letterboxd.com',
     'www.justwatch.com',
     'www.youtube.com',
@@ -15,9 +14,31 @@ const ALLOWED_REQUEST_HOSTS = new Set([
     'localhost',
     '127.0.0.1',
 ]);
+/* Gecko's chrome.* alias is callback-style, so awaiting the return value of these
+   calls is not portable. The callback form is accepted by both engines. */
+function callApi(namespace, method, arg) {
+    return new Promise((resolve, reject) => {
+        const done = value => {
+            const failure = chrome.runtime && chrome.runtime.lastError;
+            if (failure) reject(new Error(failure.message || 'Extension API call failed'));
+            else resolve(value);
+        };
+        try {
+            const maybe = namespace[method](arg, done);
+            if (maybe && typeof maybe.then === 'function') maybe.then(resolve, reject);
+        } catch (error) { reject(error); }
+    });
+}
+
 const activeRequests = new Map();
 let adRuleUpdate = Promise.resolve();
 
+/* Dynamic rules persist across sessions and extension updates, so removing only
+   the ids this build knows about would strand any rule a future release drops.
+   The whole reserved band is cleared on every update instead. */
+const AD_RULE_ID_BASE = 1001;
+const AD_RULE_ID_CAPACITY = 50;
+const AD_RULE_IDS = Array.from({ length:AD_RULE_ID_CAPACITY }, (_, index) => AD_RULE_ID_BASE + index);
 const AD_RULES = [
     '||amazon-adsystem.com/',
     '||advertising.amazon.dev/',
@@ -27,7 +48,7 @@ const AD_RULES = [
     '||unagi.amazon.com/',
     '||unagi-na.amazon.com/',
 ].map((urlFilter, index) => ({
-    id: 1001 + index,
+    id: AD_RULE_ID_BASE + index,
     priority: 1,
     action: { type:'block' },
     condition: {
@@ -36,7 +57,6 @@ const AD_RULES = [
         resourceTypes: ['script', 'image', 'stylesheet', 'sub_frame', 'xmlhttprequest', 'media', 'font', 'object', 'other', 'ping'],
     },
 }));
-const AD_RULE_IDS = AD_RULES.map(rule => rule.id);
 
 function isAllowedContentSender(sender) {
     try {
@@ -72,7 +92,7 @@ function normalizeHeaders(value) {
 }
 
 async function updateAdBlocking(enabled) {
-    adRuleUpdate = adRuleUpdate.catch(() => {}).then(() => chrome.declarativeNetRequest.updateDynamicRules({
+    adRuleUpdate = adRuleUpdate.catch(() => {}).then(() => callApi(chrome.declarativeNetRequest, 'updateDynamicRules', {
             removeRuleIds: AD_RULE_IDS,
             addRules: enabled ? AD_RULES : [],
         }));
@@ -81,7 +101,7 @@ async function updateAdBlocking(enabled) {
 
 async function syncAdBlockingFromStorage() {
     try {
-        const stored = await chrome.storage.local.get(`${STORAGE_PREFIX}removeAds`);
+        const stored = await callApi(chrome.storage.local, 'get', `${STORAGE_PREFIX}removeAds`);
         await updateAdBlocking(stored[`${STORAGE_PREFIX}removeAds`] !== false);
     } catch (error) {
         console.warn('[IMDb Enhanced] extension ad rules could not be synchronized:', error);

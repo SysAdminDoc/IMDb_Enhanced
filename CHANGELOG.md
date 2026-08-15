@@ -4,6 +4,8 @@
 
 ### Fixed
 
+- The Firefox build no longer assumes browser APIs return promises. Gecko's `chrome.*` alias is callback-style, so the storage preload and the ad-rule sync could fail there; both now use the callback form both engines accept.
+- Dropped the `www.metacritic.com` host permission and proxy entry, which nothing ever requested. Lookups go to `backend.metacritic.com`.
 - Extension build: IMDb no longer flashes its ad placeholders and default light chrome before the extension's styles load. The bridge has to await browser storage, which pushed everything past first paint; the anti-flash rules now ship as a stylesheet the browser applies synchronously, gated by an attribute cleared as soon as settings are known (or by a timeout, so a storage failure can never leave the page hidden).
 - The editorial title layout keeps IMDb's own hero video. Hiding the native hero removed the player from the page entirely; it is now re-homed into the rebuilt surface and handed back when the layout is turned off.
 - Editing a destination in Settings → Sites no longer writes to storage on every keystroke. Typing a 14-character name committed 14 full-list writes; it now commits one, and blurring the field still saves immediately.
@@ -22,6 +24,11 @@
 - Extension build: cross-origin lookups can validate the URL they were actually redirected to again. The bridge exposed the resolved address under a name none of the five consumers read, so each fell back to the pre-redirect guess.
 - The Overseerr/Jellyseerr Request button works. Its request body was serialized twice, so the instance received a JSON string where it expected an object and rejected every request.
 - Extension build: private Seen/Skip marks are no longer lost when two IMDb tabs are open. The extension mirrored browser storage once at page load and never updated it, so the second tab to save a mark overwrote whatever the first had added. The mirror now follows storage for the life of the page, which also stops a consumed Cineby handoff from blocking later Cineby links in the tab that opened it.
+
+### Changed
+
+- Dynamic ad rules are now removed across a reserved id band, so a rule dropped in a future release cannot linger on existing installs.
+- `npm version` stages the README badge it rewrites, and version sync fails loudly instead of reporting success when a string no longer matches.
 
 ## 2.11.0 — 2026-08-14
 

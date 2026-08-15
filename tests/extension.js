@@ -33,7 +33,8 @@ assert(manifest.content_scripts[0].matches.includes('https://www.imdb.com/title/
 assert(!manifest.content_scripts[0].matches.includes('https://www.imdb.com/*'), 'extension content scope must not include IMDb homepage');
 
 assert(!content.includes('==UserScript=='), 'generated extension content must not retain userscript metadata');
-assert(content.includes('chrome.storage.local.get(null)'), 'extension content must preload extension storage');
+assert(content.includes("__storage('get', null)"), 'extension content must preload extension storage');
+assert(content.includes('chrome.storage.local[method](arg, done)'), 'storage calls must use the callback form both engines accept');
 assert(content.includes('globalThis.GM_xmlhttpRequest'), 'extension bridge must provide the shared request API');
 /* The userscript's cross-tab defences (setUserMark's forced re-read, the single-slot
    Cineby handoff) assume GM_getValue reflects live manager storage. A snapshot silently
@@ -61,13 +62,19 @@ assert(bootCss.includes('html[data-imdb-enhanced-booting] body { visibility: hid
     'the boot gate must suppress the pre-theme flash');
 assert(bootCss.includes('.nas-slot'), 'boot rules must be generated from the userscript ad selectors');
 const preludeIndex = content.indexOf("setAttribute('data-imdb-enhanced-booting'");
-const awaitIndex = content.indexOf('await chrome.storage.local.get(null)');
+const awaitIndex = content.indexOf("await __storage('get', null)");
 assert(preludeIndex > 0 && preludeIndex < awaitIndex, 'the boot gate must be set before the first await');
 assert(content.includes('setTimeout(__clearBoot,'), 'a storage failure must never leave the page hidden');
 assert(content.indexOf('__clearBoot();') > awaitIndex, 'the gate must clear once real settings are known');
 assert(content.includes("const VERSION = '" + pkg.version + "'"), 'generated content must include the current source');
 assert(!/\beval\s*\(/.test(content), 'MV3 content must not depend on eval');
-assert(background.includes('declarativeNetRequest.updateDynamicRules'), 'background worker must manage dynamic ad rules');
+assert(background.includes("callApi(chrome.declarativeNetRequest, 'updateDynamicRules'"), 'background worker must manage dynamic ad rules');
+assert(background.includes('function callApi('), 'background API calls must work on both callback- and promise-style engines');
+/* Dynamic rules outlive extension updates, so a build must clear the whole reserved
+   band rather than only the ids it happens to know about. */
+assert(background.includes('AD_RULE_ID_CAPACITY'), 'ad rule removal must cover a reserved id band');
+assert(!manifest.host_permissions.includes('https://www.metacritic.com/*'), 'only origins that are actually requested should be granted');
+assert(!background.includes("'www.metacritic.com'"), 'the proxy allowlist must not carry an origin nothing fetches');
 assert(background.includes("credentials: 'omit'"), 'background requests must omit destination credentials');
 assert(background.includes("ALLOWED_CONTENT_HOSTS"), 'background messages must be sender-scoped');
 assert(source.includes("category:'watch'"), 'userscript source should remain the extension source of truth');
