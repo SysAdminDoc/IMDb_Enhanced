@@ -143,6 +143,40 @@
         aria_use_theme: 'Use $1 theme',
         aria_watch_movie_and_show_sites: 'Watch movie and show sites',
         aria_where_streaming_availability_comes_from: 'Where streaming availability comes from',
+        error_backup_bad_kdf_cost: 'This encrypted backup declares an unusable key-derivation cost.',
+        error_backup_malformed: 'This encrypted backup is malformed and was not imported.',
+        error_backup_no_web_crypto: 'This browser does not expose Web Crypto, so an encrypted backup cannot be made.',
+        error_backup_not_settings_json: 'The backup decrypted but its contents are not valid settings JSON.',
+        error_backup_passphrase_required: 'Enter the passphrase this backup was encrypted with.',
+        error_backup_unrecognized: 'This is not a recognized encrypted backup.',
+        error_backup_unsupported_parameters: 'This encrypted backup uses parameters this version cannot read.',
+        error_backup_wrong_passphrase: 'Wrong passphrase, or the backup has been altered. Nothing was changed.',
+        error_copy_failed: 'Copy failed. Check this page’s clipboard permission.',
+        error_csv_empty: 'Paste CSV data or choose a CSV file first.',
+        error_csv_no_header: 'CSV does not contain a header row.',
+        error_csv_no_usable_column: 'CSV needs a Const or imdbID column, or a Title column that can match an existing local title.',
+        error_csv_stray_quote: 'CSV has a quote in the middle of an unquoted field.',
+        error_csv_too_large: 'CSV import is too large. Use a file under 4 MB.',
+        error_csv_unterminated_quote: 'CSV ends inside a quoted field.',
+        error_import_recovery_incomplete: 'Import failed and automatic recovery was incomplete. Reload before changing settings.',
+        error_import_rolled_back: 'Import could not be saved; previous settings were restored.',
+        error_media_server_local_only: 'Only localhost and 127.0.0.1 media server URLs are allowed by this build.',
+        error_redirect_changed_origin: 'Blocked: the service redirected to a different site.',
+        error_redirect_not_allowed: 'Blocked: the service redirected somewhere this extension does not allow.',
+        error_redirect_trust_boundary: 'Blocked: the service redirected between a local and a public address.',
+        error_redirect_with_credential: 'Blocked: the service tried to redirect a request carrying your API key.',
+        error_request_aborted: 'Request aborted',
+        error_request_failed: 'Request failed',
+        error_request_http: 'The service returned an HTTP error',
+        error_request_network: 'The service could not be reached',
+        error_request_timeout: 'The service did not answer in time',
+        error_response_not_json: 'Response was not valid JSON',
+        error_response_too_large: 'Response was too large',
+        error_seerr_local_only: 'Only localhost and 127.0.0.1 Overseerr/Jellyseerr URLs are allowed by this build.',
+        error_servarr_local_only: 'Only localhost and 127.0.0.1 Servarr URLs are allowed by this build.',
+        error_settings_none_recognized: 'No valid recognized settings were found.',
+        error_settings_not_an_object: 'Settings JSON must be an object.',
+        error_settings_unreadable: 'Current settings could not be read; no changes were made.',
         feature_castAges_detail: 'Shows a living person’s current age next to their birth date. IMDb already prints the age at death for people who have died.',
         feature_castAges_name: 'Person age',
         feature_collapsibleSections_detail: 'Adds per-section collapse controls and remembers each state.',
@@ -250,6 +284,16 @@
         field_site_name: 'Site name',
         field_sonarr_root_folder_hint: '/tv',
         field_two_letter_country_code_such_as: 'Two-letter country code, such as US or GB',
+        journal_aborted: 'Cancelled by navigation',
+        journal_empty: 'No failures recorded.',
+        journal_http: 'A lookup service returned an HTTP error',
+        journal_network: 'A lookup could not reach its service',
+        journal_parse: 'A response could not be understood',
+        journal_permission: 'Access was refused',
+        journal_selector: 'IMDb page structure changed',
+        journal_storage: 'Local storage refused a write',
+        journal_timeout: 'A lookup ran out of time',
+        journal_unknown: 'Unclassified',
         provider_amazonAds_consent: 'Blocks requests to these hosts. Nothing is sent to them.',
         provider_justWatch_consent: 'Sends the title and year read from the page to JustWatch to find where it streams.',
         provider_letterboxd_consent: 'Sends the title and year read from the page to Letterboxd to find its rating.',
@@ -382,7 +426,7 @@
     }
 
     const STORAGE_HOST_LABEL = IS_EXTENSION_BUILD ? 'extension storage' : 'userscript storage';
-    const COPY_FAILURE_MESSAGE = 'Copy failed. Check this page’s clipboard permission.';
+    const COPY_FAILURE_MESSAGE = t('error_copy_failed');
     const VERSION = '2.15.0';
     const PREFIX  = 'imdb_enh_';
     const CACHE_TTL = 7 * 24 * 60 * 60 * 1000; // 7 days — default for volatile score data
@@ -1845,8 +1889,8 @@
     // =========================================================================
     function parseCsvTable(value) {
         const text = String(value || '').replace(/^\uFEFF/, '');
-        if (!text.trim()) throw new Error('Paste CSV data or choose a CSV file first.');
-        if (text.length > SETTINGS_IMPORT_TEXT_LIMIT) throw new Error('CSV import is too large. Use a file under 4 MB.');
+        if (!text.trim()) throw new Error(t('error_csv_empty'));
+        if (text.length > SETTINGS_IMPORT_TEXT_LIMIT) throw new Error(t('error_csv_too_large'));
         const rows = [];
         let row = [];
         let field = '';
@@ -1873,7 +1917,7 @@
                 continue;
             }
             if (character === '"') {
-                if (field) throw new Error('CSV has a quote in the middle of an unquoted field.');
+                if (field) throw new Error(t('error_csv_stray_quote'));
                 quoted = true;
             } else if (character === ',') {
                 row.push(field);
@@ -1885,9 +1929,9 @@
                 field += character;
             }
         }
-        if (quoted) throw new Error('CSV ends inside a quoted field.');
+        if (quoted) throw new Error(t('error_csv_unterminated_quote'));
         if (field || row.length) pushRow();
-        if (!rows.length) throw new Error('CSV does not contain a header row.');
+        if (!rows.length) throw new Error(t('error_csv_no_header'));
         return rows;
     }
 
@@ -1985,7 +2029,7 @@
         const rows = parseCsvTable(value);
         const columns = describeCsvColumns(rows[0]);
         if (columns.imdbId < 0 && columns.title < 0 && columns.originalTitle < 0) {
-            throw new Error('CSV needs a Const or imdbID column, or a Title column that can match an existing local title.');
+            throw new Error(t('error_csv_no_usable_column'));
         }
         const existing = Object.fromEntries(normalizeUserMarkEntries(currentMarks || {}));
         const merged = { ...existing };
@@ -3180,7 +3224,7 @@
 
     function prepareSettingsImport(data) {
         if (!data || Array.isArray(data) || typeof data !== 'object') {
-            throw new Error('Settings JSON must be an object.');
+            throw new Error(t('error_settings_not_an_object'));
         }
         /* A backup written by a newer version can contain shapes this build would
            quietly coerce to defaults. Refusing is recoverable; silently rewriting the
@@ -3203,7 +3247,7 @@
             if (normalized) entries.push(normalized);
             else ignored++;
         });
-        if (!entries.length) throw new Error('No valid recognized settings were found.');
+        if (!entries.length) throw new Error(t('error_settings_none_recognized'));
         return { entries, ignored };
     }
 
@@ -3275,7 +3319,7 @@
     function getCryptoSubtle() {
         const provider = typeof crypto !== 'undefined' ? crypto : null;
         if (!provider?.subtle || typeof provider.getRandomValues !== 'function') {
-            throw new Error('This browser does not expose Web Crypto, so an encrypted backup cannot be made.');
+            throw new Error(t('error_backup_no_web_crypto'));
         }
         return provider;
     }
@@ -3339,21 +3383,21 @@
        authenticates, so tampering fails as a decryption error rather than as garbage. */
     async function readEncryptedBackup(data, passphrase) {
         const version = Number(data?.[BACKUP_ENVELOPE_KEY]);
-        if (!Number.isInteger(version) || version < 1) throw new Error('This is not a recognized encrypted backup.');
+        if (!Number.isInteger(version) || version < 1) throw new Error(t('error_backup_unrecognized'));
         if (version > BACKUP_ENVELOPE_VERSION) {
             throw new Error(`This encrypted backup was written by a newer version of IMDb Enhanced (format ${version}). Update first, then import.`);
         }
         const kdf = data.kdf || {};
         const cipher = data.cipher || {};
         if (kdf.name !== 'PBKDF2' || kdf.hash !== 'SHA-256' || cipher.name !== 'AES-GCM') {
-            throw new Error('This encrypted backup uses parameters this version cannot read.');
+            throw new Error(t('error_backup_unsupported_parameters'));
         }
         const iterations = Number(kdf.iterations);
         if (!Number.isInteger(iterations) || iterations < 1000 || iterations > 5000000) {
-            throw new Error('This encrypted backup declares an unusable key-derivation cost.');
+            throw new Error(t('error_backup_bad_kdf_cost'));
         }
         const secret = String(passphrase ?? '');
-        if (!secret) throw new Error('Enter the passphrase this backup was encrypted with.');
+        if (!secret) throw new Error(t('error_backup_passphrase_required'));
         const provider = getCryptoSubtle();
         let salt;
         let iv;
@@ -3362,19 +3406,19 @@
             salt = base64ToBytes(kdf.salt);
             iv = base64ToBytes(cipher.iv);
             ciphertext = base64ToBytes(data.ciphertext);
-        } catch { throw new Error('This encrypted backup is malformed and was not imported.'); }
+        } catch { throw new Error(t('error_backup_malformed')); }
         if (salt.length < 8 || iv.length !== BACKUP_IV_BYTES || !ciphertext.length) {
-            throw new Error('This encrypted backup is malformed and was not imported.');
+            throw new Error(t('error_backup_malformed'));
         }
         const key = await deriveBackupKey(provider, secret, salt, iterations);
         let plaintext;
         try {
             plaintext = await provider.subtle.decrypt({ name:'AES-GCM', iv }, key, ciphertext);
         } catch {
-            throw new Error('Wrong passphrase, or the backup has been altered. Nothing was changed.');
+            throw new Error(t('error_backup_wrong_passphrase'));
         }
         try { return JSON.parse(new TextDecoder().decode(plaintext)); }
-        catch { throw new Error('The backup decrypted but its contents are not valid settings JSON.'); }
+        catch { throw new Error(t('error_backup_not_settings_json')); }
     }
 
     function applySettingsImport(entries) {
@@ -3386,7 +3430,7 @@
                 value:get(key),
             }]));
         } catch {
-            throw new Error('Current settings could not be read; no changes were made.');
+            throw new Error(t('error_settings_unreadable'));
         }
 
         const touched = [];
@@ -3409,8 +3453,8 @@
             try { document.dispatchEvent(new CustomEvent('imdb-enhanced:settings-save-failed')); }
             catch { /* rollback result is reported by the caller */ }
             throw new Error(rollbackFailed
-                ? 'Import failed and automatic recovery was incomplete. Reload before changing settings.'
-                : 'Import could not be saved; previous settings were restored.');
+                ? t('error_import_recovery_incomplete')
+                : t('error_import_rolled_back'));
         }
 
         entries.forEach(({ key }) => {
@@ -3801,7 +3845,7 @@
             || normalizeRequestErrorText(response?.message)
             || normalizeRequestErrorText(response?.statusText)
             || '';
-        const error = new Error(detail || REQUEST_FAILURE_TEXT[category] || 'Request failed');
+        const error = new Error(detail || REQUEST_FAILURE_TEXT[category] || t('error_request_failed'));
         error.imdbEnhancedCategory = category;
         error.status = status;
         /* Carried forward, not dropped. getRequestErrorMessage turns these into the four
@@ -3819,10 +3863,10 @@
         return error;
     }
     const REQUEST_FAILURE_TEXT = {
-        network: 'The service could not be reached',
-        timeout: 'The service did not answer in time',
-        aborted: 'Request aborted',
-        http: 'The service returned an HTTP error',
+        network: t('error_request_network'),
+        timeout: t('error_request_timeout'),
+        aborted: t('error_request_aborted'),
+        http: t('error_request_http'),
     };
     function httpRequest(url, opts = {}) {
         return new Promise((resolve, reject) => {
@@ -3889,19 +3933,19 @@
     }
     function parseJSONResponse(response, maxLength = LOCAL_RESPONSE_TEXT_LIMIT) {
         const raw = typeof response?.responseText === 'string' ? response.responseText : '';
-        if (raw.length > maxLength) throw new Error('Response was too large');
+        if (raw.length > maxLength) throw new Error(t('error_response_too_large'));
         try { return JSON.parse(raw || 'null'); }
-        catch { throw new Error('Response was not valid JSON'); }
+        catch { throw new Error(t('error_response_not_json')); }
     }
     function normalizeRequestErrorText(value) {
         if (typeof value !== 'string' && typeof value !== 'number') return '';
         return String(value).trim().replace(/\s+/g, ' ').slice(0, REQUEST_ERROR_TEXT_LIMIT);
     }
     const REDIRECT_ERROR_MESSAGES = {
-        redirect_blocked: 'Blocked: the service tried to redirect a request carrying your API key.',
-        redirect_changed_origin: 'Blocked: the service redirected to a different site.',
-        redirect_destination_not_allowed: 'Blocked: the service redirected somewhere this extension does not allow.',
-        redirect_crossed_trust_boundary: 'Blocked: the service redirected between a local and a public address.',
+        redirect_blocked: t('error_redirect_with_credential'),
+        redirect_changed_origin: t('error_redirect_changed_origin'),
+        redirect_destination_not_allowed: t('error_redirect_not_allowed'),
+        redirect_crossed_trust_boundary: t('error_redirect_trust_boundary'),
     };
     function getRequestErrorMessage(error) {
         const responseText = typeof error?.responseText === 'string' ? error.responseText : '';
@@ -3924,7 +3968,7 @@
         if (redirectMessage) return redirectMessage;
         const status = Number(error?.status);
         if (Number.isInteger(status) && status >= 100 && status <= 599) return `HTTP ${status}`;
-        return normalizeRequestErrorText(error?.message) || 'Request failed';
+        return normalizeRequestErrorText(error?.message) || t('error_request_failed');
     }
     function normalizeServarrBaseUrl(value) {
         const raw = String(value || '').trim().replace(/\/+$/, '');
@@ -4093,7 +4137,7 @@
     async function seerrRequest(path, opts = {}) {
         const cfg = getSeerrConfig();
         if (!isLocalServarrUrl(cfg.baseUrl)) {
-            throw new Error('Only localhost and 127.0.0.1 Overseerr/Jellyseerr URLs are allowed by this build.');
+            throw new Error(t('error_seerr_local_only'));
         }
         return httpRequest(buildLocalServiceUrl(cfg.baseUrl, `api/v1/${String(path).replace(/^\/+/, '')}`, opts.query), {
             method: opts.method || 'GET',
@@ -4122,7 +4166,7 @@
     async function servarrRequest(kind, path, opts = {}) {
         const cfg = getServarrConfig(kind);
         if (!isLocalServarrUrl(cfg.baseUrl)) {
-            throw new Error('Only localhost and 127.0.0.1 Servarr URLs are allowed by this build.');
+            throw new Error(t('error_servarr_local_only'));
         }
         return httpRequest(buildServarrUrl(cfg, path, opts.query), {
             method: opts.method || 'GET',
@@ -4263,7 +4307,7 @@
     }
     async function mediaServerRequest(cfg, path, opts = {}) {
         if (!isLocalServiceUrl(cfg.baseUrl)) {
-            throw new Error('Only localhost and 127.0.0.1 media server URLs are allowed by this build.');
+            throw new Error(t('error_media_server_local_only'));
         }
         const query = { ...(opts.query || {}) };
         const headerName = cfg.kind === 'plex' ? 'X-Plex-Token' : 'X-Emby-Token';
@@ -4323,15 +4367,15 @@
     ];
     const FAILURE_CATEGORY_SET = new Set(FAILURE_CATEGORIES);
     const FAILURE_CATEGORY_LABELS = {
-        selector: 'IMDb page structure changed',
-        network: 'A lookup could not reach its service',
-        http: 'A lookup service returned an HTTP error',
-        storage: 'Local storage refused a write',
-        parse: 'A response could not be understood',
-        permission: 'Access was refused',
-        timeout: 'A lookup ran out of time',
-        aborted: 'Cancelled by navigation',
-        unknown: 'Unclassified',
+        selector: t('journal_selector'),
+        network: t('journal_network'),
+        http: t('journal_http'),
+        storage: t('journal_storage'),
+        parse: t('journal_parse'),
+        permission: t('journal_permission'),
+        timeout: t('journal_timeout'),
+        aborted: t('journal_aborted'),
+        unknown: t('journal_unknown'),
     };
 
     /* Classification reads the error, but only ever emits one of the fixed categories
@@ -4406,7 +4450,7 @@
 
     function formatFailureJournal() {
         const entries = getFailureJournal();
-        if (!entries.length) return 'No failures recorded.';
+        if (!entries.length) return t('journal_empty');
         return entries.map(entry => {
             const when = new Date(entry.ts).toISOString().replace('T', ' ').slice(0, 19);
             return `${when}  v${entry.build}  ${entry.route || 'unknown'}  ${entry.key}: ${FAILURE_CATEGORY_LABELS[entry.category]}`;

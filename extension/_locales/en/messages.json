@@ -185,6 +185,108 @@
   "aria_where_streaming_availability_comes_from": {
     "message": "Where streaming availability comes from"
   },
+  "error_backup_bad_kdf_cost": {
+    "message": "This encrypted backup declares an unusable key-derivation cost."
+  },
+  "error_backup_malformed": {
+    "message": "This encrypted backup is malformed and was not imported."
+  },
+  "error_backup_no_web_crypto": {
+    "message": "This browser does not expose Web Crypto, so an encrypted backup cannot be made."
+  },
+  "error_backup_not_settings_json": {
+    "message": "The backup decrypted but its contents are not valid settings JSON."
+  },
+  "error_backup_passphrase_required": {
+    "message": "Enter the passphrase this backup was encrypted with."
+  },
+  "error_backup_unrecognized": {
+    "message": "This is not a recognized encrypted backup."
+  },
+  "error_backup_unsupported_parameters": {
+    "message": "This encrypted backup uses parameters this version cannot read."
+  },
+  "error_backup_wrong_passphrase": {
+    "message": "Wrong passphrase, or the backup has been altered. Nothing was changed."
+  },
+  "error_copy_failed": {
+    "message": "Copy failed. Check this page’s clipboard permission."
+  },
+  "error_csv_empty": {
+    "message": "Paste CSV data or choose a CSV file first."
+  },
+  "error_csv_no_header": {
+    "message": "CSV does not contain a header row."
+  },
+  "error_csv_no_usable_column": {
+    "message": "CSV needs a Const or imdbID column, or a Title column that can match an existing local title."
+  },
+  "error_csv_stray_quote": {
+    "message": "CSV has a quote in the middle of an unquoted field."
+  },
+  "error_csv_too_large": {
+    "message": "CSV import is too large. Use a file under 4 MB."
+  },
+  "error_csv_unterminated_quote": {
+    "message": "CSV ends inside a quoted field."
+  },
+  "error_import_recovery_incomplete": {
+    "message": "Import failed and automatic recovery was incomplete. Reload before changing settings."
+  },
+  "error_import_rolled_back": {
+    "message": "Import could not be saved; previous settings were restored."
+  },
+  "error_media_server_local_only": {
+    "message": "Only localhost and 127.0.0.1 media server URLs are allowed by this build."
+  },
+  "error_redirect_changed_origin": {
+    "message": "Blocked: the service redirected to a different site."
+  },
+  "error_redirect_not_allowed": {
+    "message": "Blocked: the service redirected somewhere this extension does not allow."
+  },
+  "error_redirect_trust_boundary": {
+    "message": "Blocked: the service redirected between a local and a public address."
+  },
+  "error_redirect_with_credential": {
+    "message": "Blocked: the service tried to redirect a request carrying your API key."
+  },
+  "error_request_aborted": {
+    "message": "Request aborted"
+  },
+  "error_request_failed": {
+    "message": "Request failed"
+  },
+  "error_request_http": {
+    "message": "The service returned an HTTP error"
+  },
+  "error_request_network": {
+    "message": "The service could not be reached"
+  },
+  "error_request_timeout": {
+    "message": "The service did not answer in time"
+  },
+  "error_response_not_json": {
+    "message": "Response was not valid JSON"
+  },
+  "error_response_too_large": {
+    "message": "Response was too large"
+  },
+  "error_seerr_local_only": {
+    "message": "Only localhost and 127.0.0.1 Overseerr/Jellyseerr URLs are allowed by this build."
+  },
+  "error_servarr_local_only": {
+    "message": "Only localhost and 127.0.0.1 Servarr URLs are allowed by this build."
+  },
+  "error_settings_none_recognized": {
+    "message": "No valid recognized settings were found."
+  },
+  "error_settings_not_an_object": {
+    "message": "Settings JSON must be an object."
+  },
+  "error_settings_unreadable": {
+    "message": "Current settings could not be read; no changes were made."
+  },
   "feature_castAges_detail": {
     "message": "Shows a living person’s current age next to their birth date. IMDb already prints the age at death for people who have died."
   },
@@ -505,6 +607,36 @@
   },
   "field_two_letter_country_code_such_as": {
     "message": "Two-letter country code, such as US or GB"
+  },
+  "journal_aborted": {
+    "message": "Cancelled by navigation"
+  },
+  "journal_empty": {
+    "message": "No failures recorded."
+  },
+  "journal_http": {
+    "message": "A lookup service returned an HTTP error"
+  },
+  "journal_network": {
+    "message": "A lookup could not reach its service"
+  },
+  "journal_parse": {
+    "message": "A response could not be understood"
+  },
+  "journal_permission": {
+    "message": "Access was refused"
+  },
+  "journal_selector": {
+    "message": "IMDb page structure changed"
+  },
+  "journal_storage": {
+    "message": "Local storage refused a write"
+  },
+  "journal_timeout": {
+    "message": "A lookup ran out of time"
+  },
+  "journal_unknown": {
+    "message": "Unclassified"
   },
   "provider_amazonAds_consent": {
     "message": "Blocks requests to these hosts. Nothing is sent to them."
