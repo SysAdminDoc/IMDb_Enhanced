@@ -468,6 +468,9 @@
         // Appearance
         modernUI: true, editorialTitleSurface: true, compactHeader: true, enhancedRatingDisplay: true,
         widerLayout: true, ratingColorCoding: true,
+        // Off by default: it hides nothing, but it is an opinion about other people's
+        // taste and should be asked for.
+        dimLowRated: false, dimRatingThreshold: '6.0',
         // Theme
         themeVariant: 'dark', // dark | oled | midnight | light | highContrast
         themeAuto: false,
@@ -532,6 +535,7 @@
         enhancedRatingDisplay: 'Elevates IMDb rating and popularity blocks with clearer emphasis.',
         widerLayout: 'Uses more horizontal room across normal desktop window sizes.',
         ratingColorCoding: 'Adds a small quality label beside the IMDb score.',
+        dimLowRated: 'Fades the artwork of titles rated below your threshold on lists, charts, and search results. Text and controls stay fully readable, and hovering restores the image.',
         collapsibleSections: 'Adds per-section collapse controls and remembers each state.',
         expandSummaries: 'Releases IMDb’s line clamp so long summaries and biographies read in full without a per-block click.',
         spoilerBlur: 'Softens long plot text until you intentionally reveal it.',
@@ -6359,6 +6363,29 @@ section[id*="quote" i] .ipc-list-card { padding: 4px 0 !important; margin: 2px 0
         { id:'skip', label:'Skipped' },
     ];
 
+    /* Reads the score IMDb already renders on a collection card. The rating lives in
+       `.ipc-rating-star--imdb` (its `.ipc-rating-star--rating` child holds just the
+       number); the element's aria-label reads "IMDb rating: 9.3", which is English and
+       therefore not what this parses. Some locales render the decimal with a comma, so
+       both separators are accepted. */
+    const CARD_RATING_SELECTOR = '.ipc-rating-star--imdb';
+    const DIM_THRESHOLD_OPTIONS = ['5.0', '6.0', '6.5', '7.0', '7.5', '8.0'];
+
+    function readCardRating(row) {
+        const star = row?.querySelector?.(CARD_RATING_SELECTOR);
+        if (!star) return null;
+        const text = (star.querySelector('.ipc-rating-star--rating') || star).textContent || '';
+        const match = /(\d{1,2})[.,](\d)/.exec(text) || /^\s*(\d{1,2})\s*$/.exec(text);
+        if (!match) return null;
+        const value = Number(match[2] === undefined ? match[1] : `${match[1]}.${match[2]}`);
+        return Number.isFinite(value) && value > 0 && value <= 10 ? value : null;
+    }
+
+    function normalizeDimThreshold(value) {
+        const text = String(value ?? '').trim();
+        return DIM_THRESHOLD_OPTIONS.includes(text) ? text : DEFAULTS.dimRatingThreshold;
+    }
+
     /* Rows are resolved from their own title links, not from the cards the marks feature
        has decorated. Those two are not the same set: decoration walks the page
        progressively, so on a 250-row chart it can be half done when a filter runs, and a
@@ -6411,6 +6438,56 @@ section[id*="quote" i] .ipc-list-card { padding: 4px 0 !important; margin: 2px 0
         if (filter === 'unseen') return state !== 'watched' && state !== 'skip';
         return state === filter;
     }
+
+    reg({
+        key: 'dimLowRated', name: 'Dim low-rated titles', group: 'Appearance',
+        init() {
+            if (!isIMDbHost()) return;
+            const isCurrent = createFeatureGuard(this);
+            const threshold = Number(normalizeDimThreshold(get('dimRatingThreshold')));
+
+            /* Only the artwork is dimmed. The title, its score and every control stay at
+               full contrast, because this is meant to make a card easier to skip past,
+               not harder to read or operate — and dimming text would fail contrast
+               requirements the rest of the product meets. Hover and keyboard focus
+               restore the image, so nothing is permanently obscured. */
+            addThemedCSS(() => `
+                .enh-dim-low img { opacity: .38; filter: saturate(.5); transition: opacity .15s ease, filter .15s ease; }
+                .enh-dim-low:hover img, .enh-dim-low:focus-within img { opacity: 1; filter: none; }
+                @media (prefers-reduced-motion: reduce) { .enh-dim-low img { transition: none; } }
+                @media (forced-colors: active) { .enh-dim-low img { opacity: 1; filter: none; } }
+            `, 'enh-dim-low-css');
+
+            const paint = () => {
+                if (!isCurrent()) return;
+                collectMarkFilterCards().forEach(({ card }) => {
+                    const rating = readCardRating(card);
+                    // A card with no score is not low-rated, it is unrated; dimming it
+                    // would hide new and obscure titles rather than poor ones.
+                    const poster = card.querySelector?.('.ipc-poster, .ipc-media__img') || null;
+                    if (poster) poster.classList.toggle('enh-dim-low', rating !== null && rating < threshold);
+                });
+            };
+            paint();
+
+            let frame = null;
+            const observer = new MutationObserver(() => {
+                if (frame) return;
+                frame = requestAnimationFrame(() => { frame = null; paint(); });
+            });
+            observer.observe(document.querySelector('main') || document.body, { childList:true, subtree:true });
+            this._observer = observer;
+            this._cancelFrame = () => { if (frame) cancelAnimationFrame(frame); frame = null; };
+        },
+        destroy() {
+            removeCSS('enh-dim-low-css');
+            this._observer?.disconnect();
+            this._observer = null;
+            this._cancelFrame?.();
+            this._cancelFrame = null;
+            document.querySelectorAll('.enh-dim-low').forEach(node => node.classList.remove('enh-dim-low'));
+        },
+    });
 
     reg({
         key: 'markFilters', name: 'Filter by private marks', group: 'Utility',
@@ -10150,9 +10227,30 @@ section[data-testid="hero-parent"].enh-editorial-native-hidden { display: none !
         ], true));
         experienceGrid.appendChild(makeFeatureCard('Tune the interface', 'Refine how content looks and is presented.', 'Desktop', [
             'modernUI', 'editorialTitleSurface', 'compactHeader', 'enhancedRatingDisplay', 'widerLayout', 'ratingColorCoding',
-            'collapsibleSections', 'expandSummaries', 'spoilerBlur', 'quickNav',
+            'collapsibleSections', 'expandSummaries', 'spoilerBlur', 'quickNav', 'dimLowRated',
         ], true));
         experiencePage.appendChild(experienceGrid);
+        /* The threshold belongs with the toggle it qualifies. Changing it restarts the
+           feature so the page repaints, rather than waiting for a reload. */
+        const dimThreshold = makeEl('select', {
+            className:'enh-servarr-input',
+            id:'enh-dim-threshold',
+            'aria-label':'Dim titles rated below',
+            onChange: event => {
+                const value = normalizeDimThreshold(event.target.value);
+                event.target.value = value;
+                if (!trySaveSetting('dimRatingThreshold', value)) return;
+                refreshFeature('dimLowRated');
+                markSaved();
+            },
+        }, ...DIM_THRESHOLD_OPTIONS.map(option => makeEl('option', { value:option }, option)));
+        dimThreshold.value = normalizeDimThreshold(get('dimRatingThreshold'));
+        experiencePage.appendChild(makeEl('div', { className:'enh-settings-callout', style:{ marginTop:'12px' } },
+            makeEl('strong', {}, 'Dim titles rated below'),
+            dimThreshold,
+            makeEl('span', { className:'enh-settings-card-description' },
+                'Applies when “Dim low-rated titles” is on. Unrated titles are never dimmed.')
+        ));
 
         const ratingsPage = pages.get('ratings');
         const previewCard = makeCard('Preview', 'Sample source values — not live title data.');
@@ -10683,7 +10781,7 @@ section[data-testid="hero-parent"].enh-editorial-native-hidden { display: none !
        dismissed changes what you click. */
     const COLLECTION_FEATURE_KEYS = new Set([
         ...UNIVERSAL_FEATURE_KEYS, 'watchlistBatch', 'listMultiSearch', 'listRuntimeSummary',
-        'watchedMarking', 'markFilters',
+        'watchedMarking', 'markFilters', 'dimLowRated',
     ]);
     const SECONDARY_PAGE_FEATURE_KEYS = new Set([
         ...UNIVERSAL_FEATURE_KEYS, 'collapsibleSections', 'expandSummaries', 'quickNav',
@@ -10702,7 +10800,7 @@ section[data-testid="hero-parent"].enh-editorial-native-hidden { display: none !
        IMDb's own cards rather than one title, so they take presentation and
        cleanup work without any title-scoped control. */
     const BROWSE_FEATURE_KEYS = new Set([
-        ...UNIVERSAL_FEATURE_KEYS, 'watchedMarking', 'markFilters',
+        ...UNIVERSAL_FEATURE_KEYS, 'watchedMarking', 'markFilters', 'dimLowRated',
     ]);
 
     function getPageSurface() {
@@ -10725,7 +10823,7 @@ section[data-testid="hero-parent"].enh-editorial-native-hidden { display: none !
         // episodeHeatmap would otherwise wait out its selector timeout on every title page.
         /* ratingGap needs the vote distribution, which IMDb stopped shipping on title
            pages — verified 2026-08-15 that no script there carries histogramData. */
-        if (surface === 'title') return !['watchlistBatch', 'listMultiSearch', 'listRuntimeSummary', 'markFilters', 'episodeHeatmap', 'ratingGap'].includes(feature.key);
+        if (surface === 'title') return !['watchlistBatch', 'listMultiSearch', 'listRuntimeSummary', 'markFilters', 'dimLowRated', 'episodeHeatmap', 'ratingGap'].includes(feature.key);
         if (surface === 'episodes') return EPISODE_LIST_FEATURE_KEYS.has(feature.key);
         if (surface === 'ratings') return RATINGS_FEATURE_KEYS.has(feature.key);
         if (surface === 'collection') return COLLECTION_FEATURE_KEYS.has(feature.key);

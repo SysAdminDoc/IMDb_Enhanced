@@ -99,6 +99,9 @@ function loadScriptTestHooks({ withoutDeleteValue = false } = {}) {
         parseYouTubeTrailerVideoId,
         getListTitleIdsFromLinks,
         getListTitlesFromLinks,
+        readCardRating,
+        normalizeDimThreshold,
+        DIM_THRESHOLD_OPTIONS,
         MARK_FILTERS,
         countMarkFilters,
         markMatchesFilter,
@@ -2870,6 +2873,49 @@ test('local request errors stay concise and text-only', () => {
         'Request failed',
         'non-numeric status values should not be coerced into UI text'
     );
+});
+
+/* IE-11: fade what you would skip past, without making anything harder to read. */
+test('low-rated cards dim their artwork only, and unrated cards are left alone', () => {
+    const hooks = loadScriptTestHooks();
+    const row = text => ({
+        querySelector: selector => {
+            if (selector === '.ipc-rating-star--imdb') {
+                return text === null ? null : {
+                    textContent: text,
+                    querySelector: inner => (inner === '.ipc-rating-star--rating' ? { textContent:text } : null),
+                };
+            }
+            return null;
+        },
+    });
+    assert.strictEqual(hooks.readCardRating(row('9.3')), 9.3);
+    assert.strictEqual(hooks.readCardRating(row('5,8')), 5.8, 'a comma decimal must parse; some locales render it');
+    assert.strictEqual(hooks.readCardRating(row('7')), 7);
+    assert.strictEqual(hooks.readCardRating(row('')), null);
+    assert.strictEqual(hooks.readCardRating(row(null)), null, 'a card with no rating element is unrated');
+    assert.strictEqual(hooks.readCardRating(row('Rate')), null, 'the rate prompt is not a score');
+    assert.strictEqual(hooks.readCardRating(row('12.5')), null, 'a value outside the scale is not a score');
+
+    assert.strictEqual(hooks.normalizeDimThreshold('7.0'), '7.0');
+    assert.strictEqual(hooks.normalizeDimThreshold('99'), '6.0', 'an unknown threshold falls back to the default');
+    assert.strictEqual(hooks.normalizeDimThreshold(null), '6.0');
+
+    const defaults = Object.fromEntries(hooks.getDefaultSettingsEntries().map(e => [e.key, e.value]));
+    assert.strictEqual(defaults.dimLowRated, false, 'an opinion about other people\'s taste must be opt-in');
+
+    const feature = script.slice(script.indexOf("key: 'dimLowRated'"));
+    const body = feature.slice(0, feature.indexOf("key: 'markFilters'"));
+    // Artwork only: dimming the title or its score would fail the contrast the rest of
+    // the product holds to, and this is meant to be skimmable, not unreadable.
+    assert(/\.enh-dim-low img \{ opacity/.test(body), 'only the image may be dimmed');
+    assert(!/\.enh-dim-low \{ opacity/.test(body), 'the card itself must not be dimmed');
+    assert(/\.enh-dim-low:hover img[^}]*opacity: 1/.test(body), 'hover must restore the artwork');
+    assert(/:focus-within img[^}]*opacity: 1/.test(body), 'keyboard focus must restore the artwork too');
+    assert(/forced-colors: active[^}]*opacity: 1/.test(body), 'forced colours must not be dimmed');
+    assert(body.includes('rating !== null && rating < threshold'),
+        'an unrated card must not be treated as low-rated');
+    assert(body.includes("this._observer?.disconnect()"), 'the observer must be torn down with the route');
 });
 
 /* IE-82: marks decorated cards but could not narrow a collection, which is where a long
