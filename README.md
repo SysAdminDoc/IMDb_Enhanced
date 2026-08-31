@@ -1,4 +1,4 @@
-[![Version](https://img.shields.io/badge/version-2.14.0-blue)](https://github.com/SysAdminDoc/IMDb_Enhanced)
+[![Version](https://img.shields.io/badge/version-2.15.0-blue)](https://github.com/SysAdminDoc/IMDb_Enhanced)
 [![License](https://img.shields.io/badge/license-MIT-green)](LICENSE)
 [![Platform](https://img.shields.io/badge/platform-Tampermonkey%20%7C%20Violentmonkey-yellow)](https://www.tampermonkey.net/)
 
@@ -20,7 +20,7 @@ A desktop IMDb overhaul delivered as a single userscript and a Chromium Manifest
 
 Third-party lookups omit destination cookies. Responses are rendered as text, outbound links suppress opener/referrer data, and response-provided URLs are restricted to the expected HTTPS service domains.
 
-**Watch Site Search** - Quick-search buttons for streaming sites (Cineby, StreamXTV, LookMovie2, CinemaOS, LivNet, Flixer, Cine.su, Fmovies+, UFlix, FlixMomo, Movies2Watch, WatchLuna, 1Movies). Fully configurable in settings. Destinations are contacted only when you open them; the userscript does not background-probe every site.
+**Watch Site Search** - Quick-search buttons for streaming sites. The defaults (Rive, Cinejoy, Movy, Flixer, Fmovies+, Cineplay, Z-Stream, Aether, 1Shows, CinemaOS, HydraHD, CineStream, Bingr, LookMovie2, Cine.su) come from the FMHY video wiki's starred picks, and a built-in catalog in settings offers every other streaming destination that wiki lists, grouped the way the wiki groups them, each one a single click to add. Destinations are contacted only when you open them; the userscript does not background-probe every site.
 
 **External Links** - One-click links grouped by purpose: Reviews & ratings (Rotten Tomatoes, Letterboxd, Trakt), Info & research (TMDB, Wikipedia), Trailers & video (YouTube), and Availability (JustWatch). Configurable.
 
@@ -30,11 +30,11 @@ Third-party lookups omit destination cookies. Responses are rendered as text, ou
 
 **Media Server Indicator** - Optional Plex, Jellyfin, and Emby checks show whether the current title already exists in your local media library. Localhost-only for security; access tokens are sent in request headers, not URLs.
 
-**Private Title Marks** - Local Seen/Skip toggle controls on title posters and on every IMDb title card — charts, lists, watchlists, person filmographies, episode lists, and search results — with exposed pressed state and a newest-first 5,000-title storage bound. They require no login and deliberately do not change or sync IMDb's account-based Watched status.
+**Private Title Marks** - Local Seen/Skip toggle controls on title posters and on every IMDb title card (charts, lists, watchlists, person filmographies, episode lists, and search results) with exposed pressed state and a newest-first 5,000-title storage bound. They require no login and deliberately do not change or sync IMDb's account-based Watched status.
 
 **TV Tools** - Highest-rated episode highlighting and TV-specific lookup shortcuts. Synopsis blur is opt-in and off by default.
 
-**List Page Tools** - Batch IMDb ID copy plus a popup-safe search queue on watchlist, custom list, and chart pages, including IMDb's locale-prefixed desktop URLs. Prepare up to 20 real new-tab links, open them one gesture at a time, or copy the full link set (a title list for Cineby's local handoff).
+**List Page Tools** - Batch IMDb ID copy plus a popup-safe search queue on watchlist, custom list, and chart pages, including IMDb's locale-prefixed desktop URLs. Prepare up to 20 real new-tab links, open them one gesture at a time, or copy the full link set.
 
 **Extras** - Collapsible sections with remembered state, optional keyboard-revealable spoiler blur, a keyboard-complete expanded-links menu, quick navigation sidebar, wider layout, compact header, subtitle links, copy IMDb ID button, and settings import/export.
 
@@ -77,7 +77,7 @@ The extension build is generated locally from the same userscript source and add
 3. Open `chrome://extensions`, enable **Developer mode**, choose **Load unpacked**, and select the repository's `extension` folder.
 4. Open or refresh an IMDb page. After source changes, run the build command again and use the extension card's reload button before refreshing IMDb.
 
-The extension does not auto-update from GitHub; reload the unpacked build after local changes. Its permissions are limited to the supported IMDb/Cineby pages, the on-demand score/trailer services, the known ad hosts, and localhost/127.0.0.1 media integrations.
+The extension does not auto-update from GitHub; reload the unpacked build after local changes. Its permissions are limited to the supported IMDb pages, the on-demand score/trailer services, the known ad hosts, and localhost/127.0.0.1 media integrations.
 
 ## Firefox extension
 
@@ -113,17 +113,15 @@ The redesigned visual reference set covers every menu page: [Experience](design/
 
 **Tools** - Title, TV/episode, list, private Seen/Skip, and optional keyboard-shortcut controls.
 
-**Sites** - Editable watch-search and external-link destinations with show/hide controls, purpose categories, ordering, colors, and Cineby handoff. Page buttons are grouped into Watch, Reviews & ratings, Availability, Trailers & video, Info & research, and Other. Incomplete, non-HTTP(S), credential-bearing, origin-dynamic, or unknown-token templates are visibly rejected without replacing the last valid saved list.
+**Sites** - Editable watch-search and external-link destinations with show/hide controls, purpose categories, ordering, and colors. Page buttons are grouped into Watch, Reviews & ratings, Availability, Trailers & video, Info & research, and Other. Incomplete, non-HTTP(S), credential-bearing, origin-dynamic, or unknown-token templates are visibly rejected without replacing the last valid saved list.
 
 **Integrations** - Tabbed Radarr/Sonarr and Plex/Jellyfin/Emby local-service configuration with arrow/Home/End keyboard navigation.
 
 **Data** - Local mark review, validated JSON backup/restore up to 4 MB, cache status/clearing, and an explicit two-step reset with backup guidance.
 
-**Watch Sites** - Add, remove, reorder, show/hide, categorize, and customize streaming site buttons with name, URL template, and color.
+**Watch Sites** - Add, remove, reorder, show/hide, categorize, and customize streaming site buttons with name, URL template, and color. The FMHY streaming catalog sits under the editor: a filterable list of every streaming destination from that wiki, grouped by its sections (stream aggregators, P-Stream forks, dedicated server, multi-server, backups, and legal free-with-ads services). Adding one creates a normal editable row, and entries already in your list read as Added. A list holds up to 250 destinations, enough for the whole catalog at once.
 
 **External Links** - Same customization as watch sites for review, availability, trailer, and research links; hidden destinations remain available to re-enable later.
-
-**Cineby** - The exact Cineby root uses a one-time, ten-minute local title handoff that is consumed as soon as Cineby opens. A second Cineby navigation is held back while the first handoff is pending so it cannot replace the earlier title. Edit or remove its watch-site row to use an ordinary URL template instead.
 
 **Radarr/Sonarr/Overseerr** - URL, API key, root folder, and quality profile for Radarr and Sonarr; URL and API key for an Overseerr or Jellyseerr instance. Localhost/127.0.0.1 only. Current Sonarr v4+ language selection belongs in quality-profile custom formats; retired v3 language profiles are not configured.
 
@@ -131,7 +129,7 @@ The redesigned visual reference set covers every menu page: [Experience](design/
 
 **URL Templates** - Use `{{TITLE}}`, `{{TITLE_DASH}}`, `{{TITLE_SLUG}}`, `{{IMDB_ID}}`, `{{IMDB_NUM}}`, `{{TRAKT_TYPE}}`, `{{YEAR}}` in custom site URLs.
 
-**Import/Export** - Full JSON backup—including remembered section state—and validated, transactional restore up to 4 MB. Invalid or unknown fields are skipped; a storage failure restores the prior values before reporting the error.
+**Import/Export** - Full JSON backup (including remembered section state) and validated, transactional restore up to 4 MB. Invalid or unknown fields are skipped; a storage failure restores the prior values before reporting the error.
 
 ## Themes
 

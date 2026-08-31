@@ -3,7 +3,7 @@
 const STORAGE_PREFIX = 'imdb_enh_';
 const MAX_RESPONSE_TEXT = 8 * 1024 * 1024;
 const REQUEST_TIMEOUT = 30_000;
-const ALLOWED_CONTENT_HOSTS = new Set(['www.imdb.com', 'www.cineby.at']);
+const ALLOWED_CONTENT_HOSTS = new Set(['www.imdb.com']);
 const ALLOWED_REQUEST_HOSTS = new Set([
     'www.rottentomatoes.com',
     'backend.metacritic.com',

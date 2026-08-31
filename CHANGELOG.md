@@ -1,5 +1,19 @@
 # Changelog
 
+## 2.15.0 — 2026-08-31
+
+### Added
+
+- The Sites page carries a built-in catalog of every streaming destination listed on the FMHY video wiki: 208 sites in the six groups that wiki uses, filterable by name or address, each one click to add. An added entry becomes an ordinary editable row, and anything already in your list reads as Added rather than offering a duplicate. Site lists now hold 250 destinations instead of 50, so the whole catalog fits at once if you want it.
+
+### Changed
+
+- The default watch destinations are rebuilt from the FMHY wiki's starred picks, and every one of them ships with a working search route rather than a bare homepage: Rive, Cinejoy, Movy, Flixer, Fmovies+, Cineplay, Z-Stream, Aether, 1Shows, CinemaOS, HydraHD, CineStream, Bingr, LookMovie2, and Cine.su. Each route was checked against the live site while preparing this release. Your own edits are untouched; only the defaults changed.
+
+### Removed
+
+- Cineby is gone. It announced its shutdown for the end of August 2026, and its entry needed a special case no other destination did: because the site had no searchable URL, opening it stored the title locally and a second content script filled Cineby's own search box on arrival. That whole path is retired, along with the host permission, the page match, and the settings copy explaining it. A settings migration deletes the stored preference, any pending handoff, and Cineby rows in a saved site list, and strips the retired transport flag from rows that survive.
+
 ## 2.14.0 — 2026-08-15
 
 ### Added

@@ -60,7 +60,6 @@ function loadScriptTestHooks() {
         getFeatureFailures,
         NATIVE_WATCHLIST_SELECTORS,
         isIMDbHost,
-        isCinebyHost,
         getPageSurface,
         shouldInitFeature,
         createFeatureGuard,
@@ -107,9 +106,8 @@ function loadScriptTestHooks() {
         getFocusableElements,
         prepareSettingsImport,
         applySettingsImport,
-        storeCinebyQuery,
-        takeCinebyQuery,
-        getCinebyHandoffFailureMessage,
+        FMHY_WATCH_CATALOG,
+        SITE_LIST_LIMIT,
         cacheSet,
         cacheGet,
         cacheGC,
@@ -297,15 +295,13 @@ test('metadata stays distribution-safe', () => {
     const hooks = loadScriptTestHooks();
     assert(hooks.isIMDbHost('www.imdb.com'));
     assert(!hooks.isIMDbHost('not-imdb.com'), 'IMDb host checks must not use substring trust');
-    assert(hooks.isCinebyHost('www.cineby.at'));
-    assert(!hooks.isCinebyHost('cineby.example'), 'Cineby host checks must stay exact');
 });
 
-test('IMDb theme work stays off the Cineby handoff surface', () => {
+test('IMDb theme work stays off foreign hosts', () => {
     const hooks = loadScriptTestHooks();
-    hooks.setTestHostname('www.cineby.at');
+    hooks.setTestHostname('not-imdb.example');
     hooks.setupThemeAutoSync();
-    assert.strictEqual(hooks.getMediaListenerCount(), 0, 'Cineby must not retain an IMDb theme listener');
+    assert.strictEqual(hooks.getMediaListenerCount(), 0, 'a non-IMDb host must not retain an IMDb theme listener');
     hooks.setTestHostname('www.imdb.com');
     hooks.setupThemeAutoSync();
     hooks.setupThemeAutoSync();
@@ -463,7 +459,7 @@ test('settings carry a schema version that gates migration and import', () => {
     upgrading.seedRawStorage('imdb_enh_ratingHistogram', true);
     upgrading.seedStoredSetting('settingsSchemaVersion', 1);
     upgrading.runSettingsMigrations();
-    assert.strictEqual(upgrading.getStoredSetting('settingsSchemaVersion'), 2,
+    assert.strictEqual(upgrading.getStoredSetting('settingsSchemaVersion'), upgrading.SETTINGS_SCHEMA_VERSION,
         'a pending migration advances the stored version');
     assert(!upgrading.getStorageKeys().includes('imdb_enh_ratingHistogram'),
         'the retired preference must be removed by the migration');
@@ -696,11 +692,11 @@ test('rating histogram extraction is bounded and normalizes a 1-10 distribution'
         'the rating comparison should expose itself as a note to assistive technology');
 });
 
-test('fragile selectors and global Cineby key stay removed', () => {
+test('fragile selectors stay removed', () => {
     assert(!/\.sc-|sc-[0-9a-fA-F]+|sc-[a-z0-9]+/.test(script), 'hashed styled-components selectors should stay removed');
     assert(!/\.bRimta\b/.test(script), 'observed generated IMDb class selectors should stay removed');
     assert(!/margin[^;]*-[0-9]+px/.test(script), 'layout styling should not pull poster content over adjacent rows');
-    assert(!/GM_setValue\('movieTitle'/.test(script), 'Cineby should not write the global movieTitle key');
+    assert(!/GM_setValue\('movieTitle'/.test(script), 'the retired global movieTitle key must never be written again');
 });
 
 test('ad cleanup preserves core media and covers current IMDb shells', () => {
@@ -1847,9 +1843,14 @@ test('version strings match', () => {
 });
 
 test('retired watch-site domains stay removed', () => {
+    /* cineby.at is not in this list because the schema-3 migration legitimately names
+       it while scrubbing stored rows; a dedicated test below pins its removal from the
+       defaults, catalog, and metadata instead. */
     const deadDomains = [
-        'popcornmovies.org', 'xprime.su', 'aether.mom', 'rivestream.app',
+        'popcornmovies.org', 'xprime.su', 'aether.mom',
         'cineby.sc', 'cineby.gd', 'cineby.app', 'cinevids.site',
+        'streamxtv.tech', 'livnet.pages.dev', 'uflix.to', 'flixmomo.app',
+        'movies2watch.vc', 'watchluna.com', '1movies.stream',
     ];
     deadDomains.forEach(domain => {
         assert(!script.includes(domain), `dead domain ${domain} should be removed`);
@@ -1903,14 +1904,9 @@ test('custom site templates require complete HTTP or HTTPS URLs', () => {
     assert.strictEqual(hooks.normalizeUrlTemplate(`https://example.com/${'a'.repeat(4090)}`), '', 'oversized URL templates must be rejected');
     assert.strictEqual(hooks.normalizeSite({ name:'Broken', url:'https://' }), null);
     assert.strictEqual(
-        hooks.normalizeSite({ name:'Edited Cineby', url:'https://example.com/search?q={{TITLE}}', storeQuery:true }).storeQuery,
+        hooks.normalizeSite({ name:'Legacy Cineby', url:'https://www.cineby.at/', storeQuery:true }).storeQuery,
         undefined,
-        'editing the Cineby row to another URL must remove its invisible handoff behavior'
-    );
-    assert.strictEqual(
-        hooks.normalizeSite({ name:'Cineby', url:'https://www.cineby.at' }).storeQuery,
-        true,
-        'the exact visible Cineby URL should derive its required controlled-input handoff'
+        'the retired storeQuery transport flag must be stripped from imported and stored rows'
     );
     assert.strictEqual(
         hooks.normalizeSite({ name:'Edited Letterboxd', url:'https://www.themoviedb.org/search?query={{TITLE}}', movieOnly:true }).movieOnly,
@@ -1926,11 +1922,11 @@ test('custom site templates require complete HTTP or HTTPS URLs', () => {
     );
     assert(script.includes("if (cat === 'Movie Sites' && isTVType()) continue"), 'expanded movie-only links should stay off TV pages');
     assert(script.includes("url:'https://www.themoviedb.org/search?query={{TITLE}}'"), 'default TMDB search should cover movies and TV');
-    const oversizedSites = Array.from({ length:60 }, (_, index) => ({
+    const oversizedSites = Array.from({ length:hooks.SITE_LIST_LIMIT + 10 }, (_, index) => ({
         name:`Site ${index}`, url:`https://example.com/${index}?q={{TITLE}}`, color:'#6366f1',
     }));
     hooks.seedStoredSetting('watchSites', oversizedSites);
-    assert.strictEqual(hooks.getSiteList('watchSites', []).length, 50, 'runtime custom-site lists must honor the import/UI bound');
+    assert.strictEqual(hooks.getSiteList('watchSites', []).length, hooks.SITE_LIST_LIMIT, 'runtime custom-site lists must honor the import/UI bound');
     assert(script.includes('add.disabled = total >= SITE_LIST_LIMIT'), 'site editor should expose the destination limit before adding another row');
 });
 
@@ -1957,12 +1953,21 @@ test('site destinations support purpose, visibility, and ordering metadata', () 
         'site grouping should preserve category and configured order'
     );
     [
-        'https://uflix.to/',
-        'https://www.streamxtv.tech/',
-        'https://flixmomo.app/',
-        'https://movies2watch.vc/',
-        'https://watchluna.com/movies',
-        'https://1movies.stream/home',
+        'https://www.rivestream.app/search?q={{TITLE}}',
+        'https://cinejoy.to/search?q={{TITLE}}',
+        'https://www.movy.bz/browse?q={{TITLE}}',
+        'https://flixer.su/search?q={{TITLE}}',
+        'https://www.fmovies.gd/search/{{TITLE_DASH}}',
+        'https://www.cineplay.to/search?q={{TITLE}}',
+        'https://zstream.mov/search?q={{TITLE}}',
+        'https://aether.ist/search?q={{TITLE}}',
+        'https://www.1shows.org/search?q={{TITLE}}',
+        'https://cinemaos.live/search?q={{TITLE}}',
+        'https://hydrahd.ws/search?q={{TITLE}}',
+        'https://cinestream.kje.us/search?q={{TITLE}}',
+        'https://bingr.one/search?q={{TITLE}}',
+        'https://www.lookmovie2.to/movies/search/?q={{TITLE}}',
+        'https://cine.su/en/search',
     ].forEach(url => assert(script.includes(url), `${url} should be available in the default watch destinations`));
     /* Hiding a destination has to hide it everywhere it is offered — the control says
        "on IMDb pages", and collection pages are IMDb pages. Assert both consumers of
@@ -2303,8 +2308,6 @@ test('list multi-search builds a popup-safe link queue', () => {
     }, titles);
     assert.strictEqual(entries.length, 20, 'queue should cap visible titles at 20');
     assert.strictEqual(entries[0].url, 'https://example.com/?q=Title%201&id=tt0000001');
-    const cinebyEntries = hooks.buildListSearchEntries({ storeQuery:true }, titles.slice(0, 1));
-    assert.strictEqual(cinebyEntries[0].url, 'https://www.cineby.at/', 'Cineby queue should retain its controlled-input handoff');
     assert(!script.includes("window.open(url, '_blank'"), 'timer-driven popup loop should stay removed');
     assert(!script.includes('setTimeout(r, 800)'), 'delayed popup loop should stay removed');
     [
@@ -2327,44 +2330,82 @@ test('built-in lookup links do not duplicate IMDb ID prefixes', () => {
     assert(script.includes("imdbId.replace(/^tt/, '')"), 'numeric-only lookup routes should strip the tt prefix explicitly');
 });
 
-test('cineby uses current domain', () => {
-    assert(script.includes('cineby.at'), 'cineby.at should be the active Cineby domain');
-    assert(script.includes('// @match        https://www.cineby.at/*'), 'Cineby root route should be matched');
-    assert(script.includes("url:'https://www.cineby.at/'"), 'Cineby handoff should target the live root route');
-    assert(script.includes("/^search$/i.test(label.trim())"), 'Cineby handoff should open the current search control');
-    assert(!script.includes('createCinebySettingsPanel'), 'a single supported Cineby host should not render a false-choice selector');
-    assert(script.includes('The exact Cineby root uses a one-time local title handoff.'), 'Sites should explain the fixed handoff behavior');
-    assert(!readme.includes('Preferred Cineby host selector'), 'README must not advertise a host choice that does not exist');
-    assert(readme.includes('held back while the first handoff is pending'), 'README should explain serialized Cineby navigation');
+test('Cineby stays retired outside the migration that scrubs it', () => {
+    assert(!script.includes('@match        https://www.cineby.at/*'), 'the retired Cineby route must not be matched');
+    assert(!script.includes('handleCineby'), 'the Cineby auto-fill surface should be gone');
+    assert(!script.includes('storeCinebyQuery'), 'the Cineby handoff writer should be gone');
+    assert(!script.includes('cinebyHost:'), 'the Cineby host preference should not ship in defaults');
+    const defaultsBlock = script.match(/const DEFAULT_WATCH_SITES = \[[\s\S]*?\n    \];/)?.[0] || '';
+    assert(defaultsBlock, 'the default watch-site constant should exist');
+    assert(!/cineby/i.test(defaultsBlock), 'Cineby must not be a default watch destination');
+    const catalogBlock = script.match(/const FMHY_WATCH_CATALOG = \[[\s\S]*?\n    \];/)?.[0] || '';
+    assert(catalogBlock, 'the FMHY catalog constant should exist');
+    assert(!/cineby\.at/.test(catalogBlock), 'Cineby must not be offered by the catalog');
+    const manifest = JSON.parse(fs.readFileSync(path.join(root, 'extension', 'manifest.json'), 'utf8'));
+    assert(!JSON.stringify(manifest).includes('cineby'), 'the extension manifest must not request Cineby access');
+    const background = fs.readFileSync(path.join(root, 'extension', 'background.js'), 'utf8');
+    assert(!background.includes('cineby'), 'the extension background allowlist must not include Cineby');
+    assert(!/cineby/i.test(readme), 'the README must not document Cineby');
 });
 
-test('Cineby handoffs are short-lived and consumed only once', () => {
+test('schema-3 migration scrubs Cineby leftovers from storage', () => {
     const hooks = loadScriptTestHooks();
-    assert(hooks.storeCinebyQuery('The Matrix'));
-    const payload = JSON.parse(hooks.getStoredSetting('cineby_query'));
-    assert.strictEqual(payload.title, 'The Matrix');
-    assert(Number.isFinite(payload.ts), 'handoff timestamp missing');
-    assert.strictEqual(hooks.takeCinebyQuery(), 'The Matrix');
-    assert.strictEqual(hooks.getStoredSetting('cineby_query'), undefined, 'consumed handoff should be deleted immediately');
+    hooks.seedStoredSetting('settingsSchemaVersion', 2);
+    hooks.seedStoredSetting('cinebyHost', 'https://www.cineby.at/');
+    hooks.seedStoredSetting('cineby_query', JSON.stringify({ title:'Alien', ts:Date.now() }));
+    hooks.seedRawStorage('movieTitle', 'Alien');
+    hooks.seedStoredSetting('watchSites', [
+        { name:'Cineby', url:'https://www.cineby.at/', color:'#6366f1', category:'watch', storeQuery:true },
+        { name:'Kept', url:'https://example.com/search?q={{TITLE}}', color:'#10b981', category:'watch', storeQuery:true },
+    ]);
+    assert.strictEqual(hooks.runSettingsMigrations(), hooks.SETTINGS_SCHEMA_VERSION);
+    assert.strictEqual(hooks.getStoredSetting('cinebyHost'), undefined, 'the host preference should be deleted');
+    assert.strictEqual(hooks.getStoredSetting('cineby_query'), undefined, 'a pending handoff payload should be deleted');
+    assert(!hooks.getStorageKeys().includes('movieTitle'), 'the legacy global handoff key should be deleted');
+    const migrated = hooks.getStoredSetting('watchSites');
+    assert.strictEqual(migrated.length, 1, 'stored Cineby rows should be removed');
+    assert.strictEqual(migrated[0].name, 'Kept');
+    assert(!('storeQuery' in migrated[0]), 'surviving rows should lose the retired transport flag');
+});
 
-    assert(hooks.storeCinebyQuery('Alien'));
-    assert.strictEqual(hooks.storeCinebyQuery('Aliens'), false, 'a second handoff must not overwrite one still opening');
-    assert.match(hooks.getCinebyHandoffFailureMessage(), /still opening/);
-    assert.strictEqual(hooks.takeCinebyQuery(), 'Alien', 'the first pending title must remain intact');
+test('the FMHY catalog offers valid, unique, addable destinations', () => {
+    const hooks = loadScriptTestHooks();
+    const catalog = hooks.FMHY_WATCH_CATALOG;
+    assert(Array.isArray(catalog) && catalog.length >= 5, 'the catalog should ship its wiki section groups');
+    const names = new Set();
+    let total = 0;
+    catalog.forEach(group => {
+        assert(typeof group.group === 'string' && group.group.trim(), 'every catalog group needs a label');
+        assert(Array.isArray(group.sites) && group.sites.length, 'every catalog group needs sites');
+        group.sites.forEach(site => {
+            total += 1;
+            const normalized = hooks.normalizeSite({ ...site, category:'watch' });
+            assert(normalized, `catalog entry ${site.name} must survive site normalization`);
+            assert.strictEqual(normalized.name, site.name, `catalog entry name ${site.name} must fit the stored length`);
+            const lower = site.name.toLowerCase();
+            assert(!names.has(lower), `catalog entry ${site.name} is duplicated`);
+            names.add(lower);
+        });
+    });
+    assert(total >= 150, `the catalog should carry the full FMHY streaming list (got ${total})`);
+    assert(total <= hooks.SITE_LIST_LIMIT, 'every catalog entry must be addable within the site-list limit');
+    /* Filtering hides entries with the hidden property. The UA stylesheet's [hidden]
+       rule loses to the entry's own display declaration, so without this the filter
+       leaves every entry of a matching group on screen. */
+    assert(script.includes('.enh-site-catalog__entry[hidden] { display: none; }'),
+        'filtered catalog entries need a hidden rule that outranks their display value');
+});
 
-    hooks.seedStoredSetting('cineby_query', JSON.stringify({ title:'Stale title', ts:0 }));
-    assert.strictEqual(hooks.takeCinebyQuery(), '', 'expired handoffs should not fill a later Cineby visit');
-    assert.strictEqual(hooks.getStoredSetting('cineby_query'), undefined, 'expired handoff should also be deleted');
-
-    hooks.seedStoredSetting('cineby_query', '1917');
-    assert.strictEqual(hooks.takeCinebyQuery(), '1917', 'numeric legacy movie titles should survive migration');
-
-    const failingHooks = loadScriptTestHooks();
-    failingHooks.failSettingWriteAt(1);
-    assert.strictEqual(failingHooks.storeCinebyQuery('The Matrix'), false, 'handoff writes should report storage failure');
-    assert.match(failingHooks.getCinebyHandoffFailureMessage(), /storage permissions or quota/);
-    assert(script.includes("if (btn.dataset.storeQuery !== 'true' || storeCinebyQuery(title)) return"), 'title-page Cineby navigation should stop after a failed handoff write');
-    assert((script.match(/if \(!this\._prepareEntry\(site, entry\)\)/g) || []).length === 2, 'both list-queue navigation paths should stop after a failed handoff write');
+test('default watch sites resolve to catalog services with live-checked routes', () => {
+    const hooks = loadScriptTestHooks();
+    const defaults = hooks.getDefaultSettingsEntries().find(entry => entry.key === 'watchSites').value;
+    assert(defaults.length >= 12, 'a healthy default set should survive the FMHY refresh');
+    const catalogNames = new Set();
+    hooks.FMHY_WATCH_CATALOG.forEach(group => group.sites.forEach(site => catalogNames.add(site.name.toLowerCase())));
+    defaults.forEach(site => {
+        assert(catalogNames.has(site.name.toLowerCase()), `default ${site.name} should exist in the FMHY catalog`);
+        assert(hooks.normalizeSite(site), `default ${site.name} must normalize cleanly`);
+    });
 });
 
 test('settings preserve host scroll state and complete nested tab keyboard support', () => {

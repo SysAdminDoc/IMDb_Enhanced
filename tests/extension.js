@@ -36,9 +36,9 @@ assert(!content.includes('==UserScript=='), 'generated extension content must no
 assert(content.includes("__storage('get', null)"), 'extension content must preload extension storage');
 assert(content.includes('chrome.storage.local[method](arg, done)'), 'storage calls must use the callback form both engines accept');
 assert(content.includes('globalThis.GM_xmlhttpRequest'), 'extension bridge must provide the shared request API');
-/* The userscript's cross-tab defences (setUserMark's forced re-read, the single-slot
-   Cineby handoff) assume GM_getValue reflects live manager storage. A snapshot silently
-   turns those into no-ops, so the mirror has to track storage for the page lifetime. */
+/* The userscript's cross-tab defences (setUserMark's forced re-read) assume
+   GM_getValue reflects live manager storage. A snapshot silently turns those into
+   no-ops, so the mirror has to track storage for the page lifetime. */
 assert(content.includes('chrome.storage.onChanged.addListener'), 'extension bridge must follow storage changes made by other tabs');
 assert(/__state\[key\]\s*=\s*change\.newValue/.test(content), 'storage changes from other tabs must update the bridge mirror');
 assert(content.includes('__pendingChanges'), 'storage changes arriving during the initial read must not be dropped');

@@ -1,7 +1,7 @@
 {
   "manifest_version": 3,
   "name": "IMDb Enhanced",
-  "version": "2.14.0",
+  "version": "2.15.0",
   "description": "A premium, decluttered IMDb experience with configurable title links, score widgets, private marks, local media integrations, and stronger ad-request blocking.",
   "author": "SysAdminDoc",
   "icons": {
@@ -17,7 +17,6 @@
   ],
   "host_permissions": [
     "https://www.imdb.com/*",
-    "https://www.cineby.at/*",
     "https://www.rottentomatoes.com/*",
     "https://backend.metacritic.com/*",
     "https://letterboxd.com/*",
@@ -64,8 +63,7 @@
         "https://www.imdb.com/*/find*",
         "https://www.imdb.com/*/search/*",
         "https://www.imdb.com/",
-        "https://www.imdb.com/?*",
-        "https://www.cineby.at/*"
+        "https://www.imdb.com/?*"
       ],
       "js": [
         "content.js"
