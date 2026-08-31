@@ -3167,7 +3167,10 @@
        either across two backups of the same passphrase is what breaks AES-GCM. */
     const BACKUP_ENVELOPE_KEY = 'imdbEnhancedEncryptedBackup';
     const BACKUP_ENVELOPE_VERSION = 1;
-    const BACKUP_KDF_ITERATIONS = 310000;
+    /* OWASP's current PBKDF2-SHA256 recommendation. The envelope records the cost it
+       was written with and the reader accepts a wide range, so raising this strands no
+       existing backup: an older one derives at its own recorded count. */
+    const BACKUP_KDF_ITERATIONS = 600000;
     const BACKUP_SALT_BYTES = 16;
     const BACKUP_IV_BYTES = 12;
     const BACKUP_MIN_PASSPHRASE_LENGTH = 8;

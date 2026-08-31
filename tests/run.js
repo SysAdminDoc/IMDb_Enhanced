@@ -5212,7 +5212,8 @@ asyncTest('an encrypted backup round-trips credentials under its passphrase', as
     assert(hooks.isEncryptedBackup(parsed), 'the envelope must identify itself');
     assert.strictEqual(parsed.kdf.name, 'PBKDF2');
     assert.strictEqual(parsed.kdf.hash, 'SHA-256');
-    assert(parsed.kdf.iterations >= 100000, 'the key-derivation cost must not be trivial');
+    assert(parsed.kdf.iterations >= 600000,
+        'the key-derivation cost must meet the current OWASP floor for PBKDF2-SHA256');
     assert.strictEqual(parsed.cipher.name, 'AES-GCM');
 
     const opened = await hooks.readEncryptedBackup(parsed, 'correct horse battery');
@@ -5227,6 +5228,29 @@ asyncTest('an encrypted backup round-trips credentials under its passphrase', as
     assert.notStrictEqual(parsed.kdf.salt, second.kdf.salt, 'each backup needs a fresh salt');
     assert.notStrictEqual(parsed.cipher.iv, second.cipher.iv, 'each backup needs a fresh nonce');
     assert.notStrictEqual(parsed.ciphertext, second.ciphertext, 'identical input must not produce identical ciphertext');
+});
+
+/* Written by the build that derived at 310,000 iterations, kept verbatim. Raising the
+   writer's cost must not strand a backup somebody already has, and the only way to know
+   that is to open one rather than to re-encrypt with today's parameters and call it old. */
+const LEGACY_KDF_ENVELOPE = Object.freeze({
+    imdbEnhancedEncryptedBackup: 1,
+    kdf: { name:'PBKDF2', hash:'SHA-256', iterations:310000, salt:'AxQlNkdYaXqLnK2+z+DxAg==' },
+    cipher: { name:'AES-GCM', iv:'CyhFYn+cudbzEC1K' },
+    ciphertext: 'lDREHVJD9ZVBugCjWFdNRJRdylpJdyzV5xmAXWKeD/zz/FBC+qAIka/VEpxpUeq/pXIHV+ztW958yUrRZJw8i26zkyM8MeRule8=',
+});
+
+asyncTest('a backup written at the old key-derivation cost still opens', async () => {
+    const hooks = loadScriptTestHooks();
+    assert.strictEqual(LEGACY_KDF_ENVELOPE.kdf.iterations, 310000,
+        'the fixture must keep the old cost, or it proves nothing about compatibility');
+    const opened = await hooks.readEncryptedBackup(LEGACY_KDF_ENVELOPE, 'legacy-310k-passphrase');
+    assert.strictEqual(opened.radarrApiKey, 'legacy-radarr-key');
+    assert.strictEqual(opened.themeVariant, 'oled');
+    await assert.rejects(
+        () => hooks.readEncryptedBackup(LEGACY_KDF_ENVELOPE, 'not-the-passphrase'),
+        /Wrong passphrase|altered/i,
+        'the old envelope is still authenticated, not merely readable');
 });
 
 asyncTest('a wrong passphrase or tampered envelope fails before anything is written', async () => {

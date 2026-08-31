@@ -150,7 +150,7 @@ The redesigned visual reference set covers every menu page: [Experience](design/
 
 **Import/Export.** JSON backup and validated, transactional restore up to 4 MB, including remembered section state. The Data page also accepts IMDb and Letterboxd CSV history exports. Both import paths validate and preview before writing; a storage failure restores the prior values before reporting the error.
 
-Integration API keys and tokens are left out of an ordinary backup, which names what it omitted, and restoring one keeps whatever credentials that device already has. **Export with credentials** is the separate action that includes them: it asks for a passphrase, derives a key with PBKDF2-SHA256 at 310,000 iterations, and encrypts the backup with AES-GCM under a fresh salt and nonce. Importing one asks for the passphrase as soon as it recognizes the file. A wrong passphrase or a modified file is refused before anything is written, and nothing can recover the contents if you lose the passphrase.
+Integration API keys and tokens are left out of an ordinary backup, which names what it omitted, and restoring one keeps whatever credentials that device already has. **Export with credentials** is the separate action that includes them: it asks for a passphrase, derives a key with PBKDF2-SHA256 at 600,000 iterations, and encrypts the backup with AES-GCM under a fresh salt and nonce. Importing one asks for the passphrase as soon as it recognizes the file. A wrong passphrase or a modified file is refused before anything is written, and nothing can recover the contents if you lose the passphrase.
 
 ## Themes
 
