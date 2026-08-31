@@ -310,6 +310,125 @@
        parsing someone's page, so both are decided from this rather than at runtime. */
     const DISTRIBUTION_PROFILE = globalThis.__IMDB_ENHANCED_PROFILE === 'store' ? 'store' : 'default';
     const IS_STORE_BUILD = DISTRIBUTION_PROFILE === 'store';
+    /* ---------------------------------------------------------------------------
+       Message catalog.
+
+       Every string a person reads lives here, keyed, rather than written where it is
+       rendered. One catalog serves both builds: the userscript reads it directly, and
+       scripts/build-extension.js emits the same entries as _locales/en/messages.json so
+       chrome.i18n answers from a translated locale where one is installed. The two can
+       therefore not drift, because there is only one of them.
+
+       Keys are flat and use the character set chrome.i18n allows: letters, digits and
+       underscore. They are grouped by prefix — toast_, score_, settings_ — because that
+       is the only grouping a flat namespace supports and it is how a translator reads
+       the file. Substitutions are positional, $1 to $9, which is what getMessage takes;
+       $$ is a literal dollar sign. A count-dependent string gets two keys, _one and
+       _other, because chrome.i18n has no plural forms of its own.
+
+       Nothing here may be matched against the page. Route detection and selectors read
+       IMDb's own test ids, never displayed text, so a translated string can never change
+       which code path runs. */
+    const MESSAGES = Object.freeze({
+        toast_a_site_list_can_contain_up: 'A site list can contain up to $1 destinations',
+        toast_added_to: '$1 added to $2',
+        toast_all_imdb_watched_on_this_page: 'All $1 IMDb Watched $2 on this page already have a local mark',
+        toast_cache_could_not_be_read_or: 'Cache could not be read or cleared.',
+        toast_cache_is_already_empty: 'Cache is already empty',
+        toast_cleared_cached_entries_could_not_be: 'Cleared $1 cached entries; $2 could not be removed.',
+        toast_cleared_cached_entries_reload_to_re: 'Cleared $1 cached entries. Reload to re-fetch.',
+        toast_cleared_saved_title_marks: 'Cleared $1 saved title marks',
+        toast_copied_imdb_ids: 'Copied $1 IMDb IDs',
+        toast_copied_search_links: 'Copied $1 search links',
+        toast_copy_failed_try_the_individual_links: 'Copy failed. Try the individual links instead.',
+        toast_could_not_refresh_reload_and_try: '$1 could not refresh. Reload and try again.',
+        toast_could_not_save_locally_check_permissions: 'Could not save locally. Check $1 permissions or quota.',
+        toast_could_not_save_the_theme_previous: 'Could not save the theme. Previous settings were restored.',
+        toast_could_not_start_on_this_page: '$1 could not start on this page. Settings → Data has a diagnostics report.',
+        toast_could_not_start_reload_and_try: '$1 could not start. Reload and try again.',
+        toast_credentials_must_be_at_most_4: 'Credentials must be at most 4,096 characters without control characters',
+        toast_current_settings_could_not_be_read: 'Current settings could not be read, so nothing was reset: $1',
+        toast_encrypted_backup_copied_keep_the_passphrase: 'Encrypted backup copied. Keep the passphrase; it cannot be recovered.',
+        toast_enter_a_name_valid_http_s: 'Enter a name, valid HTTP(S) URL, category, and supported template tokens',
+        toast_episode_synopsis_revealed: 'Episode synopsis revealed',
+        toast_failed: '$1 $2 failed: $3',
+        toast_failure_journal_cleared: 'Failure journal cleared',
+        toast_finish_or_remove_the_incomplete_site: 'Finish or remove the incomplete site row before changing the order',
+        toast_finish_or_remove_the_incomplete_site_2: 'Finish or remove the incomplete site row before changing the list',
+        toast_grant_then_reload: 'Grant site access on the page that just opened, then reload this one.',
+        toast_grant_then_return: 'Grant site access on the page that just opened, then return here.',
+        toast_imdb_watchlist_controls_are_unavailable_on: 'IMDb watchlist controls are unavailable on this title surface',
+        toast_import_is_too_large_use_a: 'Import is too large. Use a complete export under 4 MB.',
+        toast_imported_local_titles_from_csv_rows: 'Imported $1 local titles from $2 CSV rows.$3 Reloading...',
+        toast_imported_settings_reloading: 'Imported $1 settings$2. Reloading...',
+        toast_is_full_so_lookups_are_not: '$1 is full, so lookups are not being cached. Settings → Data → Clear cache frees it.',
+        toast_no_episodes_are_loaded_to_export: 'No episodes are loaded to export',
+        toast_no_imdb_title_ids_found: 'No IMDb title IDs found',
+        toast_no_imdb_watched_titles_found_on: 'No IMDb Watched titles found on this page. Sign in and open a list, chart, or title that shows the Watched control.',
+        toast_no_titles_found_on_this_page: 'No titles found on this page',
+        toast_paste_settings_json_before_importing: 'Paste settings JSON before importing',
+        toast_plot_synopsis_revealed: 'Plot synopsis revealed',
+        toast_press_the_clear_button_again_within: 'Press the clear button again within 5 seconds to remove every mark',
+        toast_preview_the_csv_before_importing: 'Preview the CSV before importing.',
+        toast_removed_from: '$1 removed from $2',
+        toast_reset_settings_reloading: 'Reset $1 settings. Reloading...',
+        toast_reset_settings_use_the_manager_menu: 'Reset $1 settings. Use the manager menu\'s Undo command to put them back.',
+        toast_reset_to_defaults: '$1 reset to defaults',
+        toast_season_marks_restored: 'Season marks restored',
+        toast_sent_to_your_imdb_watchlist: 'Sent to your IMDb watchlist',
+        toast_settings_could_not_be_read_for: 'Settings could not be read for export. No backup was copied.',
+        toast_settings_exceed_the_4_mb_backup: 'Settings exceed the 4 MB backup limit. Remove stale title marks or oversized destinations first.',
+        toast_settings_exceed_the_4_mb_backup_2: 'Settings exceed the 4 MB backup limit. Remove stale title marks first.',
+        toast_the_journal_could_not_be_cleared: 'The journal could not be cleared. Check $1.',
+        toast_the_match_correction_was_not_saved: 'The match correction was not saved. The previous match has been restored.',
+        toast_the_two_passphrases_do_not_match: 'The two passphrases do not match.',
+        toast_there_is_no_reset_to_undo: 'There is no reset to undo.',
+        toast_undone_settings_were_put_back_reloading: 'Undone. $1 settings were put back. Reloading...',
+        toast_use_a_localhost_or_127_0: 'Use a localhost or 127.0.0.1 HTTP(S) URL without embedded credentials',
+        toast_use_a_positive_whole_number_profile: 'Use a positive whole-number profile ID',
+        toast_your_integration_keys_are_not_readable: 'Your integration keys are not readable from an IMDb page, so this backup would be empty. Make it from the extension\'s own page instead.',
+        toast_your_seen_and_skip_marks_were: 'Your Seen and Skip marks were not saved. $1 may be full. Settings, then Data, then Clear cache frees space.',
+    });
+
+    /* getMessage answers '' for a key the active locale does not carry, and Chrome has
+       already tried default_locale by then. Falling through to the embedded catalog makes
+       the last step deterministic in both builds and in the tests, which have no i18n at
+       all. A key that exists nowhere returns its own name rather than an empty string: a
+       blank control is a bug that hides, a visible key is a bug that reports itself. */
+    function applyMessageSubstitutions(template, values) {
+        return String(template).replace(/\$(\$|[1-9])/g, (match, token) => {
+            if (token === '$') return '$';
+            const value = values[Number(token) - 1];
+            return value === undefined ? match : String(value);
+        });
+    }
+
+    function t(key, substitutions) {
+        const values = substitutions === undefined
+            ? []
+            : (Array.isArray(substitutions) ? substitutions : [substitutions]);
+        if (IS_EXTENSION_BUILD && typeof chrome !== 'undefined' && typeof chrome.i18n?.getMessage === 'function') {
+            try {
+                const translated = chrome.i18n.getMessage(key, values.map(value => String(value)));
+                if (translated) return translated;
+            } catch { /* fall through to the catalog this build embeds */ }
+        }
+        const template = Object.prototype.hasOwnProperty.call(MESSAGES, key) ? MESSAGES[key] : null;
+        if (template === null) return key;
+        return applyMessageSubstitutions(template, values);
+    }
+
+    /* chrome.i18n has no plural rules, so a count-dependent message is two keys and the
+       choice is made here. English needs only one and other; a locale that needs more
+       forms adds them to its own file and this picks the closest it has. */
+    function tCount(baseKey, count, substitutions) {
+        const suffix = Math.abs(Number(count)) === 1 ? '_one' : '_other';
+        const values = substitutions === undefined
+            ? [count]
+            : [count, ...(Array.isArray(substitutions) ? substitutions : [substitutions])];
+        return t(baseKey + suffix, values);
+    }
+
     const STORAGE_HOST_LABEL = IS_EXTENSION_BUILD ? 'extension storage' : 'userscript storage';
     const COPY_FAILURE_MESSAGE = 'Copy failed. Check this page’s clipboard permission.';
     const VERSION = '2.15.0';
@@ -1174,7 +1293,7 @@
                 : 'a cache write was rejected by storage; quota appears full');
         } catch { /* the toast below is the part the user needs */ }
         try {
-            showToast(`${STORAGE_HOST_LABEL} is full, so lookups are not being cached. Settings → Data → Clear cache frees it.`, 6000);
+            showToast(t('toast_is_full_so_lookups_are_not', [STORAGE_HOST_LABEL]), 6000);
         } catch { /* console warning already recorded the failure */ }
     }
 
@@ -1707,7 +1826,7 @@
             try { document.dispatchEvent(new CustomEvent('imdb-enhanced:marks-updated')); }
             catch (error) { console.warn('[IMDb Enhanced] could not request a marks repaint:', error); }
             try {
-                showToast(`Your Seen and Skip marks were not saved. ${STORAGE_HOST_LABEL} may be full. Settings, then Data, then Clear cache frees space.`, 6000);
+                showToast(t('toast_your_seen_and_skip_marks_were', [STORAGE_HOST_LABEL]), 6000);
             } catch (error) {
                 console.warn('[IMDb Enhanced] could not report a failed marks write:', error);
             }
@@ -2590,8 +2709,8 @@
                     );
                     if (watchlist) {
                         watchlist.click();
-                        showToast('Sent to your IMDb watchlist');
-                    } else showToast('IMDb watchlist controls are unavailable on this title surface', 3500);
+                        showToast(t('toast_sent_to_your_imdb_watchlist'));
+                    } else showToast(t('toast_imdb_watchlist_controls_are_unavailable_on'), 3500);
                 },
             }, 'Add to watchlist')
         );
@@ -2949,7 +3068,7 @@
         Object.keys(SCORE_CORRECTION_FEATURE_KEYS)
             .forEach(provider => clearScoreCorrectionCache(imdbId, provider));
         [...new Set(Object.values(SCORE_CORRECTION_FEATURE_KEYS))].forEach(refreshFeature);
-        showToast('The match correction was not saved. The previous match has been restored.', 6000);
+        showToast(t('toast_the_match_correction_was_not_saved'), 6000);
     }
     if (typeof document !== 'undefined' && typeof document.addEventListener === 'function') {
         document.addEventListener('imdb-enhanced:settings-save-failed', recoverRejectedScoreCorrections);
@@ -3666,7 +3785,7 @@
         catch (error) {
             if (notify) {
                 console.warn(`[IMDb Enhanced] setting write failed (${key}):`, error);
-                showToast(`Could not save locally. Check ${STORAGE_HOST_LABEL} permissions or quota.`, 4500);
+                showToast(t('toast_could_not_save_locally_check_permissions', [STORAGE_HOST_LABEL]), 4500);
             }
             try { document.dispatchEvent(new CustomEvent('imdb-enhanced:settings-save-failed', { detail:{ key } })); }
             catch { /* the write result is still returned to its control */ }
@@ -4416,10 +4535,10 @@
             // Announcing must never mask the failure it is announcing.
             try {
                 if (notify) {
-                    showToast(`${feature.name} could not start. Reload and try again.`, 4500);
+                    showToast(t('toast_could_not_start_reload_and_try', [feature.name]), 4500);
                 } else if (announcedFailureRoute !== activeRouteGeneration) {
                     announcedFailureRoute = activeRouteGeneration;
-                    showToast(`${feature.name} could not start on this page. Settings → Data has a diagnostics report.`, 5000);
+                    showToast(t('toast_could_not_start_on_this_page', [feature.name]), 5000);
                 }
             } catch (toastError) {
                 console.warn('[IMDb Enhanced] failure notice:', toastError);
@@ -7028,7 +7147,7 @@ section[id*="quote" i] .ipc-list-card { padding: 4px 0 !important; margin: 2px 0
             type:'button',
             className:'enh-score-stale__retry',
             onClick: async () => {
-                if (await openOptionsPage()) showToast('Grant site access on the page that just opened, then reload this one.', 5000);
+                if (await openOptionsPage()) showToast(t('toast_grant_then_reload'), 5000);
             },
         }, 'Grant access'));
     }
@@ -8019,7 +8138,7 @@ section[id*="quote" i] .ipc-list-card { padding: 4px 0 !important; margin: 2px 0
                     plotFull.classList.add('enh-revealed');
                     plotFull.classList.remove('enh-blur');
                     restoreElementAttributes(plotFull, this._plotAttributes);
-                    showToast('Plot synopsis revealed');
+                    showToast(t('toast_plot_synopsis_revealed'));
                 };
                 this._revealHandler = event => {
                     if (event.target.closest?.('a,button,input,select,textarea')) return;
@@ -9456,7 +9575,7 @@ section[id*="quote" i] .ipc-list-card { padding: 4px 0 !important; margin: 2px 0
                             } catch (error) {
                                 if (!isCurrent()) return;
                                 console.warn('[IMDb Enhanced] integration action failed:', error);
-                                showToast(`${service} ${action.kind === 'seerr' ? 'request' : 'add'} failed: ${getRequestErrorMessage(error)}`, 4500);
+                                showToast(t('toast_failed', [service, action.kind === 'seerr' ? 'request' : 'add', getRequestErrorMessage(error)]), 4500);
                                 this._setState(btn, 'add', original, originalLabel, { enabled:true });
                             }
                         },
@@ -9874,7 +9993,7 @@ section[id*="quote" i] .ipc-list-card { padding: 4px 0 !important; margin: 2px 0
             plot.classList.add('enh-revealed');
             plot.classList.remove('enh-episode-spoiler');
             restoreElementAttributes(plot, this._plotAttributes?.get(plot));
-            showToast('Episode synopsis revealed');
+            showToast(t('toast_episode_synopsis_revealed'));
         },
         _renderBestEpisodes(episodes) {
             document.getElementById('enh-best-episodes')?.remove();
@@ -10183,7 +10302,7 @@ section[id*="quote" i] .ipc-list-card { padding: 4px 0 !important; margin: 2px 0
                 onClick: () => {
                     const rows = readLoadedEpisodes();
                     const text = buildEpisodeSubtitleExport(rows);
-                    if (!text) { showToast('No episodes are loaded to export'); return; }
+                    if (!text) { showToast(t('toast_no_episodes_are_loaded_to_export')); return; }
                     showToast(copyTextToClipboard(text)
                         ? `Copied subtitle links for ${rows.length} loaded episodes`
                         : COPY_FAILURE_MESSAGE, 3000);
@@ -10242,12 +10361,12 @@ section[id*="quote" i] .ipc-list-card { padding: 4px 0 !important; margin: 2px 0
                 type:'button',
                 onClick: () => {
                     const ids = this._ids();
-                    if (!ids.length) { showToast('No IMDb title IDs found'); return; }
+                    if (!ids.length) { showToast(t('toast_no_imdb_title_ids_found')); return; }
                     if (!copyTextToClipboard(ids.join('\n'))) {
                         showToast(COPY_FAILURE_MESSAGE, 4500);
                         return;
                     }
-                    showToast(`Copied ${ids.length} IMDb IDs`);
+                    showToast(t('toast_copied_imdb_ids', [ids.length]));
                     btn.textContent = `Copy ${ids.length} IMDb IDs`;
                 },
             }, `Copy ${this._ids().length || 'all'} IMDb IDs`);
@@ -10608,7 +10727,7 @@ section[id*="quote" i] .ipc-list-card { padding: 4px 0 !important; margin: 2px 0
                 refreshFeature('watchedMarking');
                 this._paint();
                 setTextIfChanged(note, 'Undone.');
-                showToast('Season marks restored');
+                showToast(t('toast_season_marks_restored'));
             };
 
             // A season tab swap replaces the rows without a route change.
@@ -10818,7 +10937,7 @@ section[id*="quote" i] .ipc-list-card { padding: 4px 0 !important; margin: 2px 0
         },
         _showQueue(site, trigger) {
             const titles = getListTitles();
-            if (!titles.length) { showToast('No titles found on this page'); return; }
+            if (!titles.length) { showToast(t('toast_no_titles_found_on_this_page')); return; }
             const entries = buildListSearchEntries(site, titles);
             document.getElementById('enh-multi-search-queue')?.remove();
 
@@ -10886,8 +11005,8 @@ section[id*="quote" i] .ipc-list-card { padding: 4px 0 !important; margin: 2px 0
                 onClick: () => {
                     const text = entries.map(entry => entry.url).join('\n');
                     if (copyTextToClipboard(text)) {
-                        showToast(`Copied ${entries.length} search links`);
-                    } else showToast('Copy failed. Try the individual links instead.', 4500);
+                        showToast(t('toast_copied_search_links', [entries.length]));
+                    } else showToast(t('toast_copy_failed_try_the_individual_links'), 4500);
                 },
             }, 'Copy all links');
             const close = makeEl('button', {
@@ -12531,7 +12650,7 @@ section[data-testid="hero-parent"].enh-editorial-native-hidden { display: none !
             if (linkMenu && get('expandedLinkMenu')) startFeature(linkMenu, { context:'refresh', notify:true });
         } catch (e) {
             console.warn(`[IMDb Enhanced] refresh ${key}:`, e);
-            showToast(`${feature.name} could not refresh. Reload and try again.`, 4500);
+            showToast(t('toast_could_not_refresh_reload_and_try', [feature.name]), 4500);
         }
     }
 
@@ -12689,7 +12808,7 @@ section[data-testid="hero-parent"].enh-editorial-native-hidden { display: none !
                 rows.replaceChildren(...previousOrder);
                 updateCount();
                 if (lastSaveFailure === 'validation') {
-                    showToast('Finish or remove the incomplete site row before changing the order');
+                    showToast(t('toast_finish_or_remove_the_incomplete_site'));
                 }
             };
             const moveUp = makeEl('button', {
@@ -12725,14 +12844,14 @@ section[data-testid="hero-parent"].enh-editorial-native-hidden { display: none !
                             || previous?.querySelector?.('[data-field="name"]')
                             || add;
                         focusTarget?.focus();
-                        showToast(`${destination} removed from ${title}`);
+                        showToast(t('toast_removed_from', [destination, title]));
                         return;
                     }
                     rows.insertBefore(row, next?.parentNode === rows ? next : null);
                     updateCount();
                     remove.focus();
                     if (lastSaveFailure === 'validation') {
-                        showToast('Finish or remove the incomplete site row before changing the list');
+                        showToast(t('toast_finish_or_remove_the_incomplete_site_2'));
                     }
                 },
             }, 'Remove');
@@ -12763,7 +12882,7 @@ section[data-testid="hero-parent"].enh-editorial-native-hidden { display: none !
                 input.addEventListener('change', () => {
                     cancelScheduledSave();
                     if (!save(true) && lastSaveFailure === 'validation') {
-                        showToast('Enter a name, valid HTTP(S) URL, category, and supported template tokens');
+                        showToast(t('toast_enter_a_name_valid_http_s'));
                     }
                     updateCount();
                 });
@@ -12788,7 +12907,7 @@ section[data-testid="hero-parent"].enh-editorial-native-hidden { display: none !
             className:'enh-settings-footer-btn',
             onClick: () => {
                 if (rows.children.length >= SITE_LIST_LIMIT) {
-                    showToast(`A site list can contain up to ${SITE_LIST_LIMIT} destinations`);
+                    showToast(t('toast_a_site_list_can_contain_up', [SITE_LIST_LIMIT]));
                     return;
                 }
                 const row = addRow();
@@ -12808,7 +12927,7 @@ section[data-testid="hero-parent"].enh-editorial-native-hidden { display: none !
                     updateCount();
                     return;
                 }
-                showToast(`${title} reset to defaults`);
+                showToast(t('toast_reset_to_defaults', [title]));
             },
         }, 'Reset');
 
@@ -12884,7 +13003,7 @@ section[data-testid="hero-parent"].enh-editorial-native-hidden { display: none !
                         className:'enh-site-catalog__add',
                         onClick: () => {
                             if (rows.children.length >= SITE_LIST_LIMIT) {
-                                showToast(`A site list can contain up to ${SITE_LIST_LIMIT} destinations`);
+                                showToast(t('toast_a_site_list_can_contain_up', [SITE_LIST_LIMIT]));
                                 return;
                             }
                             const row = addRow({
@@ -12908,7 +13027,7 @@ section[data-testid="hero-parent"].enh-editorial-native-hidden { display: none !
                             }
                             addedCount += 1;
                             updateCount();
-                            showToast(`${site.name} added to ${title}`);
+                            showToast(t('toast_added_to', [site.name, title]));
                         },
                     }, 'Add');
                     const row = makeEl('div', { className:'enh-site-catalog__entry' },
@@ -12977,7 +13096,7 @@ section[data-testid="hero-parent"].enh-editorial-native-hidden { display: none !
                 input.classList.toggle('enh-site-input--invalid', !valid);
                 input.setAttribute('aria-invalid', String(!valid));
                 if (!valid) {
-                    if (notifyFailure) showToast('Use a localhost or 127.0.0.1 HTTP(S) URL without embedded credentials');
+                    if (notifyFailure) showToast(t('toast_use_a_localhost_or_127_0'));
                     return false;
                 }
                 return trySaveSetting(key, normalized, { notify:notifyFailure });
@@ -12988,7 +13107,7 @@ section[data-testid="hero-parent"].enh-editorial-native-hidden { display: none !
                 input.classList.toggle('enh-site-input--invalid', !valid);
                 input.setAttribute('aria-invalid', String(!valid));
                 if (!valid) {
-                    if (notifyFailure) showToast('Use a positive whole-number profile ID');
+                    if (notifyFailure) showToast(t('toast_use_a_positive_whole_number_profile'));
                     return false;
                 }
                 return trySaveSetting(key, String(number), { notify:notifyFailure });
@@ -12999,7 +13118,7 @@ section[data-testid="hero-parent"].enh-editorial-native-hidden { display: none !
                 input.classList.toggle('enh-site-input--invalid', !valid);
                 input.setAttribute('aria-invalid', String(!valid));
                 if (!valid) {
-                    if (notifyFailure) showToast('Credentials must be at most 4,096 characters without control characters');
+                    if (notifyFailure) showToast(t('toast_credentials_must_be_at_most_4'));
                     return false;
                 }
                 return trySaveSetting(key, normalized, { notify:notifyFailure });
@@ -13169,14 +13288,14 @@ section[data-testid="hero-parent"].enh-editorial-native-hidden { display: none !
                     clearAll.textContent = `Confirm clear ${entries.length}`;
                     clearAll.setAttribute('aria-label', `Confirm clearing ${entries.length} saved title marks`);
                     clearAllTimer = setTimeout(disarmClearAll, 5000);
-                    showToast('Press the clear button again within 5 seconds to remove every mark');
+                    showToast(t('toast_press_the_clear_button_again_within'));
                     return;
                 }
                 if (!setUserMarks({})) return;
                 refreshFeature('watchedMarking');
                 render();
                 document.dispatchEvent(new CustomEvent('imdb-enhanced:marks-updated'));
-                showToast(`Cleared ${entries.length} saved title marks`);
+                showToast(t('toast_cleared_saved_title_marks', [entries.length]));
             },
         }, 'Clear all');
 
@@ -13190,7 +13309,7 @@ section[data-testid="hero-parent"].enh-editorial-native-hidden { display: none !
             onClick: () => {
                 const found = collectNativeWatchedTitles(document);
                 if (!found.size) {
-                    showToast('No IMDb Watched titles found on this page. Sign in and open a list, chart, or title that shows the Watched control.');
+                    showToast(t('toast_no_imdb_watched_titles_found_on'));
                     return;
                 }
                 const marks = { ...getUserMarks(true) };
@@ -13202,7 +13321,7 @@ section[data-testid="hero-parent"].enh-editorial-native-hidden { display: none !
                     imported++;
                 });
                 if (!imported) {
-                    showToast(`All ${kept} IMDb Watched ${kept === 1 ? 'title' : 'titles'} on this page already have a local mark`);
+                    showToast(t('toast_all_imdb_watched_on_this_page', [kept, kept === 1 ? 'title' : 'titles']));
                     return;
                 }
                 if (!setUserMarks(marks)) return;
@@ -13525,7 +13644,7 @@ section[data-testid="hero-parent"].enh-editorial-native-hidden { display: none !
                         className:'enh-settings-access-btn',
                         hidden:'hidden',
                         onClick: async () => {
-                            if (await openOptionsPage()) showToast('Grant site access on the page that just opened, then return here.', 5000);
+                            if (await openOptionsPage()) showToast(t('toast_grant_then_return'), 5000);
                         },
                     }, 'Grant access');
                 }
@@ -13665,7 +13784,7 @@ section[data-testid="hero-parent"].enh-editorial-native-hidden { display: none !
                         { key:'themeVariant', value:theme.id },
                     ]); }
                     catch {
-                        showToast('Could not save the theme. Previous settings were restored.', 4500);
+                        showToast(t('toast_could_not_save_the_theme_previous'), 4500);
                         return;
                     }
                     applyThemeStyles();
@@ -13997,7 +14116,7 @@ section[data-testid="hero-parent"].enh-editorial-native-hidden { display: none !
             type:'button', className:'enh-settings-footer-btn', id:'enh-csv-preview-btn', onClick:previewCsv,
         }, 'Preview CSV');
         csvApply.addEventListener('click', () => {
-            if (!pendingCsvImport) { showToast('Preview the CSV before importing.'); return; }
+            if (!pendingCsvImport) { showToast(t('toast_preview_the_csv_before_importing')); return; }
             csvApply.disabled = true;
             try {
                 // Re-merge against storage at the moment of the write. A preview left
@@ -14007,7 +14126,7 @@ section[data-testid="hero-parent"].enh-editorial-native-hidden { display: none !
                 applySettingsImport([{ key:'userMarks', value:prepared.marks }]);
                 document.dispatchEvent(new CustomEvent('imdb-enhanced:marks-updated'));
                 const skipped = prepared.skippedRows ? ` ${prepared.skippedRows} rows were skipped.` : '';
-                showToast(`Imported ${prepared.importedTitles} local titles from ${prepared.importedRows} CSV rows.${skipped} Reloading...`, 5000);
+                showToast(t('toast_imported_local_titles_from_csv_rows', [prepared.importedTitles, prepared.importedRows, skipped]), 5000);
                 setTimeout(() => location.reload(), 1000);
             } catch (error) {
                 csvApply.disabled = false;
@@ -14169,7 +14288,7 @@ section[data-testid="hero-parent"].enh-editorial-native-hidden { display: none !
                 const payload = getExportSettings();
                 const serialized = JSON.stringify(payload, null, 2);
                 if (serialized.length > SETTINGS_IMPORT_TEXT_LIMIT) {
-                    showToast('Settings exceed the 4 MB backup limit. Remove stale title marks or oversized destinations first.', 5000);
+                    showToast(t('toast_settings_exceed_the_4_mb_backup'), 5000);
                     return;
                 }
                 const copied = copyTextToClipboard(serialized);
@@ -14182,7 +14301,7 @@ section[data-testid="hero-parent"].enh-editorial-native-hidden { display: none !
                     : 'Settings copied to clipboard', omitted.length ? 6000 : 2500);
             } catch (error) {
                 console.warn('[IMDb Enhanced] settings export failed:', error);
-                showToast('Settings could not be read for export. No backup was copied.', 4500);
+                showToast(t('toast_settings_could_not_be_read_for'), 4500);
             }
         });
         overlay.querySelector('#enh-secure-export-btn').addEventListener('click', () => {
@@ -14200,25 +14319,25 @@ section[data-testid="hero-parent"].enh-editorial-native-hidden { display: none !
             const apply = overlay.querySelector('#enh-secure-export-apply');
             const passphrase = overlay.querySelector('#enh-secure-passphrase').value;
             const confirmation = overlay.querySelector('#enh-secure-passphrase-confirm').value;
-            if (passphrase !== confirmation) { showToast('The two passphrases do not match.', 4000); return; }
+            if (passphrase !== confirmation) { showToast(t('toast_the_two_passphrases_do_not_match'), 4000); return; }
             apply.disabled = true;
             try {
                 const serialized = await createEncryptedBackup(passphrase);
                 if (serialized.length > SETTINGS_IMPORT_TEXT_LIMIT) {
-                    showToast('Settings exceed the 4 MB backup limit. Remove stale title marks first.', 5000);
+                    showToast(t('toast_settings_exceed_the_4_mb_backup_2'), 5000);
                     return;
                 }
                 const copied = copyTextToClipboard(serialized);
                 if (!copied) { showToast(COPY_FAILURE_MESSAGE, 4500); return; }
                 setDataDisclosureState('');
-                showToast('Encrypted backup copied. Keep the passphrase; it cannot be recovered.', 6000);
+                showToast(t('toast_encrypted_backup_copied_keep_the_passphrase'), 6000);
             } catch (error) {
                 console.warn('[IMDb Enhanced] encrypted export failed:', error);
                 /* The credentials are deliberately unreachable from an IMDb page, so this
                    backup cannot be made here. It used to be made anyway, carrying empty
                    strings, and restoring it wiped the real keys. */
                 if (error?.message === 'CREDENTIALS_UNREADABLE') {
-                    showToast('Your integration keys are not readable from an IMDb page, so this backup would be empty. Make it from the extension\'s own page instead.', 7000);
+                    showToast(t('toast_your_integration_keys_are_not_readable'), 7000);
                     if (await openOptionsPage()) setDataDisclosureState('');
                     return;
                 }
@@ -14249,7 +14368,7 @@ section[data-testid="hero-parent"].enh-editorial-native-hidden { display: none !
         overlay.querySelector('#enh-reset-apply').addEventListener('click', () => {
             try {
                 const reset = applySettingsImport(getDefaultSettingsEntries());
-                showToast(`Reset ${reset} settings. Reloading...`);
+                showToast(t('toast_reset_settings_reloading', [reset]));
                 setTimeout(() => location.reload(), 1000);
             } catch (error) {
                 showToast(error.message || 'Reset failed. Previous settings were restored.', 4500);
@@ -14271,8 +14390,8 @@ section[data-testid="hero-parent"].enh-editorial-native-hidden { display: none !
         overlay.querySelector('#enh-import-apply').addEventListener('click', async () => {
             const apply = overlay.querySelector('#enh-import-apply');
             const raw = overlay.querySelector('#enh-import-textarea').value.trim();
-            if (!raw) { showToast('Paste settings JSON before importing'); return; }
-            if (raw.length > SETTINGS_IMPORT_TEXT_LIMIT) { showToast('Import is too large. Use a complete export under 4 MB.'); return; }
+            if (!raw) { showToast(t('toast_paste_settings_json_before_importing')); return; }
+            if (raw.length > SETTINGS_IMPORT_TEXT_LIMIT) { showToast(t('toast_import_is_too_large_use_a')); return; }
             apply.disabled = true;
             try {
                 let data = JSON.parse(raw);
@@ -14285,7 +14404,7 @@ section[data-testid="hero-parent"].enh-editorial-native-hidden { display: none !
                 const { entries, ignored } = prepareSettingsImport(data);
                 const imported = applySettingsImport(entries);
                 const skipped = ignored ? `; skipped ${ignored} invalid or unknown` : '';
-                showToast(`Imported ${imported} settings${skipped}. Reloading...`);
+                showToast(t('toast_imported_settings_reloading', [imported, skipped]));
                 setTimeout(() => location.reload(), 1000);
             } catch (error) {
                 const message = error instanceof SyntaxError
@@ -14301,17 +14420,17 @@ section[data-testid="hero-parent"].enh-editorial-native-hidden { display: none !
         });
         overlay.querySelector('#enh-journal-clear').addEventListener('click', () => {
             if (!clearFailureJournal()) {
-                showToast(`The journal could not be cleared. Check ${STORAGE_HOST_LABEL}.`, 4500);
+                showToast(t('toast_the_journal_could_not_be_cleared', [STORAGE_HOST_LABEL]), 4500);
                 return;
             }
             overlay.querySelector('#enh-journal-body').textContent = formatFailureJournal();
-            showToast('Failure journal cleared');
+            showToast(t('toast_failure_journal_cleared'));
         });
         overlay.querySelector('#enh-clearcache-btn').addEventListener('click', () => {
             let keys;
             try { keys = GM_listValues().filter(key => key.startsWith('cache_')); }
             catch {
-                showToast('Cache could not be read or cleared.', 4500);
+                showToast(t('toast_cache_could_not_be_read_or'), 4500);
                 return;
             }
             let cleared = 0;
@@ -14330,9 +14449,9 @@ section[data-testid="hero-parent"].enh-editorial-native-hidden { display: none !
             overlay.querySelector('#enh-cache-status').textContent = remaining
                 ? `${remaining} entries remain, using ${formatCacheBytes(remainingBytes)} of ${formatCacheBytes(CACHE_TOTAL_BYTE_BUDGET)}.`
                 : 'No cached entries.';
-            if (!keys.length) showToast('Cache is already empty');
-            else if (failed) showToast(`Cleared ${cleared} cached entries; ${failed} could not be removed.`, 4500);
-            else showToast(`Cleared ${cleared} cached entries. Reload to re-fetch.`);
+            if (!keys.length) showToast(t('toast_cache_is_already_empty'));
+            else if (failed) showToast(t('toast_cleared_cached_entries_could_not_be', [cleared, failed]), 4500);
+            else showToast(t('toast_cleared_cached_entries_reload_to_re', [cleared]));
         });
 
         showPage(activeSettingsPage);
@@ -14656,11 +14775,11 @@ section[data-testid="hero-parent"].enh-editorial-native-hidden { display: none !
            there added a command per reset; Violentmonkey and Tampermonkey replace by
            caption, but a manager that does not dedupe would accumulate one every time. */
         register('Undo the last settings reset', () => {
-            if (!pendingResetUndo) { showToast('There is no reset to undo.'); return; }
+            if (!pendingResetUndo) { showToast(t('toast_there_is_no_reset_to_undo')); return; }
             try {
                 const restored = applySettingsImport(pendingResetUndo);
                 pendingResetUndo = null;
-                showToast(`Undone. ${restored} settings were put back. Reloading...`);
+                showToast(t('toast_undone_settings_were_put_back_reloading', [restored]));
                 setTimeout(() => location.reload(), 1000);
             } catch (error) {
                 showToast(error?.message || 'The undo failed. Nothing was changed.', 5000);
@@ -14670,7 +14789,7 @@ section[data-testid="hero-parent"].enh-editorial-native-hidden { display: none !
             let snapshot;
             try { snapshot = prepareSettingsImport(getExportSettings({ includeCredentials:true })).entries; }
             catch (error) {
-                showToast(`Current settings could not be read, so nothing was reset: ${error?.message || 'unknown error'}`, 5000);
+                showToast(t('toast_current_settings_could_not_be_read', [error?.message || 'unknown error']), 5000);
                 return;
             }
             try {
@@ -14679,7 +14798,7 @@ section[data-testid="hero-parent"].enh-editorial-native-hidden { display: none !
                    the already-reset state, and the undo would then report putting N
                    settings back while writing defaults over what the user really had. */
                 if (!pendingResetUndo) pendingResetUndo = snapshot;
-                showToast(`Reset ${count} settings. Use the manager menu's Undo command to put them back.`, 8000);
+                showToast(t('toast_reset_settings_use_the_manager_menu', [count]), 8000);
             } catch (error) {
                 showToast(error?.message || 'The reset failed and previous settings were restored.', 5000);
             }

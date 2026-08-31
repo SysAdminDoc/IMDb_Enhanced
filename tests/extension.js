@@ -166,7 +166,7 @@ assert(source.includes("category:'watch'"), 'userscript source should remain the
 
 // Firefox implements MV3 with event pages and opt-in host permissions, so its
 // manifest must diverge from the Chromium one in exactly these ways.
-const { toFirefoxManifest, FIREFOX_ADDON_ID, FIREFOX_COPIED_FILES } = require('../scripts/build-extension.js');
+const { toFirefoxManifest, FIREFOX_ADDON_ID, FIREFOX_COPIED_FILES, MESSAGE_CATALOG, localeFiles, localeFileNames, PSEUDO_LOCALE } = require('../scripts/build-extension.js');
 const firefox = toFirefoxManifest(manifest);
 assert.deepStrictEqual(firefox.background, { scripts:['background.js'] }, 'Firefox needs an event page, not a service worker');
 assert.strictEqual(firefox.browser_specific_settings.gecko.id, FIREFOX_ADDON_ID, 'Firefox build needs a stable add-on id');
@@ -292,6 +292,7 @@ assert.deepStrictEqual(
     [
         'boot.css', 'content.js', 'manifest.json', 'recovery.js',
         ...FIREFOX_COPIED_FILES,
+        ...localeFileNames(),
         ...Object.values(builtFirefoxManifest.icons || {}),
         ...Object.values(builtFirefoxManifest.action?.default_icon || {}),
     ].filter((name, index, all) => all.indexOf(name) === index).sort(),
@@ -420,6 +421,7 @@ assert.deepStrictEqual(
     [
         ...Object.keys(store.files),
         ...STORE_COPIED_FILES,
+        ...localeFileNames(),
         ...Object.values(store.manifest.icons || {}),
         ...Object.values(store.manifest.action?.default_icon || {}),
     ].filter((name, index, all) => all.indexOf(name) === index).sort(),
@@ -439,5 +441,46 @@ store.excluded.forEach(id => {
    match: applyStoreProfile empties the watch-destination lists. */
 assert(!/destination|watch site|streaming site|catalogue|catalog|directory/i.test(store.manifest.description),
     'the store description must not advertise the watch-destination catalog it omits');
+
+/* IE-86: one catalog, two consumers. The userscript embeds it; the extension builds emit
+   it as _locales so chrome.i18n can answer from an installed translation. They cannot
+   drift because the second is generated from the first, and this is where that is proved
+   against the files that actually ship. */
+assert.strictEqual(manifest.default_locale, 'en',
+    'a package with _locales must name the locale every lookup falls back to');
+const emittedLocales = localeFiles();
+assert.deepStrictEqual(Object.keys(emittedLocales).sort(), ['en', PSEUDO_LOCALE].sort(),
+    'the build emits English and the pseudo-locale, and nothing else');
+[
+    ['extension', path.join(root, 'extension')],
+    ['extension-firefox', firefoxDir],
+    ['extension-store', storeDir],
+].forEach(([name, dir]) => {
+    Object.entries(emittedLocales).forEach(([locale, expected]) => {
+        const file = path.join(dir, '_locales', locale, 'messages.json');
+        assert(fs.existsSync(file), `${name} is missing _locales/${locale}/messages.json`);
+        assert.deepStrictEqual(JSON.parse(fs.readFileSync(file, 'utf8')), expected,
+            `${name}'s ${locale} catalog diverges from the generator`);
+    });
+});
+const englishMessages = emittedLocales.en;
+assert.deepStrictEqual(Object.keys(englishMessages).sort(), Object.keys(MESSAGE_CATALOG).sort(),
+    'the emitted English catalog must be exactly the catalog in the source');
+Object.entries(englishMessages).forEach(([name, entry]) => {
+    assert.strictEqual(entry.message, MESSAGE_CATALOG[name], `${name} was emitted with different text`);
+    assert(/^[A-Za-z0-9_@]+$/.test(name), `message key ${name} uses characters chrome.i18n rejects`);
+});
+/* The pseudo-locale exists so a build loaded under it shows which strings still come from
+   the source rather than the catalog: those are the ones that are not bracketed. It is
+   generated from English, so it can never fall behind it. */
+const pseudo = emittedLocales[PSEUDO_LOCALE];
+assert.deepStrictEqual(Object.keys(pseudo).sort(), Object.keys(englishMessages).sort(),
+    'the pseudo-locale must cover every key, or it cannot show what is missing');
+Object.entries(pseudo).forEach(([name, entry]) => {
+    assert(entry.message.startsWith('[!! ') && entry.message.endsWith(' !!]'),
+        `${name} is not marked in the pseudo-locale`);
+    assert(entry.message.includes(englishMessages[name].message),
+        `${name}'s pseudo text must contain the English it was made from`);
+});
 
 console.log(`Extension manifest and generated content are valid at v${pkg.version}, for all three builds.`);

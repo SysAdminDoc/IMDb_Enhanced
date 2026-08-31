@@ -13,6 +13,23 @@ const script = fs.readFileSync(scriptPath, 'utf8');
 const packageJson = JSON.parse(fs.readFileSync(packagePath, 'utf8'));
 const readme = fs.readFileSync(readmePath, 'utf8');
 
+/* Sentences a person reads now live in the message catalog rather than at the call site,
+   so a claim about what someone is told is two claims: the catalog carries the sentence,
+   and the code that fires uses that key. Looking the key up by its text keeps these
+   assertions readable and survives a key being renamed. */
+const messageCatalog = (() => {
+    const block = /const MESSAGES = Object\.freeze\(\{[\s\S]*?\n    \}\);/.exec(script);
+    if (!block) throw new Error('the message catalog could not be read from the userscript');
+    // eslint-disable-next-line no-new-func
+    return new Function(`${block[0]}\nreturn MESSAGES;`)();
+})();
+
+function messageKeyFor(text) {
+    const entry = Object.entries(messageCatalog).find(([, value]) => value === text);
+    assert(entry, `no catalog entry carries the message: ${text}`);
+    return entry[0];
+}
+
 function test(name, fn) {
     try {
         fn();
@@ -31,7 +48,7 @@ function test(name, fn) {
    transform scripts/build-extension.js applies, rather than a second description of it. */
 const { applyStoreProfile } = require('../scripts/build-extension.js');
 
-function loadScriptTestHooks({ withoutDeleteValue = false, withheldCredentials = false, storeProfile = false } = {}) {
+function loadScriptTestHooks({ withoutDeleteValue = false, withheldCredentials = false, storeProfile = false, extensionI18n = null } = {}) {
     const source = storeProfile ? applyStoreProfile(script) : script;
     const instrumented = source.replace(/\}\)\(\);\s*$/, `window.__enhTest = {
         normalizeIMDbProviderId,
@@ -80,6 +97,9 @@ function loadScriptTestHooks({ withoutDeleteValue = false, withheldCredentials =
         classifyFailure,
         describeRequestFailure,
         DEFAULTS,
+        t,
+        tCount,
+        MESSAGES,
         httpGet,
         getFailureJournal,
         clearFailureJournal,
@@ -426,6 +446,12 @@ function loadScriptTestHooks({ withoutDeleteValue = false, withheldCredentials =
        a runtime id, which is what IS_EXTENSION_BUILD tests, and the bridge's boolean-only
        answer standing in for every credential read. GM_getValue withholds the value the
        same way the real mirror does, so nothing here can cheat by reading around it. */
+    /* An extension build with a locale installed. IS_EXTENSION_BUILD is what decides
+       whether the lookup consults chrome.i18n at all, so the runtime id has to be there
+       as well as the API. */
+    if (extensionI18n) {
+        sandbox.chrome = { runtime: { id: 'test-extension-id' }, i18n: extensionI18n };
+    }
     if (withheldCredentials) {
         const credentialKeys = new Set([...(script.match(/const CREDENTIAL_SETTING_KEYS = new Set\(\[([\s\S]*?)\]\);/) || [])[1]
             .matchAll(/'([^']+)'/g)].map(match => `imdb_enh_${match[1]}`));
@@ -1904,10 +1930,13 @@ test('settings use six accessible desktop destinations', () => {
     assert(script.includes("'aria-controls':'enh-import-panel', 'aria-expanded':'false'"), 'import disclosure state missing');
     assert(script.includes("'aria-controls':'enh-reset-panel', 'aria-expanded':'false'"), 'reset disclosure state missing');
     assert(script.includes('const setDataDisclosureState = openPanel =>'), 'data subpanels should share one disclosure-state owner');
-    assert(script.includes("showToast('Cache could not be read or cleared.', 4500)"), 'cache failures should remain visible');
-    assert(script.includes('else if (failed) showToast(`Cleared ${cleared} cached entries; ${failed} could not be removed.`'), 'partial cache deletion must not claim complete success');
+    assert(script.includes(`showToast(t('${messageKeyFor('Cache could not be read or cleared.')}'), 4500)`),
+        'cache failures should remain visible');
+    assert(script.includes(`else if (failed) showToast(t('${messageKeyFor('Cleared $1 cached entries; $2 could not be removed.')}', [cleared, failed])`),
+        'partial cache deletion must not claim complete success');
     assert(script.includes('if (!trySaveSetting(feature.key, enabled))'), 'feature toggles should revert when storage fails');
-    assert(script.includes("showToast('Could not save the theme. Previous settings were restored.'"), 'multi-key theme changes should report transactional rollback');
+    assert(script.includes(`showToast(t('${messageKeyFor('Could not save the theme. Previous settings were restored.')}')`),
+        'multi-key theme changes should report transactional rollback');
     assert(script.includes('rows.insertBefore(row, next?.parentNode === rows ? next : null)'), 'failed site removal should restore its row');
     assert(/const previousRows = Array\.from\(rows\.children\);[\s\S]*?rows\.replaceChildren\(\.\.\.previousRows\);/.test(script), 'failed site reset should restore the prior editor rows');
     assert(script.includes('if (!settingsOpen || overlay.contains(event.target)) return'), 'settings should recapture focus that leaves the modal');
@@ -4991,6 +5020,81 @@ test('a store build names the source it cannot ship', () => {
     // transform ran.
     const normal = loadScriptTestHooks();
     assert.strictEqual(normal.featureExcludedByProfile('inlineLetterboxdScore'), false);
+});
+
+/* IE-86: one catalog, and a lookup that has to answer the same way in a userscript with
+   no i18n API, in an extension with one, and in a locale that carries only some of the
+   keys. */
+test('a message resolves through the catalog and falls back to English', () => {
+    const hooks = loadScriptTestHooks();
+    const grantKey = messageKeyFor('Grant site access on the page that just opened, then reload this one.');
+    assert.strictEqual(hooks.t(grantKey),
+        'Grant site access on the page that just opened, then reload this one.');
+    // Positional substitutions, the shape chrome.i18n.getMessage takes.
+    const clearedKey = messageKeyFor('Cleared $1 saved title marks');
+    assert.strictEqual(hooks.t(clearedKey, [12]), 'Cleared 12 saved title marks');
+    assert.strictEqual(hooks.t(clearedKey, 12), 'Cleared 12 saved title marks',
+        'a single substitution need not be wrapped in an array');
+    // A key nothing carries reports itself rather than rendering an empty control.
+    assert.strictEqual(hooks.t('no_such_message_key'), 'no_such_message_key');
+
+    /* Every key is reachable and every message is a non-empty string a translator can
+       work with. A blank entry is a control with no label. */
+    Object.entries(hooks.MESSAGES).forEach(([key, text]) => {
+        assert(/^[A-Za-z0-9_@]+$/.test(key), `message key ${key} uses characters chrome.i18n rejects`);
+        assert(typeof text === 'string' && text.trim(), `message ${key} has no text`);
+        assert.strictEqual(hooks.t(key).length > 0, true);
+    });
+
+    /* Every key the code asks for exists, and every key the catalog carries is asked for.
+       An orphan in either direction is a string nobody sees or a control with no words. */
+    const requested = new Set([...script.matchAll(/\bt\('([A-Za-z0-9_@]+)'/g)].map(match => match[1]));
+    const declared = new Set(Object.keys(hooks.MESSAGES));
+    const missing = [...requested].filter(key => !declared.has(key));
+    assert.deepStrictEqual(missing, [], 'the code asks for messages the catalog does not carry');
+    const countKeys = new Set([...script.matchAll(/\btCount\('([A-Za-z0-9_@]+)'/g)]
+        .flatMap(match => [`${match[1]}_one`, `${match[1]}_other`]));
+    const unused = [...declared].filter(key => !requested.has(key) && !countKeys.has(key));
+    assert.deepStrictEqual(unused, [], 'the catalog carries messages nothing asks for');
+});
+
+/* In an extension build the lookup goes to chrome.i18n first, and what it does with the
+   answer decides whether an installed translation is honoured and whether a locale that
+   is missing a key silently blanks the control. */
+test('an extension build reads the installed locale and falls back deterministically', () => {
+    const asked = [];
+    const translatedKey = messageKeyFor('Grant site access on the page that just opened, then reload this one.');
+    const untranslatedKey = messageKeyFor('Cleared $1 saved title marks');
+    const hooks = loadScriptTestHooks({
+        extensionI18n: {
+            getMessage(key, substitutions) {
+                asked.push([key, substitutions]);
+                if (key === translatedKey) return 'ZUGRIFF GEWAEHREN';
+                return '';
+            },
+        },
+    });
+    assert.strictEqual(hooks.t(translatedKey), 'ZUGRIFF GEWAEHREN',
+        'an installed translation must win over the embedded English');
+    assert.deepStrictEqual(Array.from(asked[0]).map(part => (Array.isArray(part) ? Array.from(part) : part)), [translatedKey, []]);
+    assert.strictEqual(hooks.t(untranslatedKey, [3]), 'Cleared 3 saved title marks',
+        'a key the locale does not carry falls back to English, substitutions and all');
+    assert.deepStrictEqual(Array.from(asked[1]).map(part => (Array.isArray(part) ? Array.from(part) : part)), [untranslatedKey, ['3']],
+        'substitutions reach getMessage as strings, which is what it accepts');
+});
+
+/* The one rule that keeps translation from changing behaviour: nothing decides what to do
+   by matching text a person reads. */
+test('no route or selector logic matches a translated string', () => {
+    const catalogText = new Set(Object.values(messageCatalog));
+    const compared = [...script.matchAll(/(?:textContent|innerText|label|title)\s*===\s*'([^']+)'/g)]
+        .map(match => match[1]);
+    compared.forEach(text => {
+        assert(!catalogText.has(text), `code compares against the displayed string: ${text}`);
+    });
+    // Route detection reads IMDb's own test ids and paths, never words.
+    assert(!/getPageSurface[\s\S]{0,600}textContent/.test(script),
+        'route classification must not read displayed text');
 });
 
 /* IE-110: OMDb answers Rotten Tomatoes and Metacritic for one IMDb id in a single call.

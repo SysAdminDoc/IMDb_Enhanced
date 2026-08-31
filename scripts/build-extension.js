@@ -195,6 +195,58 @@ function readCachePrefix() {
 }
 const CACHE_KEY_PREFIX = readCachePrefix();
 
+/* The message catalog is data, so it is read out of the userscript rather than kept a
+   second time here. Emitting it as _locales/en/messages.json is what lets chrome.i18n
+   answer from an installed translation while the same entries stay embedded in the
+   userscript, which has no i18n API at all. */
+function readMessageCatalog() {
+    const block = source.match(/const MESSAGES = Object\.freeze\(\{[\s\S]*?\n    \}\);/);
+    if (!block) throw new Error('The message catalog could not be read from the userscript.');
+    // eslint-disable-next-line no-new-func
+    const messages = new Function(`${block[0]}\nreturn MESSAGES;`)();
+    const names = Object.keys(messages);
+    if (!names.length) throw new Error('The message catalog is empty.');
+    names.forEach(name => {
+        if (!/^[A-Za-z0-9_@]+$/.test(name)) {
+            throw new Error(`Message key "${name}" uses characters chrome.i18n does not allow.`);
+        }
+        if (typeof messages[name] !== 'string' || !messages[name]) {
+            throw new Error(`Message "${name}" has no text.`);
+        }
+    });
+    return messages;
+}
+const MESSAGE_CATALOG = readMessageCatalog();
+
+/* Two locale files ship. en is the catalog. en_XA is the pseudo-locale every platform
+   reserves for exactly this: it never matches a real user's browser, and a build loaded
+   under it shows which strings still come from the source instead of the catalog, because
+   those are the ones that are not bracketed. Generated from en by one transform, so it
+   cannot fall behind it. */
+const PSEUDO_LOCALE = 'en_XA';
+function pseudoLocalize(text) {
+    // Substitutions are left exactly as they are: they are code, not words.
+    return `[!! ${text} !!]`;
+}
+function localeFiles() {
+    const toMessages = transform => Object.fromEntries(Object.entries(MESSAGE_CATALOG)
+        .map(([name, text]) => [name, { message:transform(text) }]));
+    return {
+        'en': toMessages(text => text),
+        [PSEUDO_LOCALE]: toMessages(pseudoLocalize),
+    };
+}
+function writeLocales(dir) {
+    Object.entries(localeFiles()).forEach(([locale, messages]) => {
+        const localeDir = path.join(dir, '_locales', locale);
+        fs.mkdirSync(localeDir, { recursive:true });
+        fs.writeFileSync(path.join(localeDir, 'messages.json'), `${JSON.stringify(messages, null, 2)}\n`, 'utf8');
+    });
+}
+function localeFileNames() {
+    return Object.keys(localeFiles()).map(locale => `_locales/${locale}/messages.json`);
+}
+
 const bridgeFor = ({ trusted }) => String.raw`
     const __TRUSTED_CONTEXT = ${trusted ? 'true' : 'false'};
     const __CREDENTIAL_KEY_LIST = ${JSON.stringify(CREDENTIAL_KEYS.map(key => `imdb_enh_${key}`))};
@@ -518,6 +570,9 @@ const manifest = JSON.parse(fs.readFileSync(manifestPath, 'utf8'));
 manifest.version = packageJson.version;
 const originLists = readOriginLists();
 const { TRANSMITTED_DATA_CATEGORIES } = originLists;
+/* Mandatory the moment _locales exists, and it is the locale every lookup falls
+   back to. */
+manifest.default_locale = 'en';
 manifest.host_permissions = originLists.REQUIRED_ORIGINS;
 manifest.optional_host_permissions = originLists.OPTIONAL_ORIGINS;
 const serializedManifest = `${JSON.stringify(manifest, null, 2)}\n`;
@@ -567,6 +622,7 @@ function resetBuildDir(dir) {
 function buildFirefoxBuild() {
     const firefoxManifest = toFirefoxManifest(manifest);
     resetBuildDir(firefoxDir);
+    writeLocales(firefoxDir);
     fs.writeFileSync(path.join(firefoxDir, 'manifest.json'), `${JSON.stringify(firefoxManifest, null, 2)}\n`, 'utf8');
     fs.writeFileSync(path.join(firefoxDir, 'content.js'), content, 'utf8');
     fs.writeFileSync(path.join(firefoxDir, 'boot.css'), bootCss, 'utf8');
@@ -655,6 +711,7 @@ ${bridgeFor({ trusted:false })}\n${storeBody}\n})();\n`;
 function buildStoreBuild() {
     const store = computeStoreBuild();
     resetBuildDir(storeDir);
+    writeLocales(storeDir);
     Object.entries(store.files).forEach(([name, body]) => {
         fs.writeFileSync(path.join(storeDir, name), body, 'utf8');
     });
@@ -719,6 +776,10 @@ module.exports = {
     PROVIDER_REGISTRY: originLists,
     applyStoreProfile,
     computeStoreBuild,
+    MESSAGE_CATALOG,
+    localeFiles,
+    localeFileNames,
+    PSEUDO_LOCALE,
     STORE_COPIED_FILES,
     STORE_DESCRIPTION,
     toFirefoxManifest,
@@ -751,17 +812,18 @@ if (require.main !== module) {
                 'boot.css': bootCss,
                 'recovery.js': recovery,
             },
-            copied: FIREFOX_COPIED_FILES,
+            copied: [...FIREFOX_COPIED_FILES, ...localeFileNames()],
             manifest: firefoxManifest,
         };
     }, 'npm run build:firefox');
     checkGeneratedProfile(storeDir, () => {
         const store = computeStoreBuild();
-        return { files:store.files, copied:STORE_COPIED_FILES, manifest:store.manifest };
+        return { files:store.files, copied:[...STORE_COPIED_FILES, ...localeFileNames()], manifest:store.manifest };
     }, 'npm run build:store');
     console.log(`Extension build is current at v${packageJson.version}.`);
 } else {
     fs.mkdirSync(extensionDir, { recursive:true });
+    writeLocales(extensionDir);
     fs.writeFileSync(contentPath, content, 'utf8');
     fs.writeFileSync(bootCssPath, bootCss, 'utf8');
     fs.writeFileSync(recoveryPath, recovery, 'utf8');

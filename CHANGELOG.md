@@ -20,6 +20,8 @@
 
 ### Added
 
+- Groundwork for translation. Every message the extension shows is moving into one catalog that both builds read; the extension packages now carry it as a standard `_locales` file, so a translated locale installed in the browser is used and anything it does not cover falls back to English. Nothing reads differently in English today.
+
 - Rotten Tomatoes and Metacritic scores can now come from the OMDb API with a key of your own, free for a thousand lookups a day from omdbapi.com. It matters most in the web-store build, which does not read either site's pages and so had no source for those two widgets at all; there they now work, labelled "via OMDb" with the credit its licence asks for. In the ordinary build it is optional, and used only when reading the page did not produce an answer. One lookup answers both widgets, and nothing is requested at all without a key.
 
 - Rotten Tomatoes, Letterboxd, Metacritic, and JustWatch widgets now have a Wrong? action for a bad title match. It opens up to five year-aware candidates. The panel also accepts a trusted title URL. Marking No entry prevents later visits from retrying. The choice is stored by IMDb title and service outside the volatile score cache, and it appears in settings backups. Automatic matching can be restored at any time. The backup schema advances to 4 so an older build refuses these records instead of dropping them during import.
