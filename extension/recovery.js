@@ -558,6 +558,125 @@
         provider_tmdb_consent: 'Sends the IMDb id to TMDB to look up where the title streams. Needs your own TMDB read token.',
         provider_wikidata_consent: 'Sends the IMDb id to Wikidata to find the matching page on another site.',
         provider_youTube_consent: 'Loads the trailer from YouTube, which sees the video you opened.',
+        settings_a_backup_covers_preferences_sites_and_title: 'A backup covers preferences, sites, and title marks. Integration API keys and tokens are left out unless you choose the encrypted export.',
+        settings_a_key_is_saved_on_this_device: 'A key is saved on this device. It is not shown here; type a new one to replace it.',
+        settings_a_readable_summary_for_bug_reports_credentials: 'A readable summary for bug reports. Credentials, marked titles, and the page query string are never included.',
+        settings_a_year_review_appears_after_10_dated: 'A year review appears after 10 dated viewings in one year.',
+        settings_actions_placed_near_a_movie_or_show: 'Actions placed near a movie or show title.',
+        settings_activity_by_year: 'Activity by year',
+        settings_add_destination: 'Add destination',
+        settings_add_movies_to_radarr_and_shows_to: 'Add movies to Radarr and shows to Sonarr.',
+        settings_additions_to_cast_and_crew_pages: 'Additions to cast and crew pages.',
+        settings_all_pages: 'All pages',
+        settings_api_key: 'API key',
+        settings_applies_when_dim_low_rated_titles_is: 'Applies when “Dim low-rated titles” is on. Unrated titles are never dimmed.',
+        settings_backup_restore: 'Backup & restore',
+        settings_batch_actions_and_quick_navigation: 'Batch actions and quick navigation.',
+        settings_both_sources_use_the_two_letter_region: 'Both sources use the two-letter region below. TMDB publishes its data through a documented API and asks for a token of your own, free from themoviedb.org. JustWatch is read by parsing their page. Choosing TMDB without a token says so rather than quietly reading the page instead.',
+        settings_cached_lookups: 'Cached lookups',
+        settings_calculated_on_this_device_from_your_private: 'Calculated on this device from your private marks and imported viewing history.',
+        settings_check_plex_jellyfin_and_emby_libraries: 'Check Plex, Jellyfin, and Emby libraries.',
+        settings_checks_match_imdb_ids_first_then_title: 'Checks match IMDb IDs first, then title and year. Credentials stay local.',
+        settings_choose_a_passphrase_the_backup_is_encrypted: 'Choose a passphrase. The backup is encrypted in this browser with it, and there is no way to recover the contents if you forget it.',
+        settings_choose_the_tonal_base_for_imdb_enhanced: 'Choose the tonal base for IMDb Enhanced surfaces.',
+        settings_choose_which_ratings_and_availability: 'Choose which ratings and availability information to show. The vote-distribution controls apply to a title’s Ratings tab.',
+        settings_clean_up: 'Clean up',
+        settings_column_color: 'Color',
+        settings_column_move: 'Move',
+        settings_column_name: 'Name',
+        settings_column_purpose: 'Purpose',
+        settings_column_remove: 'Remove',
+        settings_column_url_template: 'URL template',
+        settings_column_visible: 'Visible',
+        settings_configure_local_library_checks: 'Configure local library checks.',
+        settings_configure_local_quick_add_destinations: 'Configure local quick-add destinations.',
+        settings_copy_a_passphrase_encrypted_backup_that: 'Copy a passphrase-encrypted backup that includes integration credentials',
+        settings_copy_a_scrubbed_diagnostics_report_to_the: 'Copy a scrubbed diagnostics report to the clipboard',
+        settings_copy_diagnostics: 'Copy diagnostics',
+        settings_coverage_label: 'Coverage.',
+        settings_credentials_stay_local_and_requests_are_limited: 'Credentials stay local and requests are limited to localhost or 127.0.0.1. Overseerr and Jellyseerr both use these fields; a request there goes through your instance\'s approval workflow instead of writing straight into Radarr or Sonarr, and your instance resolves the IMDb ID itself.',
+        settings_csv_could_not_be_read: 'CSV could not be read.',
+        settings_csv_import_failed_previous_marks_were_restored: 'CSV import failed. Previous marks were restored.',
+        settings_dated_viewings: 'Dated viewings',
+        settings_diagnostics_copied_paste_it_into_your_report: 'Diagnostics copied. Paste it into your report.',
+        settings_edit_every_destination_directly_hide_categorize: 'Edit every destination directly. Hide, categorize, reorder, or remove links without changing the rest of IMDb Enhanced.',
+        settings_export_with_credentials: 'Export with credentials',
+        settings_failure_journal: 'Failure journal',
+        settings_fetched_only_on_imdb_title_pages_responses: 'Fetched only on IMDb title pages. Responses are cached locally.',
+        settings_fmhy_catalog: 'FMHY catalog',
+        settings_fmhy_streaming_catalog: 'FMHY streaming catalog',
+        settings_focused_tools_for_series_and_episode_lists: 'Focused tools for series and episode lists.',
+        settings_genres_appear_as_titles_are_marked_or: 'Genres appear as titles are marked or imported.',
+        settings_grant_access: 'Grant access',
+        settings_history_metadata_coverage_one: '$2 of $1 history title has year, genre, score, or runtime metadata. $3',
+        settings_history_metadata_coverage_other: '$2 of $1 history titles have year, genre, score, or runtime metadata. $3',
+        settings_imdb_and_letterboxd_exports_become_local_seen: 'IMDb and Letterboxd exports become local Seen marks. This does not change IMDb Watched status or any IMDb list. IMDb Labs account import is a separate feature.',
+        settings_import_from_page: 'Import from page',
+        settings_import_preview: 'Import preview',
+        settings_import_settings: 'Import settings',
+        settings_import_viewing_history: 'Import viewing history',
+        settings_lists_shortcuts: 'Lists & shortcuts',
+        settings_local_only: 'Local only',
+        settings_local_seen: 'Local seen',
+        settings_local_skip: 'Local skip',
+        settings_mark_and_note_removed: 'Mark and note removed',
+        settings_mark_cleared: 'Mark cleared',
+        settings_media_server_indicator: 'Media server indicator',
+        settings_media_servers: 'Media servers',
+        settings_name_pages: 'Name pages',
+        settings_no_dated_viewings_yet: 'No dated viewings yet.',
+        settings_no_importable_rows_were_found_nothing_was: 'No importable rows were found. Nothing was changed.',
+        settings_no_local_viewing_history_yet_mark_a: 'No local viewing history yet. Mark a title Seen or import an IMDb or Letterboxd CSV. Nothing leaves this device.',
+        settings_note_only: 'Note only',
+        settings_nothing_is_sent_to_an_imdb_enhanced: 'Nothing is sent to an IMDb Enhanced account or cloud service.',
+        settings_nothing_is_transmitted_the_report_only_reaches: 'Nothing is transmitted — the report only reaches your clipboard.',
+        settings_omdb_api_key: 'OMDb API key',
+        settings_optional_scores_normally_come_from_reading_each: 'Optional. Scores normally come from reading each site\'s own page; with an OMDb key stored here, a lookup that fails falls back to their API and the score says it came from OMDb. Free for 1,000 lookups a day from omdbapi.com.',
+        settings_paste_csv_data_or_choose_a_file: 'Paste CSV data or choose a file, then preview it.',
+        settings_personal_ratings: 'Personal ratings',
+        settings_preview_csv: 'Preview CSV',
+        settings_private_by_design: 'Private by design',
+        settings_quality_profile_id: 'Quality profile ID',
+        settings_radarr_sonarr: 'Radarr & Sonarr',
+        settings_rating_comparison_appears_after_a_title_has: 'Rating comparison appears after a title has both your rating and IMDb’s rating.',
+        settings_refine_how_content_looks_and_is_presented: 'Refine how content looks and is presented.',
+        settings_release_decades: 'Release decades',
+        settings_release_years_appear_as_titles_are_marked: 'Release years appear as titles are marked or imported.',
+        settings_remove_noise_so_you_can_focus_on: 'Remove noise so you can focus on what matters.',
+        settings_remove_site: 'Remove site',
+        settings_requests_go_directly_from_your_browser_to: 'Requests go directly from your browser to the local URLs you provide.',
+        settings_research_reviews: 'Research & reviews',
+        settings_reset_all_settings: 'Reset all settings',
+        settings_reset_everything: 'Reset everything',
+        settings_reset_failed_previous_settings_were_restored: 'Reset failed. Previous settings were restored.',
+        settings_root_folder: 'Root folder',
+        settings_rotten_tomatoes: 'Rotten Tomatoes',
+        settings_rotten_tomatoes_and_metacritic_through_omdb: 'Rotten Tomatoes and Metacritic through OMDb',
+        settings_rows_should_carry_const_or_imdbid_a: 'Rows should carry Const or imdbID. A Title and Year row can also match one unambiguous title already stored on this device. Headers are read by name, so IMDb’s Original Title column does not shift the import.',
+        settings_sample_source_values_not_live_title_data: 'Sample source values — not live title data.',
+        settings_saved_type_to_replace: 'Saved — type to replace',
+        settings_scores_and_availability_lookups_are_cached: 'Scores and availability lookups are cached locally for up to seven days.',
+        settings_seen_titles: 'Seen titles',
+        settings_settings_copied_to_clipboard: 'Settings copied to clipboard',
+        settings_show_or_hide_this_destination_on_imdb: 'Show or hide this destination on IMDb pages',
+        settings_skipped_titles: 'Skipped titles',
+        settings_the_encrypted_backup_could_not_be_created: 'The encrypted backup could not be created.',
+        settings_the_last_20_feature_failures_kept_across: 'The last 20 feature failures, kept across reloads so an intermittent problem can be seen. Each entry records when, which feature, which kind of page, and what category of failure — never a title, address, or message.',
+        settings_these_marks_stay_on_this_device_and: 'These marks stay on this device and never change your IMDb account. Import from page copies the IMDb Watched titles visible on the page behind the settings dialog into local Seen marks; existing marks are kept, and nothing is ever sent back to IMDb.',
+        settings_this_backup_is_encrypted_enter_its_passphrase: 'This backup is encrypted. Enter its passphrase.',
+        settings_this_build_cannot_update_itself_so_it: 'This build cannot update itself, so it checks once a day whether a newer release has been published.',
+        settings_this_build_does_not_read_rotten_tomatoes: 'This build does not read Rotten Tomatoes or Metacritic pages, so their scores come from the OMDb API instead. It is free for 1,000 lookups a day from omdbapi.com and takes an email address to get. Without a key those two widgets say so rather than showing nothing.',
+        settings_this_clears_title_marks_and_local_integration: 'This clears title marks and local integration credentials. Export a backup first if you may need them.',
+        settings_title_pages: 'Title pages',
+        settings_title_tools: 'Title tools',
+        settings_tmdb_read_access_token: 'TMDB read access token',
+        settings_top_genres: 'Top genres',
+        settings_tune_the_interface: 'Tune the interface',
+        settings_tv_episodes: 'TV & episodes',
+        settings_watch_stream: 'Watch & stream',
+        settings_watch_stream_includes_a_built_in_catalog: 'Watch & stream includes a built-in catalog of every streaming destination from the FMHY video wiki. Open it below to add any of them with one click, then edit the row like any other destination.',
+        settings_when_optional_keyboard_shortcuts_is_enabled: 'When “Optional keyboard shortcuts” is enabled',
+        settings_where_availability_comes_from: 'Where availability comes from',
         text_all_opened: 'All opened',
         text_cache_remaining: '$1 cached entries · $2',
         text_candidate_matches_could_not_be_loaded: 'Candidate matches could not be loaded. Paste a title URL or mark no entry.',
@@ -566,7 +685,10 @@
         text_copy_imdb_ids: 'Copy $1 IMDb IDs',
         text_correction_candidate_count: '$1 candidate $2.',
         text_csv_import_is_too_large_choose: 'CSV import is too large. Choose a file under 4 MB.',
+        text_list_joined: '$1 and $2',
+        text_list_separator: ', ',
         text_no_candidate_matches_were_found_paste: 'No candidate matches were found. Paste a title URL or mark no entry.',
+        text_no_external_sites: 'no external sites',
         text_open_next_of: 'Open next ($1 of $2)',
         text_preview_required_nothing_has_been_changed: 'Preview required. Nothing has been changed.',
         text_queue_opened_progress: '$1 of $2 opened',
@@ -576,6 +698,7 @@
         text_saving: 'Saving…',
         text_settings_saved: 'Saved',
         text_the_selected_file_could_not_be: 'The selected file could not be read.',
+        text_two_items_joined: '$1 and $2',
         text_unavailable: 'Unavailable',
         text_use_a_valid_title_url: 'Use a valid $1 title URL.',
         toast_a_site_list_can_contain_up: 'A site list can contain up to $1 destinations',
@@ -12822,9 +12945,9 @@ section[data-testid="hero-parent"].enh-editorial-native-hidden { display: none !
     }
 
     function joinNames(names) {
-        if (names.length <= 1) return names[0] || 'no external sites';
-        if (names.length === 2) return `${names[0]} and ${names[1]}`;
-        return `${names.slice(0, -1).join(', ')} and ${names[names.length - 1]}`;
+        if (names.length <= 1) return names[0] || t('text_no_external_sites');
+        if (names.length === 2) return t('text_two_items_joined', [names[0], names[1]]);
+        return t('text_list_joined', [names.slice(0, -1).join(t('text_list_separator')), names[names.length - 1]]);
     }
 
     /* Named from the provider declarations. This used to format the origins, which meant
@@ -12913,13 +13036,13 @@ section[data-testid="hero-parent"].enh-editorial-native-hidden { display: none !
         const rows = makeEl('div', { className:'enh-site-editor__rows' });
         let refreshCatalogStates = () => {};
         const columns = makeEl('div', { className:'enh-site-editor__columns', 'aria-hidden':'true' },
-            makeEl('span', {}, 'Visible'),
-            makeEl('span', {}, 'Name'),
-            makeEl('span', {}, 'Purpose'),
-            makeEl('span', {}, 'URL template'),
-            makeEl('span', {}, 'Color'),
-            makeEl('span', {}, 'Move'),
-            makeEl('span', {}, 'Remove')
+            makeEl('span', {}, t('settings_column_visible')),
+            makeEl('span', {}, t('settings_column_name')),
+            makeEl('span', {}, t('settings_column_purpose')),
+            makeEl('span', {}, t('settings_column_url_template')),
+            makeEl('span', {}, t('settings_column_color')),
+            makeEl('span', {}, t('settings_column_move')),
+            makeEl('span', {}, t('settings_column_remove'))
         );
         const defaultCategory = key === 'watchSites' ? 'watch' : 'other';
         const count = makeEl('span', {
@@ -13012,7 +13135,7 @@ section[data-testid="hero-parent"].enh-editorial-native-hidden { display: none !
             enabledInput.checked = site.enabled !== false;
             const visibility = makeEl('label', {
                 className:'enh-site-visibility',
-                title:'Show or hide this destination on IMDb pages',
+                title:t('settings_show_or_hide_this_destination_on_imdb'),
             }, enabledInput, makeEl('span', { className:'enh-site-visibility__dot', 'aria-hidden':'true' }));
             const nameInput = makeEl('input', {
                 type:'text',
@@ -13069,7 +13192,7 @@ section[data-testid="hero-parent"].enh-editorial-native-hidden { display: none !
                 type:'button',
                 className:'enh-site-order-btn',
                 dataset:{ action:'up' },
-                title:'Move destination up',
+                title:t('aria_move_destination_up'),
                 'aria-label':t('aria_move_destination_up'),
                 onClick: () => moveRow('up'),
             }, '↑');
@@ -13077,7 +13200,7 @@ section[data-testid="hero-parent"].enh-editorial-native-hidden { display: none !
                 type:'button',
                 className:'enh-site-order-btn',
                 dataset:{ action:'down' },
-                title:'Move destination down',
+                title:t('aria_move_destination_down'),
                 'aria-label':t('aria_move_destination_down'),
                 onClick: () => moveRow('down'),
             }, '↓');
@@ -13086,7 +13209,7 @@ section[data-testid="hero-parent"].enh-editorial-native-hidden { display: none !
             const remove = makeEl('button', {
                 type:'button',
                 className:'enh-site-remove',
-                title:'Remove site',
+                title:t('settings_remove_site'),
                 'aria-label':t('aria_remove_destination'),
                 onClick: () => {
                     const next = row.nextSibling;
@@ -13168,7 +13291,7 @@ section[data-testid="hero-parent"].enh-editorial-native-hidden { display: none !
                 updateCount();
                 row.querySelector('[data-field="name"]')?.focus();
             },
-        }, 'Add destination');
+        }, t('settings_add_destination'));
         const reset = makeEl('button', {
             type:'button',
             className:'enh-settings-footer-btn',
@@ -13192,7 +13315,7 @@ section[data-testid="hero-parent"].enh-editorial-native-hidden { display: none !
             makeEl('div', { className:'enh-site-editor__actions' }, add, reset)
         ));
         editor.appendChild(makeEl('div', { className:'enh-site-editor__hint' },
-            'Edit every destination directly. Hide, categorize, reorder, or remove links without changing the rest of IMDb Enhanced.'
+            t('settings_edit_every_destination_directly_hide_categorize')
         ));
 
         getSiteList(key, defaults).forEach(site => addRow(site));
@@ -13304,7 +13427,7 @@ section[data-testid="hero-parent"].enh-editorial-native-hidden { display: none !
             filter.addEventListener('input', refreshCatalogStates);
             const picker = makeEl('details', { className:'enh-site-catalog' },
                 makeEl('summary', { className:'enh-site-catalog__summary' },
-                    makeEl('span', {}, 'FMHY streaming catalog'),
+                    makeEl('span', {}, t('settings_fmhy_streaming_catalog')),
                     makeEl('span', { className:'enh-settings-route-badge' },
                         `${catalogEntries.length} sites`)
                 ),
@@ -13331,7 +13454,7 @@ section[data-testid="hero-parent"].enh-editorial-native-hidden { display: none !
             name:key,
             type,
             className:'enh-servarr-input',
-            placeholder: writeOnly ? 'Saved — type to replace' : placeholder,
+            placeholder: writeOnly ? t('settings_saved_type_to_replace') : placeholder,
             autocomplete: type === 'password' ? 'new-password' : 'off',
             spellcheck:'false',
             ...(writeOnly ? { 'aria-describedby':`${id}-state` } : {}),
@@ -13406,7 +13529,7 @@ section[data-testid="hero-parent"].enh-editorial-native-hidden { display: none !
             // mistaken for an unconfigured integration.
             writeOnly
                 ? makeEl('span', { className:'enh-servarr-note enh-servarr-note--saved', id:`${id}-state` },
-                    'A key is saved on this device. It is not shown here; type a new one to replace it.')
+                    t('settings_a_key_is_saved_on_this_device'))
                 : null
         );
     }
@@ -13466,30 +13589,28 @@ section[data-testid="hero-parent"].enh-editorial-native-hidden { display: none !
             {
                 id:'radarr', title:'Radarr', fields:[
                     { key:'radarrUrl', label:'URL', wide:true, placeholder:t('field_http_localhost_7878') },
-                    { key:'radarrApiKey', label:'API key', type:'password', wide:true },
-                    { key:'radarrRootFolderPath', label:'Root folder', wide:true, placeholder:t('field_radarr_root_folder_hint') },
-                    { key:'radarrQualityProfileId', label:'Quality profile ID', type:'number' },
+                    { key:'radarrApiKey', label:t('settings_api_key'), type:'password', wide:true },
+                    { key:'radarrRootFolderPath', label:t('settings_root_folder'), wide:true, placeholder:t('field_radarr_root_folder_hint') },
+                    { key:'radarrQualityProfileId', label:t('settings_quality_profile_id'), type:'number' },
                 ],
             },
             {
                 id:'sonarr', title:'Sonarr', fields:[
                     { key:'sonarrUrl', label:'URL', wide:true, placeholder:t('field_http_localhost_8989') },
-                    { key:'sonarrApiKey', label:'API key', type:'password', wide:true },
-                    { key:'sonarrRootFolderPath', label:'Root folder', wide:true, placeholder:t('field_sonarr_root_folder_hint') },
-                    { key:'sonarrQualityProfileId', label:'Quality profile ID', type:'number' },
+                    { key:'sonarrApiKey', label:t('settings_api_key'), type:'password', wide:true },
+                    { key:'sonarrRootFolderPath', label:t('settings_root_folder'), wide:true, placeholder:t('field_sonarr_root_folder_hint') },
+                    { key:'sonarrQualityProfileId', label:t('settings_quality_profile_id'), type:'number' },
                 ],
             },
             {
                 id:'seerr', title:'Overseerr', fields:[
                     { key:'seerrUrl', label:'URL', wide:true, placeholder:t('field_http_localhost_5055') },
-                    { key:'seerrApiKey', label:'API key', type:'password', wide:true },
+                    { key:'seerrApiKey', label:t('settings_api_key'), type:'password', wide:true },
                 ],
             },
         ], createSettingsInput, 'servarr');
         panel.appendChild(makeEl('div', { className:'enh-servarr-note' },
-            'Credentials stay local and requests are limited to localhost or 127.0.0.1. '
-            + 'Overseerr and Jellyseerr both use these fields; a request there goes through your instance\'s approval workflow '
-            + 'instead of writing straight into Radarr or Sonarr, and your instance resolves the IMDb ID itself.'
+            t('settings_credentials_stay_local_and_requests_are_limited')
         ));
         panel.addEventListener('submit', e => e.preventDefault());
         return panel;
@@ -13507,18 +13628,18 @@ section[data-testid="hero-parent"].enh-editorial-native-hidden { display: none !
             {
                 id:'jellyfin', title:'Jellyfin', fields:[
                     { key:'jellyfinUrl', label:'URL', wide:true, placeholder:t('field_http_localhost_8096') },
-                    { key:'jellyfinApiKey', label:'API key', type:'password', wide:true },
+                    { key:'jellyfinApiKey', label:t('settings_api_key'), type:'password', wide:true },
                 ],
             },
             {
                 id:'emby', title:'Emby', fields:[
                     { key:'embyUrl', label:'URL', wide:true, placeholder:t('field_http_localhost_8096') },
-                    { key:'embyApiKey', label:'API key', type:'password', wide:true },
+                    { key:'embyApiKey', label:t('settings_api_key'), type:'password', wide:true },
                 ],
             },
         ], mediaField, 'media');
         panel.appendChild(makeEl('div', { className:'enh-servarr-note' },
-            'Checks match IMDb IDs first, then title and year. Credentials stay local.'
+            t('settings_checks_match_imdb_ids_first_then_title')
         ));
         panel.addEventListener('submit', e => e.preventDefault());
         return panel;
@@ -13558,7 +13679,7 @@ section[data-testid="hero-parent"].enh-editorial-native-hidden { display: none !
                 document.dispatchEvent(new CustomEvent('imdb-enhanced:marks-updated'));
                 showToast(t('toast_cleared_saved_title_marks', [entries.length]));
             },
-        }, 'Clear all');
+        }, t('text_clear_all'));
 
         /* One-way: IMDb's account Watched state can seed local Seen marks, never
            the reverse. Existing marks win, so an imported title can never
@@ -13593,7 +13714,7 @@ section[data-testid="hero-parent"].enh-editorial-native-hidden { display: none !
                     ? `Imported ${imported} as local Seen; kept ${kept} existing ${kept === 1 ? 'mark' : 'marks'}`
                     : `Imported ${imported} IMDb Watched ${imported === 1 ? 'title' : 'titles'} as local Seen`);
             },
-        }, 'Import from page');
+        }, t('settings_import_from_page'));
 
         const render = () => {
             disarmClearAll();
@@ -13612,9 +13733,9 @@ section[data-testid="hero-parent"].enh-editorial-native-hidden { display: none !
                 /* A record can now exist for a note alone, with no Seen or Skip, so the
                    badge has to describe that rather than mislabel it as one of the two. */
                 const note = normalizeUserNote(record.note);
-                const state = record.state === 'watched' ? 'Local seen'
-                    : record.state === 'skip' ? 'Local skip'
-                    : 'Note only';
+                const state = record.state === 'watched' ? t('settings_local_seen')
+                    : record.state === 'skip' ? t('settings_local_skip')
+                    : t('settings_note_only');
                 const titleEl = makeEl('div', { className:'enh-mark-row__title', title },
                     title,
                     record.title ? makeEl('span', { className:'enh-mark-row__id' }, id) : ''
@@ -13649,7 +13770,7 @@ section[data-testid="hero-parent"].enh-editorial-native-hidden { display: none !
                         refreshFeature('titleNotes');
                         render();
                         document.dispatchEvent(new CustomEvent('imdb-enhanced:marks-updated'));
-                        showToast(note ? 'Mark and note removed' : 'Mark cleared');
+                        showToast(note ? t('settings_mark_and_note_removed') : t('settings_mark_cleared'));
                     },
                 }, 'Remove');
                 const row = makeEl('div', { className:'enh-mark-row' }, titleEl, stateEl, open, clear);
@@ -13664,9 +13785,7 @@ section[data-testid="hero-parent"].enh-editorial-native-hidden { display: none !
             makeEl('div', { className:'enh-site-editor__actions' }, count, importNative, clearAll)
         ));
         panel.appendChild(makeEl('div', { className:'enh-servarr-note' },
-            'These marks stay on this device and never change your IMDb account. '
-            + 'Import from page copies the IMDb Watched titles visible on the page behind the settings dialog into local Seen marks; '
-            + 'existing marks are kept, and nothing is ever sent back to IMDb.'
+            t('settings_these_marks_stay_on_this_device_and')
         ));
         panel.appendChild(rows);
         document.addEventListener('imdb-enhanced:marks-updated', render);
@@ -13712,30 +13831,30 @@ section[data-testid="hero-parent"].enh-editorial-native-hidden { display: none !
                 makeEl('div', {},
                     makeEl('h3', { className:'enh-settings-card-title', id:'enh-local-stats-title' }, 'Local stats'),
                     makeEl('p', { className:'enh-settings-card-description' },
-                        'Calculated on this device from your private marks and imported viewing history.')
+                        t('settings_calculated_on_this_device_from_your_private'))
                 ),
                 makeEl('span', { className:'enh-settings-route-badge' }, 'Local only')
             ));
             if (!stats.markedTitles && !stats.viewings) {
                 card.appendChild(makeEl('div', { className:'enh-stats-empty' },
-                    'No local viewing history yet. Mark a title Seen or import an IMDb or Letterboxd CSV. Nothing leaves this device.'));
+                    t('settings_no_local_viewing_history_yet_mark_a')));
                 return;
             }
             const overview = makeEl('div', { className:'enh-stats-overview' });
             [
-                [stats.seen, 'Seen titles'],
-                [stats.skipped, 'Skipped titles'],
-                [stats.viewings, 'Dated viewings'],
-                [stats.rated, 'Personal ratings'],
+                [stats.seen, t('settings_seen_titles')],
+                [stats.skipped, t('settings_skipped_titles')],
+                [stats.viewings, t('settings_dated_viewings')],
+                [stats.rated, t('settings_personal_ratings')],
             ].forEach(([value, label]) => overview.appendChild(makeEl('div', { className:'enh-stats-metric' },
                 makeEl('div', { className:'enh-stats-metric__value' }, String(value)),
                 makeEl('div', { className:'enh-stats-metric__label' }, label)
             )));
             card.appendChild(overview);
             card.appendChild(makeEl('div', { className:'enh-stats-grid' },
-                createLocalStatsList('Activity by year', stats.years, 'No dated viewings yet.'),
-                createLocalStatsList('Top genres', stats.topGenres, 'Genres appear as titles are marked or imported.'),
-                createLocalStatsList('Release decades', stats.decades, 'Release years appear as titles are marked or imported.')
+                createLocalStatsList(t('settings_activity_by_year'), stats.years, t('settings_no_dated_viewings_yet')),
+                createLocalStatsList(t('settings_top_genres'), stats.topGenres, t('settings_genres_appear_as_titles_are_marked_or')),
+                createLocalStatsList(t('settings_release_decades'), stats.decades, t('settings_release_years_appear_as_titles_are_marked'))
             ));
             const insights = [];
             if (stats.ratingDelta !== null) {
@@ -13744,15 +13863,18 @@ section[data-testid="hero-parent"].enh-editorial-native-hidden { display: none !
                     ? `Your ${stats.ratingPairs} comparable ratings match IMDb on average.`
                     : `Your ${stats.ratingPairs} comparable ratings run ${delta} ${stats.ratingDelta > 0 ? 'higher' : 'lower'} than IMDb on average.`);
             } else {
-                insights.push('Rating comparison appears after a title has both your rating and IMDb’s rating.');
+                insights.push(t('settings_rating_comparison_appears_after_a_title_has'));
             }
             if (stats.runtimeMinutes) insights.push(`${formatRuntimeTotal(stats.runtimeMinutes)} of runtime is known across Seen titles.`);
             if (stats.reviewYear) insights.push(`${stats.reviewYear.label} has ${stats.reviewYear.count} dated viewings, enough for a year review.`);
-            else insights.push('A year review appears after 10 dated viewings in one year.');
+            else insights.push(t('settings_a_year_review_appears_after_10_dated'));
             if (stats.undatedSeen) insights.push(`${stats.undatedSeen} Seen ${stats.undatedSeen === 1 ? 'title has' : 'titles have'} no viewing date.`);
             card.appendChild(makeEl('div', { className:'enh-stats-insights' },
-                makeEl('strong', {}, 'Coverage. '),
-                `${stats.metadataTitles} of ${stats.historyTitles} history ${stats.historyTitles === 1 ? 'title has' : 'titles have'} year, genre, score, or runtime metadata. ${insights.join(' ')}`
+                makeEl('strong', {}, t('settings_coverage_label')),
+                /* One sentence, not a lead-in plus a clause plus a verb chosen by a
+                   ternary: which word changes with the count is a property of the
+                   language, so the whole sentence has a singular and a plural form. */
+                ` ${tCount('settings_history_metadata_coverage', stats.historyTitles, [stats.metadataTitles, insights.join(' ')])}`
             ));
         };
         document.addEventListener('imdb-enhanced:marks-updated', render);
@@ -13907,7 +14029,7 @@ section[data-testid="hero-parent"].enh-editorial-native-hidden { display: none !
                         onClick: async () => {
                             if (await openOptionsPage()) showToast(t('toast_grant_then_return'), 5000);
                         },
-                    }, 'Grant access');
+                    }, t('settings_grant_access'));
                 }
                 const copy = row.querySelector('.enh-settings-row-copy');
                 copy.appendChild(access);
@@ -14021,7 +14143,7 @@ section[data-testid="hero-parent"].enh-editorial-native-hidden { display: none !
 
         const experiencePage = pages.get('experience');
         experiencePage.classList.add('enh-settings-page--experience');
-        const themeCard = makeCard('Appearance', 'Choose the tonal base for IMDb Enhanced surfaces.');
+        const themeCard = makeCard('Appearance', t('settings_choose_the_tonal_base_for_imdb_enhanced'));
         const themeSelector = makeEl('div', { className:'enh-theme-selector' });
         const curTheme = getActiveThemeId();
         [
@@ -14078,11 +14200,11 @@ section[data-testid="hero-parent"].enh-editorial-native-hidden { display: none !
         themeCard.appendChild(autoThemeRow);
         experiencePage.appendChild(themeCard);
         const experienceGrid = makeEl('div', { className:'enh-settings-grid enh-settings-grid--experience', style:{ marginTop:'12px' } });
-        experienceGrid.appendChild(makeFeatureCard('Clean up', 'Remove noise so you can focus on what matters.', 'All pages', [
+        experienceGrid.appendChild(makeFeatureCard(t('settings_clean_up'), t('settings_remove_noise_so_you_can_focus_on'), t('settings_all_pages'), [
             'removeAds', 'removeProUpsell', 'removeNewsSection', 'removeRelatedInterests',
             'removeContribution', 'removeSponsoredRecs', 'removeAppBanner',
         ], true));
-        experienceGrid.appendChild(makeFeatureCard('Tune the interface', 'Refine how content looks and is presented.', 'Desktop', [
+        experienceGrid.appendChild(makeFeatureCard(t('settings_tune_the_interface'), t('settings_refine_how_content_looks_and_is_presented'), 'Desktop', [
             'modernUI', 'editorialTitleSurface', 'compactHeader', 'enhancedRatingDisplay', 'widerLayout', 'ratingColorCoding',
             'collapsibleSections', 'expandSummaries', 'spoilerBlur', 'quickNav', 'dimLowRated',
         ], true));
@@ -14103,10 +14225,10 @@ section[data-testid="hero-parent"].enh-editorial-native-hidden { display: none !
         }, ...DIM_THRESHOLD_OPTIONS.map(option => makeEl('option', { value:option }, option)));
         dimThreshold.value = normalizeDimThreshold(get('dimRatingThreshold'));
         experiencePage.appendChild(makeEl('div', { className:'enh-settings-callout', style:{ marginTop:'12px' } },
-            makeEl('strong', {}, 'Dim titles rated below'),
+            makeEl('strong', {}, t('aria_dim_titles_rated_below')),
             dimThreshold,
             makeEl('span', { className:'enh-settings-card-description' },
-                'Applies when “Dim low-rated titles” is on. Unrated titles are never dimmed.')
+                t('settings_applies_when_dim_low_rated_titles_is'))
         ));
 
         /* The two availability sources answer the same question by different means, so
@@ -14133,7 +14255,7 @@ section[data-testid="hero-parent"].enh-editorial-native-hidden { display: none !
             select.value = getAvailabilitySource();
             const tokenField = createSettingsInput({
                 key:'tmdbReadToken',
-                label:'TMDB read access token',
+                label:t('settings_tmdb_read_access_token'),
                 placeholder:t('field_paste_your_v4_read_access_token'),
                 refreshKey:'streamAvailability',
                 wide:true,
@@ -14149,39 +14271,39 @@ section[data-testid="hero-parent"].enh-editorial-native-hidden { display: none !
                 refreshKey:'streamAvailability',
             });
             return makeEl('div', { className:'enh-settings-callout', style:{ marginTop:'12px' } },
-                makeEl('strong', {}, 'Where availability comes from'),
+                makeEl('strong', {}, t('settings_where_availability_comes_from')),
                 select,
                 makeEl('span', { className:'enh-settings-card-description' },
-                    'Both sources use the two-letter region below. TMDB publishes its data through a documented API and asks for a token of your own, free from themoviedb.org. JustWatch is read by parsing their page. Choosing TMDB without a token says so rather than quietly reading the page instead.'),
+                    t('settings_both_sources_use_the_two_letter_region')),
                 tokenField,
                 regionField
             );
         }
 
         const ratingsPage = pages.get('ratings');
-        const previewCard = makeCard('Preview', 'Sample source values — not live title data.');
+        const previewCard = makeCard('Preview', t('settings_sample_source_values_not_live_title_data'));
         const preview = makeEl('div', { className:'enh-score-preview' });
         [
-            ['8.7 /10', 'IMDb'], ['88%', 'Rotten Tomatoes'], ['4.2 /5', 'Letterboxd'], ['73 /100', 'Metacritic'], ['4 services', 'Streaming'],
+            ['8.7 /10', 'IMDb'], ['88%', t('settings_rotten_tomatoes')], ['4.2 /5', 'Letterboxd'], ['73 /100', 'Metacritic'], ['4 services', 'Streaming'],
         ].forEach(([value, label]) => preview.appendChild(makeEl('div', { className:'enh-score-preview-item' },
             makeEl('div', { className:'enh-score-preview-value' }, value),
             makeEl('div', { className:'enh-score-preview-label' }, label)
         )));
         previewCard.appendChild(preview);
         ratingsPage.append(previewCard,
-            makeEl('div', { style:{ marginTop:'12px' } }, makeFeatureCard('Score sources', 'Choose which ratings and availability information to show. The vote-distribution controls apply to a title’s Ratings tab.', 'Title pages', [
+            makeEl('div', { style:{ marginTop:'12px' } }, makeFeatureCard('Score sources', t('settings_choose_which_ratings_and_availability'), t('settings_title_pages'), [
                 'ratingGap', 'inlineRTScore', 'inlineLetterboxdScore', 'inlineMetacriticScore', 'streamAvailability',
             ])),
             createAvailabilitySourceControl(),
             makeEl('div', { className:'enh-settings-callout', style:{ marginTop:'12px' } },
-                makeEl('strong', {}, 'Rotten Tomatoes and Metacritic through OMDb'),
+                makeEl('strong', {}, t('settings_rotten_tomatoes_and_metacritic_through_omdb')),
                 makeEl('span', { className:'enh-settings-card-description' },
                     IS_STORE_BUILD
-                        ? 'This build does not read Rotten Tomatoes or Metacritic pages, so their scores come from the OMDb API instead. It is free for 1,000 lookups a day from omdbapi.com and takes an email address to get. Without a key those two widgets say so rather than showing nothing.'
-                        : 'Optional. Scores normally come from reading each site\'s own page; with an OMDb key stored here, a lookup that fails falls back to their API and the score says it came from OMDb. Free for 1,000 lookups a day from omdbapi.com.'),
+                        ? t('settings_this_build_does_not_read_rotten_tomatoes')
+                        : t('settings_optional_scores_normally_come_from_reading_each')),
                 createSettingsInput({
                     key:'omdbApiKey',
-                    label:'OMDb API key',
+                    label:t('settings_omdb_api_key'),
                     placeholder:t('field_paste_your_omdb_key'),
                     refreshKey:['inlineRTScore', 'inlineMetacriticScore'],
                     wide:true,
@@ -14189,41 +14311,41 @@ section[data-testid="hero-parent"].enh-editorial-native-hidden { display: none !
             ),
             makeEl('div', { className:'enh-settings-callout', style:{ marginTop:'12px' } },
                 makeEl('strong', {}, 'Privacy'),
-                'Fetched only on IMDb title pages. Responses are cached locally.'
+                t('settings_fetched_only_on_imdb_title_pages_responses')
             )
         );
 
         const toolsPage = pages.get('tools');
         toolsPage.appendChild(makeEl('div', { className:'enh-settings-grid enh-settings-grid--three' },
-            makeFeatureCard('Title tools', 'Actions placed near a movie or show title.', 'Title pages', [
+            makeFeatureCard(t('settings_title_tools'), t('settings_actions_placed_near_a_movie_or_show'), t('settings_title_pages'), [
                 'searchButtons', 'externalLinks', 'trailerPopover', 'expandedLinkMenu', 'watchedMarking', 'titleNotes',
             ]),
-            makeFeatureCard('TV & episodes', 'Focused tools for series and episode lists.', 'TV', [
+            makeFeatureCard(t('settings_tv_episodes'), t('settings_focused_tools_for_series_and_episode_lists'), 'TV', [
                 'tvEpisodeTools', 'tvShowEnhancements', 'subtitleLinks', 'episodeSubtitles',
                 'episodeHeatmap', 'seasonProgress',
             ]),
-            makeFeatureCard('Lists & shortcuts', 'Batch actions and quick navigation.', 'Lists', [
+            makeFeatureCard(t('settings_lists_shortcuts'), t('settings_batch_actions_and_quick_navigation'), 'Lists', [
                 'watchlistBatch', 'listMultiSearch', 'listRuntimeSummary', 'markFilters', 'listRoulette',
                 'quickCopyID', 'keyboardShortcuts',
             ]),
-            makeFeatureCard('People', 'Additions to cast and crew pages.', 'Name pages', [
+            makeFeatureCard('People', t('settings_additions_to_cast_and_crew_pages'), t('settings_name_pages'), [
                 'castAges',
             ])
         ));
         toolsPage.appendChild(makeEl('div', { className:'enh-settings-callout', style:{ marginTop:'12px', justifyContent:'center' } },
-            makeEl('strong', {}, 'When “Optional keyboard shortcuts” is enabled'),
+            makeEl('strong', {}, t('settings_when_optional_keyboard_shortcuts_is_enabled')),
             makeEl('span', { className:'enh-settings-kbd' }, '?'), 'Open settings',
             makeEl('span', { className:'enh-settings-kbd', style:{ marginLeft:'20px' } }, 'C'), 'Copy IMDb ID'
         ));
 
         const sitesPage = pages.get('sites');
         sitesPage.appendChild(makeEl('div', { className:'enh-settings-callout' },
-            makeEl('strong', {}, 'FMHY catalog'),
-            'Watch & stream includes a built-in catalog of every streaming destination from the FMHY video wiki. Open it below to add any of them with one click, then edit the row like any other destination.'
+            makeEl('strong', {}, t('settings_fmhy_catalog')),
+            t('settings_watch_stream_includes_a_built_in_catalog')
         ));
         const sitesGrid = makeEl('div', { className:'enh-sites-grid enh-sites-grid--single', style:{ marginTop:'12px' } },
-            createSiteEditor({ title:'Watch & stream', key:'watchSites', defaults:DEFAULT_WATCH_SITES, featureKey:'searchButtons', catalog:FMHY_WATCH_CATALOG }, registerCleanup),
-            createSiteEditor({ title:'Research & reviews', key:'externalSites', defaults:DEFAULT_EXTERNAL_SITES, featureKey:'externalLinks' }, registerCleanup)
+            createSiteEditor({ title:t('settings_watch_stream'), key:'watchSites', defaults:DEFAULT_WATCH_SITES, featureKey:'searchButtons', catalog:FMHY_WATCH_CATALOG }, registerCleanup),
+            createSiteEditor({ title:t('settings_research_reviews'), key:'externalSites', defaults:DEFAULT_EXTERNAL_SITES, featureKey:'externalLinks' }, registerCleanup)
         );
         sitesPage.append(sitesGrid, makeEl('div', { className:'enh-settings-callout', style:{ marginTop:'12px' } },
             makeEl('strong', {}, 'Templates'),
@@ -14232,18 +14354,18 @@ section[data-testid="hero-parent"].enh-editorial-native-hidden { display: none !
 
         const integrationsPage = pages.get('integrations');
         integrationsPage.appendChild(makeEl('div', { className:'enh-integration-summary' },
-            makeFeatureSummaryCard('Servarr quick-add', 'Add movies to Radarr and shows to Sonarr.', 'Local', 'servarrIntegration'),
-            makeFeatureSummaryCard('Media server indicator', 'Check Plex, Jellyfin, and Emby libraries.', 'Local', 'mediaServerIntegration')
+            makeFeatureSummaryCard(t('feature_servarrIntegration_name'), t('settings_add_movies_to_radarr_and_shows_to'), 'Local', 'servarrIntegration'),
+            makeFeatureSummaryCard(t('settings_media_server_indicator'), t('settings_check_plex_jellyfin_and_emby_libraries'), 'Local', 'mediaServerIntegration')
         ));
         integrationsPage.appendChild(makeEl('div', { className:'enh-settings-callout', style:{ marginTop:'12px' } },
-            makeEl('strong', {}, 'Private by design'),
-            'Requests go directly from your browser to the local URLs you provide.'
+            makeEl('strong', {}, t('settings_private_by_design')),
+            t('settings_requests_go_directly_from_your_browser_to')
         ));
         const integrationGrid = makeEl('div', { className:'enh-integration-grid', style:{ marginTop:'12px' } });
-        const servarrCard = makeCard('Radarr & Sonarr', 'Configure local quick-add destinations.');
+        const servarrCard = makeCard(t('settings_radarr_sonarr'), t('settings_configure_local_quick_add_destinations'));
         servarrCard.classList.add('enh-integration-card');
         servarrCard.appendChild(createServarrSettingsPanel());
-        const mediaCard = makeCard('Media servers', 'Configure local library checks.');
+        const mediaCard = makeCard(t('settings_media_servers'), t('settings_configure_local_library_checks'));
         mediaCard.classList.add('enh-integration-card');
         mediaCard.appendChild(createMediaServerSettingsPanel());
         integrationGrid.append(servarrCard, mediaCard);
@@ -14277,7 +14399,7 @@ section[data-testid="hero-parent"].enh-editorial-native-hidden { display: none !
                so the ordinary paste-and-import path gains no extra field. */
             makeEl('div', { className:'enh-backup-passphrase', id:'enh-import-passphrase-row', hidden:'hidden' },
                 makeEl('label', { className:'enh-import-label', for:'enh-import-passphrase' },
-                    'This backup is encrypted. Enter its passphrase.'),
+                    t('settings_this_backup_is_encrypted_enter_its_passphrase')),
                 makeEl('input', {
                     type:'password', id:'enh-import-passphrase', className:'enh-servarr-input',
                     autocomplete:'off', spellcheck:'false', maxlength:'256',
@@ -14291,7 +14413,7 @@ section[data-testid="hero-parent"].enh-editorial-native-hidden { display: none !
         const securePanel = makeEl('div', { className:'enh-import-panel', id:'enh-secure-export-panel', hidden:'hidden' },
             makeEl('div', { className:'enh-import-label' }, 'Encrypted backup with credentials'),
             makeEl('div', { className:'enh-settings-card-description' },
-                'Choose a passphrase. The backup is encrypted in this browser with it, and there is no way to recover the contents if you forget it.'
+                t('settings_choose_a_passphrase_the_backup_is_encrypted')
             ),
             makeEl('div', { className:'enh-backup-passphrase' },
                 makeEl('label', { className:'enh-import-label', for:'enh-secure-passphrase' }, 'Passphrase'),
@@ -14315,12 +14437,12 @@ section[data-testid="hero-parent"].enh-editorial-native-hidden { display: none !
         },
             makeEl('div', { className:'enh-import-label' }, 'Reset every setting?'),
             makeEl('div', { className:'enh-settings-card-description' },
-                'This clears title marks and local integration credentials. Export a backup first if you may need them.'
+                t('settings_this_clears_title_marks_and_local_integration')
             ),
             makeEl('div', { className:'enh-import-actions' },
                 makeEl('button', {
                     type:'button', className:'enh-settings-footer-btn enh-settings-footer-btn--danger', id:'enh-reset-apply',
-                }, 'Reset everything'),
+                }, t('settings_reset_everything')),
                 makeEl('button', { type:'button', className:'enh-settings-footer-btn', id:'enh-reset-cancel' }, 'Cancel')
             )
         );
@@ -14336,10 +14458,10 @@ section[data-testid="hero-parent"].enh-editorial-native-hidden { display: none !
         });
         const csvPreview = makeEl('div', {
             className:'enh-csv-preview', id:'enh-csv-preview', role:'status', 'aria-live':'polite',
-        }, 'Paste CSV data or choose a file, then preview it.');
+        }, t('settings_paste_csv_data_or_choose_a_file'));
         const csvApply = makeEl('button', {
             type:'button', className:'enh-settings-footer-btn', id:'enh-csv-apply', disabled:'disabled',
-        }, 'Import preview');
+        }, t('settings_import_preview'));
         const resetCsvPreview = () => {
             pendingCsvImport = null;
             csvApply.disabled = true;
@@ -14353,7 +14475,7 @@ section[data-testid="hero-parent"].enh-editorial-native-hidden { display: none !
             } catch (error) {
                 pendingCsvImport = null;
                 csvApply.disabled = true;
-                csvPreview.textContent = error.message || 'CSV could not be read.';
+                csvPreview.textContent = error.message || t('settings_csv_could_not_be_read');
             }
         };
         csvTextarea.addEventListener('input', resetCsvPreview);
@@ -14375,7 +14497,7 @@ section[data-testid="hero-parent"].enh-editorial-native-hidden { display: none !
         });
         const csvPreviewButton = makeEl('button', {
             type:'button', className:'enh-settings-footer-btn', id:'enh-csv-preview-btn', onClick:previewCsv,
-        }, 'Preview CSV');
+        }, t('settings_preview_csv'));
         csvApply.addEventListener('click', () => {
             if (!pendingCsvImport) { showToast(t('toast_preview_the_csv_before_importing')); return; }
             csvApply.disabled = true;
@@ -14383,7 +14505,7 @@ section[data-testid="hero-parent"].enh-editorial-native-hidden { display: none !
                 // Re-merge against storage at the moment of the write. A preview left
                 // open in one tab must not erase marks saved from another tab meanwhile.
                 const prepared = prepareCsvMarkImport(csvTextarea.value, getUserMarks(true));
-                if (!prepared.importedRows) throw new Error('No importable rows were found. Nothing was changed.');
+                if (!prepared.importedRows) throw new Error(t('settings_no_importable_rows_were_found_nothing_was'));
                 applySettingsImport([{ key:'userMarks', value:prepared.marks }]);
                 document.dispatchEvent(new CustomEvent('imdb-enhanced:marks-updated'));
                 const skipped = prepared.skippedRows ? ` ${prepared.skippedRows} rows were skipped.` : '';
@@ -14391,14 +14513,14 @@ section[data-testid="hero-parent"].enh-editorial-native-hidden { display: none !
                 setTimeout(() => location.reload(), 1000);
             } catch (error) {
                 csvApply.disabled = false;
-                showToast(error.message || 'CSV import failed. Previous marks were restored.', 5000);
+                showToast(error.message || t('settings_csv_import_failed_previous_marks_were_restored'), 5000);
             }
         });
-        const csvImportCard = makeCard('Import viewing history',
-            'IMDb and Letterboxd exports become local Seen marks. This does not change IMDb Watched status or any IMDb list. IMDb Labs account import is a separate feature.');
+        const csvImportCard = makeCard(t('settings_import_viewing_history'),
+            t('settings_imdb_and_letterboxd_exports_become_local_seen'));
         csvImportCard.append(
             makeEl('div', { className:'enh-settings-card-description' },
-                'Rows should carry Const or imdbID. A Title and Year row can also match one unambiguous title already stored on this device. Headers are read by name, so IMDb’s Original Title column does not shift the import.'),
+                t('settings_rows_should_carry_const_or_imdbid_a')),
             makeEl('label', { className:'enh-import-label', for:'enh-csv-file', style:{ marginTop:'10px' } }, 'Choose CSV file'),
             csvFile,
             makeEl('label', { className:'enh-import-label', for:'enh-csv-textarea', style:{ marginTop:'10px' } }, 'Or paste CSV data'),
@@ -14406,29 +14528,29 @@ section[data-testid="hero-parent"].enh-editorial-native-hidden { display: none !
             csvPreview,
             makeEl('div', { className:'enh-import-actions' }, csvPreviewButton, csvApply)
         );
-        const backupCard = makeCard('Backup & restore', 'A backup covers preferences, sites, and title marks. Integration API keys and tokens are left out unless you choose the encrypted export.');
+        const backupCard = makeCard(t('settings_backup_restore'), t('settings_a_backup_covers_preferences_sites_and_title'));
         backupCard.appendChild(makeEl('div', { className:'enh-data-actions' },
             makeEl('button', { type:'button', className:'enh-settings-footer-btn', id:'enh-export-btn', title:'Copy settings to the clipboard without integration credentials' }, 'Export settings'),
             makeEl('button', {
                 type:'button', className:'enh-settings-footer-btn', id:'enh-secure-export-btn',
-                title:'Copy a passphrase-encrypted backup that includes integration credentials',
+                title:t('settings_copy_a_passphrase_encrypted_backup_that'),
                 'aria-controls':'enh-secure-export-panel', 'aria-expanded':'false',
-            }, 'Export with credentials'),
+            }, t('settings_export_with_credentials')),
             makeEl('button', {
                 type:'button', className:'enh-settings-footer-btn', id:'enh-import-btn', title:'Import settings from JSON',
                 'aria-controls':'enh-import-panel', 'aria-expanded':'false',
-            }, 'Import settings'),
+            }, t('settings_import_settings')),
             makeEl('button', {
                 type:'button', className:'enh-settings-footer-btn enh-settings-footer-btn--danger',
                 id:'enh-reset-btn', title:'Reset preferences, title marks, and integration credentials',
                 'aria-controls':'enh-reset-panel', 'aria-expanded':'false',
-            }, 'Reset all settings')
+            }, t('settings_reset_all_settings'))
         ));
         backupCard.appendChild(importPanel);
         backupCard.appendChild(securePanel);
         backupCard.appendChild(resetPanel);
-        const journalCard = makeCard('Failure journal',
-            'The last 20 feature failures, kept across reloads so an intermittent problem can be seen. Each entry records when, which feature, which kind of page, and what category of failure — never a title, address, or message.');
+        const journalCard = makeCard(t('settings_failure_journal'),
+            t('settings_the_last_20_feature_failures_kept_across'));
         journalCard.append(
             makeEl('pre', { className:'enh-journal', id:'enh-journal-body', tabindex:'0', role:'group', 'aria-label':t('aria_recorded_failures') },
                 formatFailureJournal()),
@@ -14437,7 +14559,7 @@ section[data-testid="hero-parent"].enh-editorial-native-hidden { display: none !
                 makeEl('button', { type:'button', className:'enh-settings-footer-btn', id:'enh-journal-clear' }, 'Clear journal')
             )
         );
-        const cacheCard = makeCard('Cached lookups', 'Scores and availability lookups are cached locally for up to seven days.');
+        const cacheCard = makeCard(t('settings_cached_lookups'), t('settings_scores_and_availability_lookups_are_cached'));
         cacheCard.append(
             makeEl('button', { type:'button', className:'enh-settings-footer-btn', id:'enh-clearcache-btn', title:'Clear cached third-party lookups' }, 'Clear cache'),
             makeEl('div', { className:'enh-settings-card-description', id:'enh-cache-status', style:{ marginTop:'8px' } },
@@ -14446,7 +14568,7 @@ section[data-testid="hero-parent"].enh-editorial-native-hidden { display: none !
         /* Only the extension builds can be stale — the userscript updates through its
            manager — so the control exists only where it means something. */
         if (IS_EXTENSION_BUILD) {
-            const updateCard = makeCard('Updates', 'This build cannot update itself, so it checks once a day whether a newer release has been published.');
+            const updateCard = makeCard('Updates', t('settings_this_build_cannot_update_itself_so_it'));
             const updateRow = makeEl('div', { className:'enh-settings-row' },
                 makeEl('div', { className:'enh-settings-row-copy' },
                     makeEl('span', { className:'enh-settings-label' }, 'Tell me about new versions'),
@@ -14471,28 +14593,28 @@ section[data-testid="hero-parent"].enh-editorial-native-hidden { display: none !
             dataPage.appendChild(updateCard);
         }
 
-        const diagnosticsCard = makeCard('Diagnostics', 'A readable summary for bug reports. Credentials, marked titles, and the page query string are never included.');
+        const diagnosticsCard = makeCard('Diagnostics', t('settings_a_readable_summary_for_bug_reports_credentials'));
         diagnosticsCard.append(
             makeEl('button', {
                 type:'button', className:'enh-settings-footer-btn', id:'enh-diagnostics-btn',
-                title:'Copy a scrubbed diagnostics report to the clipboard',
+                title:t('settings_copy_a_scrubbed_diagnostics_report_to_the'),
                 onClick: () => {
                     const report = buildDiagnosticsReport();
                     showToast(copyTextToClipboard(report)
-                        ? 'Diagnostics copied. Paste it into your report.'
+                        ? t('settings_diagnostics_copied_paste_it_into_your_report')
                         : COPY_FAILURE_MESSAGE, 4000);
                 },
-            }, 'Copy diagnostics'),
+            }, t('settings_copy_diagnostics')),
             makeEl('div', { className:'enh-settings-card-description', id:'enh-diagnostics-status', style:{ marginTop:'8px' } },
-                'Nothing is transmitted — the report only reaches your clipboard.')
+                t('settings_nothing_is_transmitted_the_report_only_reaches'))
         );
         dataPage.appendChild(makeEl('div', { className:'enh-settings-grid' },
             createMarksPanel(registerCleanup),
             makeEl('div', { className:'enh-settings-stack' }, csvImportCard, backupCard, cacheCard, journalCard, diagnosticsCard)
         ));
         dataPage.appendChild(makeEl('div', { className:'enh-settings-callout', style:{ marginTop:'12px' } },
-            makeEl('strong', {}, 'Local only'),
-            'Nothing is sent to an IMDb Enhanced account or cloud service.'
+            makeEl('strong', {}, t('settings_local_only')),
+            t('settings_nothing_is_sent_to_an_imdb_enhanced')
         ));
 
         const setDataDisclosureState = openPanel => {
@@ -14559,7 +14681,7 @@ section[data-testid="hero-parent"].enh-editorial-native-hidden { display: none !
                 const omitted = payload[EXPORT_REDACTED_KEY] || [];
                 showToast(omitted.length
                     ? `Settings copied. ${omitted.length} integration ${omitted.length === 1 ? 'credential was' : 'credentials were'} left out — use Export with credentials to include ${omitted.length === 1 ? 'it' : 'them'}.`
-                    : 'Settings copied to clipboard', omitted.length ? 6000 : 2500);
+                    : t('settings_settings_copied_to_clipboard'), omitted.length ? 6000 : 2500);
             } catch (error) {
                 console.warn('[IMDb Enhanced] settings export failed:', error);
                 showToast(t('toast_settings_could_not_be_read_for'), 4500);
@@ -14602,7 +14724,7 @@ section[data-testid="hero-parent"].enh-editorial-native-hidden { display: none !
                     if (await openOptionsPage()) setDataDisclosureState('');
                     return;
                 }
-                showToast(error?.message || 'The encrypted backup could not be created.', 5000);
+                showToast(error?.message || t('settings_the_encrypted_backup_could_not_be_created'), 5000);
             } finally { apply.disabled = false; }
         });
         overlay.querySelector('#enh-import-btn').addEventListener('click', () => {
@@ -14632,7 +14754,7 @@ section[data-testid="hero-parent"].enh-editorial-native-hidden { display: none !
                 showToast(t('toast_reset_settings_reloading', [reset]));
                 setTimeout(() => location.reload(), 1000);
             } catch (error) {
-                showToast(error.message || 'Reset failed. Previous settings were restored.', 4500);
+                showToast(error.message || t('settings_reset_failed_previous_settings_were_restored'), 4500);
             }
         });
         /* Reveal the passphrase field as soon as the pasted text is recognizable as an

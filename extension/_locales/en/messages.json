@@ -674,6 +674,363 @@
   "provider_youTube_consent": {
     "message": "Loads the trailer from YouTube, which sees the video you opened."
   },
+  "settings_a_backup_covers_preferences_sites_and_title": {
+    "message": "A backup covers preferences, sites, and title marks. Integration API keys and tokens are left out unless you choose the encrypted export."
+  },
+  "settings_a_key_is_saved_on_this_device": {
+    "message": "A key is saved on this device. It is not shown here; type a new one to replace it."
+  },
+  "settings_a_readable_summary_for_bug_reports_credentials": {
+    "message": "A readable summary for bug reports. Credentials, marked titles, and the page query string are never included."
+  },
+  "settings_a_year_review_appears_after_10_dated": {
+    "message": "A year review appears after 10 dated viewings in one year."
+  },
+  "settings_actions_placed_near_a_movie_or_show": {
+    "message": "Actions placed near a movie or show title."
+  },
+  "settings_activity_by_year": {
+    "message": "Activity by year"
+  },
+  "settings_add_destination": {
+    "message": "Add destination"
+  },
+  "settings_add_movies_to_radarr_and_shows_to": {
+    "message": "Add movies to Radarr and shows to Sonarr."
+  },
+  "settings_additions_to_cast_and_crew_pages": {
+    "message": "Additions to cast and crew pages."
+  },
+  "settings_all_pages": {
+    "message": "All pages"
+  },
+  "settings_api_key": {
+    "message": "API key"
+  },
+  "settings_applies_when_dim_low_rated_titles_is": {
+    "message": "Applies when “Dim low-rated titles” is on. Unrated titles are never dimmed."
+  },
+  "settings_backup_restore": {
+    "message": "Backup & restore"
+  },
+  "settings_batch_actions_and_quick_navigation": {
+    "message": "Batch actions and quick navigation."
+  },
+  "settings_both_sources_use_the_two_letter_region": {
+    "message": "Both sources use the two-letter region below. TMDB publishes its data through a documented API and asks for a token of your own, free from themoviedb.org. JustWatch is read by parsing their page. Choosing TMDB without a token says so rather than quietly reading the page instead."
+  },
+  "settings_cached_lookups": {
+    "message": "Cached lookups"
+  },
+  "settings_calculated_on_this_device_from_your_private": {
+    "message": "Calculated on this device from your private marks and imported viewing history."
+  },
+  "settings_check_plex_jellyfin_and_emby_libraries": {
+    "message": "Check Plex, Jellyfin, and Emby libraries."
+  },
+  "settings_checks_match_imdb_ids_first_then_title": {
+    "message": "Checks match IMDb IDs first, then title and year. Credentials stay local."
+  },
+  "settings_choose_a_passphrase_the_backup_is_encrypted": {
+    "message": "Choose a passphrase. The backup is encrypted in this browser with it, and there is no way to recover the contents if you forget it."
+  },
+  "settings_choose_the_tonal_base_for_imdb_enhanced": {
+    "message": "Choose the tonal base for IMDb Enhanced surfaces."
+  },
+  "settings_choose_which_ratings_and_availability": {
+    "message": "Choose which ratings and availability information to show. The vote-distribution controls apply to a title’s Ratings tab."
+  },
+  "settings_clean_up": {
+    "message": "Clean up"
+  },
+  "settings_column_color": {
+    "message": "Color"
+  },
+  "settings_column_move": {
+    "message": "Move"
+  },
+  "settings_column_name": {
+    "message": "Name"
+  },
+  "settings_column_purpose": {
+    "message": "Purpose"
+  },
+  "settings_column_remove": {
+    "message": "Remove"
+  },
+  "settings_column_url_template": {
+    "message": "URL template"
+  },
+  "settings_column_visible": {
+    "message": "Visible"
+  },
+  "settings_configure_local_library_checks": {
+    "message": "Configure local library checks."
+  },
+  "settings_configure_local_quick_add_destinations": {
+    "message": "Configure local quick-add destinations."
+  },
+  "settings_copy_a_passphrase_encrypted_backup_that": {
+    "message": "Copy a passphrase-encrypted backup that includes integration credentials"
+  },
+  "settings_copy_a_scrubbed_diagnostics_report_to_the": {
+    "message": "Copy a scrubbed diagnostics report to the clipboard"
+  },
+  "settings_copy_diagnostics": {
+    "message": "Copy diagnostics"
+  },
+  "settings_coverage_label": {
+    "message": "Coverage."
+  },
+  "settings_credentials_stay_local_and_requests_are_limited": {
+    "message": "Credentials stay local and requests are limited to localhost or 127.0.0.1. Overseerr and Jellyseerr both use these fields; a request there goes through your instance's approval workflow instead of writing straight into Radarr or Sonarr, and your instance resolves the IMDb ID itself."
+  },
+  "settings_csv_could_not_be_read": {
+    "message": "CSV could not be read."
+  },
+  "settings_csv_import_failed_previous_marks_were_restored": {
+    "message": "CSV import failed. Previous marks were restored."
+  },
+  "settings_dated_viewings": {
+    "message": "Dated viewings"
+  },
+  "settings_diagnostics_copied_paste_it_into_your_report": {
+    "message": "Diagnostics copied. Paste it into your report."
+  },
+  "settings_edit_every_destination_directly_hide_categorize": {
+    "message": "Edit every destination directly. Hide, categorize, reorder, or remove links without changing the rest of IMDb Enhanced."
+  },
+  "settings_export_with_credentials": {
+    "message": "Export with credentials"
+  },
+  "settings_failure_journal": {
+    "message": "Failure journal"
+  },
+  "settings_fetched_only_on_imdb_title_pages_responses": {
+    "message": "Fetched only on IMDb title pages. Responses are cached locally."
+  },
+  "settings_fmhy_catalog": {
+    "message": "FMHY catalog"
+  },
+  "settings_fmhy_streaming_catalog": {
+    "message": "FMHY streaming catalog"
+  },
+  "settings_focused_tools_for_series_and_episode_lists": {
+    "message": "Focused tools for series and episode lists."
+  },
+  "settings_genres_appear_as_titles_are_marked_or": {
+    "message": "Genres appear as titles are marked or imported."
+  },
+  "settings_grant_access": {
+    "message": "Grant access"
+  },
+  "settings_history_metadata_coverage_one": {
+    "message": "$2 of $1 history title has year, genre, score, or runtime metadata. $3"
+  },
+  "settings_history_metadata_coverage_other": {
+    "message": "$2 of $1 history titles have year, genre, score, or runtime metadata. $3"
+  },
+  "settings_imdb_and_letterboxd_exports_become_local_seen": {
+    "message": "IMDb and Letterboxd exports become local Seen marks. This does not change IMDb Watched status or any IMDb list. IMDb Labs account import is a separate feature."
+  },
+  "settings_import_from_page": {
+    "message": "Import from page"
+  },
+  "settings_import_preview": {
+    "message": "Import preview"
+  },
+  "settings_import_settings": {
+    "message": "Import settings"
+  },
+  "settings_import_viewing_history": {
+    "message": "Import viewing history"
+  },
+  "settings_lists_shortcuts": {
+    "message": "Lists & shortcuts"
+  },
+  "settings_local_only": {
+    "message": "Local only"
+  },
+  "settings_local_seen": {
+    "message": "Local seen"
+  },
+  "settings_local_skip": {
+    "message": "Local skip"
+  },
+  "settings_mark_and_note_removed": {
+    "message": "Mark and note removed"
+  },
+  "settings_mark_cleared": {
+    "message": "Mark cleared"
+  },
+  "settings_media_server_indicator": {
+    "message": "Media server indicator"
+  },
+  "settings_media_servers": {
+    "message": "Media servers"
+  },
+  "settings_name_pages": {
+    "message": "Name pages"
+  },
+  "settings_no_dated_viewings_yet": {
+    "message": "No dated viewings yet."
+  },
+  "settings_no_importable_rows_were_found_nothing_was": {
+    "message": "No importable rows were found. Nothing was changed."
+  },
+  "settings_no_local_viewing_history_yet_mark_a": {
+    "message": "No local viewing history yet. Mark a title Seen or import an IMDb or Letterboxd CSV. Nothing leaves this device."
+  },
+  "settings_note_only": {
+    "message": "Note only"
+  },
+  "settings_nothing_is_sent_to_an_imdb_enhanced": {
+    "message": "Nothing is sent to an IMDb Enhanced account or cloud service."
+  },
+  "settings_nothing_is_transmitted_the_report_only_reaches": {
+    "message": "Nothing is transmitted — the report only reaches your clipboard."
+  },
+  "settings_omdb_api_key": {
+    "message": "OMDb API key"
+  },
+  "settings_optional_scores_normally_come_from_reading_each": {
+    "message": "Optional. Scores normally come from reading each site's own page; with an OMDb key stored here, a lookup that fails falls back to their API and the score says it came from OMDb. Free for 1,000 lookups a day from omdbapi.com."
+  },
+  "settings_paste_csv_data_or_choose_a_file": {
+    "message": "Paste CSV data or choose a file, then preview it."
+  },
+  "settings_personal_ratings": {
+    "message": "Personal ratings"
+  },
+  "settings_preview_csv": {
+    "message": "Preview CSV"
+  },
+  "settings_private_by_design": {
+    "message": "Private by design"
+  },
+  "settings_quality_profile_id": {
+    "message": "Quality profile ID"
+  },
+  "settings_radarr_sonarr": {
+    "message": "Radarr & Sonarr"
+  },
+  "settings_rating_comparison_appears_after_a_title_has": {
+    "message": "Rating comparison appears after a title has both your rating and IMDb’s rating."
+  },
+  "settings_refine_how_content_looks_and_is_presented": {
+    "message": "Refine how content looks and is presented."
+  },
+  "settings_release_decades": {
+    "message": "Release decades"
+  },
+  "settings_release_years_appear_as_titles_are_marked": {
+    "message": "Release years appear as titles are marked or imported."
+  },
+  "settings_remove_noise_so_you_can_focus_on": {
+    "message": "Remove noise so you can focus on what matters."
+  },
+  "settings_remove_site": {
+    "message": "Remove site"
+  },
+  "settings_requests_go_directly_from_your_browser_to": {
+    "message": "Requests go directly from your browser to the local URLs you provide."
+  },
+  "settings_research_reviews": {
+    "message": "Research & reviews"
+  },
+  "settings_reset_all_settings": {
+    "message": "Reset all settings"
+  },
+  "settings_reset_everything": {
+    "message": "Reset everything"
+  },
+  "settings_reset_failed_previous_settings_were_restored": {
+    "message": "Reset failed. Previous settings were restored."
+  },
+  "settings_root_folder": {
+    "message": "Root folder"
+  },
+  "settings_rotten_tomatoes": {
+    "message": "Rotten Tomatoes"
+  },
+  "settings_rotten_tomatoes_and_metacritic_through_omdb": {
+    "message": "Rotten Tomatoes and Metacritic through OMDb"
+  },
+  "settings_rows_should_carry_const_or_imdbid_a": {
+    "message": "Rows should carry Const or imdbID. A Title and Year row can also match one unambiguous title already stored on this device. Headers are read by name, so IMDb’s Original Title column does not shift the import."
+  },
+  "settings_sample_source_values_not_live_title_data": {
+    "message": "Sample source values — not live title data."
+  },
+  "settings_saved_type_to_replace": {
+    "message": "Saved — type to replace"
+  },
+  "settings_scores_and_availability_lookups_are_cached": {
+    "message": "Scores and availability lookups are cached locally for up to seven days."
+  },
+  "settings_seen_titles": {
+    "message": "Seen titles"
+  },
+  "settings_settings_copied_to_clipboard": {
+    "message": "Settings copied to clipboard"
+  },
+  "settings_show_or_hide_this_destination_on_imdb": {
+    "message": "Show or hide this destination on IMDb pages"
+  },
+  "settings_skipped_titles": {
+    "message": "Skipped titles"
+  },
+  "settings_the_encrypted_backup_could_not_be_created": {
+    "message": "The encrypted backup could not be created."
+  },
+  "settings_the_last_20_feature_failures_kept_across": {
+    "message": "The last 20 feature failures, kept across reloads so an intermittent problem can be seen. Each entry records when, which feature, which kind of page, and what category of failure — never a title, address, or message."
+  },
+  "settings_these_marks_stay_on_this_device_and": {
+    "message": "These marks stay on this device and never change your IMDb account. Import from page copies the IMDb Watched titles visible on the page behind the settings dialog into local Seen marks; existing marks are kept, and nothing is ever sent back to IMDb."
+  },
+  "settings_this_backup_is_encrypted_enter_its_passphrase": {
+    "message": "This backup is encrypted. Enter its passphrase."
+  },
+  "settings_this_build_cannot_update_itself_so_it": {
+    "message": "This build cannot update itself, so it checks once a day whether a newer release has been published."
+  },
+  "settings_this_build_does_not_read_rotten_tomatoes": {
+    "message": "This build does not read Rotten Tomatoes or Metacritic pages, so their scores come from the OMDb API instead. It is free for 1,000 lookups a day from omdbapi.com and takes an email address to get. Without a key those two widgets say so rather than showing nothing."
+  },
+  "settings_this_clears_title_marks_and_local_integration": {
+    "message": "This clears title marks and local integration credentials. Export a backup first if you may need them."
+  },
+  "settings_title_pages": {
+    "message": "Title pages"
+  },
+  "settings_title_tools": {
+    "message": "Title tools"
+  },
+  "settings_tmdb_read_access_token": {
+    "message": "TMDB read access token"
+  },
+  "settings_top_genres": {
+    "message": "Top genres"
+  },
+  "settings_tune_the_interface": {
+    "message": "Tune the interface"
+  },
+  "settings_tv_episodes": {
+    "message": "TV & episodes"
+  },
+  "settings_watch_stream": {
+    "message": "Watch & stream"
+  },
+  "settings_watch_stream_includes_a_built_in_catalog": {
+    "message": "Watch & stream includes a built-in catalog of every streaming destination from the FMHY video wiki. Open it below to add any of them with one click, then edit the row like any other destination."
+  },
+  "settings_when_optional_keyboard_shortcuts_is_enabled": {
+    "message": "When “Optional keyboard shortcuts” is enabled"
+  },
+  "settings_where_availability_comes_from": {
+    "message": "Where availability comes from"
+  },
   "text_all_opened": {
     "message": "All opened"
   },
@@ -698,8 +1055,17 @@
   "text_csv_import_is_too_large_choose": {
     "message": "CSV import is too large. Choose a file under 4 MB."
   },
+  "text_list_joined": {
+    "message": "$1 and $2"
+  },
+  "text_list_separator": {
+    "message": ", "
+  },
   "text_no_candidate_matches_were_found_paste": {
     "message": "No candidate matches were found. Paste a title URL or mark no entry."
+  },
+  "text_no_external_sites": {
+    "message": "no external sites"
   },
   "text_open_next_of": {
     "message": "Open next ($1 of $2)"
@@ -727,6 +1093,9 @@
   },
   "text_the_selected_file_could_not_be": {
     "message": "The selected file could not be read."
+  },
+  "text_two_items_joined": {
+    "message": "$1 and $2"
   },
   "text_unavailable": {
     "message": "Unavailable"

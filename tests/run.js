@@ -2723,8 +2723,10 @@ test('site destinations support purpose, visibility, and ordering metadata', () 
         .slice(script.indexOf("className:'enh-site-editor__columns'"))
         .split('\n')
         .slice(0, 9)
-        .map(line => line.match(/makeEl\('span', \{\}, '([^']+)'\)/)?.[1])
-        .filter(Boolean);
+        // The headers are catalog entries, so the label is what the key resolves to.
+        .map(line => line.match(/makeEl\('span', \{\}, t\('([A-Za-z0-9_@]+)'\)\)/)?.[1])
+        .filter(Boolean)
+        .map(key => messageCatalog[key]);
     const cellOrder = script
         .slice(script.indexOf('row.appendChild(visibility);'))
         .split('\n')
