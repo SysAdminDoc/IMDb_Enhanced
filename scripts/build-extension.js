@@ -433,6 +433,10 @@ const bridgeFor = ({ trusted }) => String.raw`
                    credential to send. The background looks the key up and injects it only
                    into a request it has already validated as loopback. */
                 credentialHeader:options.credentialHeader || null,
+                /* One service takes its key only in the query string. Same rule as the
+                   header form: a name and a storage key travel, never a value, and the
+                   worker decides from its own binding where the value goes. */
+                credentialQuery:options.credentialQuery || null,
                 body:options.data,
                 timeout:options.timeout,
             }, response => {

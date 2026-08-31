@@ -38,6 +38,11 @@ const CREDENTIAL_DESTINATIONS = new Map([
     // The one credential that goes anywhere but your own machine, and it goes to exactly
     // one host over TLS.
     ['imdb_enh_tmdbReadToken', { host: 'api.themoviedb.org', scheme: 'Bearer ' }],
+    /* OMDb accepts its key in the query string and nowhere else, so this binding names
+       the parameter instead of a header scheme. The parameter name comes from here, like
+       the scheme does, so a page that cannot read the key cannot shape what carries it.
+       The URL therefore holds a secret: the address is never handed back to the page. */
+    ['imdb_enh_omdbApiKey', { host: 'www.omdbapi.com', query: 'apikey' }],
 ]);
 const CREDENTIAL_STORAGE_KEYS = new Set(CREDENTIAL_DESTINATIONS.keys());
 /* Credentials the userscript attaches to local-service calls. fetch strips
@@ -260,7 +265,7 @@ async function sendHttpRequest(message, sender, sendResponse) {
        known credential settings, and the destination must already have been validated as
        loopback. That is what stops this from becoming a way to read storage into an
        arbitrary request. */
-    const credentialRef = message.credentialHeader;
+    const credentialRef = message.credentialHeader || message.credentialQuery;
     const credentialKey = credentialRef ? `${STORAGE_PREFIX}${credentialRef.ref}` : '';
     const binding = CREDENTIAL_DESTINATIONS.get(credentialKey);
     /* Three conditions, all required: the key must be one this worker knows, the request
@@ -275,15 +280,27 @@ async function sendHttpRequest(message, sender, sendResponse) {
         && (binding.loopback
             ? target.loopback
             : target.hostname === binding.host && target.url.protocol === 'https:');
-    if (destinationOwnsCredential && typeof credentialRef.name === 'string') {
+    /* The address actually fetched. It differs from the one the page asked for only
+       where the binding says the credential rides in the query string, and that version
+       never leaves this worker. */
+    let requestUrl = url;
+    let credentialInUrl = false;
+    if (destinationOwnsCredential) {
         const stored = await callApi(chrome.storage.local, 'get', credentialKey).catch(() => null);
         const value = stored?.[credentialKey];
         // Rejected the same way normalizeHeaders rejects one: a control character here
         // would be a header-injection vector.
         if (typeof value === 'string' && value.trim() && !/[\u0000-\u001f\u007f]/.test(value)) {
-            // The scheme comes from the binding, never from the message: a caller that
-            // cannot read the value has no business shaping the header around it.
-            headers[credentialRef.name.slice(0, 120)] = `${binding.scheme || ''}${value.slice(0, 4096)}`;
+            if (binding.query) {
+                const withKey = new URL(url);
+                withKey.searchParams.set(binding.query, value.slice(0, 4096));
+                requestUrl = withKey.toString();
+                credentialInUrl = true;
+            } else if (typeof credentialRef.name === 'string') {
+                // The scheme comes from the binding, never from the message: a caller that
+                // cannot read the value has no business shaping the header around it.
+                headers[credentialRef.name.slice(0, 120)] = `${binding.scheme || ''}${value.slice(0, 4096)}`;
+            }
         }
     }
     const body = message.body === undefined || message.body === null
@@ -309,7 +326,7 @@ async function sendHttpRequest(message, sender, sendResponse) {
        stays for headers the caller supplied itself. */
     const carriesCredentials = destinationOwnsCredential || hasSensitiveHeader(headers);
 
-    fetch(url, {
+    fetch(requestUrl, {
         method,
         headers,
         body,
@@ -329,8 +346,12 @@ async function sendHttpRequest(message, sender, sendResponse) {
         /* The initial URL was allowlisted; the URL the response actually came from is
            the one that matters. Validate it before the body is read, so a redirected
            response is discarded rather than parsed. */
-        const finalUrl = String(response.url || url);
-        const landed = describeRequestUrl(finalUrl);
+        /* Where the key rides in the URL, the address this response came from carries
+           it. Validate that address, then report the one the page asked for: handing back
+           the other would put the secret into the world the bridge keeps it out of. */
+        const landedUrl = String(response.url || requestUrl);
+        const finalUrl = credentialInUrl ? url : landedUrl;
+        const landed = describeRequestUrl(landedUrl);
         if (!landed) {
             sendResponse({
                 ok:false,

@@ -649,6 +649,69 @@ for (const engine of ['chromium', 'gecko']) {
             'a request carrying a credential must still refuse to redirect');
     });
 
+    /* IE-110: OMDb accepts its key in the query string and nowhere else, so this is the
+       first credential that rides in the URL. Everything the header form guarantees has
+       to hold here too, plus one thing that is new: the address the request went to is
+       itself a secret, and the page is not allowed to see it. */
+    test(`[${engine}] the OMDb key is put in the query string of an OMDb request`, async () => {
+        const { dispatch, calls, storage } = loadBackground({ engine, fetchImpl: makeFetch({}) });
+        storage.set('imdb_enh_omdbApiKey', 'OMDB-KEY-VALUE');
+        const asked = 'https://www.omdbapi.com/?i=tt0133093';
+        const answer = await dispatch(request(asked, {
+            credentialQuery: { name:'apikey', ref:'omdbApiKey' },
+        }), IMDB_SENDER);
+        assert.strictEqual(calls.fetches[0][0], 'https://www.omdbapi.com/?i=tt0133093&apikey=OMDB-KEY-VALUE',
+            'the key must reach OMDb the only way OMDb accepts one');
+        assert.strictEqual(calls.fetches[0][1].redirect, 'manual',
+            'a request whose URL carries a credential must refuse to redirect');
+        assert.strictEqual(answer.responseURL, asked,
+            'the address that came back must not carry the key into the page');
+        assert(!JSON.stringify(answer).includes('OMDB-KEY-VALUE'),
+            'and nothing else in the response may either');
+    });
+
+    test(`[${engine}] the OMDb key is refused to every other destination`, async () => {
+        for (const url of [
+            'https://api.themoviedb.org/3/find/tt0133093?external_source=imdb_id',
+            'http://localhost:7878/api/v3/movie',
+            'https://query.wikidata.org/sparql?query=x',
+        ]) {
+            const { dispatch, calls, storage } = loadBackground({ engine, fetchImpl: makeFetch({}) });
+            storage.set('imdb_enh_omdbApiKey', 'OMDB-KEY-VALUE');
+            await dispatch(request(url, { credentialQuery: { name:'apikey', ref:'omdbApiKey' } }), IMDB_SENDER);
+            assert(!String(calls.fetches[0][0]).includes('OMDB-KEY-VALUE'),
+                `the OMDb key must not be attached to ${url}`);
+        }
+    });
+
+    /* The parameter name comes from the binding, exactly as the header scheme does. A
+       caller that cannot read the value cannot decide what carries it either. */
+    test(`[${engine}] a caller cannot choose the parameter a URL credential rides in`, async () => {
+        const { dispatch, calls, storage } = loadBackground({ engine, fetchImpl: makeFetch({}) });
+        storage.set('imdb_enh_omdbApiKey', 'OMDB-KEY-VALUE');
+        await dispatch(request('https://www.omdbapi.com/?i=tt0133093', {
+            credentialQuery: { name:'callback', ref:'omdbApiKey' },
+        }), IMDB_SENDER);
+        const sent = String(calls.fetches[0][0]);
+        assert(sent.includes('apikey=OMDB-KEY-VALUE'), 'the binding names the parameter');
+        assert(!sent.includes('callback='), 'a parameter named in the message must be ignored');
+    });
+
+    test(`[${engine}] an OMDb redirect is stopped before the key can follow it`, async () => {
+        const { dispatch, storage } = loadBackground({
+            engine,
+            fetchImpl: makeFetch({
+                'https://www.omdbapi.com/?i=tt0133093&apikey=OMDB-KEY-VALUE': 'https://example.invalid/collect',
+            }),
+        });
+        storage.set('imdb_enh_omdbApiKey', 'OMDB-KEY-VALUE');
+        const answer = await dispatch(request('https://www.omdbapi.com/?i=tt0133093', {
+            credentialQuery: { name:'apikey', ref:'omdbApiKey' },
+        }), IMDB_SENDER);
+        assert.strictEqual(answer.errorType, 'redirect_blocked');
+        assert(!JSON.stringify(answer).includes('OMDB-KEY-VALUE'));
+    });
+
     test(`[${engine}] the TMDB token is refused to every other destination`, async () => {
         for (const url of [
             'https://www.justwatch.com/us/movie/the-matrix',

@@ -222,6 +222,18 @@
             // An API with a key, rather than page parsing, so a store listing can ship it.
             profiles: ['default', 'store'],
         },
+        omdb: {
+            label: 'OMDb',
+            origins: ['https://www.omdbapi.com/*'],
+            // The IMDb id of the page you are on, nothing read from the page itself.
+            transmits: 'websiteContent',
+            consent: 'Sends the IMDb id to OMDb to read its Rotten Tomatoes and Metacritic ratings. Needs your own OMDb key.',
+            ttl: CACHE_TTL,
+            // OMDb publishes its data under CC BY-NC 4.0, which requires the credit.
+            attribution: 'Ratings from the OMDb API, used under CC BY-NC 4.0.',
+            // A documented API with a key of your own, so a store listing can ship it.
+            profiles: ['default', 'store'],
+        },
         youTube: {
             label: 'YouTube',
             origins: ['https://www.youtube.com/*'],
@@ -275,8 +287,12 @@
         },
     };
     const FEATURE_PROVIDERS = {
-        inlineRTScore: ['rottenTomatoes', 'wikidata'],
-        inlineMetacriticScore: ['metacritic', 'wikidata'],
+        /* OMDb answers the same two questions from an API. It is declared here so a
+           build that cannot ship the page parser still has a source, and so an install
+           that configures a key can fall back to it; activeProvidersFor keeps it out of
+           the way of an install that has neither. */
+        inlineRTScore: ['rottenTomatoes', 'omdb', 'wikidata'],
+        inlineMetacriticScore: ['metacritic', 'omdb', 'wikidata'],
         inlineLetterboxdScore: ['letterboxd', 'wikidata'],
         /* Both are declared so either can be granted, but only the chosen source is ever
            contacted; activeProvidersFor narrows this to what is actually in play. */
@@ -630,7 +646,7 @@
         /* Which service answers "where can I watch this". JustWatch is read by parsing
            their page; TMDB is a documented API but needs a read token of your own. The
            default stays where it was so nothing changes for an existing install. */
-        availabilitySource: 'justwatch', tmdbReadToken: '',
+        availabilitySource: 'justwatch', tmdbReadToken: '', omdbApiKey: '',
         /* Which country's offers to read. TMDB answers for every country it knows, and
            showing another one's services as though they were yours is the failure this
            avoids. Declared here so it round-trips through backup and restore like any
@@ -673,6 +689,7 @@
     const CREDENTIAL_SETTING_KEYS = new Set([
         'radarrApiKey', 'sonarrApiKey', 'seerrApiKey', 'plexToken', 'jellyfinApiKey', 'embyApiKey',
         'tmdbReadToken',
+        'omdbApiKey',
     ]);
     const COLLAPSIBLE_SECTION_IDS = [
         'title-cast', 'UserReviews', 'MoreLikeThis', 'Details', 'BoxOffice',
@@ -6082,6 +6099,68 @@ section[id*="quote" i] .ipc-list-card { padding: 4px 0 !important; margin: 2px 0
         return { providers:offers.stream, offers, url, region };
     }
 
+    /* OMDb returns IMDb, Rotten Tomatoes and Metacritic ratings for one IMDb id in a
+       single documented call, so both score widgets share one request and one cache
+       entry rather than asking twice. The key is the user's own, free from omdbapi.com,
+       and rate-limited to 1,000 lookups a day, which is another reason not to ask twice. */
+    const OMDB_API_ORIGIN = 'https://www.omdbapi.com';
+
+    function readOmdbKey() { return readCredential('omdbApiKey'); }
+    function isOmdbConfigured() { return readOmdbKey().configured; }
+
+    /* Their Ratings array carries the source name and a formatted value: "83%" for
+       Rotten Tomatoes, "73/100" for Metacritic. Read by source name rather than by
+       position, because the array omits a source it has nothing for. */
+    function parseOmdbRatings(payload) {
+        if (!payload || typeof payload !== 'object') return null;
+        if (String(payload.Response) === 'False') return null;
+        const ratings = Array.isArray(payload.Ratings) ? payload.Ratings.slice(0, 20) : [];
+        const valueFor = source => {
+            const entry = ratings.find(item => String(item?.Source || '') === source);
+            return typeof entry?.Value === 'string' ? entry.Value : '';
+        };
+        const percent = /^(\d{1,3})%$/.exec(valueFor('Rotten Tomatoes').trim());
+        const outOfHundred = /^(\d{1,3})\/100$/.exec(valueFor('Metacritic').trim());
+        const metascore = /^\d{1,3}$/.test(String(payload.Metascore || '').trim())
+            ? Number(payload.Metascore)
+            : null;
+        return {
+            rt: percent ? boundedScore(Number(percent[1]), 100) : null,
+            metacritic: outOfHundred ? boundedScore(Number(outOfHundred[1]), 100) : boundedScore(metascore, 100),
+        };
+    }
+
+    async function fetchOmdbRatings(imdbId, isCurrent) {
+        const key = readOmdbKey();
+        if (!key.configured) return { unconfigured:true };
+        const cacheKey = 'omdb_' + imdbId;
+        const cached = cacheGet(cacheKey);
+        if (cached) return cached;
+        /* Under a script manager the value is readable here and goes on the URL. In an
+           extension build it is not: only the stored key's name travels, and the worker
+           puts the value into the query string of a request it has already validated as
+           OMDb's. Their API accepts a key nowhere else. */
+        const requestUrl = `${OMDB_API_ORIGIN}/?i=${encodeURIComponent(imdbId)}`
+            + (key.value ? `&apikey=${encodeURIComponent(key.value)}` : '');
+        let response;
+        try {
+            response = await httpGet(requestUrl, {
+                credentialQuery: { name:'apikey', ref:key.ref },
+                timeout: 12000,
+                cancelOnRouteChange: true,
+            });
+        } catch (error) {
+            const status = Number(error?.status);
+            if (status === 401 || status === 403) return { rejected:true };
+            throw error;
+        }
+        if (!isCurrent()) return null;
+        const parsed = parseOmdbRatings(parseJSONResponse(response));
+        if (!parsed) return { empty:true };
+        cacheSet(cacheKey, parsed, PROVIDERS.omdb.ttl);
+        return parsed;
+    }
+
     async function fetchTmdbAvailability(imdbId, isCurrent) {
         const token = readTmdbToken();
         if (!token.configured) return { unconfigured:true };
@@ -6660,6 +6739,20 @@ section[id*="quote" i] .ipc-list-card { padding: 4px 0 !important; margin: 2px 0
             widget.appendChild(makeEl('div', { className:'enh-score-widget__sub' }, unavailableText));
             return;
         }
+        if (reason === 'omdb-unconfigured' || reason === 'omdb-rejected') {
+            const rejected = reason === 'omdb-rejected';
+            widget.appendChild(makeEl('div', { className:'enh-score-widget__sub' },
+                rejected ? 'OMDb rejected this key' : 'Needs an OMDb key'));
+            widget.appendChild(makeEl('button', {
+                type:'button',
+                className:'enh-score-stale__retry',
+                onClick: () => {
+                    if (!document.getElementById('enh-settings-overlay')) createSettingsPanel();
+                    if (!settingsOpen) toggleSettings();
+                },
+            }, rejected ? 'Replace key' : 'Add key'));
+            return;
+        }
         if (reason === 'unconfigured' || reason === 'rejected') {
             widget.appendChild(makeEl('div', { className:'enh-score-widget__sub' },
                 reason === 'rejected' ? 'TMDB rejected this token' : 'Needs a TMDB read token'));
@@ -6730,6 +6823,30 @@ section[id*="quote" i] .ipc-list-card { padding: 4px 0 !important; margin: 2px 0
         return true;
     }
 
+    /* Both score widgets answer from the same OMDb call. Returns true when it put
+       something on screen — a score, or the reason there is none — so the caller knows
+       whether its own fallback path still has work to do. */
+    async function renderOmdbScore(feature, field, imdbId, cacheKey, isCurrent) {
+        let answer;
+        try {
+            answer = await fetchOmdbRatings(imdbId, isCurrent);
+        } catch (error) {
+            recordLookupFailure(feature, error);
+            return false;
+        }
+        if (!isCurrent()) return true;
+        if (answer?.unconfigured) { feature._renderUnavailable('omdb-unconfigured'); return true; }
+        if (answer?.rejected) { feature._renderUnavailable('omdb-rejected'); return true; }
+        const value = boundedScore(answer?.[field], 100);
+        if (value === null) return false;
+        const data = field === 'rt'
+            ? { tomatometer:value, via:'omdb' }
+            : { score:value, via:'omdb' };
+        cacheSet(cacheKey, data);
+        feature._render(data);
+        return true;
+    }
+
     reg({
         key: 'inlineRTScore', name: 'Rotten Tomatoes scores', group: 'Scores',
         async init() {
@@ -6756,6 +6873,15 @@ section[id*="quote" i] .ipc-list-card { padding: 4px 0 !important; margin: 2px 0
             }
             if (!await waitUntilVisible(bar, isCurrent) || !isCurrent()) return;
             this._renderLoading();
+
+            /* A build that does not ship the page parser has no search or detail page to
+               read, and no origin to read it from, so OMDb is the whole path here. */
+            if (!providerAllowedHere('rottenTomatoes')) {
+                if (!await renderOmdbScore(this, 'rt', imdbId, cacheKey, isCurrent) && isCurrent()) {
+                    this._renderUnavailable('unavailable');
+                }
+                return;
+            }
 
             const type = isTVType() ? 'tv' : 'movie';
             if (!isCurrent()) return;
@@ -6827,6 +6953,10 @@ section[id*="quote" i] .ipc-list-card { padding: 4px 0 !important; margin: 2px 0
             } catch (error) { lookupError = error; }
             if (!isCurrent()) return;
             recordLookupFailure(this, lookupError);
+            /* Reading their page did not answer. With a key of your own there is a second
+               source that can, so it is asked before anything stale or absent is shown. */
+            if (isOmdbConfigured() && await renderOmdbScore(this, 'rt', imdbId, cacheKey, isCurrent)) return;
+            if (!isCurrent()) return;
             /* A provider that could not be reached is the one case where a bounded
                expired value beats nothing, provided it is labelled with its date and
                offers a retry. A mismatch or an unparseable response is not: the lookup
@@ -6863,6 +6993,10 @@ section[id*="quote" i] .ipc-list-card { padding: 4px 0 !important; margin: 2px 0
             w.append(makeEl('div', { className:'enh-score-widget__label' }, 'TOMATOMETER'), scoreLink);
             announceScore('Rotten Tomatoes', `${score}%`);
             if (hasAudience) w.appendChild(makeEl('div', { className:'enh-score-widget__sub' }, `Audience: ${audience}%`));
+            if (data.via === 'omdb') {
+                w.appendChild(makeEl('div', { className:'enh-score-widget__sub' }, 'via OMDb'));
+                appendProviderAttribution(w, 'omdb');
+            }
             appendScoreCorrectionAction(w, 'rottenTomatoes', this.key);
             bar.appendChild(w);
         },
@@ -7072,6 +7206,15 @@ section[id*="quote" i] .ipc-list-card { padding: 4px 0 !important; margin: 2px 0
             if (!await waitUntilVisible(bar, isCurrent) || !isCurrent()) return;
             this._renderLoading();
 
+            /* As with Rotten Tomatoes: no parser in this build means no search endpoint
+               and no origin, so OMDb answers or nothing does. */
+            if (!providerAllowedHere('metacritic')) {
+                if (!await renderOmdbScore(this, 'metacritic', imdbId, cacheKey, isCurrent) && isCurrent()) {
+                    this._renderUnavailable('unavailable');
+                }
+                return;
+            }
+
             const mediaType = isTVType() ? 'tv' : 'movie';
 
             if (correction?.mode === 'url') {
@@ -7140,6 +7283,11 @@ section[id*="quote" i] .ipc-list-card { padding: 4px 0 !important; margin: 2px 0
             } catch (error) { lookupError = error; }
             if (!isCurrent()) return;
             recordLookupFailure(this, lookupError);
+            /* Reading their search endpoint did not answer. With a key of your own there
+               is a second source that can, so it is asked before anything stale or absent
+               is shown. */
+            if (isOmdbConfigured() && await renderOmdbScore(this, 'metacritic', imdbId, cacheKey, isCurrent)) return;
+            if (!isCurrent()) return;
             /* A provider that could not be reached is the one case where a bounded
                expired value beats nothing, provided it is labelled with its date and
                offers a retry. A mismatch or an unparseable response is not: the lookup
@@ -7175,6 +7323,10 @@ section[id*="quote" i] .ipc-list-card { padding: 4px 0 !important; margin: 2px 0
             );
             if (hasUserScore) {
                 w.appendChild(makeEl('div', { className:'enh-score-widget__sub' }, `User: ${userScore.toFixed(1)}`));
+            }
+            if (data.via === 'omdb') {
+                w.appendChild(makeEl('div', { className:'enh-score-widget__sub' }, 'via OMDb'));
+                appendProviderAttribution(w, 'omdb');
             }
             appendScoreCorrectionAction(w, 'metacritic', this.key);
             announceScore('Metascore', hasScore ? String(score) : '');
@@ -12008,11 +12160,24 @@ section[data-testid="hero-parent"].enh-editorial-native-hidden { display: none !
         if (providerAllowedHere('tmdb')) return 'tmdb';
         return providerAllowedHere('justWatch') ? 'justwatch' : preferred;
     }
+    /* Which page parser OMDb stands in for, per feature. */
+    const OMDB_BACKED_FEATURES = { inlineRTScore:'rottenTomatoes', inlineMetacriticScore:'metacritic' };
+    /* OMDb is a second answer to a question another provider already answers, so asking
+       for its origin unconditionally would be asking for access nothing uses. It is in
+       play only where the parser is not shipped, or where a key has been entered. */
+    function omdbInPlayFor(key) {
+        const parser = OMDB_BACKED_FEATURES[key];
+        if (!parser || !providerAllowedHere('omdb')) return false;
+        return !providerAllowedHere(parser) || isOmdbConfigured();
+    }
     function activeProvidersFor(key) {
         const declared = (FEATURE_PROVIDERS[key] || []).filter(providerAllowedHere);
-        if (key !== 'streamAvailability') return declared;
-        const preferred = getEffectiveAvailabilitySource() === 'tmdb' ? 'tmdb' : 'justWatch';
-        return declared.includes(preferred) ? [preferred] : declared;
+        if (key === 'streamAvailability') {
+            const preferred = getEffectiveAvailabilitySource() === 'tmdb' ? 'tmdb' : 'justWatch';
+            return declared.includes(preferred) ? [preferred] : declared;
+        }
+        if (OMDB_BACKED_FEATURES[key] && !omdbInPlayFor(key)) return declared.filter(id => id !== 'omdb');
+        return declared;
     }
     function getFeatureOrigins(key) {
         const active = activeProvidersFor(key);
@@ -12527,6 +12692,8 @@ section[data-testid="hero-parent"].enh-editorial-native-hidden { display: none !
         return editor;
     }
 
+    /* refreshKey takes one feature or several: the OMDb key feeds two score widgets,
+       and saving it has to refresh both. */
     function createSettingsInput({ key, label, type = 'text', wide = false, placeholder = '', refreshKey = 'servarrIntegration' }) {
         const id = `enh-setting-${key}`;
         /* In the extension a credential is write-only here: the bridge keeps the value out
@@ -12599,7 +12766,7 @@ section[data-testid="hero-parent"].enh-editorial-native-hidden { display: none !
         input.addEventListener('input', () => persist(false));
         input.addEventListener('change', () => {
             if (!persist(true)) return;
-            if (refreshKey) refreshFeature(refreshKey);
+            [].concat(refreshKey || []).forEach(refreshFeature);
         });
         return makeEl('div', { className:'enh-servarr-field' + (wide ? ' enh-servarr-field--wide' : '') },
             makeEl('label', { for:id }, label),
@@ -13375,6 +13542,20 @@ section[data-testid="hero-parent"].enh-editorial-native-hidden { display: none !
                 'ratingGap', 'inlineRTScore', 'inlineLetterboxdScore', 'inlineMetacriticScore', 'streamAvailability',
             ])),
             createAvailabilitySourceControl(),
+            makeEl('div', { className:'enh-settings-callout', style:{ marginTop:'12px' } },
+                makeEl('strong', {}, 'Rotten Tomatoes and Metacritic through OMDb'),
+                makeEl('span', { className:'enh-settings-card-description' },
+                    IS_STORE_BUILD
+                        ? 'This build does not read Rotten Tomatoes or Metacritic pages, so their scores come from the OMDb API instead. It is free for 1,000 lookups a day from omdbapi.com and takes an email address to get. Without a key those two widgets say so rather than showing nothing.'
+                        : 'Optional. Scores normally come from reading each site\'s own page; with an OMDb key stored here, a lookup that fails falls back to their API and the score says it came from OMDb. Free for 1,000 lookups a day from omdbapi.com.'),
+                createSettingsInput({
+                    key:'omdbApiKey',
+                    label:'OMDb API key',
+                    placeholder:'Paste your OMDb key',
+                    refreshKey:['inlineRTScore', 'inlineMetacriticScore'],
+                    wide:true,
+                })
+            ),
             makeEl('div', { className:'enh-settings-callout', style:{ marginTop:'12px' } },
                 makeEl('strong', {}, 'Privacy'),
                 'Fetched only on IMDb title pages. Responses are cached locally.'

@@ -592,11 +592,12 @@ await runFixture('chart', async (window, hooks) => {
     hooks.stopFeature('watchedMarking');
 });
 
-/* IE-99: a store build does not ship the Rotten Tomatoes, Metacritic, Letterboxd or
-   JustWatch parsers, and its manifest never declares their origins. The settings row for
-   such a feature used to offer a Grant button that could not possibly succeed. Exercised
-   against the script the store build actually ships, with the chrome surface that makes
-   the access line exist at all. */
+/* IE-99: a store build does not ship the Letterboxd or JustWatch parsers, and its
+   manifest never declares their origins. The settings row for such a feature used to
+   offer a Grant button that could not possibly succeed. Exercised against the script the
+   store build actually ships, with the chrome surface that makes the access line exist at
+   all. (Rotten Tomatoes and Metacritic are no longer excluded there — OMDb answers both
+   from an API — so Letterboxd is the feature with no source in that build.) */
 {
     const storeSource = applyStoreProfile(instrumented);
     assert.notEqual(storeSource, instrumented, 'the store transform must rewrite the script it is given');
@@ -619,10 +620,10 @@ await runFixture('chart', async (window, hooks) => {
             assert.ok(found, `settings row "${label}" was not rendered`);
             return found;
         };
-        const excluded = rowFor('Rotten Tomatoes scores');
+        const excluded = rowFor('Letterboxd scores');
         const excludedAccess = excluded.querySelector('.enh-settings-access');
         assert.ok(excludedAccess, 'an excluded feature must still say why it cannot work');
-        assert.equal(excludedAccess.textContent, 'Not available in this build (Rotten Tomatoes)');
+        assert.equal(excludedAccess.textContent, 'Not available in this build (Letterboxd)');
         assert.equal(excludedAccess.dataset.state, 'excluded');
         assert.equal(excluded.querySelector('.enh-settings-access-btn'), null,
             'a build that excludes the source must not offer to request access to it');
@@ -642,6 +643,75 @@ await runFixture('chart', async (window, hooks) => {
         hooks.destroySettingsChrome();
     }, { source:storeSource, extension:chromeStub });
     console.log('ok - a store build names the sources it cannot ship instead of asking for access to them');
+}
+
+/* IE-110: the store build ships no Rotten Tomatoes or Metacritic parser and asks for
+   neither origin, so both widgets answer from OMDb's API with a key of the user's own.
+   Rendered from the real feature against the real fixture, because the thing being
+   checked is what ends up on the page — including the credit OMDb's licence requires. */
+{
+    const storeSource = applyStoreProfile(instrumented);
+    await runFixture('title', async (window, hooks) => {
+        /* Nothing is laid out here, so happy-dom's IntersectionObserver never reports an
+           intersection and the score features would wait out their 60-second visibility
+           timeout. Removing it takes the documented no-observer path instead. */
+        delete window.IntersectionObserver;
+        window.GM_setValue('imdb_enh_omdbApiKey', 'OMDB-KEY-VALUE');
+        const sent = [];
+        window.GM_xmlhttpRequest = options => {
+            sent.push(options);
+            window.queueMicrotask(() => options.onload?.({
+                status: 200,
+                finalUrl: options.url,
+                responseText: JSON.stringify({
+                    Response:'True',
+                    Metascore:'73',
+                    Ratings:[
+                        { Source:'Rotten Tomatoes', Value:'83%' },
+                        { Source:'Metacritic', Value:'73/100' },
+                    ],
+                }),
+            }));
+            return { abort() {} };
+        };
+
+        await hooks.runFeature('inlineRTScore');
+        const rt = await waitForSelector(window, '#enh-rt-widget');
+        assert.match(rt.textContent, /83%/, 'a store build must still show the Tomatometer');
+        assert.match(rt.textContent, /via OMDb/, 'and say where it came from');
+        assert.match(rt.textContent, /CC BY-NC 4\.0/, 'and carry the credit OMDb asks for');
+
+        await hooks.runFeature('inlineMetacriticScore');
+        const mc = await waitForSelector(window, '#enh-mc-widget');
+        assert.match(mc.textContent, /73/, 'the Metascore comes from the same answer');
+        assert.match(mc.textContent, /via OMDb/);
+
+        const hosts = [...new Set(sent.map(options => new window.URL(options.url).hostname))];
+        assert.deepEqual(hosts, ['www.omdbapi.com'],
+            'a store build must not reach for the pages it does not ship a parser for');
+        assert.equal(sent.length, 1,
+            'one OMDb call answers both widgets; the second reads the cached answer');
+        hooks.stopFeature('inlineRTScore');
+        hooks.stopFeature('inlineMetacriticScore');
+    }, { source:storeSource });
+    console.log('ok - a store build renders Rotten Tomatoes and Metacritic from OMDb');
+}
+
+/* Without a key there is nothing to authenticate with, so the widget says so and asks for
+   one instead of showing an empty panel or a permanent loading state. */
+{
+    const storeSource = applyStoreProfile(instrumented);
+    await runFixture('title', async (window, hooks) => {
+        delete window.IntersectionObserver;
+        const sent = [];
+        window.GM_xmlhttpRequest = options => { sent.push(options); return { abort() {} }; };
+        await hooks.runFeature('inlineRTScore');
+        const rt = await waitForSelector(window, '#enh-rt-widget');
+        assert.match(rt.textContent, /Needs an OMDb key/);
+        assert.equal(sent.length, 0, 'and nothing may be requested without one');
+        hooks.stopFeature('inlineRTScore');
+    }, { source:storeSource });
+    console.log('ok - a store build with no OMDb key says so rather than showing nothing');
 }
 
 /* Drive the real catch path. This proves both parts of the failure contract: the broken

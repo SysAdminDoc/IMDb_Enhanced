@@ -231,6 +231,9 @@ function loadScriptTestHooks({ withoutDeleteValue = false, withheldCredentials =
         parseTmdbFind,
         parseTmdbWatchProviders,
         fetchTmdbAvailability,
+        parseOmdbRatings,
+        fetchOmdbRatings,
+        isOmdbConfigured,
         getAvailabilitySource,
         getEffectiveAvailabilitySource,
         featureExcludedByProfile,
@@ -4964,10 +4967,8 @@ test('TMDB availability resolves an IMDb id and reads only the chosen region', (
    runs everywhere. */
 test('a store build names the source it cannot ship', () => {
     const hooks = loadScriptTestHooks({ storeProfile:true });
-    assert.strictEqual(hooks.featureExcludedByProfile('inlineRTScore'), true,
-        'the page-parsing score sources are not in a store build');
-    assert.strictEqual(hooks.describeProfileExclusion('inlineRTScore'),
-        'Not available in this build (Rotten Tomatoes)');
+    assert.strictEqual(hooks.featureExcludedByProfile('inlineLetterboxdScore'), true,
+        'a feature whose only source is read by parsing a page is not in a store build');
     assert.strictEqual(hooks.describeProfileExclusion('inlineLetterboxdScore'),
         'Not available in this build (Letterboxd)');
     assert.strictEqual(hooks.featureExcludedByProfile('streamAvailability'), false,
@@ -4976,10 +4977,91 @@ test('a store build names the source it cannot ship', () => {
         ['https://api.themoviedb.org/*'],
         'and it asks only for the origin that build can use');
 
+    /* Rotten Tomatoes and Metacritic are not excluded there any more: OMDb answers both
+       from an API, so the store build asks for OMDb's origin and nothing else for them. */
+    assert.strictEqual(hooks.featureExcludedByProfile('inlineRTScore'), false,
+        'a store build has an OMDb-backed source for Rotten Tomatoes');
+    assert.deepStrictEqual(Array.from(hooks.getFeatureOrigins('inlineRTScore')).sort(),
+        ['https://query.wikidata.org/*', 'https://www.omdbapi.com/*'],
+        'and it never asks for the page it cannot read');
+    assert.deepStrictEqual(Array.from(hooks.getFeatureOrigins('inlineMetacriticScore')).sort(),
+        ['https://query.wikidata.org/*', 'https://www.omdbapi.com/*']);
+
     // The ordinary build excludes nothing, or the assertions above prove only that the
     // transform ran.
     const normal = loadScriptTestHooks();
-    assert.strictEqual(normal.featureExcludedByProfile('inlineRTScore'), false);
+    assert.strictEqual(normal.featureExcludedByProfile('inlineLetterboxdScore'), false);
+});
+
+/* IE-110: OMDb answers Rotten Tomatoes and Metacritic for one IMDb id in a single call.
+   Their Ratings array names its sources and omits the ones it has nothing for, so it is
+   read by name and every shape it can take has to survive that. */
+test('OMDb ratings are read by source name and bounded', () => {
+    const hooks = loadScriptTestHooks();
+    const full = hooks.parseOmdbRatings({
+        Response:'True',
+        Metascore:'73',
+        Ratings:[
+            { Source:'Internet Movie Database', Value:'8.7/10' },
+            { Source:'Rotten Tomatoes', Value:'83%' },
+            { Source:'Metacritic', Value:'73/100' },
+        ],
+    });
+    assert.strictEqual(full.rt, 83);
+    assert.strictEqual(full.metacritic, 73);
+
+    // Position is not identity: the array order is theirs and it changes.
+    const reordered = hooks.parseOmdbRatings({
+        Ratings:[{ Source:'Metacritic', Value:'40/100' }, { Source:'Rotten Tomatoes', Value:'12%' }],
+    });
+    assert.strictEqual(reordered.rt, 12);
+    assert.strictEqual(reordered.metacritic, 40);
+
+    // A source they have nothing for is simply absent from the array.
+    const noRT = hooks.parseOmdbRatings({ Ratings:[{ Source:'Metacritic', Value:'55/100' }] });
+    assert.strictEqual(noRT.rt, null, 'an absent source is absent, not zero');
+    assert.strictEqual(noRT.metacritic, 55);
+    // Metascore is the same number by another name, and it is there when the array is not.
+    assert.strictEqual(hooks.parseOmdbRatings({ Metascore:'64', Ratings:[] }).metacritic, 64);
+    assert.strictEqual(hooks.parseOmdbRatings({ Metascore:'N/A', Ratings:[] }).metacritic, null,
+        'their placeholder for "no score" is a string, not a number');
+
+    // Their own error envelope, and everything that is not an answer at all.
+    assert.strictEqual(hooks.parseOmdbRatings({ Response:'False', Error:'Invalid API key!' }), null);
+    assert.strictEqual(hooks.parseOmdbRatings(null), null);
+    assert.strictEqual(hooks.parseOmdbRatings('not an object'), null);
+    assert.strictEqual(hooks.parseOmdbRatings({ Ratings:'not an array' }).rt, null);
+    // Values outside the scale are not scores.
+    assert.strictEqual(hooks.parseOmdbRatings({ Ratings:[{ Source:'Rotten Tomatoes', Value:'830%' }] }).rt, null);
+    assert.strictEqual(hooks.parseOmdbRatings({ Ratings:[{ Source:'Rotten Tomatoes', Value:'8.3/10' }] }).rt, null,
+        'a value in another scale is not a percentage');
+});
+
+/* The origin is asked for only where OMDb can actually answer: a build without the page
+   parser, or an install that entered a key. Otherwise it would be consent for a service
+   that is never called. */
+test('OMDb is asked for only where it is the source', () => {
+    const hooks = loadScriptTestHooks();
+    assert.strictEqual(hooks.isOmdbConfigured(), false);
+    assert.deepStrictEqual(
+        Array.from(hooks.getFeatureOrigins('inlineRTScore')).sort(),
+        ['https://query.wikidata.org/*', 'https://www.rottentomatoes.com/*'],
+        'an install with no OMDb key must not be asked for OMDb access');
+    assert.strictEqual(hooks.describeFeatureOrigins('inlineRTScore'), 'Rotten Tomatoes and Wikidata');
+
+    hooks.seedStoredSetting('omdbApiKey', 'a-key');
+    assert.strictEqual(hooks.isOmdbConfigured(), true);
+    assert.deepStrictEqual(
+        Array.from(hooks.getFeatureOrigins('inlineRTScore')).sort(),
+        ['https://query.wikidata.org/*', 'https://www.omdbapi.com/*', 'https://www.rottentomatoes.com/*'],
+        'a stored key makes OMDb a source this feature may use');
+    assert.deepStrictEqual(
+        Array.from(hooks.getFeatureOrigins('inlineMetacriticScore')).sort(),
+        ['https://backend.metacritic.com/*', 'https://query.wikidata.org/*', 'https://www.omdbapi.com/*']);
+    // A feature OMDb cannot answer for is unaffected either way.
+    assert.deepStrictEqual(
+        Array.from(hooks.getFeatureOrigins('inlineLetterboxdScore')).sort(),
+        ['https://letterboxd.com/*', 'https://query.wikidata.org/*']);
 });
 
 /* IE-101: a guard the suite could not tell was there. Availability declares two sources
@@ -5260,7 +5342,71 @@ asyncTest('importing a redacted backup leaves credentials already on the device 
         'a redacted backup must not wipe a credential the device already has');
 });
 
-/* IE-101: the early return that stops a TMDB lookup before it starts. It was asserted
+/* IE-110: no key, no request. The same rule the TMDB adapter follows, and the same
+   reason: a lookup that cannot be authenticated is a lookup not worth making. */
+asyncTest('the OMDb adapter makes no request at all without a key', async () => {
+    const hooks = loadScriptTestHooks();
+    const before = hooks.getCapturedRequests().length;
+    const outcome = await Promise.race([
+        hooks.fetchOmdbRatings('tt0133093', () => true),
+        new Promise(resolve => setImmediate(() => resolve({ reachedTheNetwork:true }))),
+    ]);
+    assert.strictEqual(outcome.unconfigured, true, 'a missing key must be reported, not attempted');
+    assert.deepStrictEqual(Array.from(hooks.getCapturedRequests().slice(before)), [],
+        'and nothing may leave before that is known');
+
+    /* With a key the request goes to OMDb, carrying the IMDb id and nothing read off the
+       page. Under a script manager the value is readable, so it rides on the URL here;
+       the extension build sends only the reference, which tests/background.js covers. */
+    hooks.seedStoredSetting('omdbApiKey', 'OMDB-KEY-VALUE');
+    hooks.fetchOmdbRatings('tt0133093', () => true);
+    const attempted = hooks.getCapturedRequests().slice(before);
+    assert.strictEqual(attempted.length, 1, 'a stored key must actually be used');
+    assert.strictEqual(attempted[0].url,
+        'https://www.omdbapi.com/?i=tt0133093&apikey=OMDB-KEY-VALUE');
+    assert.strictEqual(attempted[0].credentialQuery.ref, 'omdbApiKey',
+        'and the reference travels too, for the build that cannot read the value');
+    assert(!/The Matrix|1999/.test(String(attempted[0].url)),
+        'only the id is sent, never the title read from the page');
+});
+
+/* A key their API refuses is the one part of this a person can fix, so it is reported as
+   that rather than as the service being unavailable. */
+asyncTest('an OMDb key the API refuses is reported as a refused key', async () => {
+    const hooks = loadScriptTestHooks();
+    hooks.seedStoredSetting('omdbApiKey', 'WRONG-KEY');
+    const before = hooks.getCapturedRequests().length;
+    const pending = hooks.fetchOmdbRatings('tt0133093', () => true);
+    const sent = hooks.getCapturedRequests()[before];
+    sent.onload({ status:401, responseText:'{"Response":"False","Error":"Invalid API key!"}', finalUrl:sent.url });
+    assert.strictEqual((await pending).rejected, true);
+});
+
+/* A title OMDb has no Rotten Tomatoes entry for is a real answer, not a failure: the
+   widget has to say the score is absent rather than sit on a loading state. */
+asyncTest('an OMDb answer with no Rotten Tomatoes entry is still an answer', async () => {
+    const hooks = loadScriptTestHooks();
+    hooks.seedStoredSetting('omdbApiKey', 'OMDB-KEY-VALUE');
+    const before = hooks.getCapturedRequests().length;
+    const pending = hooks.fetchOmdbRatings('tt0133093', () => true);
+    const sent = hooks.getCapturedRequests()[before];
+    sent.onload({
+        status:200,
+        responseText:JSON.stringify({ Response:'True', Metascore:'73', Ratings:[{ Source:'Metacritic', Value:'73/100' }] }),
+        finalUrl:sent.url,
+    });
+    const answer = await pending;
+    assert.strictEqual(answer.rt, null);
+    assert.strictEqual(answer.metacritic, 73);
+    // One call, one cache entry, read by both widgets rather than fetched twice.
+    assert.strictEqual(hooks.cacheGet('omdb_tt0133093').metacritic, 73);
+    const second = await hooks.fetchOmdbRatings('tt0133093', () => true);
+    assert.strictEqual(second.metacritic, 73);
+    assert.strictEqual(hooks.getCapturedRequests().length, before + 1,
+        'the second reader must use the cached answer, not a second lookup');
+});
+
+/* IE-110: the early return that stops a TMDB lookup before it starts. It was asserted
    only as source text, so deleting it kept the suite green while the adapter issued a
    request with no credential on it. */
 asyncTest('the TMDB adapter makes no request at all without a token', async () => {

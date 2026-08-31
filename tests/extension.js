@@ -197,7 +197,7 @@ assert(background.includes("redirect: carriesCredentials ? 'manual' : 'follow'")
     'a credential-bearing privileged fetch must not follow redirects');
 assert(background.includes("response.type === 'opaqueredirect'"),
     'a stopped redirect must be recognized from the response, not inferred from an error message');
-assert(background.includes('describeRequestUrl(finalUrl)'),
+assert(background.includes('const landed = describeRequestUrl(landedUrl);'),
     'the privileged fetch must re-validate the URL a response actually came from');
 
 /* IE-79: the toolbar action was inert, so every recovery action depended on the content
@@ -315,13 +315,23 @@ assert.deepStrictEqual(
     'the background bindings and the credential settings must name the same keys');
 assert(background.includes('const CREDENTIAL_STORAGE_KEYS = new Set(CREDENTIAL_DESTINATIONS.keys());'),
     'the injectable keys must be exactly the bound ones, not a second list');
-/* The only credential that leaves the machine goes to exactly one host over TLS. Every
-   other one is bound to loopback, so no request to a public host can ask for it. */
+/* Two credentials leave the machine, each to exactly one host over TLS. Every other one
+   is bound to loopback, so no request to a public host can ask for it. */
 assert(/\['imdb_enh_tmdbReadToken', \{ host: 'api\.themoviedb\.org', scheme: 'Bearer ' \}\]/.test(background),
     'the TMDB token must be bound to TMDB and to the scheme it is sent under');
-const offMachine = [...bindingBlock.matchAll(/\['(imdb_enh_[^']+)', \{ host:/g)].map(m => m[1]);
-assert.deepStrictEqual(offMachine, ['imdb_enh_tmdbReadToken'],
+/* OMDb takes its key only in the query string, so its binding names the parameter rather
+   than a header scheme. The name is the worker's, not the caller's, for the same reason
+   the scheme is. */
+assert(/\['imdb_enh_omdbApiKey', \{ host: 'www\.omdbapi\.com', query: 'apikey' \}\]/.test(background),
+    'the OMDb key must be bound to OMDb and to the parameter it is carried in');
+const offMachine = [...bindingBlock.matchAll(/\['(imdb_enh_[^']+)', \{ host:/g)].map(m => m[1]).sort();
+assert.deepStrictEqual(offMachine, ['imdb_enh_omdbApiKey', 'imdb_enh_tmdbReadToken'],
     'no other credential may be bound to an off-machine destination without being noticed here');
+/* A key carried in the URL is a secret in the address, so the address the response came
+   from must never be handed back to the page that could not read the key in the first
+   place. */
+assert(background.includes('const finalUrl = credentialInUrl ? url : landedUrl;'),
+    'a URL-carried credential must not be reported back in the response URL');
 /* The worker used to keep its own copy of the hosts it would fetch, which meant a newly
    declared provider was silently refused by the one component that has to reach it. */
 assert(!background.includes('const ALLOWED_REQUEST_HOSTS = new Set(['),
