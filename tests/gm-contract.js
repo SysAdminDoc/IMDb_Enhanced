@@ -93,6 +93,9 @@ async function createBridgeAdapter({ seed = {}, trusted = false } = {}) {
        one-shot flag could not express two failures in flight, which is the shape that
        exposed the rollback restoring an earlier unstored value. */
     const failWriteMessages = [];
+    // Writes deferred by holdNextWrite, released together by releaseHeldWrites.
+    const heldWrites = [];
+    let holdCount = 0;
     let clipboardRejection = null;
 
     const withLastError = (message, run) => {
@@ -120,14 +123,22 @@ async function createBridgeAdapter({ seed = {}, trusted = false } = {}) {
                     const done = typeof arg === 'function' ? arg : callback;
                     setImmediate(() => done({ ...store }));
                 },
-                set: (values, callback) => setImmediate(() => {
-                    if (failWriteMessages.length) {
-                        withLastError(failWriteMessages.shift(), () => callback());
-                        return;
-                    }
-                    Object.assign(store, values);
-                    callback();
-                }),
+                set: (values, callback) => {
+                    /* chrome.storage.local settles in whatever order it settles. Holding
+                       one write open is the only way to reproduce an earlier write
+                       confirming after a later one, which is the case the ordering token
+                       in the bridge exists for. */
+                    const run = () => setImmediate(() => {
+                        if (failWriteMessages.length) {
+                            withLastError(failWriteMessages.shift(), () => callback());
+                            return;
+                        }
+                        Object.assign(store, values);
+                        callback();
+                    });
+                    if (holdCount > 0) { holdCount -= 1; heldWrites.push(run); return; }
+                    run();
+                },
                 remove: (key, callback) => setImmediate(() => {
                     if (failWriteMessages.length) {
                         withLastError(failWriteMessages.shift(), () => callback());
@@ -204,6 +215,8 @@ async function createBridgeAdapter({ seed = {}, trusted = false } = {}) {
         asyncWrites: true,
         failNextWrite: error => { failWriteMessages.push(error.message); },
         failNextClipboard: error => { clipboardRejection = error; },
+        holdNextWrite: () => { holdCount += 1; },
+        releaseHeldWrites: () => { heldWrites.splice(0).forEach(run => run()); },
         observed,
         settle,
         // Only the bridge has a credential boundary; the manager has nothing to redact.
@@ -322,6 +335,43 @@ async function runContract(adapter) {
                 'the successful write must survive the earlier rejection of an identical value');
 
             // Leave nothing armed for the checks that follow.
+            await drain();
+        });
+    }
+
+    /* IE-101: the same defect one step later. The rollback above identifies the write it
+       is undoing; the confirm has to as well. Storage settles in its own order, so an
+       earlier write can land after a later one, and a confirm that does not check whether
+       it is still the current write records a value that has already been superseded. The
+       next rejected write then restores that stale value, which is exactly the bug the
+       rollback token was added to prevent. */
+    if (adapter.asyncWrites && adapter.holdNextWrite) {
+        await check(label, 'a confirm that arrives late does not become the value a rollback restores', async () => {
+            const drain = async () => {
+                for (let pass = 0; pass < 3; pass += 1) {
+                    try { gm.setValue('imdb_enh_drain', String(pass)); } catch { /* that is the point */ }
+                    await adapter.settle();
+                }
+            };
+            await drain();
+
+            adapter.holdNextWrite();
+            gm.setValue('imdb_enh_order', 'first');
+            gm.setValue('imdb_enh_order', 'second');
+            await adapter.settle();
+            // The later write has confirmed; the earlier one is still in flight.
+            adapter.releaseHeldWrites();
+            await adapter.settle();
+            await adapter.settle();
+            assert.strictEqual(gm.getValue('imdb_enh_order', null), 'second',
+                'a late-settling earlier write must not change what the mirror reports');
+
+            adapter.failNextWrite(new Error('simulated quota failure'));
+            try { gm.setValue('imdb_enh_order', 'third'); } catch { /* reported via the event */ }
+            await adapter.settle();
+            assert.strictEqual(gm.getValue('imdb_enh_order', null), 'second',
+                'a rejected write must roll back to the write that actually won, not to a superseded one');
+
             await drain();
         });
     }

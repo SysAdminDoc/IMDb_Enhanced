@@ -225,6 +225,7 @@ function loadScriptTestHooks({ withoutDeleteValue = false, withheldCredentials =
         describeOriginHosts,
         parseTmdbFind,
         parseTmdbWatchProviders,
+        fetchTmdbAvailability,
         getAvailabilitySource,
         getEffectiveAvailabilitySource,
         featureExcludedByProfile,
@@ -4952,6 +4953,33 @@ test('TMDB availability resolves an IMDb id and reads only the chosen region', (
         'the scheme is the background\'s to add, since nothing here can read the value it wraps');
 });
 
+/* IE-101: a guard the suite could not tell was there. Availability declares two sources
+   but contacts one, and the narrowing that expresses that was asserted only as source
+   text. Deleting it left every check green while the build asked for consent to an origin
+   it never calls. */
+test('availability asks for the origin of the source it will actually use', () => {
+    const hooks = loadScriptTestHooks();
+    hooks.seedStoredSetting('availabilitySource', 'justwatch');
+    assert.deepStrictEqual(Array.from(hooks.getFeatureOrigins('streamAvailability')), ['https://www.justwatch.com/*'],
+        'the unchosen source must not be requested');
+    assert.strictEqual(hooks.describeFeatureOrigins('streamAvailability'), 'JustWatch',
+        'and the settings row must name one service, not both');
+    assert.strictEqual(hooks.describeFeatureConsent('streamAvailability').length, 1,
+        'consent covers what is actually contacted');
+
+    hooks.seedStoredSetting('availabilitySource', 'tmdb');
+    assert.deepStrictEqual(Array.from(hooks.getFeatureOrigins('streamAvailability')), ['https://api.themoviedb.org/*'],
+        'switching source switches which origin is asked for');
+    assert.strictEqual(hooks.describeFeatureOrigins('streamAvailability'), 'TMDB');
+
+    /* Every other feature keeps all of its declared providers: the narrowing is specific
+       to availability, where the two sources answer the same question. */
+    assert.deepStrictEqual(
+        Array.from(hooks.getFeatureOrigins('inlineRTScore')).sort(),
+        ['https://query.wikidata.org/*', 'https://www.rottentomatoes.com/*'],
+        'a feature whose providers are used together keeps all of them');
+});
+
 /* IE-92: a build may exclude a provider, and the features that depended on it have to say
    so rather than blaming something else. Getting this wrong once already: counting the
    Wikidata resolver as a reason Rotten Tomatoes still worked meant the widget reported a
@@ -5196,6 +5224,34 @@ asyncTest('importing a redacted backup leaves credentials already on the device 
         'a redacted backup must not wipe a credential the device already has');
     assert.strictEqual(hooks.getStoredSetting('plexToken'), 'live-plex-token',
         'a redacted backup must not wipe a credential the device already has');
+});
+
+/* IE-101: the early return that stops a TMDB lookup before it starts. It was asserted
+   only as source text, so deleting it kept the suite green while the adapter issued a
+   request with no credential on it. */
+asyncTest('the TMDB adapter makes no request at all without a token', async () => {
+    const hooks = loadScriptTestHooks();
+    hooks.seedStoredSetting('availabilitySource', 'tmdb');
+    const before = hooks.getCapturedRequests().length;
+    /* Raced against a turn of the loop: the sandbox never answers a request, so a build
+       that got past the guard would hang rather than fail, and a hang reads as a broken
+       harness rather than as the defect it is. */
+    const outcome = await Promise.race([
+        hooks.fetchTmdbAvailability('tt0133093', () => true),
+        new Promise(resolve => setImmediate(() => resolve({ reachedTheNetwork:true }))),
+    ]);
+    assert.strictEqual(outcome.unconfigured, true,
+        'an unconfigured token must be reported, not attempted');
+    assert.deepStrictEqual(Array.from(hooks.getCapturedRequests().slice(before)), [],
+        'and no request may leave before that is known');
+
+    // With a token the same call does reach the network, or the check above proves nothing.
+    hooks.seedStoredSetting('tmdbReadToken', 'a-token');
+    hooks.fetchTmdbAvailability('tt0133093', () => true);
+    const attempted = hooks.getCapturedRequests().slice(before);
+    assert.strictEqual(attempted.length, 1, 'a configured token must actually be used');
+    assert(String(attempted[0].url).startsWith('https://api.themoviedb.org/'),
+        'and used against TMDB');
 });
 
 asyncTest('an encrypted backup round-trips credentials under its passphrase', async () => {
