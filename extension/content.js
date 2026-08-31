@@ -648,7 +648,7 @@
         episodeHeatmap: true, ratingGap: true,
         castAges: true,
         // Utility
-        quickCopyID: true, watchlistBatch: true, listMultiSearch: true,
+        quickCopyID: true, watchlistBatch: true, listMultiSearch: true, listRuntimeSummary: true,
         keyboardShortcuts: false,
         // Extension builds only: the userscript updates itself through its manager.
         updateNotice: true, updateDismissedVersion: '',
@@ -707,6 +707,7 @@
         quickCopyID: 'Adds a visible IMDb ID copy button beside the title.',
         watchlistBatch: 'Adds a watchlist-page button that copies all visible IMDb title IDs.',
         listMultiSearch: 'Builds a popup-safe queue of up to 20 title links on watchlist, list, and chart pages.',
+        listRuntimeSummary: 'Totals how long the titles on a watchlist, list, or chart would take to watch, and says how many had no runtime listed.',
         keyboardShortcuts: 'Optional. Enables ? for settings, c to copy, r for rating, and t for top.',
     };
 
@@ -7315,6 +7316,67 @@ section[id*="quote" i] .ipc-list-card { padding: 4px 0 !important; margin: 2px 0
         return /\/(watchlist|list\/|chart\/)/i.test(location.pathname);
     }
 
+    /* IMDb renders each collection row's metadata as a short inline list — year, runtime,
+       certificate — under `cli-title-metadata`. That class is one of IMDb's stable
+       `cli-*` component names; the wrapper beside it is a hashed styled-components class
+       and deliberately not used. Verified against /chart/top/ and /chart/toptv/ on
+       2026-08-31: a film row reads ["1994", "2h 22m", "R"] while a series row reads
+       ["2008–2013", "TV-MA", "TV Series"] with no runtime at all. Series therefore make a
+       list legitimately partial rather than broken, which is why the summary says so
+       rather than quietly under-reporting. */
+    const COLLECTION_METADATA_SELECTOR = '.cli-title-metadata';
+    const RUNTIME_PATTERN = /^(?:(\d{1,2})\s*h)?\s*(?:(\d{1,3})\s*m)?$/i;
+
+    function parseRuntimeMinutes(text) {
+        const value = String(text || '').trim();
+        if (!value) return 0;
+        const match = RUNTIME_PATTERN.exec(value);
+        // Both groups absent means the pattern matched the empty string, which every
+        // non-runtime cell (a year, a certificate) would also do.
+        if (!match || (!match[1] && !match[2])) return 0;
+        const minutes = (Number(match[1] || 0) * 60) + Number(match[2] || 0);
+        // A single row cannot plausibly exceed a day; anything that does is a misparse.
+        return Number.isFinite(minutes) && minutes > 0 && minutes <= 24 * 60 ? minutes : 0;
+    }
+
+    function summarizeCollectionRuntime(rows) {
+        let counted = 0;
+        let missing = 0;
+        let minutes = 0;
+        let inspected = 0;
+        for (const row of rows || []) {
+            if (inspected >= COLLECTION_LINK_SCAN_LIMIT) break;
+            inspected += 1;
+            const cells = row.querySelectorAll?.(`${COLLECTION_METADATA_SELECTOR} li, ${COLLECTION_METADATA_SELECTOR} span`) || [];
+            let rowMinutes = 0;
+            for (const cell of cells) {
+                rowMinutes = parseRuntimeMinutes(cell.textContent);
+                if (rowMinutes) break;
+            }
+            if (rowMinutes) { counted += 1; minutes += rowMinutes; }
+            else missing += 1;
+        }
+        return { counted, missing, minutes, total:counted + missing };
+    }
+
+    function formatRuntimeTotal(minutes) {
+        const whole = Math.max(0, Math.round(Number(minutes) || 0));
+        const hours = Math.floor(whole / 60);
+        return `${hours}:${String(whole % 60).padStart(2, '0')}`;
+    }
+
+    function describeCollectionRuntime(summary) {
+        if (!summary.total) return '';
+        const titles = `${summary.total} ${summary.total === 1 ? 'title' : 'titles'}`;
+        if (!summary.counted) return `${titles} · no runtimes listed`;
+        const total = `${formatRuntimeTotal(summary.minutes)} total`;
+        // Naming the shortfall matters more than the number: a list of series would
+        // otherwise report a confidently wrong total.
+        return summary.missing
+            ? `${titles} · ${total} from ${summary.counted} · ${summary.missing} without a listed runtime`
+            : `${titles} · ${total}`;
+    }
+
     function getListTitleIdsFromLinks(links) {
         const ids = new Set();
         let inspected = 0;
@@ -7356,6 +7418,56 @@ section[id*="quote" i] .ipc-list-card { padding: 4px 0 !important; margin: 2px 0
             url: applyLinkTemplate(site.url, getLinkContext(title.name, title.id, '')),
         }));
     }
+
+    reg({
+        key: 'listRuntimeSummary', name: 'List runtime summary', group: 'Utility',
+        init() {
+            if (!isListPage()) return;
+            if (document.getElementById('enh-runtime-summary')) return;
+            const isCurrent = createFeatureGuard(this);
+
+            addThemedCSS(t => `
+                #enh-runtime-summary {
+                    display: block; margin: 6px 0 10px;
+                    color: ${t.tx2};
+                    font: 600 12px/1.4 -apple-system, BlinkMacSystemFont, 'Segoe UI', sans-serif;
+                }
+                #enh-runtime-summary:empty { display: none; }
+                .enh-runtime-summary__partial { color: ${t.tx3}; font-weight: 500; }
+            `, 'enh-runtime-summary-css');
+
+            const summary = makeEl('div', {
+                id:'enh-runtime-summary', role:'status', 'aria-live':'polite', 'aria-atomic':'true',
+            });
+            const rowsOf = () => document.querySelectorAll('li.ipc-metadata-list-summary-item');
+            const paint = () => {
+                if (!isCurrent()) return;
+                summary.textContent = describeCollectionRuntime(summarizeCollectionRuntime(rowsOf()));
+            };
+            paint();
+            const target = document.querySelector('main') || document.body;
+            target.insertBefore(summary, target.firstElementChild?.nextSibling || null);
+
+            /* Collection pages append rows as you scroll or press "50 more", so a total
+               computed once goes stale the moment the list grows. Recount on mutation,
+               debounced to a frame, and only while this feature instance owns the route. */
+            let frame = null;
+            const observer = new MutationObserver(() => {
+                if (frame) return;
+                frame = requestAnimationFrame(() => { frame = null; paint(); });
+            });
+            observer.observe(target, { childList:true, subtree:true });
+            this._observer = observer;
+            this._cancelFrame = () => { if (frame) cancelAnimationFrame(frame); frame = null; };
+        },
+        destroy() {
+            this._observer?.disconnect();
+            this._observer = null;
+            this._cancelFrame?.();
+            this._cancelFrame = null;
+            document.getElementById('enh-runtime-summary')?.remove();
+        },
+    });
 
     reg({
         key: 'listMultiSearch', name: 'List multi-search', group: 'Utility',
@@ -10015,7 +10127,7 @@ section[data-testid="hero-parent"].enh-editorial-native-hidden { display: none !
                 'tvEpisodeTools', 'tvShowEnhancements', 'subtitleLinks', 'episodeHeatmap',
             ]),
             makeFeatureCard('Lists & shortcuts', 'Batch actions and quick navigation.', 'Lists', [
-                'watchlistBatch', 'listMultiSearch', 'quickCopyID', 'keyboardShortcuts',
+                'watchlistBatch', 'listMultiSearch', 'listRuntimeSummary', 'quickCopyID', 'keyboardShortcuts',
             ]),
             makeFeatureCard('People', 'Additions to cast and crew pages.', 'Name pages', [
                 'castAges',
@@ -10514,7 +10626,7 @@ section[data-testid="hero-parent"].enh-editorial-native-hidden { display: none !
        search results are exactly where knowing what you already watched or
        dismissed changes what you click. */
     const COLLECTION_FEATURE_KEYS = new Set([
-        ...UNIVERSAL_FEATURE_KEYS, 'watchlistBatch', 'listMultiSearch', 'watchedMarking',
+        ...UNIVERSAL_FEATURE_KEYS, 'watchlistBatch', 'listMultiSearch', 'listRuntimeSummary', 'watchedMarking',
     ]);
     const SECONDARY_PAGE_FEATURE_KEYS = new Set([
         ...UNIVERSAL_FEATURE_KEYS, 'collapsibleSections', 'expandSummaries', 'quickNav', 'watchedMarking', 'castAges',
@@ -10553,7 +10665,7 @@ section[data-testid="hero-parent"].enh-editorial-native-hidden { display: none !
         // episodeHeatmap would otherwise wait out its selector timeout on every title page.
         /* ratingGap needs the vote distribution, which IMDb stopped shipping on title
            pages — verified 2026-08-15 that no script there carries histogramData. */
-        if (surface === 'title') return !['watchlistBatch', 'listMultiSearch', 'episodeHeatmap', 'ratingGap'].includes(feature.key);
+        if (surface === 'title') return !['watchlistBatch', 'listMultiSearch', 'listRuntimeSummary', 'episodeHeatmap', 'ratingGap'].includes(feature.key);
         if (surface === 'episodes') return EPISODE_LIST_FEATURE_KEYS.has(feature.key);
         if (surface === 'ratings') return RATINGS_FEATURE_KEYS.has(feature.key);
         if (surface === 'collection') return COLLECTION_FEATURE_KEYS.has(feature.key);

@@ -99,6 +99,11 @@ function loadScriptTestHooks({ withoutDeleteValue = false } = {}) {
         parseYouTubeTrailerVideoId,
         getListTitleIdsFromLinks,
         getListTitlesFromLinks,
+        parseRuntimeMinutes,
+        summarizeCollectionRuntime,
+        formatRuntimeTotal,
+        describeCollectionRuntime,
+        COLLECTION_LINK_SCAN_LIMIT,
         buildListSearchEntries,
         getEnhancementScrollBehavior,
         truncateAtWord,
@@ -2856,6 +2861,65 @@ test('local request errors stay concise and text-only', () => {
         'Request failed',
         'non-numeric status values should not be coerced into UI text'
     );
+});
+
+/* IE-17: "how long is this list" is answerable from data already on the page. */
+test('collection runtime totals are summed and say what they could not count', () => {
+    const hooks = loadScriptTestHooks();
+
+    assert.strictEqual(hooks.parseRuntimeMinutes('2h 22m'), 142);
+    assert.strictEqual(hooks.parseRuntimeMinutes('3h'), 180);
+    assert.strictEqual(hooks.parseRuntimeMinutes('45m'), 45);
+    // Every other cell in the same metadata list must read as "no runtime", or a year
+    // would be summed as minutes.
+    ['1994', '2008–2013', 'R', 'TV-MA', 'TV Series', '', 'Not Rated'].forEach(text => {
+        assert.strictEqual(hooks.parseRuntimeMinutes(text), 0, `${text} must not parse as a runtime`);
+    });
+    assert.strictEqual(hooks.parseRuntimeMinutes('99h 99m'), 0, 'an implausible row must be rejected, not summed');
+
+    assert.strictEqual(hooks.formatRuntimeTotal(142), '2:22');
+    assert.strictEqual(hooks.formatRuntimeTotal(60), '1:00');
+    assert.strictEqual(hooks.formatRuntimeTotal(5), '0:05');
+    assert.strictEqual(hooks.formatRuntimeTotal(0), '0:00');
+
+    /* Rows shaped like the live DOM. Verified 2026-08-31: a film row's metadata reads
+       ["1994", "2h 22m", "R"], a series row ["2008–2013", "TV-MA", "TV Series"] with no
+       runtime at all, so a list of series is legitimately partial. */
+    const row = cells => ({
+        querySelectorAll: () => cells.map(text => ({ textContent:text })),
+    });
+    const films = [row(['1994', '2h 22m', 'R']), row(['1972', '2h 55m', 'R'])];
+    assert.deepStrictEqual(
+        { ...hooks.summarizeCollectionRuntime(films) },
+        { counted:2, missing:0, minutes:317, total:2 });
+    assert.strictEqual(hooks.describeCollectionRuntime(hooks.summarizeCollectionRuntime(films)), '2 titles · 5:17 total');
+
+    const mixed = [...films, row(['2008–2013', 'TV-MA', 'TV Series'])];
+    assert.strictEqual(
+        hooks.describeCollectionRuntime(hooks.summarizeCollectionRuntime(mixed)),
+        '3 titles · 5:17 total from 2 · 1 without a listed runtime',
+        'a partial total must say how much it could not count rather than under-reporting silently');
+
+    const seriesOnly = [row(['2008–2013', 'TV-MA', 'TV Series'])];
+    assert.strictEqual(hooks.describeCollectionRuntime(hooks.summarizeCollectionRuntime(seriesOnly)),
+        '1 title · no runtimes listed');
+    assert.strictEqual(hooks.describeCollectionRuntime(hooks.summarizeCollectionRuntime([])), '',
+        'an empty collection renders nothing rather than a zero');
+
+    // The same finite budget the other collection scans use.
+    const many = Array.from({ length:hooks.COLLECTION_LINK_SCAN_LIMIT + 25 }, () => row(['1994', '1h 0m', 'R']));
+    assert.strictEqual(hooks.summarizeCollectionRuntime(many).total, hooks.COLLECTION_LINK_SCAN_LIMIT,
+        'the runtime scan must honour the collection link budget');
+
+    // Stable IMDb component class, never the hashed styled-components wrapper beside it.
+    assert(script.includes("COLLECTION_METADATA_SELECTOR = '.cli-title-metadata'"),
+        'runtime parsing must hang off a stable class');
+    assert(/#enh-runtime-summary[\s\S]{0,120}?role:'status'/.test(script) || script.includes("id:'enh-runtime-summary', role:'status'"),
+        'the total must announce itself when it changes');
+    // Collection pages append rows as you scroll, so a total computed once goes stale.
+    const feature = script.slice(script.indexOf("key: 'listRuntimeSummary'"));
+    assert(/new MutationObserver/.test(feature.slice(0, 2500)), 'the total must recount as rows load');
+    assert(/this\._observer\?\.disconnect\(\)/.test(feature.slice(0, 3500)), 'the observer must be torn down with the route');
 });
 
 /* IE-84: the in-memory failure list vanished on reload, so the failures worth
