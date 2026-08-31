@@ -12080,9 +12080,106 @@ function featureLabel(key) {
     return first ? `${first.replace(/\.$/, '')}` : key;
 }
 
+/* Firefox's built-in data-consent experience. The manifest declares websiteContent as
+   optional because an enabled score lookup sends the title and year read from the page to
+   a third party, and Mozilla's guidance is that an optional declaration has to be
+   requested before the data is collected.
+
+   It is deliberately its own control rather than part of a feature's Grant button: a
+   request for data-collection permissions cannot include any other optional permission,
+   so it can never be bundled with an origin request. It is also add-on wide rather than
+   per feature, which matches how it reads to a user.
+
+   Chromium ignores the key entirely, so the row is feature-detected from whether
+   permissions.getAll() reports a data_collection field at all — not from a browser
+   sniff. */
+const DATA_COLLECTION = ['websiteContent'];
+
+function supportsDataConsent() {
+    return new Promise(resolve => {
+        try {
+            chrome.permissions.getAll(granted => {
+                void chrome.runtime.lastError;
+                resolve(Boolean(granted) && Object.prototype.hasOwnProperty.call(granted, 'data_collection'));
+            });
+        } catch { resolve(false); }
+    });
+}
+
+function dataConsent() {
+    return {
+        contains: () => new Promise(r => chrome.permissions.contains({ data_collection: DATA_COLLECTION },
+            v => { void chrome.runtime.lastError; r(v === true); })),
+        request: () => new Promise(r => chrome.permissions.request({ data_collection: DATA_COLLECTION },
+            v => { void chrome.runtime.lastError; r(v === true); })),
+        remove: () => new Promise(r => chrome.permissions.remove({ data_collection: DATA_COLLECTION },
+            v => { void chrome.runtime.lastError; r(v === true); })),
+    };
+}
+
+async function renderDataConsentRow(list) {
+    if (!(await supportsDataConsent())) return;
+    const api = dataConsent();
+
+    const row = document.createElement('div');
+    row.className = 'access-row';
+    const copy = document.createElement('div');
+    const name = document.createElement('div');
+    name.className = 'access-name';
+    name.textContent = 'Sending page details to score services';
+    const detail = document.createElement('div');
+    detail.className = 'access-detail';
+    detail.textContent = 'A score or availability lookup sends the title and year from the page you are on to the service it is looking them up in.';
+    const state = document.createElement('div');
+    state.className = 'access-state';
+    copy.append(name, detail, state);
+
+    const button = document.createElement('button');
+    button.type = 'button';
+
+    const paint = async () => {
+        const granted = await api.contains();
+        state.dataset.state = granted ? 'granted' : 'missing';
+        state.textContent = granted
+            ? 'Allowed.'
+            : 'Not allowed, so those lookups should stay off.';
+        button.textContent = granted ? 'Withdraw' : 'Allow';
+        button.className = granted ? '' : 'primary';
+        button.setAttribute('aria-label', granted
+            ? 'Withdraw consent for sending page details to score services'
+            : 'Allow sending page details to score services');
+    };
+
+    button.addEventListener('click', async () => {
+        button.disabled = true;
+        try {
+            if (await api.contains()) {
+                await api.remove();
+                say('Consent withdrawn. Turn off the score and availability lookups too.', 'ok');
+            } else if (await api.request()) {
+                say('Consent recorded.', 'ok');
+            } else {
+                say('Consent was not given, so those lookups should stay off.', 'error');
+            }
+        } catch (error) {
+            say(error?.message || 'The consent could not be changed.', 'error');
+        } finally {
+            button.disabled = false;
+            await paint();
+            button.focus();
+        }
+    });
+
+    row.append(copy, button);
+    list.appendChild(row);
+    await paint();
+}
+
 function renderAccessList() {
     const list = $('access-list');
     list.textContent = '';
+    // Rendered first: it governs what the origin grants below are for.
+    renderDataConsentRow(list);
     Object.keys(core.FEATURE_ORIGIN_GROUPS || {}).forEach(key => {
         const origins = core.getFeatureOrigins(key);
         if (!origins.length) return;

@@ -182,6 +182,21 @@ assert(!/<div[^>]*\srole="button"/.test(recoveryHtml), 'recovery controls must b
 assert(/\[hidden\] \{ display: none !important; \}/.test(recoveryHtml),
     'the recovery page toggles .hidden on panels that set their own display');
 
+/* IE-90: an optional data-collection declaration has to be requested before the data is
+   collected, and Mozilla's rule is that such a request cannot include any other optional
+   permission — so it can never be bundled with an origin grant. */
+const recoverySource = fs.readFileSync(path.join(root, 'scripts', 'recovery-page.js'), 'utf8');
+assert(recoverySource.includes("chrome.permissions.request({ data_collection: DATA_COLLECTION }"),
+    'the declared optional data collection must actually be requested');
+assert(!/request\(\{[^}]*data_collection[^}]*origins/.test(recoverySource)
+    && !/request\(\{[^}]*origins[^}]*data_collection/.test(recoverySource),
+    'a data-collection request may not carry any other optional permission');
+// Feature-detected from the API's own response, never from a browser sniff: Chromium
+// ignores the key, so the control simply does not appear there.
+assert(recoverySource.includes("hasOwnProperty.call(granted, 'data_collection')"),
+    'the consent control must be feature-detected, not browser-sniffed');
+assert(!/isFirefox|browser !== undefined \? true/.test(recoverySource), 'no browser sniffing');
+
 const permissionsScript = fs.readFileSync(path.join(root, 'extension', 'permissions.js'), 'utf8');
 assert(fs.readFileSync(path.join(root, 'extension', 'permissions.html'), 'utf8').includes('recovery.html'),
     'Firefox opens the popup instead of the action handler, so it needs a link to the recovery page');
