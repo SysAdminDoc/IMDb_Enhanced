@@ -110,7 +110,45 @@ assert(background.includes("redirect: carriesCredentials ? 'error' : 'follow'"),
 assert(background.includes('describeRequestUrl(finalUrl)'),
     'the privileged fetch must re-validate the URL a response actually came from');
 
+/* IE-79: the toolbar action was inert, so every recovery action depended on the content
+   script having injected into an IMDb page — the exact thing that is broken when someone
+   needs to reset or restore. */
+assert.strictEqual(manifest.options_ui?.page, 'recovery.html', 'the extension needs a recovery page');
+assert.strictEqual(manifest.options_ui?.open_in_tab, true, 'the recovery page needs room to work, not a popup');
+assert(fs.existsSync(path.join(root, 'extension', 'recovery.html')), 'recovery.html must ship');
+assert(fs.existsSync(path.join(root, 'extension', 'recovery.js')), 'recovery.js must be generated');
+assert(background.includes('chrome.action?.onClicked'), 'the toolbar action must do something');
+assert(background.includes('openOptionsPage'), 'the toolbar action must open the recovery page');
+const recovery = fs.readFileSync(path.join(root, 'extension', 'recovery.js'), 'utf8');
+/* The point of the recovery page is that it is the SAME settings layer, not a second
+   implementation. It gets there by loading the userscript body behind the same bridge
+   and taking the helpers from the recovery hook. */
+assert(recovery.includes('__imdbEnhancedRecoveryHook'), 'the recovery page must receive canonical helpers through the hook');
+assert(recovery.includes("__storage('get', null)"), 'the recovery page must use the same storage bridge');
+[
+    'getExportSettings', 'prepareSettingsImport', 'applySettingsImport',
+    'getDefaultSettingsEntries', 'buildDiagnosticsReport', 'createEncryptedBackup',
+].forEach(name => {
+    assert(recovery.includes(name), `the recovery page must reuse the canonical ${name}`);
+    /* Reused, not reimplemented: each helper is defined exactly once in the bundle,
+       by the userscript body it loads. */
+    assert.strictEqual(
+        (recovery.match(new RegExp(`function ${name}\\(`, 'g')) || []).length, 1,
+        `${name} must be defined once in the recovery bundle, not reimplemented`);
+});
+const recoveryHtml = fs.readFileSync(path.join(root, 'extension', 'recovery.html'), 'utf8');
+['export', 'restore', 'reset', 'undo', 'copy-diagnostics', 'open-imdb', 'secure-export'].forEach(id => {
+    assert(recoveryHtml.includes(`id="${id}"`), `the recovery page is missing its ${id} control`);
+});
+// Every control is a real button, so keyboard activation needs no extra handling.
+assert(!/<div[^>]*\srole="button"/.test(recoveryHtml), 'recovery controls must be real buttons, not div roles');
+// The same [hidden]-vs-display trap that bit the catalog and the passphrase row.
+assert(/\[hidden\] \{ display: none !important; \}/.test(recoveryHtml),
+    'the recovery page toggles .hidden on panels that set their own display');
+
 const permissionsScript = fs.readFileSync(path.join(root, 'extension', 'permissions.js'), 'utf8');
+assert(fs.readFileSync(path.join(root, 'extension', 'permissions.html'), 'utf8').includes('recovery.html'),
+    'Firefox opens the popup instead of the action handler, so it needs a link to the recovery page');
 assert(permissionsScript.includes('permissions.request'), 'the popup must be able to request the opt-in origins');
 assert(permissionsScript.includes('getManifest'), 'the popup must derive origins from the manifest rather than a second hard-coded list');
 

@@ -2741,6 +2741,35 @@ test('local request errors stay concise and text-only', () => {
     );
 });
 
+/* IE-79: a userscript has no toolbar surface, so the manager's menu is its equivalent
+   of the extension's recovery page — reachable when the in-page settings button is not. */
+test('userscript managers get backup, restore, reset-with-undo and settings commands', () => {
+    assert(script.includes('// @grant        GM_registerMenuCommand'), 'menu commands need their grant');
+    [
+        'Open IMDb Enhanced settings',
+        'Copy settings backup (no credentials)',
+        'Restore a settings backup',
+        'Reset all settings (with undo)',
+        'Undo the last settings reset',
+    ].forEach(label => assert(script.includes(`'${label}'`), `menu command missing: ${label}`));
+    // Absent in a manager that does not implement it, and absent off IMDb.
+    assert(script.includes("typeof GM_registerMenuCommand !== 'function' || !isIMDbHost()"),
+        'menu registration must tolerate a manager without the API and stay off other hosts');
+    // The reset command must capture an undo snapshot before it destroys anything, and
+    // that snapshot must include credentials or the undo silently loses them.
+    const command = script.slice(script.indexOf("register('Reset all settings (with undo)'"));
+    const body = command.slice(0, command.indexOf("register('Undo"));
+    assert(body.indexOf('getExportSettings({ includeCredentials:true })') < body.indexOf('applySettingsImport(getDefaultSettingsEntries())'),
+        'the undo snapshot must be taken before the reset writes');
+    assert(/snapshot = prepareSettingsImport\(getExportSettings\(\{ includeCredentials:true \}\)\)/.test(body),
+        'an undo that dropped credentials would be worse than no undo');
+    // The commands reuse the canonical helpers rather than a second implementation.
+    ['getExportSettings', 'applySettingsImport', 'prepareSettingsImport', 'getDefaultSettingsEntries'].forEach(name => {
+        assert.strictEqual((script.match(new RegExp(`function ${name}\\(`, 'g')) || []).length, 1,
+            `${name} must exist once; the menu commands must not fork it`);
+    });
+});
+
 /* IE-81: the README advertised a retired title-page histogram, an end-of-life Node
    floor, and a `git checkout v<version>` rollback against a repository with no tags.
    Documentation drifts silently, so the claims that can be checked are checked. */

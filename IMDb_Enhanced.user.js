@@ -29,6 +29,7 @@
 // @grant        GM_listValues
 // @grant        GM_deleteValue
 // @grant        GM_webRequest
+// @grant        GM_registerMenuCommand
 // @connect      www.rottentomatoes.com
 // @connect      backend.metacritic.com
 // @connect      letterboxd.com
@@ -10133,6 +10134,111 @@ section[data-testid="hero-parent"].enh-editorial-native-hidden { display: none !
         routeInitCount += 1;
         console.info(`[IMDb Enhanced] v${VERSION} — init #${routeInitCount}; ${enabledFeatures.length} features enabled`);
     }
+
+    /* The extension's recovery page needs backup, restore, reset and diagnostics to
+       behave exactly as they do in the settings panel, and a second implementation of
+       them would be a second set of bugs. It is a separate document, so it cannot reach
+       into this closure on its own; the build generates a page that defines this hook
+       before loading this file, and nothing else ever sets it. Everywhere else the hook
+       is absent and this is dead code.
+
+       Deliberately narrow: storage-layer operations only. No feature, DOM, or route
+       function is handed out, because the recovery page has no page to act on. */
+    if (typeof globalThis.__imdbEnhancedRecoveryHook === 'function') {
+        try {
+            globalThis.__imdbEnhancedRecoveryHook({
+                VERSION,
+                getExportSettings,
+                createEncryptedBackup,
+                readEncryptedBackup,
+                isEncryptedBackup,
+                prepareSettingsImport,
+                applySettingsImport,
+                getDefaultSettingsEntries,
+                buildDiagnosticsReport,
+                cacheCount,
+                cacheBytes,
+                formatCacheBytes,
+                getUserMarks,
+                EXPORT_REDACTED_KEY,
+            });
+        } catch (error) {
+            console.warn('[IMDb Enhanced] recovery hook failed:', error);
+        }
+    }
+
+    /* The extension gets a recovery page it can open from the toolbar. A userscript has
+       no such surface, and every settings action lived behind a floating button that
+       only exists once a feature successfully rendered on an IMDb page — so a selector
+       break or a disabled feature could put backup and reset out of reach. The manager's
+       own menu is the equivalent escape hatch, and it reuses the same helpers the
+       settings panel does rather than a second implementation.
+
+       Registered only on IMDb, because that is the only place the userscript runs. */
+    let pendingResetUndo = null;
+    function registerManagerMenuCommands() {
+        if (typeof GM_registerMenuCommand !== 'function' || !isIMDbHost()) return;
+        const register = (label, handler) => {
+            try { GM_registerMenuCommand(label, handler); }
+            catch (error) { console.warn(`[IMDb Enhanced] menu command "${label}" unavailable:`, error); }
+        };
+        register('Open IMDb Enhanced settings', () => {
+            if (!document.getElementById('enh-settings-overlay')) createSettingsPanel();
+            if (!settingsOpen) toggleSettings();
+        });
+        register('Copy settings backup (no credentials)', () => {
+            try {
+                const payload = getExportSettings();
+                const omitted = payload[EXPORT_REDACTED_KEY] || [];
+                if (!copyTextToClipboard(JSON.stringify(payload, null, 2))) {
+                    showToast(COPY_FAILURE_MESSAGE, 4500);
+                    return;
+                }
+                showToast(omitted.length
+                    ? `Backup copied. ${omitted.length} integration ${omitted.length === 1 ? 'credential was' : 'credentials were'} left out.`
+                    : 'Backup copied.', omitted.length ? 5000 : 2500);
+            } catch (error) {
+                showToast(error?.message || 'The backup could not be created.', 4500);
+            }
+        });
+        register('Restore a settings backup', () => {
+            if (!document.getElementById('enh-settings-overlay')) createSettingsPanel();
+            if (!settingsOpen) toggleSettings();
+            // Land on Data with the restore panel already open, so the command finishes
+            // the journey rather than dropping the user at the front of the settings.
+            requestAnimationFrame(() => {
+                document.getElementById('enh-settings-tab-data')?.click();
+                requestAnimationFrame(() => document.getElementById('enh-import-btn')?.click());
+            });
+        });
+        register('Reset all settings (with undo)', () => {
+            let snapshot;
+            try { snapshot = prepareSettingsImport(getExportSettings({ includeCredentials:true })).entries; }
+            catch (error) {
+                showToast(`Current settings could not be read, so nothing was reset: ${error?.message || 'unknown error'}`, 5000);
+                return;
+            }
+            try {
+                const count = applySettingsImport(getDefaultSettingsEntries());
+                pendingResetUndo = snapshot;
+                showToast(`Reset ${count} settings. Use the manager menu's Undo command to put them back.`, 8000);
+                register('Undo the last settings reset', () => {
+                    if (!pendingResetUndo) { showToast('There is no reset to undo.'); return; }
+                    try {
+                        const restored = applySettingsImport(pendingResetUndo);
+                        pendingResetUndo = null;
+                        showToast(`Undone. ${restored} settings were put back. Reloading...`);
+                        setTimeout(() => location.reload(), 1000);
+                    } catch (error) {
+                        showToast(error?.message || 'The undo failed. Nothing was changed.', 5000);
+                    }
+                });
+            } catch (error) {
+                showToast(error?.message || 'The reset failed and previous settings were restored.', 5000);
+            }
+        });
+    }
+    registerManagerMenuCommands();
 
     if (isIMDbHost()) installSPARouter();
     // Let IMDb's Next.js hydration settle before mutating title-page DOM.

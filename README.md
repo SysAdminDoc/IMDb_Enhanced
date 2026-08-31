@@ -77,6 +77,8 @@ The extension build is generated locally from the same userscript source and add
 3. Open `chrome://extensions`, enable **Developer mode**, choose **Load unpacked**, and select the repository's `extension` folder.
 4. Open or refresh an IMDb page. After source changes, run the build command again and use the extension card's reload button before refreshing IMDb.
 
+Click the toolbar button to open the settings recovery page. It runs on the extension's own origin rather than inside an IMDb page, so backup, restore, reset with undo, diagnostics, and the list of granted hosts stay reachable even when site access is revoked or IMDb changes its markup. Userscript installs get the same actions from the manager's extension menu.
+
 The extension does not auto-update from GitHub; reload the unpacked build after local changes. Its permissions are limited to the supported IMDb pages, the on-demand score/trailer services, the known ad hosts, and localhost/127.0.0.1 media integrations.
 
 ## Firefox extension

@@ -38,6 +38,10 @@
   "background": {
     "service_worker": "background.js"
   },
+  "options_ui": {
+    "page": "recovery.html",
+    "open_in_tab": true
+  },
   "action": {
     "default_title": "IMDb Enhanced",
     "default_icon": {

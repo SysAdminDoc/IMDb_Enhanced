@@ -14,6 +14,10 @@
 
 ### Added
 
+- The extension's toolbar button now opens a settings recovery page instead of doing nothing. Backup, restore, reset, and diagnostics used to live only inside the panel injected into IMDb pages, which is exactly what stops working when site access is revoked or IMDb changes its markup. The recovery page runs on the extension's own origin, so it works regardless: it shows the version, which hosts are actually granted, how many marks and cached lookups you have, and it can copy a backup, restore one, or reset everything. A reset there can be undone. Firefox opens its permissions popup from the toolbar rather than the page, so that popup links to it.
+
+- Userscript managers get the same escape hatch through their extension menu: open settings, copy a backup, restore one, and reset with an undo command. All of it uses the same code the settings panel does.
+
 - The Sites page carries a built-in catalog of every streaming destination listed on the FMHY video wiki: 208 sites in the six groups that wiki uses, filterable by name or address, each one click to add. An added entry becomes an ordinary editable row, and anything already in your list reads as Added rather than offering a duplicate. Site lists now hold 250 destinations instead of 50, so the whole catalog fits at once if you want it.
 
 ### Changed

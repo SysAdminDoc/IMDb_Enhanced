@@ -286,6 +286,18 @@ async function checkForUpdate() {
     }).catch(() => { /* a failed write only costs one skipped check */ });
 }
 
+/* The toolbar button was inert, which meant every recovery action — backup, restore,
+   reset, permission repair — depended on the content script having successfully
+   injected into an IMDb page. That is exactly the condition that is broken when someone
+   needs those actions. On Chromium this handler runs because no default_popup is set;
+   Firefox opens permissions.html instead, which links to the same page. */
+if (chrome.action?.onClicked) {
+    chrome.action.onClicked.addListener(() => {
+        if (chrome.runtime.openOptionsPage) chrome.runtime.openOptionsPage();
+        else chrome.tabs.create({ url: chrome.runtime.getURL('recovery.html') });
+    });
+}
+
 chrome.runtime.onInstalled.addListener(() => { syncAdBlockingFromStorage(); checkForUpdate(); });
 chrome.runtime.onStartup.addListener(() => { syncAdBlockingFromStorage(); checkForUpdate(); });
 chrome.storage.onChanged.addListener((changes, areaName) => {
