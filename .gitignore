@@ -1,4 +1,6 @@
 *.bak
+# Saved page captures: the sanitized fixtures under tests/fixtures/ are the offline source
+*.mhtml
 *.pre-polish-*.bak
 node_modules/
 tests/artifacts/
