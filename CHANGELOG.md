@@ -40,6 +40,8 @@
 
 ### Fixed
 
+- Provider HTTP errors now keep their status and response message through the shared request path. Server errors qualify for the bounded stale score fallback and are recorded as HTTP failures. Authentication refusals remain retryable instead of being cached as unavailable for 24 hours.
+
 - The extension background worker now refuses an optional service request unless that service's host access is currently granted. A provider with a permissive CORS policy could previously answer the worker even after the user declined or removed access. The check happens before credentials are read and before any network request starts.
 
 - Availability cache entries are now separated by source and country. Switching between TMDB and JustWatch can no longer show the other source's answer or attribution, and changing country no longer serves the previous country's providers. Old source-blind entries are ignored safely.

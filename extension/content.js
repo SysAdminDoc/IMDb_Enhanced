@@ -1400,8 +1400,16 @@
        turns a permission gap the user can fix in a click into a day of wrong answers that
        survive the fix. Where access is missing, nothing is written, so the very next visit
        retries. Always true in the userscript build, which has no optional grants. */
-    async function cacheUnavailableUnlessBlocked(featureKey, cacheKey) {
+    function isAuthenticationHttpFailure(error) {
+        const status = Number(error?.status);
+        return status === 401 || status === 403;
+    }
+    async function cacheUnavailableUnlessBlocked(featureKey, cacheKey, error = null) {
         if (!cacheKey) return false;
+        /* Fixing a credential or access policy should take effect on the next request.
+           A 24-hour unavailable sentinel would preserve the rejected answer long after
+           the cause was fixed, so authentication failures never write one. */
+        if (isAuthenticationHttpFailure(error)) return false;
         if (await hasFeatureOrigins(featureKey)) {
             cacheSetUnavailable(cacheKey);
             return false;
@@ -3657,6 +3665,7 @@
         network: 'The service could not be reached',
         timeout: 'The service did not answer in time',
         aborted: 'Request aborted',
+        http: 'The service returned an HTTP error',
     };
     function httpRequest(url, opts = {}) {
         return new Promise((resolve, reject) => {
@@ -3695,7 +3704,13 @@
                     timeout: requestOptions.timeout || 10000,
                     headers,
                     data: hasBody ? JSON.stringify(body) : requestOptions.data,
-                    onload: r => finish(r.status >= 400 ? reject : resolve, r),
+                    onload: response => {
+                        const failed = Number(response?.status) >= 400;
+                        finish(
+                            failed ? reject : resolve,
+                            failed ? describeRequestFailure('http', response, url) : response
+                        );
+                    },
                     /* A script manager hands these callbacks its own response object, not
                        an Error. It has no name and no message, so anything downstream that
                        reads those saw "[object Object]" and classified every provider
@@ -4147,12 +4162,13 @@
        went down. */
     const FAILURE_JOURNAL_ENTRY_VERSION = 1;
     const FAILURE_CATEGORIES = [
-        'selector', 'network', 'storage', 'parse', 'permission', 'timeout', 'aborted', 'unknown',
+        'selector', 'network', 'http', 'storage', 'parse', 'permission', 'timeout', 'aborted', 'unknown',
     ];
     const FAILURE_CATEGORY_SET = new Set(FAILURE_CATEGORIES);
     const FAILURE_CATEGORY_LABELS = {
         selector: 'IMDb page structure changed',
         network: 'A lookup could not reach its service',
+        http: 'A lookup service returned an HTTP error',
         storage: 'Local storage refused a write',
         parse: 'A response could not be understood',
         permission: 'Access was refused',
@@ -6254,7 +6270,9 @@ section[id*="quote" i] .ipc-list-card { padding: 4px 0 !important; margin: 2px 0
             try { return await request(path); }
             catch (error) {
                 const status = Number(error?.status);
-                if (status === 401 || status === 403) throw Object.assign(new Error('TMDB_TOKEN_REJECTED'), { tmdbRejected:true });
+                if (status === 401 || status === 403) {
+                    throw Object.assign(error, { tmdbRejected:true });
+                }
                 throw error;
             }
         };
@@ -6774,7 +6792,13 @@ section[id*="quote" i] .ipc-list-card { padding: 4px 0 !important; margin: 2px 0
     function isReachabilityFailure(error) {
         if (!error) return false;
         const category = classifyFailure(error);
-        return category === 'network' || category === 'timeout';
+        if (category === 'network' || category === 'timeout') return true;
+        return category === 'http' && Number(error.status) >= 500 && Number(error.status) <= 599;
+    }
+
+    function recordLookupFailure(feature, error) {
+        if (!feature?.key || !error) return;
+        appendFailureJournal(feature.key, classifyFailure(error));
     }
 
     /* stale-if-error, RFC 5861's shape: a bounded expired value is better than nothing
@@ -6964,6 +6988,7 @@ section[id*="quote" i] .ipc-list-card { padding: 4px 0 !important; margin: 2px 0
                 }
             } catch (error) { lookupError = error; }
             if (!isCurrent()) return;
+            recordLookupFailure(this, lookupError);
             /* A provider that could not be reached is the one case where a bounded
                expired value beats nothing, provided it is labelled with its date and
                offers a retry. A mismatch or an unparseable response is not: the lookup
@@ -6971,7 +6996,7 @@ section[id*="quote" i] .ipc-list-card { padding: 4px 0 !important; margin: 2px 0
             if (await renderStaleScore(this, cacheKey, lookupError, isCurrent)) return;
             /* Nothing is recorded when the failure was only a missing host grant, so the
                next visit retries instead of reading back a stale "unavailable". */
-            const blocked = await cacheUnavailableUnlessBlocked(this.key, cacheKey);
+            const blocked = await cacheUnavailableUnlessBlocked(this.key, cacheKey, lookupError);
             if (!isCurrent()) return;
             this._renderUnavailable(blocked ? 'access' : 'unavailable');
         },
@@ -7107,6 +7132,7 @@ section[id*="quote" i] .ipc-list-card { padding: 4px 0 !important; margin: 2px 0
             } catch (error) { lookupError = error; }
 
             if (!isCurrent()) return;
+            recordLookupFailure(this, lookupError);
             /* A provider that could not be reached is the one case where a bounded
                expired value beats nothing, provided it is labelled with its date and
                offers a retry. A mismatch or an unparseable response is not: the lookup
@@ -7114,7 +7140,7 @@ section[id*="quote" i] .ipc-list-card { padding: 4px 0 !important; margin: 2px 0
             if (await renderStaleScore(this, cacheKey, lookupError, isCurrent)) return;
             /* Nothing is recorded when the failure was only a missing host grant, so the
                next visit retries instead of reading back a stale "unavailable". */
-            const blocked = await cacheUnavailableUnlessBlocked(this.key, cacheKey);
+            const blocked = await cacheUnavailableUnlessBlocked(this.key, cacheKey, lookupError);
             if (!isCurrent()) return;
             this._renderUnavailable(blocked ? 'access' : 'unavailable');
         },
@@ -7275,6 +7301,7 @@ section[id*="quote" i] .ipc-list-card { padding: 4px 0 !important; margin: 2px 0
                 }
             } catch (error) { lookupError = error; }
             if (!isCurrent()) return;
+            recordLookupFailure(this, lookupError);
             /* A provider that could not be reached is the one case where a bounded
                expired value beats nothing, provided it is labelled with its date and
                offers a retry. A mismatch or an unparseable response is not: the lookup
@@ -7282,7 +7309,7 @@ section[id*="quote" i] .ipc-list-card { padding: 4px 0 !important; margin: 2px 0
             if (await renderStaleScore(this, cacheKey, lookupError, isCurrent)) return;
             /* Nothing is recorded when the failure was only a missing host grant, so the
                next visit retries instead of reading back a stale "unavailable". */
-            const blocked = await cacheUnavailableUnlessBlocked(this.key, cacheKey);
+            const blocked = await cacheUnavailableUnlessBlocked(this.key, cacheKey, lookupError);
             if (!isCurrent()) return;
             this._renderUnavailable(blocked ? 'access' : 'unavailable');
         },
@@ -7415,10 +7442,11 @@ section[id*="quote" i] .ipc-list-card { padding: 4px 0 !important; margin: 2px 0
                     return;
                 } catch (error) { tmdbError = error; }
                 if (!isCurrent()) return;
+                recordLookupFailure(this, tmdbError);
                 // A rejected token is the user's to fix, not an outage to fall back from.
                 if (tmdbError?.tmdbRejected) { this._renderUnavailable('rejected'); return; }
                 if (await renderStaleScore(this, cacheKey, tmdbError, isCurrent)) return;
-                const tmdbBlocked = await cacheUnavailableUnlessBlocked(this.key, cacheKey);
+                const tmdbBlocked = await cacheUnavailableUnlessBlocked(this.key, cacheKey, tmdbError);
                 if (!isCurrent()) return;
                 this._renderUnavailable(tmdbBlocked ? 'access' : 'unavailable');
                 return;
@@ -7485,6 +7513,7 @@ section[id*="quote" i] .ipc-list-card { padding: 4px 0 !important; margin: 2px 0
             } catch (error) { lookupError = error; }
 
             if (!isCurrent()) return;
+            recordLookupFailure(this, lookupError);
             /* A provider that could not be reached is the one case where a bounded
                expired value beats nothing, provided it is labelled with its date and
                offers a retry. A mismatch or an unparseable response is not: the lookup
@@ -7492,7 +7521,7 @@ section[id*="quote" i] .ipc-list-card { padding: 4px 0 !important; margin: 2px 0
             if (await renderStaleScore(this, cacheKey, lookupError, isCurrent)) return;
             /* Nothing is recorded when the failure was only a missing host grant, so the
                next visit retries instead of reading back a stale "unavailable". */
-            const blocked = await cacheUnavailableUnlessBlocked(this.key, cacheKey);
+            const blocked = await cacheUnavailableUnlessBlocked(this.key, cacheKey, lookupError);
             if (!isCurrent()) return;
             this._renderUnavailable(blocked ? 'access' : 'unavailable');
         },

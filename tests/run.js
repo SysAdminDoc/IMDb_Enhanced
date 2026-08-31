@@ -71,6 +71,7 @@ function loadScriptTestHooks({ withoutDeleteValue = false, withheldCredentials =
         canReadCredentials,
         getFeatureFailures,
         recordFeatureFailure,
+        recordLookupFailure,
         classifyFailure,
         describeRequestFailure,
         DEFAULTS,
@@ -154,6 +155,7 @@ function loadScriptTestHooks({ withoutDeleteValue = false, withheldCredentials =
         cacheSet,
         cacheGet,
         cacheGetStale,
+        cacheUnavailableUnlessBlocked,
         isReachabilityFailure,
         cacheGC,
         cacheCount,
@@ -4704,12 +4706,17 @@ test('external access is requested per feature, not demanded at install', () => 
        that failed only for want of a grant records nothing. */
     assert(script.includes('async function cacheUnavailableUnlessBlocked'),
         'a blocked lookup must not poison the cache');
-    /* Six: the three score sources, and availability three times over because its TMDB
-       branch has to record an empty region separately from a failed lookup. The count is
-       only a tripwire for a new lookup that forgot the guard, so the structural check
-       below is the one that carries the meaning. */
-    assert.strictEqual((script.match(/cacheUnavailableUnlessBlocked\(this\.key, cacheKey\)/g) || []).length, 6,
+    /* Six: the three score sources, JustWatch, and availability twice in its TMDB branch.
+       Provider failures must pass the error so authentication refusals cannot become a
+       24-hour unavailable answer. An empty TMDB region is a valid answer and has no error. */
+    assert.strictEqual((script.match(/cacheUnavailableUnlessBlocked\(this\.key, cacheKey(?:, (?:lookupError|tmdbError))?\)/g) || []).length, 6,
         'every score and availability lookup must use the guarded form');
+    assert.strictEqual((script.match(/cacheUnavailableUnlessBlocked\(this\.key, cacheKey, lookupError\)/g) || []).length, 4,
+        'each ordinary provider failure must pass its real error to the cache guard');
+    assert.strictEqual((script.match(/cacheUnavailableUnlessBlocked\(this\.key, cacheKey, tmdbError\)/g) || []).length, 1,
+        'the TMDB failure must pass its real error to the cache guard');
+    assert.strictEqual((script.match(/cacheUnavailableUnlessBlocked\(this\.key, cacheKey\)/g) || []).length, 1,
+        'only a valid empty-region answer may use the guard without an error');
     /* The unguarded form. Recording "unavailable" for 24 hours when the only problem was a
        missing grant outlives the fix, so no lookup may reach for it directly. */
     const lookupRegion = script.slice(script.indexOf("key: 'inlineRTScore'"), script.indexOf("key: 'trailerPopover'"));
@@ -5024,6 +5031,66 @@ test('public documentation matches what the project actually ships', () => {
    test() where a rejection would be swallowed and reported as a pass. */
 const asyncTests = [];
 function asyncTest(name, fn) { asyncTests.push({ name, fn }); }
+
+/* IE-97: manager onload callbacks also carry HTTP failures. Treating every onload as a
+   success left 500 responses unjournaled and let 401/403 responses become cached
+   "unavailable" answers. Drive the actual rejection so returning the raw response fails. */
+asyncTest('provider HTTP failures reject, classify, journal, and protect authentication retries', async () => {
+    const hooks = loadScriptTestHooks();
+    const rejectStatus = async (status, responseText = '') => {
+        const pending = hooks.httpGet('https://www.rottentomatoes.com/m/http-status-test');
+        const request = hooks.getCapturedRequests().at(-1);
+        assert(request?.onload, 'the real request callback must be captured');
+        request.onload({
+            status,
+            responseText,
+            finalUrl:'https://www.rottentomatoes.com/m/http-status-test',
+        });
+        return pending.then(() => null, error => error);
+    };
+
+    const outage = await rejectStatus(500, JSON.stringify({ message:'Provider maintenance' }));
+    assert(outage, 'HTTP 500 must reject rather than resolve a raw response');
+    assert.strictEqual(hooks.classifyFailure(outage), 'http');
+    assert.strictEqual(outage.status, 500);
+    assert.strictEqual(hooks.isReachabilityFailure(outage), true,
+        'server errors qualify for the bounded stale-value fallback');
+    assert.strictEqual(hooks.getRequestErrorMessage(outage), 'Provider maintenance',
+        'a concise JSON body must outrank the generic status');
+    hooks.recordLookupFailure({ key:'inlineRTScore' }, outage);
+    assert.strictEqual(hooks.getFailureJournal().at(-1)?.category, 'http',
+        'the lookup journal must retain the HTTP category');
+
+    const noBody = await rejectStatus(503, '<html>not JSON</html>');
+    assert.strictEqual(hooks.getRequestErrorMessage(noBody), 'HTTP 503',
+        'an unusable body must fall back to the status');
+
+    const providerKeys = [
+        'inlineRTScore',
+        'inlineLetterboxdScore',
+        'inlineMetacritic',
+        'streamAvailability',
+    ];
+    for (const status of [401, 403]) {
+        const refusal = await rejectStatus(status, '');
+        assert(refusal, `HTTP ${status} must reject`);
+        assert.strictEqual(hooks.classifyFailure(refusal), 'http');
+        assert.strictEqual(hooks.isReachabilityFailure(refusal), false,
+            `HTTP ${status} is not a reachability failure`);
+        for (const featureKey of providerKeys) {
+            const cacheKey = `auth_${featureKey}_${status}`;
+            assert.strictEqual(
+                await hooks.cacheUnavailableUnlessBlocked(featureKey, cacheKey, refusal),
+                false,
+                `HTTP ${status} must remain retryable for ${featureKey}`
+            );
+            assert.strictEqual(hooks.cacheGet(cacheKey), null,
+                `HTTP ${status} must not cache unavailable for ${featureKey}`);
+            assert(!hooks.getStorageKeys().includes(`cache_${cacheKey}`),
+                `HTTP ${status} must not write a sentinel for ${featureKey}`);
+        }
+    }
+});
 
 asyncTest('a normal backup omits every integration credential and says which', async () => {
     const hooks = loadScriptTestHooks();
