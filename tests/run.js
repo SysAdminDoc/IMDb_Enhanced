@@ -111,6 +111,12 @@ function loadScriptTestHooks() {
         cacheSet,
         cacheGet,
         cacheGC,
+        cacheCount,
+        cacheBytes,
+        encodedByteLength,
+        readCacheUsage,
+        CACHE_TOTAL_BYTE_BUDGET,
+        CACHE_MAX_ENTRIES,
         resolveExternalIds,
         CACHE_TTL,
         CACHE_MAX_TTL,
@@ -157,6 +163,7 @@ function loadScriptTestHooks() {
     let prefersReducedMotion = false;
     let sandboxWriteCount = 0;
     let sandboxFailWriteAt = null;
+    let sandboxFailAllWrites = false;
     let sandboxClipboardFailure = false;
     let sandboxMediaListenerCount = 0;
     const sandboxValues = new Map();
@@ -214,6 +221,7 @@ function loadScriptTestHooks() {
         GM_getValue: (key, fallback) => sandboxValues.has(key) ? sandboxValues.get(key) : fallback,
         GM_setValue: (key, value) => {
             sandboxWriteCount += 1;
+            if (sandboxFailAllWrites) throw new Error('simulated storage quota exceeded');
             if (sandboxWriteCount === sandboxFailWriteAt) throw new Error('simulated settings write failure');
             sandboxValues.set(key, value);
         },
@@ -237,8 +245,12 @@ function loadScriptTestHooks() {
     sandbox.window.__enhTest.seedRawStorage = (key, value) => sandboxValues.set(key, value);
     sandbox.window.__enhTest.getStoredSetting = key => sandboxValues.get(`imdb_enh_${key}`);
     sandbox.window.__enhTest.failSettingWriteAt = offset => { sandboxFailWriteAt = sandboxWriteCount + offset; };
+    // A quota that stays full: every write throws until it is turned back off. The
+    // offset form above cannot express this, and a cache retry would sail past it.
+    sandbox.window.__enhTest.failAllSettingWrites = value => { sandboxFailAllWrites = Boolean(value); };
     sandbox.window.__enhTest.setClipboardFailure = value => { sandboxClipboardFailure = Boolean(value); };
     sandbox.window.__enhTest.getStorageKeys = () => [...sandboxValues.keys()];
+    sandbox.window.__enhTest.getRawStorage = key => sandboxValues.get(key);
     sandbox.window.__enhTest.getCapturedRequests = () => [...sandboxRequests];
     sandbox.window.__enhTest.setTestHostname = hostname => { location.hostname = hostname; };
     /* Builds a minimal hero subtree so control-resolution can be exercised for real
@@ -1193,9 +1205,91 @@ test('lookup caches remain bounded and storage failures do not hide fetched resu
     assert(script.includes('CACHE_SCHEMA_VERSION = 3'), 'cache schema invalidation marker missing');
     assert.strictEqual((script.match(/function parseCacheEntry\(/g) || []).length, 1, 'cache reads and GC should share one envelope validator');
 
+    /* This assertion previously required cacheSet to give up on the first thrown write.
+       That encoded the absence of the recovery path, not a guarantee anyone depends on:
+       a single transient rejection is exactly what eviction-then-retry exists to absorb.
+       The contract that matters is that a write which cannot succeed still returns false
+       without throwing, which the persistent-quota test below now pins. */
     const failingHooks = loadScriptTestHooks();
     failingHooks.failSettingWriteAt(1);
-    assert.strictEqual(failingHooks.cacheSet('quota', { value:true }), false, 'cache write errors should be non-fatal');
+    assert.strictEqual(failingHooks.cacheSet('quota', { value:true }), true,
+        'one transient write rejection should be recovered by the eviction retry');
+    assert.strictEqual(failingHooks.cacheGet('quota')?.value, true, 'the recovered write must actually be readable');
+});
+
+/* IE-78: 120 entries x 256 KiB permits ~30 MiB against a 10 MiB default quota, so the
+   entry count never binds before the quota does. */
+test('the cache is bounded in bytes and evicts least-recently-accessed entries', () => {
+    const hooks = loadScriptTestHooks();
+    assert(hooks.CACHE_TOTAL_BYTE_BUDGET <= 6 * 1024 * 1024,
+        'the aggregate budget must stay under the 10 MiB default extension quota');
+
+    // Accounting is in encoded UTF-8 bytes, not UTF-16 code units.
+    assert.strictEqual(hooks.encodedByteLength('abc'), 3);
+    assert.strictEqual(hooks.encodedByteLength('é'), 2, 'a two-byte character must not count as one');
+    assert.strictEqual(hooks.encodedByteLength('☃'), 3);
+    assert.strictEqual(hooks.encodedByteLength('😀'), 4, 'an astral character must not count as two');
+
+    // Fill well past the byte budget with entries large enough that the count limit
+    // cannot be what stops it, then confirm the aggregate is actually enforced.
+    const payload = 'x'.repeat(200 * 1024);
+    for (let index = 0; index < 60; index += 1) hooks.cacheSet(`bulk_${index}`, { payload, index });
+    const usage = hooks.readCacheUsage();
+    assert(usage.bytes <= hooks.CACHE_TOTAL_BYTE_BUDGET,
+        `aggregate cache bytes exceeded the budget: ${usage.bytes} > ${hooks.CACHE_TOTAL_BYTE_BUDGET}`);
+    assert(usage.entries.length <= hooks.CACHE_MAX_ENTRIES, 'the entry ceiling must still hold');
+    assert(usage.entries.length < 60, 'entries must actually have been evicted');
+    assert.strictEqual(hooks.cacheGet('bulk_59')?.index, 59, 'the newest write must survive its own eviction pass');
+    assert.strictEqual(hooks.cacheGet('bulk_0'), null, 'the oldest entry should have been evicted first');
+
+    // Nothing outside the cache keyspace is an eviction candidate.
+    const survivor = loadScriptTestHooks();
+    survivor.seedStoredSetting('userMarks', { tt0133093:{ state:'watched', ts:Date.now() } });
+    survivor.seedStoredSetting('radarrApiKey', 'secret-key');
+    survivor.seedStoredSetting('themeVariant', 'midnight');
+    for (let index = 0; index < 60; index += 1) survivor.cacheSet(`bulk_${index}`, { payload, index });
+    survivor.cacheGC(true);
+    assert.strictEqual(survivor.getStoredSetting('radarrApiKey'), 'secret-key', 'credentials are never eviction candidates');
+    assert.strictEqual(survivor.getStoredSetting('themeVariant'), 'midnight', 'settings are never eviction candidates');
+    assert(survivor.getStoredSetting('userMarks'), 'private marks are never eviction candidates');
+});
+
+test('eviction order follows last access, not write order', () => {
+    const hooks = loadScriptTestHooks();
+    const payload = 'x'.repeat(200 * 1024);
+    for (let index = 0; index < 20; index += 1) hooks.cacheSet(`aged_${index}`, { payload, index });
+    /* Age every entry an hour so the next read re-stamps it, then touch the oldest.
+       Without access stamping it would be first out; with it, it must outlive newer
+       entries that were never read. */
+    const hour = 60 * 60 * 1000;
+    hooks.getStorageKeys().filter(key => key.startsWith('cache_')).forEach(key => {
+        const entry = JSON.parse(hooks.getRawStorage(key));
+        hooks.seedRawStorage(key, JSON.stringify({ ...entry, ts:entry.ts - 2 * hour, at:entry.at - 2 * hour }));
+    });
+    assert(hooks.cacheGet('aged_0'), 'the oldest entry should still be readable before eviction');
+    for (let index = 20; index < 40; index += 1) hooks.cacheSet(`aged_${index}`, { payload, index });
+    assert(hooks.cacheGet('aged_0'), 'a recently read entry must outlive never-read entries written after it');
+});
+
+test('a persistently full quota reports a scrubbed failure and a recovery action', () => {
+    const hooks = loadScriptTestHooks();
+    hooks.cacheSet('warm', { value:'kept' });
+    hooks.failAllSettingWrites(true);
+    assert.strictEqual(hooks.cacheSet('doomed', { value:true }), false,
+        'a write that cannot succeed must report failure rather than throw');
+    hooks.failAllSettingWrites(false);
+    const failures = hooks.getFeatureFailures().filter(entry => entry.key === 'cache');
+    assert(failures.length, 'a persistent quota failure must be recorded for diagnostics');
+    const message = failures[failures.length - 1].message;
+    assert(/quota/i.test(message), 'the recorded failure should name the quota');
+    assert(!/doomed/.test(message), 'the failure record must not carry the cache key');
+    assert(!/kept/.test(message), 'the failure record must not carry cached payload data');
+    // The recovery action the message points at has to exist.
+    assert(script.includes("id:'enh-clearcache-btn'"), 'the recovery control named by the quota toast must exist');
+    assert(/Settings → Data → Clear cache frees it/.test(script), 'the quota toast should name the recovery path');
+    const manifest = JSON.parse(fs.readFileSync(path.join(root, 'extension', 'manifest.json'), 'utf8'));
+    assert(!(manifest.permissions || []).includes('unlimitedStorage'),
+        'the byte budget exists so the build never needs unlimitedStorage');
 });
 
 test('settings use six accessible desktop destinations', () => {

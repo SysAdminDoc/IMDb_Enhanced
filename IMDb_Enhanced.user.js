@@ -66,6 +66,18 @@
     const CACHE_MAX_ENTRIES = 120;
     const CACHE_GC_WRITE_INTERVAL = 10;
     const CACHE_ENTRY_TEXT_LIMIT = 256 * 1024;
+    /* 120 entries at 256 KiB each permits ~30 MiB, while chrome.storage.local defaults
+       to 10 MiB for the whole extension — settings, marks and credentials included. The
+       entry count alone therefore never binds before the quota does, so the cache also
+       carries an aggregate ceiling well under that default and evicts to stay beneath
+       it. Measured in encoded UTF-8 bytes: a JS string's .length counts UTF-16 code
+       units, which undercounts every non-ASCII title. */
+    const CACHE_TOTAL_BYTE_BUDGET = 6 * 1024 * 1024;
+    /* Eviction is by last access, so a read has to record one. Writing on every read
+       would cost a storage round trip per cache hit, so the stamp is refreshed only
+       once an hour — precise enough to order eviction candidates, cheap enough to sit
+       on the read path. */
+    const CACHE_ACCESS_STAMP_INTERVAL = 60 * 60 * 1000;
     const USER_MARKS_MAX = 5000;
     const USER_MARKS_SCAN_LIMIT = USER_MARKS_MAX * 2;
     const USER_MARK_TITLE_LIMIT = 160;
@@ -522,7 +534,35 @@
     let cacheWritesSinceGC = 0;
     let userMarksCache = null;
 
+    /* Storage quotas are counted in bytes, so the budget has to be too. TextEncoder is
+       present in every target engine; the fallback keeps the accounting honest anywhere
+       it is not, and deliberately over- rather than under-counts by resolving a lone
+       surrogate to the 3-byte replacement character. */
+    function encodedByteLength(text) {
+        const value = String(text ?? '');
+        if (typeof TextEncoder === 'function') {
+            try { return new TextEncoder().encode(value).length; }
+            catch { /* fall through to the manual count */ }
+        }
+        let bytes = 0;
+        for (let index = 0; index < value.length; index += 1) {
+            const code = value.codePointAt(index);
+            if (code > 0xffff) index += 1;
+            if (code < 0x80) bytes += 1;
+            else if (code < 0x800) bytes += 2;
+            else if (code < 0x10000) bytes += 3;
+            else bytes += 4;
+        }
+        return bytes;
+    }
+
+    function isCacheStorageKey(storageKey) {
+        return typeof storageKey === 'string' && storageKey.startsWith('cache_');
+    }
+
     function parseCacheEntry(raw, now = Date.now()) {
+        // .length is a cheap pre-filter only: a string can never encode to fewer bytes
+        // than it has code units, so this rejects nothing the byte check would keep.
         if (typeof raw !== 'string' || !raw || raw.length > CACHE_ENTRY_TEXT_LIMIT) return null;
         try {
             const entry = JSON.parse(raw);
@@ -532,8 +572,102 @@
                 || !Number.isFinite(ts) || ts <= 0 || ts > now + 60000
                 || !Number.isFinite(ttl) || ttl <= 0 || ttl > CACHE_MAX_TTL
                 || now - ts > ttl) return null;
-            return { ...entry, ts, ttl };
+            // Entries written before access stamping fall back to their write time,
+            // which orders them correctly against anything newer.
+            const rawAccess = Number(entry.at);
+            const at = Number.isFinite(rawAccess) && rawAccess > 0 && rawAccess <= now + 60000
+                ? rawAccess
+                : ts;
+            return { ...entry, ts, ttl, at };
         } catch { return null; }
+    }
+
+    /* The write path only needs to know whether it is near a ceiling, and answering that
+       by parsing up to 120 entries of up to 256 KiB each would put tens of megabytes of
+       JSON.parse on every cache write. Sizes come from the raw strings instead; the full
+       parsing walk below runs only once that says eviction is actually due. Expired
+       entries are counted here, which errs toward evicting slightly early rather than
+       overshooting the quota. */
+    function measureCacheBytes(excludeKey = null) {
+        let bytes = 0;
+        let count = 0;
+        GM_listValues().forEach(storageKey => {
+            if (!isCacheStorageKey(storageKey) || storageKey === excludeKey) return;
+            let raw = null;
+            try { raw = GM_getValue(storageKey, null); }
+            catch { return; }
+            if (typeof raw !== 'string' || !raw) return;
+            bytes += encodedByteLength(storageKey) + encodedByteLength(raw);
+            count += 1;
+        });
+        return { bytes, count };
+    }
+
+    /* One walk of the cache keyspace: total bytes plus every live entry with the access
+       stamp eviction orders by. Only `cache_`-prefixed keys are ever inspected, which is
+       what keeps settings, private marks, notes, and credentials — all written under
+       PREFIX — outside the eviction candidate set by construction rather than by a
+       filter someone could later loosen. */
+    function readCacheUsage(now = Date.now()) {
+        const entries = [];
+        let bytes = 0;
+        GM_listValues().forEach(storageKey => {
+            if (!isCacheStorageKey(storageKey)) return;
+            let raw = null;
+            try { raw = GM_getValue(storageKey, null); }
+            catch { return; }
+            if (raw === null || raw === undefined) return;
+            const entry = parseCacheEntry(raw, now);
+            if (!entry) {
+                try {
+                    if (typeof GM_deleteValue === 'function') GM_deleteValue(storageKey);
+                } catch { /* best-effort expired/malformed cleanup */ }
+                return;
+            }
+            const size = encodedByteLength(storageKey) + encodedByteLength(raw);
+            bytes += size;
+            entries.push({ storageKey, ts:entry.ts, at:entry.at, bytes:size });
+        });
+        return { bytes, entries };
+    }
+
+    /* Evict least-recently-accessed first until the cache fits both ceilings. Returns
+       the bytes reclaimed so a failed write can tell whether retrying is worth it. */
+    function evictCacheEntries(usage, { byteBudget = CACHE_TOTAL_BYTE_BUDGET, maxEntries = CACHE_MAX_ENTRIES } = {}) {
+        const ordered = usage.entries.slice().sort((a, b) => (a.at - b.at) || (a.ts - b.ts));
+        let bytes = usage.bytes;
+        let count = ordered.length;
+        let reclaimed = 0;
+        for (const entry of ordered) {
+            if (bytes <= byteBudget && count <= maxEntries) break;
+            try {
+                if (typeof GM_deleteValue === 'function') GM_deleteValue(entry.storageKey);
+                else GM_setValue(entry.storageKey, '');
+            } catch { continue; }
+            bytes -= entry.bytes;
+            reclaimed += entry.bytes;
+            count -= 1;
+            entry.evicted = true;
+        }
+        usage.entries = usage.entries.filter(entry => !entry.evicted);
+        usage.bytes = bytes;
+        return reclaimed;
+    }
+
+    let cacheQuotaFailureNotified = false;
+    /* A full quota is the one cache failure a user can act on, and it silently cost them
+       every score lookup until now. Report it once per page — scrubbed to the byte
+       figures, never the key or payload — and hand them the control that fixes it. */
+    function reportCacheQuotaFailure(bytes) {
+        try {
+            recordFeatureFailure({ key:'cache' }, 'storage',
+                `cache write of ${bytes} bytes failed after eviction; storage quota appears full`);
+        } catch { /* the toast below is the part the user needs */ }
+        if (cacheQuotaFailureNotified) return;
+        cacheQuotaFailureNotified = true;
+        try {
+            showToast(`${STORAGE_HOST_LABEL} is full, so lookups are not being cached. Settings → Data → Clear cache frees it.`, 6000);
+        } catch { /* console warning already recorded the failure */ }
     }
 
     function cacheGet(key) {
@@ -541,10 +675,15 @@
             const storageKey = 'cache_' + key;
             const raw = GM_getValue(storageKey, null);
             if (!raw) return null;
-            const entry = parseCacheEntry(raw);
+            const now = Date.now();
+            const entry = parseCacheEntry(raw, now);
             if (!entry) {
                 if (typeof GM_deleteValue === 'function') GM_deleteValue(storageKey);
                 return null;
+            }
+            if (now - entry.at >= CACHE_ACCESS_STAMP_INTERVAL) {
+                try { GM_setValue(storageKey, JSON.stringify({ ...entry, at:now })); }
+                catch { /* the value is still usable; only eviction order degrades */ }
             }
             return entry.data;
         } catch {
@@ -555,22 +694,69 @@
         }
     }
     function cacheSet(key, data, ttl = CACHE_TTL) {
+        const storageKey = 'cache_' + key;
+        let serialized;
         try {
-            const serialized = JSON.stringify({ data, ts: Date.now(), ttl, schema:CACHE_SCHEMA_VERSION });
-            if (serialized.length > CACHE_ENTRY_TEXT_LIMIT) {
-                console.warn('[IMDb Enhanced] cache entry exceeded the storage limit');
-                return false;
+            const now = Date.now();
+            serialized = JSON.stringify({ data, ts:now, at:now, ttl, schema:CACHE_SCHEMA_VERSION });
+        } catch (error) {
+            console.warn('[IMDb Enhanced] cache value could not be serialized:', error);
+            return false;
+        }
+        const entryBytes = encodedByteLength(serialized) + encodedByteLength(storageKey);
+        if (entryBytes > CACHE_ENTRY_TEXT_LIMIT) {
+            console.warn('[IMDb Enhanced] cache entry exceeded the per-entry storage limit');
+            return false;
+        }
+        /* Make room before writing rather than after: the point of the budget is that
+           the write itself stays inside the quota. The cheap measurement decides whether
+           that is even necessary, so the parsing walk stays off the common path. A key
+           being overwritten is excluded from the total — it is about to be replaced, not
+           added to. */
+        try {
+            const rough = measureCacheBytes(storageKey);
+            if (rough.bytes + entryBytes > CACHE_TOTAL_BYTE_BUDGET || rough.count + 1 > CACHE_MAX_ENTRIES) {
+                const usage = readCacheUsage();
+                const existing = usage.entries.find(entry => entry.storageKey === storageKey);
+                if (existing) {
+                    usage.bytes -= existing.bytes;
+                    usage.entries = usage.entries.filter(entry => entry !== existing);
+                }
+                evictCacheEntries(usage, {
+                    byteBudget: CACHE_TOTAL_BYTE_BUDGET - entryBytes,
+                    maxEntries: CACHE_MAX_ENTRIES - 1,
+                });
             }
-            GM_setValue('cache_' + key, serialized);
+        } catch (error) {
+            console.warn('[IMDb Enhanced] cache accounting failed:', error);
+        }
+        const write = () => {
+            GM_setValue(storageKey, serialized);
             cacheWritesSinceGC += 1;
             if (cacheWritesSinceGC >= CACHE_GC_WRITE_INTERVAL) {
                 cacheWritesSinceGC = 0;
                 cacheGC(true);
             }
             return true;
-        } catch (error) {
+        };
+        try { return write(); }
+        catch (error) {
             console.warn('[IMDb Enhanced] cache write failed:', error);
-            return false;
+            /* The manager rejected the write even though the accounting said it fits,
+               so the real quota is tighter than the budget. Drop to a fraction of it and
+               try once; a second failure is the user's to resolve. */
+            try {
+                evictCacheEntries(readCacheUsage(), {
+                    byteBudget: Math.floor(CACHE_TOTAL_BYTE_BUDGET / 4),
+                    maxEntries: Math.floor(CACHE_MAX_ENTRIES / 4),
+                });
+            } catch { /* the retry below still reports honestly */ }
+            try { return write(); }
+            catch (retryError) {
+                console.warn('[IMDb Enhanced] cache write failed after eviction:', retryError);
+                reportCacheQuotaFailure(entryBytes);
+                return false;
+            }
         }
     }
     /* The cache has carried a schema version since v2.6 and rejects entries that do not
@@ -651,10 +837,22 @@
     function cacheCount() {
         try {
             return GM_listValues().filter(key =>
-                key.startsWith('cache_') && GM_getValue(key, null) !== null
+                isCacheStorageKey(key) && GM_getValue(key, null) !== null
             ).length;
         }
         catch { return 0; }
+    }
+    /* Reported on the Data page and in diagnostics so a user can see the cache
+       approaching its ceiling rather than only learning about it when a write fails. */
+    function cacheBytes() {
+        try { return readCacheUsage().bytes; }
+        catch { return 0; }
+    }
+    function formatCacheBytes(bytes) {
+        const value = Number(bytes) || 0;
+        if (value < 1024) return `${value} B`;
+        if (value < 1024 * 1024) return `${(value / 1024).toFixed(1)} KB`;
+        return `${(value / (1024 * 1024)).toFixed(1)} MB`;
     }
     function cacheGC(force = false) {
         if (cacheGC._ran && !force) return;
@@ -667,26 +865,9 @@
                     if (GM_getValue(key, null) !== null) GM_deleteValue(key);
                 });
             }
-            const now = Date.now();
-            const live = [];
-            GM_listValues().forEach(storageKey => {
-                if (!storageKey.startsWith('cache_')) return;
-                try {
-                    const raw = GM_getValue(storageKey, null);
-                    const entry = parseCacheEntry(raw, now);
-                    if (!entry) {
-                        if (typeof GM_deleteValue === 'function') GM_deleteValue(storageKey);
-                        return;
-                    }
-                    live.push({ storageKey, ts:entry.ts });
-                } catch {
-                    if (typeof GM_deleteValue === 'function') GM_deleteValue(storageKey);
-                }
-            });
-            if (live.length <= CACHE_MAX_ENTRIES) return;
-            live.sort((a, b) => a.ts - b.ts)
-                .slice(0, live.length - CACHE_MAX_ENTRIES)
-                .forEach(entry => GM_deleteValue(entry.storageKey));
+            // readCacheUsage drops expired and malformed entries as it walks, so this
+            // only has to enforce the two ceilings on what survived.
+            evictCacheEntries(readCacheUsage());
         } catch (e) {
             console.warn('[IMDb Enhanced] cache GC failed:', e);
         }
@@ -2399,7 +2580,8 @@
         // page-lifetime render cache that may predate the problem being reported.
         try { markCount = String(Object.keys(getUserMarks(true) || {}).length); } catch { /* reported as unavailable */ }
         let cached = 'unavailable';
-        try { cached = String(cacheCount()); } catch { /* reported as unavailable */ }
+        try { cached = `${cacheCount()} (${formatCacheBytes(cacheBytes())} of ${formatCacheBytes(CACHE_TOTAL_BYTE_BUDGET)})`; }
+        catch { /* reported as unavailable */ }
         const failures = getFeatureFailures();
         return [
             'IMDb Enhanced diagnostics',
@@ -9240,7 +9422,8 @@ section[data-testid="hero-parent"].enh-editorial-native-hidden { display: none !
             ),
             makeEl('div', { className:'enh-data-summary-item' },
                 makeEl('div', { className:'enh-data-summary-label' }, 'Score cache'),
-                makeEl('div', { className:'enh-data-summary-value', id:'enh-data-cache-count' }, `${cacheCount()} cached entries`)
+                makeEl('div', { className:'enh-data-summary-value', id:'enh-data-cache-count' },
+                    `${cacheCount()} cached entries · ${formatCacheBytes(cacheBytes())}`)
             )
         );
         dataPage.appendChild(dataSummary);
@@ -9287,7 +9470,8 @@ section[data-testid="hero-parent"].enh-editorial-native-hidden { display: none !
         const cacheCard = makeCard('Cached lookups', 'Scores and availability lookups are cached locally for up to seven days.');
         cacheCard.append(
             makeEl('button', { type:'button', className:'enh-settings-footer-btn', id:'enh-clearcache-btn', title:'Clear cached third-party lookups' }, 'Clear cache'),
-            makeEl('div', { className:'enh-settings-card-description', id:'enh-cache-status', style:{ marginTop:'8px' } }, `${cacheCount()} entries currently cached.`)
+            makeEl('div', { className:'enh-settings-card-description', id:'enh-cache-status', style:{ marginTop:'8px' } },
+                `${cacheCount()} entries currently cached, using ${formatCacheBytes(cacheBytes())} of ${formatCacheBytes(CACHE_TOTAL_BYTE_BUDGET)}. The oldest are dropped automatically as that fills.`)
         );
         /* Only the extension builds can be stale — the userscript updates through its
            manager — so the control exists only where it means something. */
@@ -9459,9 +9643,11 @@ section[data-testid="hero-parent"].enh-editorial-native-hidden { display: none !
                 } catch { failed++; }
             });
             const remaining = cacheCount();
-            overlay.querySelector('#enh-data-cache-count').textContent = `${remaining} cached entries`;
+            const remainingBytes = cacheBytes();
+            overlay.querySelector('#enh-data-cache-count').textContent =
+                `${remaining} cached entries · ${formatCacheBytes(remainingBytes)}`;
             overlay.querySelector('#enh-cache-status').textContent = remaining
-                ? `${remaining} entries remain.`
+                ? `${remaining} entries remain, using ${formatCacheBytes(remainingBytes)} of ${formatCacheBytes(CACHE_TOTAL_BYTE_BUDGET)}.`
                 : 'No cached entries.';
             if (!keys.length) showToast('Cache is already empty');
             else if (failed) showToast(`Cleared ${cleared} cached entries; ${failed} could not be removed.`, 4500);

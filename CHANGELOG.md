@@ -2,6 +2,10 @@
 
 ## 2.15.0 — 2026-08-31
 
+### Fixed
+
+- The lookup cache can no longer outgrow the storage it lives in. Its 120-entry by 256 KiB limits allowed roughly 30 MB of cached scores while a Chromium extension gets 10 MB for everything it stores, so a heavy browsing session could fill the quota and quietly stop saving lookups. The cache now measures itself in real encoded bytes, holds a 6 MB ceiling, and drops least-recently-read entries as it fills. Settings, private marks, and integration credentials are never eviction candidates. If storage is full anyway, you get a message pointing at Data → Clear cache instead of silence, and the Data page shows what the cache is using.
+
 ### Added
 
 - The Sites page carries a built-in catalog of every streaming destination listed on the FMHY video wiki: 208 sites in the six groups that wiki uses, filterable by name or address, each one click to add. An added entry becomes an ordinary editable row, and anything already in your list reads as Added rather than offering a duplicate. Site lists now hold 250 destinations instead of 50, so the whole catalog fits at once if you want it.
