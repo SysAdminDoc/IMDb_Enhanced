@@ -6624,6 +6624,10 @@ section[id*="quote" i] .ipc-list-card { padding: 4px 0 !important; margin: 2px 0
             throw error;
         }
         if (!isCurrent()) return null;
+        if (typeof response?.finalUrl === 'string' && response.finalUrl
+            && !normalizeTrustedUrl(response.finalUrl, 'omdbapi.com', '')) {
+            return { empty:true };
+        }
         const parsed = parseOmdbRatings(parseJSONResponse(response));
         if (!parsed) return { empty:true };
         cacheSet(cacheKey, parsed, PROVIDERS.omdb.ttl);
@@ -7295,7 +7299,7 @@ section[id*="quote" i] .ipc-list-card { padding: 4px 0 !important; margin: 2px 0
     /* Both score widgets answer from the same OMDb call. Returns true when it put
        something on screen — a score, or the reason there is none — so the caller knows
        whether its own fallback path still has work to do. */
-    async function renderOmdbScore(feature, field, imdbId, cacheKey, isCurrent) {
+    async function renderOmdbScore(feature, field, imdbId, isCurrent) {
         let answer;
         try {
             answer = await fetchOmdbRatings(imdbId, isCurrent);
@@ -7308,11 +7312,9 @@ section[id*="quote" i] .ipc-list-card { padding: 4px 0 !important; margin: 2px 0
         if (answer?.rejected) { feature._renderUnavailable('omdb-rejected'); return true; }
         const value = boundedScore(answer?.[field], 100);
         if (value === null) return false;
-        const data = field === 'rt'
+        feature._render(field === 'rt'
             ? { tomatometer:value, via:'omdb' }
-            : { score:value, via:'omdb' };
-        cacheSet(cacheKey, data);
-        feature._render(data);
+            : { score:value, via:'omdb' });
         return true;
     }
 
@@ -7346,7 +7348,7 @@ section[id*="quote" i] .ipc-list-card { padding: 4px 0 !important; margin: 2px 0
             /* A build that does not ship the page parser has no search or detail page to
                read, and no origin to read it from, so OMDb is the whole path here. */
             if (!providerAllowedHere('rottenTomatoes')) {
-                if (!await renderOmdbScore(this, 'rt', imdbId, cacheKey, isCurrent) && isCurrent()) {
+                if (!await renderOmdbScore(this, 'rt', imdbId, isCurrent) && isCurrent()) {
                     this._renderUnavailable('unavailable');
                 }
                 return;
@@ -7424,7 +7426,7 @@ section[id*="quote" i] .ipc-list-card { padding: 4px 0 !important; margin: 2px 0
             recordLookupFailure(this, lookupError);
             /* Reading their page did not answer. With a key of your own there is a second
                source that can, so it is asked before anything stale or absent is shown. */
-            if (isOmdbConfigured() && await renderOmdbScore(this, 'rt', imdbId, cacheKey, isCurrent)) return;
+            if (isOmdbConfigured() && await renderOmdbScore(this, 'rt', imdbId, isCurrent)) return;
             if (!isCurrent()) return;
             /* A provider that could not be reached is the one case where a bounded
                expired value beats nothing, provided it is labelled with its date and
@@ -7466,7 +7468,7 @@ section[id*="quote" i] .ipc-list-card { padding: 4px 0 !important; margin: 2px 0
                 w.appendChild(makeEl('div', { className:'enh-score-widget__sub' }, 'via OMDb'));
                 appendProviderAttribution(w, 'omdb');
             }
-            appendScoreCorrectionAction(w, 'rottenTomatoes', this.key);
+            if (providerAllowedHere('rottenTomatoes')) appendScoreCorrectionAction(w, 'rottenTomatoes', this.key);
             bar.appendChild(w);
         },
         _renderLoading() {
@@ -7500,7 +7502,9 @@ section[id*="quote" i] .ipc-list-card { padding: 4px 0 !important; margin: 2px 0
                 : reason === 'correction-failed' ? 'Saved Rotten Tomatoes match unavailable'
                 : 'Score unavailable';
             appendUnavailableNote(w, reason, note);
-            if (reason !== 'excluded') appendScoreCorrectionAction(w, 'rottenTomatoes', this.key);
+            if (reason !== 'excluded' && providerAllowedHere('rottenTomatoes')) {
+                appendScoreCorrectionAction(w, 'rottenTomatoes', this.key);
+            }
             bar.appendChild(w);
         },
         destroy() { document.getElementById('enh-rt-widget')?.remove(); }
@@ -7678,7 +7682,7 @@ section[id*="quote" i] .ipc-list-card { padding: 4px 0 !important; margin: 2px 0
             /* As with Rotten Tomatoes: no parser in this build means no search endpoint
                and no origin, so OMDb answers or nothing does. */
             if (!providerAllowedHere('metacritic')) {
-                if (!await renderOmdbScore(this, 'metacritic', imdbId, cacheKey, isCurrent) && isCurrent()) {
+                if (!await renderOmdbScore(this, 'metacritic', imdbId, isCurrent) && isCurrent()) {
                     this._renderUnavailable('unavailable');
                 }
                 return;
@@ -7755,7 +7759,7 @@ section[id*="quote" i] .ipc-list-card { padding: 4px 0 !important; margin: 2px 0
             /* Reading their search endpoint did not answer. With a key of your own there
                is a second source that can, so it is asked before anything stale or absent
                is shown. */
-            if (isOmdbConfigured() && await renderOmdbScore(this, 'metacritic', imdbId, cacheKey, isCurrent)) return;
+            if (isOmdbConfigured() && await renderOmdbScore(this, 'metacritic', imdbId, isCurrent)) return;
             if (!isCurrent()) return;
             /* A provider that could not be reached is the one case where a bounded
                expired value beats nothing, provided it is labelled with its date and
@@ -7797,7 +7801,7 @@ section[id*="quote" i] .ipc-list-card { padding: 4px 0 !important; margin: 2px 0
                 w.appendChild(makeEl('div', { className:'enh-score-widget__sub' }, 'via OMDb'));
                 appendProviderAttribution(w, 'omdb');
             }
-            appendScoreCorrectionAction(w, 'metacritic', this.key);
+            if (providerAllowedHere('metacritic')) appendScoreCorrectionAction(w, 'metacritic', this.key);
             announceScore('Metascore', hasScore ? String(score) : '');
             bar.appendChild(w);
         },
@@ -7832,7 +7836,9 @@ section[id*="quote" i] .ipc-list-card { padding: 4px 0 !important; margin: 2px 0
                 : reason === 'correction-failed' ? 'Saved Metacritic match unavailable'
                 : 'Score unavailable';
             appendUnavailableNote(w, reason, note);
-            if (reason !== 'excluded') appendScoreCorrectionAction(w, 'metacritic', this.key);
+            if (reason !== 'excluded' && providerAllowedHere('metacritic')) {
+                appendScoreCorrectionAction(w, 'metacritic', this.key);
+            }
             bar.appendChild(w);
         },
         destroy() { document.getElementById('enh-mc-widget')?.remove(); }
@@ -13236,6 +13242,13 @@ section[data-testid="hero-parent"].enh-editorial-native-hidden { display: none !
         input.addEventListener('change', () => {
             if (!persist(true)) return;
             [].concat(refreshKey || []).forEach(refreshFeature);
+            /* Storing a credential can add a service to what a feature contacts — an OMDb
+               key does exactly that — so the rows that report access are stale the moment
+               this returns. They listen for this; nothing used to send it. */
+            if (isCredential) {
+                try { document.dispatchEvent(new CustomEvent('imdb-enhanced:permissions-changed')); }
+                catch { /* the row repaints on the next open */ }
+            }
         });
         return makeEl('div', { className:'enh-servarr-field' + (wide ? ' enh-servarr-field--wide' : '') },
             makeEl('label', { for:id }, label),

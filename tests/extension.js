@@ -441,6 +441,19 @@ store.excluded.forEach(id => {
    match: applyStoreProfile empties the watch-destination lists. */
 assert(!/destination|watch site|streaming site|catalogue|catalog|directory/i.test(store.manifest.description),
     'the store description must not advertise the watch-destination catalog it omits');
+/* And the positive half: everything this build answers with comes from a service the user
+   supplies a key for, so the listing has to say which. A reviewer reads the description
+   before the manifest. */
+const keyedStoreProviders = Object.entries(originLists.PROVIDERS)
+    .filter(([id, provider]) => provider.profiles.includes('store') && /needs your own/i.test(provider.consent)
+        && Object.values(originLists.FEATURE_PROVIDERS).some(list => list.includes(id)))
+    .map(([, provider]) => provider.label);
+assert(keyedStoreProviders.length >= 2,
+    'the store build answers from keyed services, or this check is watching the wrong thing');
+keyedStoreProviders.forEach(label => {
+    assert(store.manifest.description.includes(label),
+        `the store description must name ${label}, which is where its data comes from`);
+});
 
 /* IE-86: one catalog, two consumers. The userscript embeds it; the extension builds emit
    it as _locales so chrome.i18n can answer from an installed translation. They cannot

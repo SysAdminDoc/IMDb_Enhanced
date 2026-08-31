@@ -686,6 +686,23 @@ await runFixture('chart', async (window, hooks) => {
         assert.match(mc.textContent, /73/, 'the Metascore comes from the same answer');
         assert.match(mc.textContent, /via OMDb/);
 
+        /* A "Wrong?" action fixes a title matched by search. OMDb matches by IMDb id and
+           cannot land on another film, and the search endpoint the action would call is an
+           origin this build does not declare, so offering it would be an affordance that
+           could only fail. */
+        assert.equal(rt.querySelector('.enh-score-correction-trigger'), null,
+            'a build that matches by id must not offer to correct the match');
+        assert.equal(mc.querySelector('.enh-score-correction-trigger'), null);
+
+        /* The OMDb answer is cached under its own key. Writing it into rt_/mc_ as well
+           would pin a reduced record — no audience score, no consensus, no page link —
+           over the page parser for a week after a single failed lookup. */
+        assert.equal(hooks.cacheGet('rt_tt0133093'), null,
+            'an OMDb answer must not occupy the page parser\'s cache entry');
+        assert.equal(hooks.cacheGet('mc_tt0133093'), null);
+        assert.equal(hooks.cacheGet('omdb_tt0133093').rt, 83,
+            'it is cached under its own key, so the second widget makes no second call');
+
         const hosts = [...new Set(sent.map(options => new window.URL(options.url).hostname))];
         assert.deepEqual(hosts, ['www.omdbapi.com'],
             'a store build must not reach for the pages it does not ship a parser for');
@@ -709,6 +726,18 @@ await runFixture('chart', async (window, hooks) => {
         const rt = await waitForSelector(window, '#enh-rt-widget');
         assert.match(rt.textContent, /Needs an OMDb key/);
         assert.equal(sent.length, 0, 'and nothing may be requested without one');
+
+        /* Storing a key changes which services the feature contacts, so every row that
+           reports access is stale the moment it is saved. Nothing used to say so. */
+        const repaints = [];
+        window.document.addEventListener('imdb-enhanced:permissions-changed', () => repaints.push(1));
+        hooks.createSettingsPanel();
+        const keyField = requireSelector(window.document, '#enh-setting-omdbApiKey');
+        keyField.value = 'OMDB-KEY-VALUE';
+        keyField.dispatchEvent(new window.Event('change', { bubbles:true }));
+        assert.equal(repaints.length, 1,
+            'saving a credential must tell the access rows to re-read');
+        hooks.destroySettingsChrome();
         hooks.stopFeature('inlineRTScore');
     }, { source:storeSource });
     console.log('ok - a store build with no OMDb key says so rather than showing nothing');

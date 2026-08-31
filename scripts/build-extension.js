@@ -653,7 +653,7 @@ const STORE_COPIED_FILES = ['background.js', 'recovery.html'];
    store build ships neither, so it needs its own sentence rather than the shared one.
    Chrome truncates a manifest description at 132 characters, so the length is checked
    here instead of being discovered at upload. */
-const STORE_DESCRIPTION = 'A decluttered IMDb page: private watch marks, streaming availability from your own TMDB key, and ad-request blocking.';
+const STORE_DESCRIPTION = 'Decluttered IMDb: private watch marks, scores and streaming from your own OMDb and TMDB keys, and ad-request blocking.';
 const CHROME_DESCRIPTION_LIMIT = 132;
 
 /* Same generator, same source, one transform. The store content bundle is the ordinary
@@ -680,9 +680,20 @@ ${bridgeFor({ trusted:false })}\n${storeBody}\n})();\n`;
     if (STORE_DESCRIPTION.length > CHROME_DESCRIPTION_LIMIT) {
         throw new Error(`The store description is ${STORE_DESCRIPTION.length} characters; Chrome allows ${CHROME_DESCRIPTION_LIMIT}.`);
     }
-    /* A description that names a source this build cannot reach is the same defect as a
-       manifest that asks for its origin, and a reviewer sees the description first. */
+    /* A description that names a capability this build cannot deliver is the same defect
+       as a manifest that asks for an origin it does not use, and a reviewer reads the
+       description first. What matters is the capability, not the provider: Rotten Tomatoes
+       scores ship here through OMDb even though the provider that reads their pages does
+       not, so naming them is accurate. A provider whose every feature is dead in this
+       build is the thing that may not be advertised. */
+    const featuresNaming = id => Object.entries(originLists.FEATURE_PROVIDERS)
+        .filter(([, providers]) => providers.includes(id))
+        .map(([feature]) => feature);
+    const featureWorksInStore = feature => (originLists.FEATURE_PROVIDERS[feature] || [])
+        .filter(id => !originLists.PROVIDERS[id]?.auxiliary)
+        .some(id => originLists.PROVIDERS[id].profiles.includes('store'));
     const advertisedButAbsent = excluded
+        .filter(id => !featuresNaming(id).some(featureWorksInStore))
         .map(id => originLists.PROVIDERS[id].label)
         .filter(label => STORE_DESCRIPTION.toLowerCase().includes(label.toLowerCase()));
     if (advertisedButAbsent.length) {
@@ -747,6 +758,8 @@ function checkGeneratedProfile(dir, compute, rebuildCommand) {
     if (!fs.existsSync(dir)) return;
     const name = path.basename(dir);
     const { files, copied, manifest:profileManifest } = compute();
+    // Locale files are generated from the catalog, not copied from extension/.
+    const localeNames = new Set(localeFileNames());
     const expected = [
         ...Object.keys(files),
         ...copied,
@@ -760,6 +773,17 @@ function checkGeneratedProfile(dir, compute, rebuildCommand) {
     Object.entries(files).forEach(([entry, body]) => {
         if (fs.readFileSync(path.join(dir, entry), 'utf8') !== body) {
             throw new Error(`${name}/${entry} is stale; run ${rebuildCommand}.`);
+        }
+    });
+    /* Everything else in the directory is a copy of a file in extension/, including the
+       background worker that holds the credential-injection code. Comparing the bytes is
+       the only way to notice one that was edited in place. */
+    const generated = new Set(Object.keys(files));
+    expected.filter(entry => !generated.has(entry) && !localeNames.has(entry)).forEach(entry => {
+        const master = path.join(extensionDir, entry);
+        if (!fs.existsSync(master)) return;
+        if (!fs.readFileSync(path.join(dir, entry)).equals(fs.readFileSync(master))) {
+            throw new Error(`${name}/${entry} does not match extension/${entry}; run ${rebuildCommand}.`);
         }
     });
 }

@@ -5027,6 +5027,29 @@ test('a store build names the source it cannot ship', () => {
     assert.strictEqual(normal.featureExcludedByProfile('inlineLetterboxdScore'), false);
 });
 
+/* The metadata block is the userscript's host_permissions, and it was hand-kept beside a
+   provider registry that already says which hosts get contacted. Two API providers were
+   added to the registry and never to the header, so a script manager blocked or prompted
+   for every request to them and the feature could not work at all. Derived from the
+   registry here, in both directions: a host the code contacts must be declared, and a
+   host that is declared must belong to something that contacts it. */
+test('the userscript declares exactly the hosts its providers contact', () => {
+    const hooks = loadScriptTestHooks();
+    const declared = [...script.matchAll(/^\/\/ @connect\s+(\S+)$/gm)].map(match => match[1]).sort();
+    assert(declared.length >= 8, 'the metadata block must declare the hosts this script calls');
+    const fromProviders = [...new Set(Object.values(hooks.PROVIDERS)
+        .filter(provider => provider.transmits !== 'none')
+        .flatMap(provider => provider.origins)
+        .map(origin => origin.replace(/^https?:\/\//, '').replace(/\/\*$/, '').replace(/^\*\./, '')))];
+    /* The loopback origins are four patterns for two hosts, and the ad hosts are blocked
+       rather than called, so neither set maps one-to-one. Both are declared through the
+       providers that do call them. */
+    const localServiceHosts = ['localhost', '127.0.0.1'];
+    const expected = [...new Set([...fromProviders, ...localServiceHosts])].sort();
+    assert.deepStrictEqual(declared, expected,
+        'every host a provider contacts must be declared, and nothing else may be');
+});
+
 /* IE-86: one catalog, and a lookup that has to answer the same way in a userscript with
    no i18n API, in an extension with one, and in a locale that carries only some of the
    keys. */

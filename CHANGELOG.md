@@ -50,6 +50,18 @@
 
 ### Fixed
 
+- The userscript build never declared OMDb or TMDB in its metadata, so a script manager blocked or prompted for every request to either. Both are declared now, and a check derives that list from the services the code actually contacts so it cannot fall behind again.
+
+- Saving an API key now tells the settings rows to re-read what they report. Storing an OMDb key changes which services a score source contacts, and the row went on saying access was granted for the old set until the panel was closed and opened again.
+
+- A score that came from OMDb is no longer written into the cache entry belonging to the site whose page is normally read. One failed lookup used to pin a reduced record there for a week, without the audience score, the critics consensus or the link to the page, and stopped that site being tried again in all that time.
+
+- The web-store build no longer offers a Wrong? action on scores it matched by IMDb id. Matching by id cannot land on another film, and the search page the action would have opened is not a site that build is allowed to contact.
+
+- The store listing description can name the sources that build actually uses. The check that stops it advertising a removed capability was judging by service rather than by capability, which had it forbidding the two score sources the build does ship, through OMDb.
+
+- The build freshness check compares the bytes of every file in a generated package, including the background worker and the icons. It used to check only that they were present by name, so an edited worker passed.
+
 - The README named Fmovies+ and Cineplay among the default watch destinations. Both were replaced on 31 August because they redirected onto a retired domain, so the document pointed at two sites the build deliberately dropped. The list is now derived from the code by the test suite, which fails if the two disagree.
 
 - The generated Firefox and web-store builds are written from an empty directory, so a file an earlier build produced and this one does not can no longer travel into a package. The freshness check runs before anything is regenerated, which is the only order in which it can catch a stale or hand-edited build.
