@@ -48,6 +48,8 @@
 
 ### Fixed
 
+- The README named Fmovies+ and Cineplay among the default watch destinations. Both were replaced on 31 August because they redirected onto a retired domain, so the document pointed at two sites the build deliberately dropped. The list is now derived from the code by the test suite, which fails if the two disagree.
+
 - The generated Firefox and web-store builds are written from an empty directory, so a file an earlier build produced and this one does not can no longer travel into a package. The freshness check runs before anything is regenerated, which is the only order in which it can catch a stale or hand-edited build.
 
 - The extension no longer keeps a second copy of every cached lookup inside the IMDb tab. The storage bridge shadowed each value so a rejected write could be undone, which roughly doubled what the page held for entries that are disposable anyway. A cache write that fails now drops the entry and the next read asks the service again. Settings and marks still roll back exactly as before.

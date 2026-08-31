@@ -20,7 +20,7 @@ A desktop IMDb overhaul delivered as a single userscript and a Chromium Manifest
 
 Third-party lookups omit destination cookies. Responses are rendered as text, outbound links suppress opener/referrer data, and response-provided URLs are restricted to the expected HTTPS service domains.
 
-**Watch Site Search**. Quick-search buttons for streaming sites. The defaults (Rive, Cinejoy, Movy, Flixer, Fmovies+, Cineplay, Z-Stream, Aether, 1Shows, CinemaOS, HydraHD, CineStream, Bingr, LookMovie2, Cine.su) come from the FMHY video wiki's starred picks, and a built-in catalog in settings offers every other streaming destination that wiki lists, grouped the way the wiki groups them, each one a single click to add. Destinations are contacted only when you open them; the userscript does not background-probe every site.
+**Watch Site Search**. Quick-search buttons for streaming sites. The defaults (Rive, Cinejoy, Movy, Flixer, CorsFlix, ShuttleTV, Z-Stream, Aether, 1Shows, CinemaOS, HydraHD, CineStream, Bingr, LookMovie2, Cine.su) come from the FMHY video wiki's starred picks, and a built-in catalog in settings offers every other streaming destination that wiki lists, grouped the way the wiki groups them, each one a single click to add. Destinations are contacted only when you open them; the userscript does not background-probe every site.
 
 **External Links**. One-click links grouped by purpose: Reviews & ratings (Rotten Tomatoes, Letterboxd, Trakt), Info & research (TMDB, Wikipedia), Trailers & video (YouTube), and Availability (JustWatch). Configurable.
 

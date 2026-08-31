@@ -5191,6 +5191,16 @@ test('public documentation matches what the project actually ships', () => {
     assert(!/declares no data collection/.test(readme),
         'the README must not claim the Firefox build declares no data collection');
 
+    /* The README named two destinations the code had already replaced, because both
+       redirected onto a retired domain. A list written out by hand in prose drifts from
+       the list in the code the moment either changes, so it is derived from the code. */
+    const shippedDefaults = [...(/const DEFAULT_WATCH_SITES = \[([\s\S]*?)\n    \];/.exec(script)?.[1] || '')
+        .matchAll(/name:'([^']+)'/g)].map(match => match[1]);
+    assert(shippedDefaults.length >= 10, 'the default watch destinations must be readable from the source');
+    const readmeDefaults = (/The defaults \(([^)]+)\)/.exec(readme)?.[1] || '').split(', ').filter(Boolean);
+    assert.deepStrictEqual(readmeDefaults, shippedDefaults,
+        'the README must name exactly the watch destinations the build ships, in the same order');
+
     // The vote-distribution widget was retired in v2.14.0; only the ratings-route
     // comparison survives, and the README must not promise the widget.
     assert(!/Rating histogram shows/.test(readme), 'the README must not advertise the retired title-page histogram');
