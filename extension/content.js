@@ -837,6 +837,11 @@
            their page; TMDB is a documented API but needs a read token of your own. The
            default stays where it was so nothing changes for an existing install. */
         availabilitySource: 'justwatch', tmdbReadToken: '',
+        /* Which country's offers to read. TMDB answers for every country it knows, and
+           showing another one's services as though they were yours is the failure this
+           avoids. Declared here so it round-trips through backup and restore like any
+           other setting; without it the region was read but could never be set. */
+        availabilityRegion: 'US',
         // Links
         searchButtons: true, externalLinks: true, expandedLinkMenu: true,
         trailerPopover: true,
@@ -5398,14 +5403,26 @@ section[id*="quote" i] .ipc-list-card { padding: 4px 0 !important; margin: 2px 0
             cancelOnRouteChange: true,
         });
 
+        /* A token TMDB rejects comes back 401 or 403. Left to the generic path it read as
+           "availability unavailable", which sends someone looking at the wrong thing: the
+           service is fine and the token is the part they can fix. */
+        const ask = async path => {
+            try { return await request(path); }
+            catch (error) {
+                const status = Number(error?.status);
+                if (status === 401 || status === 403) throw Object.assign(new Error('TMDB_TOKEN_REJECTED'), { tmdbRejected:true });
+                throw error;
+            }
+        };
+
         const found = parseTmdbFind(parseJSONResponse(
-            await request(`/3/find/${encodeURIComponent(imdbId)}?external_source=imdb_id`),
+            await ask(`/3/find/${encodeURIComponent(imdbId)}?external_source=imdb_id`),
             EXTERNAL_RESPONSE_TEXT_LIMIT));
         if (!isCurrent()) return { cancelled:true };
         if (!found) return { providers:[], url:'', region };
 
         const offers = parseTmdbWatchProviders(parseJSONResponse(
-            await request(`/3/${found.type}/${found.id}/watch/providers`),
+            await ask(`/3/${found.type}/${found.id}/watch/providers`),
             EXTERNAL_RESPONSE_TEXT_LIMIT), region);
         if (!isCurrent()) return { cancelled:true };
         return offers || { providers:[], url:'', region };
@@ -5726,8 +5743,9 @@ section[id*="quote" i] .ipc-list-card { padding: 4px 0 !important; margin: 2px 0
     }
 
     function appendUnavailableNote(widget, reason, unavailableText = 'Score unavailable') {
-        if (reason === 'unconfigured') {
-            widget.appendChild(makeEl('div', { className:'enh-score-widget__sub' }, 'Needs a TMDB read token'));
+        if (reason === 'unconfigured' || reason === 'rejected') {
+            widget.appendChild(makeEl('div', { className:'enh-score-widget__sub' },
+                reason === 'rejected' ? 'TMDB rejected this token' : 'Needs a TMDB read token'));
             widget.appendChild(makeEl('button', {
                 type:'button',
                 className:'enh-score-stale__retry',
@@ -5735,7 +5753,7 @@ section[id*="quote" i] .ipc-list-card { padding: 4px 0 !important; margin: 2px 0
                     if (!document.getElementById('enh-settings-overlay')) createSettingsPanel();
                     if (!settingsOpen) toggleSettings();
                 },
-            }, 'Add token'));
+            }, reason === 'rejected' ? 'Replace token' : 'Add token'));
             return;
         }
         if (reason !== 'access') {
@@ -6184,6 +6202,8 @@ section[id*="quote" i] .ipc-list-card { padding: 4px 0 !important; margin: 2px 0
                     return;
                 } catch (error) { tmdbError = error; }
                 if (!isCurrent()) return;
+                // A rejected token is the user's to fix, not an outage to fall back from.
+                if (tmdbError?.tmdbRejected) { this._renderUnavailable('rejected'); return; }
                 if (await renderStaleScore(this, cacheKey, tmdbError, isCurrent)) return;
                 const tmdbBlocked = await cacheUnavailableUnlessBlocked(this.key, cacheKey);
                 if (!isCurrent()) return;
@@ -11914,6 +11934,7 @@ section[data-testid="hero-parent"].enh-editorial-native-hidden { display: none !
                     event.target.value = value;
                     if (!trySaveSetting('availabilitySource', value)) return;
                     tokenField.hidden = value !== 'tmdb';
+                    regionField.hidden = value !== 'tmdb';
                     refreshFeature('streamAvailability');
                     markSaved();
                 },
@@ -11930,12 +11951,23 @@ section[data-testid="hero-parent"].enh-editorial-native-hidden { display: none !
                 wide:true,
             });
             tokenField.hidden = getAvailabilitySource() !== 'tmdb';
+            /* Two letters, because that is what TMDB keys its results by. Free text rather
+               than a list of every country: the list would be another thing to keep in step
+               with theirs, and an unrecognized code already falls back to US. */
+            const regionField = createSettingsInput({
+                key:'availabilityRegion',
+                label:'Region',
+                placeholder:'Two-letter country code, such as US or GB',
+                refreshKey:'streamAvailability',
+            });
+            regionField.hidden = getAvailabilitySource() !== 'tmdb';
             return makeEl('div', { className:'enh-settings-callout', style:{ marginTop:'12px' } },
                 makeEl('strong', {}, 'Where availability comes from'),
                 select,
                 makeEl('span', { className:'enh-settings-card-description' },
                     'TMDB publishes this data through a documented API and asks for a token of your own, free from themoviedb.org. JustWatch is read by parsing their page. Choosing TMDB without a token says so rather than quietly reading the page instead.'),
-                tokenField
+                tokenField,
+                regionField
             );
         }
 

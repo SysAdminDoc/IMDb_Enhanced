@@ -4336,6 +4336,23 @@ test('TMDB availability resolves an IMDb id and reads only the chosen region', (
         'and must not reach the page-parsing path on its way out');
     assert(body.includes("if (getAvailabilitySource() === 'tmdb')"),
         'the source is a choice, not a fallback order');
+    /* A token TMDB rejects is the one part of this the user can fix. Left to the generic
+       path it read as "availability unavailable", which points at the wrong thing. */
+    assert(body.includes("if (tmdbError?.tmdbRejected) { this._renderUnavailable('rejected'); return; }"),
+        'a rejected token must be reported as a rejected token');
+    assert(/status === 401 \|\| status === 403/.test(script), 'and recognized from what TMDB actually answers');
+    assert(script.includes("'TMDB rejected this token'"), 'in words that say which end the problem is at');
+    assert(script.includes("reason === 'rejected' ? 'Replace token' : 'Add token'"),
+        'and offer the action that matches');
+
+    /* The region was read but never declared, so "your region" was permanently US and the
+       setting could not be exported, imported, or changed. */
+    assert.strictEqual(hooks.DEFAULTS.availabilityRegion, 'US', 'the region must be a real setting');
+    assert(script.includes("key:'availabilityRegion',"), 'and have a control that sets it');
+    hooks.seedStoredSetting('availabilityRegion', 'GB');
+    const gbPayload = { results:{ US:{ link:'', flatrate:[{ provider_name:'Max' }] }, GB:{ link:'', flatrate:[{ provider_name:'Now' }] } } };
+    assert.strictEqual(Array.from(hooks.parseTmdbWatchProviders(gbPayload, hooks.getTmdbRegion()).providers).join(''), 'Now',
+        'a chosen region must actually be the one read');
 
     // Both attributions are required by the terms, and both are rendered with the data.
     const attribution = script.match(/attribution: 'This extension uses TMDB[^']*'/);
