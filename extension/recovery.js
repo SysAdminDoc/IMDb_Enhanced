@@ -2755,6 +2755,12 @@
     const SCORE_CORRECTION_CACHE_PREFIXES = Object.freeze({
         rottenTomatoes:'rt_', letterboxd:'lb_', metacritic:'mc_', justWatch:'jw_',
     });
+    const SCORE_CORRECTION_FEATURE_KEYS = Object.freeze({
+        rottenTomatoes:'inlineRTScore',
+        letterboxd:'inlineLetterboxdScore',
+        metacritic:'inlineMetacriticScore',
+        justWatch:'streamAvailability',
+    });
 
     function normalizeScoreCorrectionUrl(provider, value) {
         const config = SCORE_CORRECTION_PROVIDERS[provider];
@@ -2844,6 +2850,22 @@
         return getScoreCorrections()[imdbId]?.[provider] || null;
     }
 
+    /* The MV3 bridge reports an asynchronous write failure before its deferred error has
+       been consumed. The first storage mutation made by the failure handler therefore
+       throws without running. Retry once so that clearing the first provider is not a
+       no-op while every later provider happens to work. A manager-side failure can throw
+       synchronously for its own reason too; two failed attempts still stop quietly. */
+    function deleteScoreCorrectionCacheKey(storageKey) {
+        if (typeof GM_deleteValue !== 'function') return false;
+        for (let attempt = 0; attempt < 2; attempt += 1) {
+            try {
+                GM_deleteValue(storageKey);
+                return true;
+            } catch { /* consume a deferred bridge failure, then retry once */ }
+        }
+        return false;
+    }
+
     function clearScoreCorrectionCache(imdbId, provider) {
         const prefix = SCORE_CORRECTION_CACHE_PREFIXES[provider];
         if (!prefix || !/^tt\d{5,12}$/.test(String(imdbId || ''))) return;
@@ -2852,15 +2874,17 @@
             if (provider === 'justWatch') {
                 const regionalPrefix = 'cache_availability_justwatch_';
                 const titleSuffix = `_${imdbId}`;
+                const matchingKeys = new Set([`cache_${prefix}${imdbId}`]);
                 GM_listValues().forEach(storageKey => {
                     if (storageKey === `cache_${prefix}${imdbId}`
                         || (storageKey.startsWith(regionalPrefix) && storageKey.endsWith(titleSuffix))) {
-                        GM_deleteValue(storageKey);
+                        matchingKeys.add(storageKey);
                     }
                 });
+                matchingKeys.forEach(deleteScoreCorrectionCacheKey);
                 return;
             }
-            GM_deleteValue(`cache_${prefix}${imdbId}`);
+            deleteScoreCorrectionCacheKey(`cache_${prefix}${imdbId}`);
         } catch { /* the durable correction still wins over any cache entry */ }
     }
 
@@ -2881,6 +2905,28 @@
         if (!trySaveSetting('scoreCorrections', bounded)) return false;
         clearScoreCorrectionCache(imdbId, provider);
         return true;
+    }
+
+    /* A content-script write is optimistic until chrome.storage.local settles. If a match
+       correction is rejected, the bridge has already restored the previous setting by
+       the time this event fires, but the feature may still be rendering or awaiting a
+       request made with the rejected value. Clear every correction-backed cache for this
+       title and refresh every consumer. stopFeature advances its generation, so any old
+       response becomes inert before it can cache or render the phantom match. Script
+       managers are deliberately excluded: their failed write already returned false
+       synchronously, before setScoreCorrection cleared a cache or refreshed a feature. */
+    function recoverRejectedScoreCorrections(event) {
+        if (!IS_EXTENSION_BUILD
+            || settingKeyFromFailure(event?.detail?.key) !== 'scoreCorrections') return;
+        const imdbId = getIMDbID();
+        if (!/^tt\d{5,12}$/.test(String(imdbId || ''))) return;
+        Object.keys(SCORE_CORRECTION_FEATURE_KEYS)
+            .forEach(provider => clearScoreCorrectionCache(imdbId, provider));
+        [...new Set(Object.values(SCORE_CORRECTION_FEATURE_KEYS))].forEach(refreshFeature);
+        showToast('The match correction was not saved. The previous match has been restored.', 6000);
+    }
+    if (typeof document !== 'undefined' && typeof document.addEventListener === 'function') {
+        document.addEventListener('imdb-enhanced:settings-save-failed', recoverRejectedScoreCorrections);
     }
 
     function normalizeScoreCorrectionCandidate(provider, candidate) {

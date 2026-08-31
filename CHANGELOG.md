@@ -40,6 +40,8 @@
 
 ### Fixed
 
+- A rejected match correction no longer leaves the wrong match on screen in the extension. A write to extension storage is optimistic, so the panel could keep showing a correction the browser refused. The failure now clears every correction-backed cache for that title, refreshes the affected widgets, and says the previous match was restored.
+
 - Saved Rotten Tomatoes and Letterboxd matches now trust the page where the request actually landed. A redirect to search, a listing page, or another site can no longer be parsed and cached under the saved title. Saved JustWatch matches also follow the active country instead of continuing to request the country embedded in the original URL.
 
 - A TMDB result with no offers now keeps its source, country, regional watch link, and attribution in the cache. Reading that answer again no longer labels it as JustWatch or opens a JustWatch search. The country control remains visible for both availability sources.
