@@ -44,9 +44,14 @@
     const __applyChanges = changes => {
         Object.entries(changes || {}).forEach(([key, change]) => {
             const has = change && Object.prototype.hasOwnProperty.call(change, 'newValue');
-            // A credential changed in another tab updates only whether it is set.
+            /* A credential change updates only whether one is set. The delete matters:
+               this listener also fires for a credential typed into the settings panel in
+               this very tab, whose value GM_setValue put straight into the mirror. Without
+               it the secret stayed readable in this world until the page was reloaded,
+               which is the difference between "not in this tab" and "not in this tab yet". */
             if (!__TRUSTED_CONTEXT && __isCredentialKey(key)) {
                 __recordCredential(key, has ? change.newValue : '');
+                delete __state[key];
                 return;
             }
             if (has) __state[key] = change.newValue;
@@ -138,7 +143,13 @@
         const written = __clone(value);
         const token = ++__writeSequence;
         __latestWrite[key] = token;
-        __state[key] = written;
+        /* A credential typed into the settings panel goes to storage but never into this
+           world's mirror. Writing it here first and clearing it when the change event came
+           back left the secret readable in the page's tab for the rest of its life, which
+           is exactly what keeping it out of the mirror was for. Only whether one is set is
+           kept, so the field can still report itself as configured. */
+        if (!__TRUSTED_CONTEXT && __isCredentialKey(key)) __recordCredential(key, written);
+        else __state[key] = written;
         __storage('set', { [key]:written }).catch(error => {
             __rollbackMirror(key, had, previous, token);
             __reportWriteFailure(error, key);
@@ -2333,6 +2344,12 @@
         let ignored = 0;
         Object.entries(data).forEach(([key, value]) => {
             if (EXPORT_METADATA_KEYS.has(key)) return;
+            /* An empty credential in a backup means "this backup does not carry one", not
+               "clear the one you have". Writing it through destroyed working keys on
+               restore, and the backup most likely to contain empty ones is an encrypted
+               export taken where the values could not be read. Clearing a key is done in
+               the field that owns it, never as a side effect of restoring. */
+            if (CREDENTIAL_SETTING_KEYS.has(key) && !normalizeCredentialValue(value)) return;
             const normalized = normalizeImportedSetting(key, value);
             if (normalized) entries.push(normalized);
             else ignored++;
@@ -2359,13 +2376,22 @@
        now omits them and says which it omitted; the encrypted export below is the only
        way they leave the browser. */
     function getExportSettings({ includeCredentials = false } = {}) {
+        /* A backup that claims to carry credentials and carries empty strings is worse
+           than no backup: restoring it used to wipe the real keys. On an IMDb page the
+           bridge keeps credential values out of this world entirely, so this cannot be
+           honoured here and says so rather than producing one. The extension's own page
+           can read them, which is why that is where the encrypted export belongs. */
+        if (includeCredentials && !canReadCredentials()) {
+            throw new Error('CREDENTIALS_UNREADABLE');
+        }
         const data = {};
         const redacted = [];
         Object.keys(DEFAULTS).forEach(key => {
             if (!includeCredentials && CREDENTIAL_SETTING_KEYS.has(key)) {
                 // Only name a key that actually holds something; listing every empty
-                // credential field would imply the user had configured them.
-                if (String(get(key) || '').trim()) redacted.push(key);
+                // credential field would imply the user had configured them. Asked of
+                // readCredential, because get() cannot see one from a content script.
+                if (readCredential(key).configured) redacted.push(key);
                 return;
             }
             let current = get(key);
@@ -2879,7 +2905,20 @@
        classified the failure its answer wins. Its refusal categories (redirect_blocked,
        invalid_url and the rest) are not reachability categories and stay network, which
        is what they were treated as before. */
-    const BRIDGE_FAILURE_CATEGORIES = { timeout:'timeout', aborted:'aborted', network:'network' };
+    const BRIDGE_FAILURE_CATEGORIES = {
+        timeout:'timeout', aborted:'aborted', network:'network',
+        /* A refusal, not an outage. These are the worker deciding not to make or finish a
+           request, and calling them network failures made isReachabilityFailure true for
+           every one: a request stopped because it would have carried a credential across
+           a redirect then rendered last week's score with a Retry that could only be
+           refused again. The commit that introduced this claimed they "stay network, as
+           before" — they had been unknown and permission, and neither was reachable. */
+        redirect_blocked:'permission',
+        redirect_changed_origin:'permission',
+        redirect_destination_not_allowed:'permission',
+        redirect_crossed_trust_boundary:'permission',
+        invalid_url:'permission',
+    };
     function describeRequestFailure(fallback, response, url) {
         const category = BRIDGE_FAILURE_CATEGORIES[String(response?.errorType || '')] || fallback;
         const status = Number(response?.status) || 0;
@@ -2892,6 +2931,12 @@
         const error = new Error(detail || REQUEST_FAILURE_TEXT[category] || 'Request failed');
         error.imdbEnhancedCategory = category;
         error.status = status;
+        /* Carried forward, not dropped. getRequestErrorMessage turns these into the four
+           sentences a user is actually shown for a blocked redirect; without it every one
+           of those was unreachable and the toast fell through to the worker's own internal
+           wording instead. */
+        if (response?.errorType) error.errorType = String(response.errorType).slice(0, 64);
+        if (typeof response?.responseText === 'string') error.responseText = response.responseText;
         // The URL is kept off the message: failures reach the journal and the diagnostics
         // report, and neither may carry the title someone looked at.
         error.requestHost = (() => {
@@ -3029,12 +3074,28 @@
        request. What comes back is a reference — the setting key — plus whether it is set.
        Under a script manager there is no second context to hold it, so the value is read
        directly and the reference is unused. */
+    /* Value first, because whether it is readable depends on which context this is running
+       in, not on the build. The options page is an extension context that legitimately
+       holds credentials — it is the one surface that produces an encrypted backup — and
+       checking IS_EXTENSION_BUILD first made every credential there report as not set.
+       `readable` says whether this context can see a value at all, which is what anything
+       about to write a backup needs to know before promising to carry one. */
     function readCredential(key) {
-        if (IS_EXTENSION_BUILD && typeof globalThis.__imdbEnhancedCredentialConfigured === 'function') {
-            return { value:'', ref:key, configured: globalThis.__imdbEnhancedCredentialConfigured(PREFIX + key) };
-        }
         const value = normalizeCredentialValue(get(key));
-        return { value, ref:key, configured: Boolean(value) };
+        if (value) return { value, ref:key, configured:true, readable:true };
+        if (IS_EXTENSION_BUILD && typeof globalThis.__imdbEnhancedCredentialConfigured === 'function') {
+            return {
+                value:'',
+                ref:key,
+                configured: globalThis.__imdbEnhancedCredentialConfigured(PREFIX + key),
+                readable:false,
+            };
+        }
+        return { value:'', ref:key, configured:false, readable:true };
+    }
+    // True only where every stored credential can actually be read back.
+    function canReadCredentials() {
+        return !IS_EXTENSION_BUILD || typeof globalThis.__imdbEnhancedCredentialConfigured !== 'function';
     }
 
     function getServarrConfig(kind) {
@@ -3502,7 +3563,10 @@
         const enabled = featureState.filter(entry => entry.on).map(entry => entry.key);
         const disabled = featureState.filter(entry => !entry.on).map(entry => entry.key);
         const integrations = DIAGNOSTIC_CREDENTIAL_KEYS
-            .map(([label, key]) => `${label}: ${String(get(key) || '').trim() ? 'configured' : 'not configured'}`);
+            // Asked of readCredential: a content script cannot read a credential value, so
+            // reading get() here told every extension user their integrations were not set
+            // up, while the same report from the options page said the opposite.
+            .map(([label, key]) => `${label}: ${readCredential(key).configured ? 'configured' : 'not configured'}`);
         let markCount = 'unavailable';
         // Force a re-read: a diagnostics snapshot must describe storage, not a
         // page-lifetime render cache that may predate the problem being reported.
@@ -12189,6 +12253,14 @@ section[data-testid="hero-parent"].enh-editorial-native-hidden { display: none !
                 showToast('Encrypted backup copied. Keep the passphrase; it cannot be recovered.', 6000);
             } catch (error) {
                 console.warn('[IMDb Enhanced] encrypted export failed:', error);
+                /* The credentials are deliberately unreachable from an IMDb page, so this
+                   backup cannot be made here. It used to be made anyway, carrying empty
+                   strings, and restoring it wiped the real keys. */
+                if (error?.message === 'CREDENTIALS_UNREADABLE') {
+                    showToast('Your integration keys are not readable from an IMDb page, so this backup would be empty. Make it from the extension\'s own page instead.', 7000);
+                    if (openOptionsPage()) setDataDisclosureState('');
+                    return;
+                }
                 showToast(error?.message || 'The encrypted backup could not be created.', 5000);
             } finally { apply.disabled = false; }
         });

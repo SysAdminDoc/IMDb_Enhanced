@@ -23,7 +23,11 @@ function test(name, fn) {
     }
 }
 
-function loadScriptTestHooks({ withoutDeleteValue = false } = {}) {
+/* withheldCredentials reproduces the one context that matters most and was never covered:
+   a content script in an extension build, where the bridge answers whether a credential is
+   set but never hands back its value. Six call sites read get() there and concluded
+   "not configured", which is how an encrypted backup came to carry empty strings. */
+function loadScriptTestHooks({ withoutDeleteValue = false, withheldCredentials = false } = {}) {
     const instrumented = script.replace(/\}\)\(\);\s*$/, `window.__enhTest = {
         normalizeIMDbProviderId,
         normalizeLookupTitle,
@@ -62,6 +66,9 @@ function loadScriptTestHooks({ withoutDeleteValue = false } = {}) {
         describeSeasonProgress,
         summarizeHeatmapSeason,
         buildDiagnosticsReport,
+        prepareSettingsImport,
+        readCredential,
+        canReadCredentials,
         getFeatureFailures,
         recordFeatureFailure,
         classifyFailure,
@@ -365,6 +372,19 @@ function loadScriptTestHooks({ withoutDeleteValue = false } = {}) {
     /* Not every manager exposes GM_deleteValue, and the userscript guards each call for
        that reason. Omitting it here lets those guards be exercised rather than assumed. */
     if (!withoutDeleteValue) sandbox.GM_deleteValue = key => { sandboxValues.delete(key); };
+    /* The two things that together make a context an untrusted extension one: chrome with
+       a runtime id, which is what IS_EXTENSION_BUILD tests, and the bridge's boolean-only
+       answer standing in for every credential read. GM_getValue withholds the value the
+       same way the real mirror does, so nothing here can cheat by reading around it. */
+    if (withheldCredentials) {
+        const credentialKeys = new Set([...(script.match(/const CREDENTIAL_SETTING_KEYS = new Set\(\[([\s\S]*?)\]\);/) || [])[1]
+            .matchAll(/'([^']+)'/g)].map(match => `imdb_enh_${match[1]}`));
+        const readValue = sandbox.GM_getValue;
+        sandbox.GM_getValue = (key, fallback) => (credentialKeys.has(key) ? fallback : readValue(key, fallback));
+        sandbox.chrome = { runtime: { id: 'test-extension-id' } };
+        sandbox.__imdbEnhancedCredentialConfigured = key =>
+            typeof sandboxValues.get(key) === 'string' && sandboxValues.get(key).trim() !== '';
+    }
     vm.runInNewContext(instrumented, sandbox, { filename: scriptPath });
     sandbox.window.__enhTest.getCapturedWebRequestRules = () => sandbox.webRequestRules || [];
     sandbox.window.__enhTest.getAbortedRequestCount = () => sandboxAbortedRequestCount;
@@ -3027,6 +3047,136 @@ test('media server matching handles provider IDs and title fallback', () => {
     );
 });
 
+/* Found by adversarial review. On an IMDb page the bridge keeps credential values out of
+   the content script's world, and six things went on reading them with get(): the
+   encrypted backup carried empty strings while reporting success, restoring one wiped the
+   real keys, the plain export's "left out" warning never fired, and the diagnostics report
+   told every extension user their integrations were not set up. */
+test('a credential this context cannot read is never treated as absent', () => {
+    const hooks = loadScriptTestHooks({ withheldCredentials:true });
+    hooks.seedStoredSetting('radarrApiKey', 'RADARR-SECRET');
+    hooks.seedStoredSetting('plexToken', 'PLEX-SECRET');
+
+    // The premise: this context genuinely cannot see the values.
+    assert.strictEqual(hooks.readCredential('radarrApiKey').value, '', 'the value must be withheld here');
+    assert.strictEqual(hooks.readCredential('radarrApiKey').configured, true, 'but it is configured');
+    assert.strictEqual(hooks.readCredential('radarrApiKey').readable, false);
+    assert.strictEqual(hooks.readCredential('seerrApiKey').configured, false, 'an unset one stays unset');
+
+    /* A backup that promises credentials and carries empty strings is worse than none:
+       restoring it destroyed the real ones. It refuses instead. */
+    assert.throws(() => hooks.getExportSettings({ includeCredentials:true }), /CREDENTIALS_UNREADABLE/,
+        'a credential-bearing backup cannot be made where the credentials cannot be read');
+
+    // The plain export must still name what it left out, which is what tells someone why
+    // Radarr stopped working after they restored it.
+    const plain = hooks.getExportSettings();
+    const omitted = Array.from(plain[hooks.EXPORT_REDACTED_KEY] || []);
+    assert(omitted.includes('radarrApiKey') && omitted.includes('plexToken'),
+        'a stored credential must be named as omitted even when its value is unreadable');
+    assert(!omitted.includes('seerrApiKey'), 'an empty one must not be listed as though it were set');
+    assert(!JSON.stringify(plain).includes('RADARR-SECRET'), 'and the value itself never travels');
+
+    // The diagnostics report must agree with reality rather than with what get() can see.
+    const report = hooks.buildDiagnosticsReport();
+    assert(/Radarr: configured/.test(report), 'a configured integration must report as configured');
+    assert(/Overseerr: not configured/.test(report), 'an unconfigured one must still say so');
+    assert(!report.includes('RADARR-SECRET'), 'and the report never carries the value');
+});
+
+/* A local-service request in an extension build cannot carry the key itself, so it names
+   it and the worker attaches it. Nothing asserted that it was named: replacing the whole
+   credentialHeader with null left the suite green, which would have shipped an extension
+   that sends Radarr and Sonarr no API key at all. */
+test('a local-service request names the credential it needs', async () => {
+    const hooks = loadScriptTestHooks({ withheldCredentials:true });
+    hooks.seedStoredSetting('radarrUrl', 'http://localhost:7878');
+    hooks.seedStoredSetting('radarrApiKey', 'RADARR-SECRET');
+    hooks.seedStoredSetting('radarrRootFolderPath', '/movies');
+    hooks.seedStoredSetting('radarrQualityProfileId', '1');
+    assert.strictEqual(hooks.isServarrConfigured('radarr'), true,
+        'a stored key must count as configured even where its value cannot be read');
+
+    const before = hooks.getCapturedRequests().length;
+    hooks.servarrRequest(hooks.getServarrConfig('radarr'), 'movie').catch(() => {});
+    const issued = hooks.getCapturedRequests().slice(before);
+    assert.strictEqual(issued.length, 1, 'the request should have been issued');
+    const sent = issued[0];
+    assert.strictEqual(sent.credentialHeader?.name, 'X-Api-Key',
+        'the request must name the header the service expects');
+    assert.strictEqual(sent.credentialHeader?.ref, 'radarrApiKey',
+        'and which stored key holds it, or the worker has nothing to attach');
+    assert.strictEqual(sent.headers['X-Api-Key'], undefined,
+        'and must not carry the value, which this context cannot read anyway');
+    assert(!JSON.stringify(sent).includes('RADARR-SECRET'), 'no part of the request may carry the secret');
+});
+
+test('restoring a backup never blanks a credential it does not carry', () => {
+    const hooks = loadScriptTestHooks();
+    hooks.seedStoredSetting('radarrApiKey', 'RADARR-SECRET');
+    hooks.seedStoredSetting('plexToken', 'PLEX-SECRET');
+
+    /* The shape an extension-made encrypted backup used to have: the keys present, the
+       values empty. Applying it wiped both real credentials with no warning. */
+    const { entries } = hooks.prepareSettingsImport({
+        radarrApiKey:'', plexToken:'', sonarrApiKey:'', themeVariant:'oled',
+    });
+    const keys = Array.from(entries).map(entry => entry.key);
+    assert(!keys.includes('radarrApiKey'), 'an empty credential is not an instruction to clear one');
+    assert(!keys.includes('plexToken'));
+    assert(keys.includes('themeVariant'), 'everything else still imports');
+
+    hooks.applySettingsImport(Array.from(entries));
+    assert.strictEqual(hooks.getRawStorage('imdb_enh_radarrApiKey'), 'RADARR-SECRET',
+        'restoring must leave a working key alone');
+    assert.strictEqual(hooks.getRawStorage('imdb_enh_plexToken'), 'PLEX-SECRET');
+
+    // A backup that really does carry one still restores it.
+    const real = hooks.prepareSettingsImport({ radarrApiKey:'NEW-SECRET' });
+    hooks.applySettingsImport(Array.from(real.entries));
+    assert.strictEqual(hooks.getRawStorage('imdb_enh_radarrApiKey'), 'NEW-SECRET',
+        'a credential that is actually present must still be restored');
+});
+
+/* Found by adversarial review. Wrapping a manager's response object in a real Error fixed
+   classification and broke two things that read the original: the refusal categories all
+   became "network", which made every deliberate refusal look like an outage, and errorType
+   was dropped, which made all four blocked-redirect sentences unreachable. Both are driven
+   through the real rejection here rather than through a hand-built object, which is how
+   they passed while being dead. */
+test('a refusal by the worker is not an outage, and still says what it was', () => {
+    const hooks = loadScriptTestHooks();
+    const refusals = [
+        ['redirect_blocked', 'Blocked: the service tried to redirect a request carrying your API key.'],
+        ['redirect_changed_origin', 'Blocked: the service redirected to a different site.'],
+        ['redirect_destination_not_allowed', 'Blocked: the service redirected somewhere this extension does not allow.'],
+        ['redirect_crossed_trust_boundary', 'Blocked: the service redirected between a local and a public address.'],
+    ];
+    refusals.forEach(([errorType, sentence]) => {
+        const failure = hooks.describeRequestFailure('network', { errorType, message:'Failed to fetch' }, 'https://x.test/');
+        assert.strictEqual(hooks.classifyFailure(failure), 'permission',
+            `${errorType} is the worker refusing, not the service being unreachable`);
+        assert.strictEqual(hooks.isReachabilityFailure(failure), false,
+            `${errorType} must not offer a stale score with a retry that can only be refused again`);
+        assert.strictEqual(hooks.getRequestErrorMessage(failure), sentence,
+            `${errorType} must still reach the user as its own sentence`);
+    });
+    // An invalid URL is a refusal too, not a service that could not be reached.
+    const invalid = hooks.describeRequestFailure('network', { errorType:'invalid_url', message:'Invalid HTTP(S) request' }, 'https://x.test/');
+    assert.strictEqual(hooks.isReachabilityFailure(invalid), false, 'a refused URL is not an outage');
+    // The genuine reachability failures must keep working, or the fallback is dead again.
+    ['network', 'timeout'].forEach(errorType => {
+        const failure = hooks.describeRequestFailure('network', { errorType, message:'Failed to fetch' }, 'https://x.test/');
+        assert.strictEqual(hooks.isReachabilityFailure(failure), true,
+            `${errorType} really is the service being unreachable`);
+    });
+    // A body the local service sent still outranks the generic wording.
+    const withBody = hooks.describeRequestFailure('network',
+        { errorType:'network', responseText:JSON.stringify({ message:'Movie already exists' }) }, 'http://localhost:7878/');
+    assert.strictEqual(hooks.getRequestErrorMessage(withBody), 'Movie already exists',
+        'a service that explained itself must still be quoted');
+});
+
 test('local request errors stay concise and text-only', () => {
     const hooks = loadScriptTestHooks();
     const longMessage = `  ${'failure '.repeat(80)}\nretry  `;
@@ -3358,6 +3508,20 @@ test('an unreachable provider falls back to a labelled cached value', () => {
        was never reached, and nothing was recorded. */
     assert(helper.includes('if (!await hasFeatureOrigins(feature.key)) return false;'),
         'a failure that is really a missing host grant must not be dressed up as an outage');
+    /* Tripwires, and named as such. Each of these was deleted wholesale in a mutation run
+       and the suite stayed green, because the surrounding checks were loose enough to
+       match the mutant. They are exact rather than behavioural because rendering these
+       needs a real rating bar; the behaviour itself was verified in a loaded extension
+       with the grant withheld against a live provider. */
+    assert.strictEqual((script.match(/this\._renderUnavailable\(blocked \? 'access' : 'unavailable'\)/g) || []).length, 4,
+        'every score lookup must distinguish a missing grant from an outage when it gives up');
+    assert(script.includes("if (reason !== 'access') {"),
+        'the unavailable note must keep a branch for a missing grant');
+    assert(script.includes("'Site access not granted'"), 'and say so in those words');
+    assert(/if \(!supportsOptionalPermissions\(\)\) return;\s*\n\s*widget\.appendChild/.test(script),
+        'the Grant access button must stay out of a build that cannot grant anything');
+    assert(/if \(await hasFeatureOrigins\(featureKey\)\) \{\s*\n\s*cacheSetUnavailable\(cacheKey\);/.test(script),
+        'a lookup blocked only by a missing grant must record nothing, so the next visit retries');
     assert(helper.indexOf('hasFeatureOrigins') < helper.indexOf('cacheGetStale'),
         'the grant check must come before an old value is looked up');
     /* Presence first, then order. indexOf returns -1 when the guard is gone and -1 sorts
@@ -3389,8 +3553,12 @@ test('an unreachable provider falls back to a labelled cached value', () => {
     // The bridge routes every failure through onerror, so its own classification wins.
     assert.strictEqual(hooks2.classifyFailure(hooks2.describeRequestFailure('network', { errorType:'timeout', message:'Timed out' }, 'https://x.test/')), 'timeout',
         'the background knows a timeout from a dead host and the callback that fired does not');
-    assert.strictEqual(hooks2.classifyFailure(hooks2.describeRequestFailure('network', { errorType:'redirect_blocked', message:'Blocked' }, 'https://x.test/')), 'network',
-        'a refusal category that is not about reachability must stay a network failure');
+    /* This required "network", which was wrong twice over: those categories had never
+       been network, and calling them that made isReachabilityFailure true for a request
+       the worker deliberately refused, so a blocked redirect rendered a stale score with
+       a Retry that could only be refused again. See the refusal test above. */
+    assert.strictEqual(hooks2.classifyFailure(hooks2.describeRequestFailure('network', { errorType:'redirect_blocked', message:'Blocked' }, 'https://x.test/')), 'permission',
+        'a refusal by the worker is a permission failure, not the service being unreachable');
     // A failure travels to the journal and the diagnostics report, so it carries no title.
     const described = hooks2.describeRequestFailure('network', managerResponse, 'https://www.rottentomatoes.com/m/the_matrix');
     assert(!/the_matrix/.test(String(described.message)), 'a failure message must not carry what was looked up');

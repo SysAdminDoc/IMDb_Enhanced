@@ -26,6 +26,14 @@
 
 ### Fixed
 
+- Restoring a backup no longer wipes your integration keys. An encrypted backup taken from an IMDb page carried empty values rather than your real keys, because the page deliberately cannot read them, and restoring it wrote those blanks over the working ones. Backups made from the extension's own page were always fine. An empty credential in any backup is now understood as "this backup does not carry one" rather than "clear the one you have", and the encrypted export refuses to run from a page that cannot read your keys, pointing you at the page that can.
+
+- The plain backup names the keys it left out again, and the diagnostics report no longer tells every extension user that none of their integrations are set up. Both were asking a question the IMDb page cannot answer and reading the silence as "not configured".
+
+- A credential you type into the settings panel no longer sits readable in that tab until you reload. Keys already stored were kept out of the page, but one entered during the session went in and stayed.
+
+- A request the extension deliberately refuses, such as a service trying to redirect a call that carries your API key, is no longer reported as the service being unreachable. It was being treated as an outage, which meant the score widget offered last week's number and a Retry button that could only be refused again, and the specific message explaining what was blocked never reached you.
+
 - Settings now names the service a feature contacts instead of the address it calls. It used to say a feature needed access to "backend.metacritic.com and query.wikidata.org", which reads like a fault report; it says Metacritic and Wikidata. Ad blocking asked for access to a list of Amazon tracking hosts, which sounded like the opposite of what it does, and now says it needs the ad and tracking hosts it blocks. The extension's own page, where access is actually granted, adds a plain sentence per service saying what gets sent: the title and year for a score lookup, the IMDb id for the identity lookup, and nothing at all for the hosts that are only blocked.
 
 - The private-marks filter works on a season's episode list. Every episode row is a different kind of element than the cards the filter knew about, so the bar rendered with all four counts at zero, stayed hidden, and kept an observer running over the page for nothing. On an eight-episode season with two seen and one skipped it now reads All 8, Unseen 5, Seen 2, Skipped 1, and picking Seen leaves those two rows.

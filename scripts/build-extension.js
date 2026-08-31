@@ -188,9 +188,14 @@ const bridgeFor = ({ trusted }) => String.raw`
     const __applyChanges = changes => {
         Object.entries(changes || {}).forEach(([key, change]) => {
             const has = change && Object.prototype.hasOwnProperty.call(change, 'newValue');
-            // A credential changed in another tab updates only whether it is set.
+            /* A credential change updates only whether one is set. The delete matters:
+               this listener also fires for a credential typed into the settings panel in
+               this very tab, whose value GM_setValue put straight into the mirror. Without
+               it the secret stayed readable in this world until the page was reloaded,
+               which is the difference between "not in this tab" and "not in this tab yet". */
             if (!__TRUSTED_CONTEXT && __isCredentialKey(key)) {
                 __recordCredential(key, has ? change.newValue : '');
+                delete __state[key];
                 return;
             }
             if (has) __state[key] = change.newValue;
@@ -282,7 +287,13 @@ const bridgeFor = ({ trusted }) => String.raw`
         const written = __clone(value);
         const token = ++__writeSequence;
         __latestWrite[key] = token;
-        __state[key] = written;
+        /* A credential typed into the settings panel goes to storage but never into this
+           world's mirror. Writing it here first and clearing it when the change event came
+           back left the secret readable in the page's tab for the rest of its life, which
+           is exactly what keeping it out of the mirror was for. Only whether one is set is
+           kept, so the field can still report itself as configured. */
+        if (!__TRUSTED_CONTEXT && __isCredentialKey(key)) __recordCredential(key, written);
+        else __state[key] = written;
         __storage('set', { [key]:written }).catch(error => {
             __rollbackMirror(key, had, previous, token);
             __reportWriteFailure(error, key);

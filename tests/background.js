@@ -478,6 +478,36 @@ for (const engine of ['chromium', 'gecko']) {
         assert.strictEqual(sent.redirect, 'follow', 'an uncredentialed public request may still follow same-origin hops');
     });
 
+    /* The other half of "the page never sees a credential": the worker attaches it, so the
+       worker must not hand it back. Nothing tested this — adding the sent headers to the
+       success response left the suite green while undoing the whole boundary. */
+    test(`[${engine}] a successful response never carries the credential back`, async () => {
+        const { dispatch, storage } = loadBackground({ engine, fetchImpl: makeFetch({}, { body:'PAYLOAD' }) });
+        storage.set('imdb_enh_radarrApiKey', 'RADARR-SECRET');
+        const answer = await dispatch(request('http://localhost:7878/api/v3/movie', {
+            credentialHeader: { name:'X-Api-Key', ref:'radarrApiKey' },
+        }), IMDB_SENDER);
+        assert.strictEqual(answer.ok, true, 'the request should have succeeded');
+        assert(!JSON.stringify(answer).includes('RADARR-SECRET'),
+            'no part of the answer may carry the credential the worker attached');
+        assert.strictEqual(answer.headers, undefined, 'the worker must not report the headers it sent');
+        assert.strictEqual(answer.injected, undefined, 'nor what it injected');
+    });
+
+    test(`[${engine}] a failed response never carries the credential back either`, async () => {
+        const { dispatch, storage } = loadBackground({
+            engine,
+            fetchImpl: () => Promise.reject(new TypeError(OPAQUE_FETCH_FAILURE)),
+        });
+        storage.set('imdb_enh_radarrApiKey', 'RADARR-SECRET');
+        const answer = await dispatch(request('http://localhost:7878/api/v3/movie', {
+            credentialHeader: { name:'X-Api-Key', ref:'radarrApiKey' },
+        }), IMDB_SENDER);
+        assert.strictEqual(answer.ok, false);
+        assert(!JSON.stringify(answer).includes('RADARR-SECRET'),
+            'a failure must not report the credential in its message or elsewhere');
+    });
+
     /* IE-91: the TMDB token is the only credential that leaves the machine, so it is bound
        to one host. The binding, not the caller, decides where a key may go and under which
        scheme, because the caller cannot read the value and has no business shaping the

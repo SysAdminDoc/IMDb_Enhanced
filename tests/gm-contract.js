@@ -84,8 +84,9 @@ function createManagerAdapter() {
  * ------------------------------------------------------------------------- */
 let pendingResponseUrl = 'https://example.test/final';
 
-async function createBridgeAdapter() {
+async function createBridgeAdapter({ seed = {} } = {}) {
     const store = Object.create(null);
+    Object.assign(store, seed);
     const changeListeners = [];
     const observed = { writeFailures: 0, clipboardFailures: 0, writeFailureKeys: [] };
     let failWriteMessage = null;
@@ -198,6 +199,11 @@ async function createBridgeAdapter() {
         failNextClipboard: error => { clipboardRejection = error; },
         observed,
         settle,
+        // Only the bridge has a credential boundary; the manager has nothing to redact.
+        credentials: {
+            isConfigured: key => context.__imdbEnhancedCredentialConfigured(key),
+            backingStore: () => ({ ...store }),
+        },
     };
 }
 
@@ -352,9 +358,62 @@ async function runContract(adapter) {
     });
 }
 
+/* The credential boundary, executed rather than matched in source. Three mutations that
+   kept credential values in the content world all survived the source-text assertion in
+   tests/extension.js, which is the whole reason this is here: the claim is about what the
+   bridge does, so it has to be asked of the bridge. */
+async function runCredentialBoundary() {
+    const label = 'MV3 bridge';
+    const pre = 'PRE-EXISTING-SECRET';
+    const typed = 'JUST-TYPED-SECRET';
+
+    await check(label, 'a credential already in storage never enters the content world', async () => {
+        const bridge = await createBridgeAdapter({ seed: { imdb_enh_radarrApiKey: pre, imdb_enh_themeVariant: 'oled' } });
+        assert.strictEqual(bridge.gm.getValue('imdb_enh_radarrApiKey', ''), '',
+            'the value must not be readable from the page tab');
+        assert.strictEqual(bridge.gm.getValue('imdb_enh_themeVariant', ''), 'oled',
+            'an ordinary setting must still be readable, or the mirror is simply broken');
+        assert(!bridge.gm.listValues().includes('imdb_enh_radarrApiKey'),
+            'nor discoverable by listing what is stored');
+        assert.strictEqual(bridge.credentials.isConfigured('imdb_enh_radarrApiKey'), true,
+            'but the field must still be able to say one is set');
+        assert.strictEqual(bridge.credentials.isConfigured('imdb_enh_sonarrApiKey'), false);
+    });
+
+    /* The one the source-text check could never have caught: a credential typed into the
+       settings panel went through GM_setValue, which put it straight into the mirror. It
+       stayed readable in that tab until the page was reloaded. */
+    await check(label, 'a credential typed into the panel never enters the content world either', async () => {
+        const bridge = await createBridgeAdapter();
+        bridge.gm.setValue('imdb_enh_plexToken', typed);
+        assert.strictEqual(bridge.gm.getValue('imdb_enh_plexToken', ''), '',
+            'the value must not be readable straight after writing it');
+        await bridge.settle();
+        assert.strictEqual(bridge.gm.getValue('imdb_enh_plexToken', ''), '',
+            'nor once the change event has come back');
+        assert(!bridge.gm.listValues().includes('imdb_enh_plexToken'));
+        assert.strictEqual(bridge.credentials.isConfigured('imdb_enh_plexToken'), true,
+            'the field must know one is now set');
+        assert.strictEqual(bridge.credentials.backingStore().imdb_enh_plexToken, typed,
+            'and it must really have been stored, or the setting silently did nothing');
+    });
+
+    await check(label, 'a credential changed in another tab updates only whether it is set', async () => {
+        const bridge = await createBridgeAdapter({ seed: { imdb_enh_embyApiKey: pre } });
+        bridge.externalChange('imdb_enh_embyApiKey', 'ROTATED-SECRET');
+        assert.strictEqual(bridge.gm.getValue('imdb_enh_embyApiKey', ''), '',
+            'a value arriving by change event must not be adopted either');
+        assert.strictEqual(bridge.credentials.isConfigured('imdb_enh_embyApiKey'), true);
+        bridge.externalChange('imdb_enh_embyApiKey', '');
+        assert.strictEqual(bridge.credentials.isConfigured('imdb_enh_embyApiKey'), false,
+            'clearing it elsewhere must be reflected');
+    });
+}
+
 (async () => {
     await runContract(createManagerAdapter());
     await runContract(await createBridgeAdapter());
+    await runCredentialBoundary();
     if (failures) {
         console.error(`\n${failures} GM contract check(s) failed.`);
         process.exit(1);
