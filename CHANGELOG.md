@@ -20,6 +20,8 @@
 
 ### Fixed
 
+- Settings now names the service a feature contacts instead of the address it calls. It used to say a feature needed access to "backend.metacritic.com and query.wikidata.org", which reads like a fault report; it says Metacritic and Wikidata. Ad blocking asked for access to a list of Amazon tracking hosts, which sounded like the opposite of what it does, and now says it needs the ad and tracking hosts it blocks. The extension's own page, where access is actually granted, adds a plain sentence per service saying what gets sent: the title and year for a score lookup, the IMDb id for the identity lookup, and nothing at all for the hosts that are only blocked.
+
 - The private-marks filter works on a season's episode list. Every episode row is a different kind of element than the cards the filter knew about, so the bar rendered with all four counts at zero, stayed hidden, and kept an observer running over the page for nothing. On an eight-episode season with two seen and one skipped it now reads All 8, Unseen 5, Seen 2, Skipped 1, and picking Seen leaves those two rows.
 
 - A score source you have not granted access to no longer pretends to be a service outage. The browser refuses an ungranted request with exactly the same opaque error a dead host produces, so the widget fell back to showing last week's score with a Retry button that could never work, and the message naming the real problem was never reached. It now says the site access is not granted and offers a button that takes you to the page where you can grant it.

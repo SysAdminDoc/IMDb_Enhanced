@@ -52,6 +52,9 @@
     .access-row:last-child { border-bottom: 0; }
     .access-name { color: var(--tx); font-weight: 600; }
     .access-detail { color: var(--tx3); font-size: 12px; overflow-wrap: anywhere; }
+    .access-consent { color: var(--tx3); font-size: 12px; margin-top: 3px; overflow-wrap: anywhere; }
+    /* The element's own display outranks the UA rule for [hidden], so it needs this. */
+    .access-consent[hidden] { display: none; }
     .access-state { font-size: 12px; }
     .access-state[data-state="granted"] { color: var(--ok); }
     .access-state[data-state="missing"] { color: var(--warn); }

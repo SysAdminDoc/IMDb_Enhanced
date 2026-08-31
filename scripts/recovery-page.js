@@ -231,9 +231,15 @@ function renderAccessList() {
         const detail = document.createElement('div');
         detail.className = 'access-detail';
         detail.textContent = core.describeFeatureOrigins(key);
+        /* This page is where the grant actually happens, so it is where what gets sent
+           has to be said. The name alone tells you who is contacted, not what leaves. */
+        const consent = document.createElement('div');
+        consent.className = 'access-consent';
+        consent.textContent = (core.describeFeatureConsent?.(key) || []).join(' ');
+        consent.hidden = !consent.textContent;
         const state = document.createElement('div');
         state.className = 'access-state';
-        copy.append(name, detail, state);
+        copy.append(name, detail, consent, state);
 
         const button = document.createElement('button');
         button.type = 'button';

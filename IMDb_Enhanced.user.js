@@ -212,7 +212,10 @@
             profiles: ['default', 'store'],
         },
         amazonAds: {
-            label: 'Amazon advertising and tracking',
+            /* Phrased as what the access is for. "Amazon advertising and tracking" is an
+               accurate name for the hosts and a misleading one in the only sentence it
+               appears in, which reads "needs access to ...". */
+            label: 'the ad and tracking hosts it blocks',
             origins: [
                 'https://*.amazon-adsystem.com/*', 'https://advertising.amazon.dev/*',
                 'https://images-na.ssl-images-amazon.com/*', 'https://sb.scorecardresearch.com/*',
@@ -10222,17 +10225,30 @@ section[data-testid="hero-parent"].enh-editorial-native-hidden { display: none !
         return loopback ? [...hosts, 'your own computer'] : hosts;
     }
 
-    /* Still the hostnames rather than the providers' labels. The registry now carries a
-       readable name for each, and "Rotten Tomatoes and Wikidata" beats
-       "www.rottentomatoes.com and query.wikidata.org" for a reader deciding whether to
-       grant access, but that is a change to what the panel says and belongs with the rest
-       of that wording, not smuggled in beneath a refactor. The origins themselves come
-       from the registry, so this is derived either way. */
-    function describeFeatureOrigins(key) {
-        const names = describeOriginHosts(getFeatureOrigins(key));
+    function joinNames(names) {
         if (names.length <= 1) return names[0] || 'no external sites';
         if (names.length === 2) return `${names[0]} and ${names[1]}`;
         return `${names.slice(0, -1).join(', ')} and ${names[names.length - 1]}`;
+    }
+
+    /* Named from the provider declarations. This used to format the origins, which meant
+       telling people a feature needs "backend.metacritic.com and query.wikidata.org" —
+       the hosts the code calls, not the services anyone recognizes, and the first of those
+       reads like something has gone wrong. A feature whose origins belong to no declared
+       provider still falls back to the hostnames, so a new group reads truthfully before
+       it is declared rather than silently naming nothing. */
+    function describeFeatureOrigins(key) {
+        const labels = (FEATURE_PROVIDERS[key] || []).map(id => PROVIDERS[id]?.label).filter(Boolean);
+        return joinNames(labels.length ? [...new Set(labels)] : describeOriginHosts(getFeatureOrigins(key)));
+    }
+
+    /* Shown where access is actually requested. Naming the service says who is contacted;
+       these sentences say what is sent, which is the part someone deciding needs. */
+    function describeFeatureConsent(key) {
+        return (FEATURE_PROVIDERS[key] || [])
+            .map(id => PROVIDERS[id]?.consent)
+            .filter(Boolean)
+            .filter((sentence, index, all) => all.indexOf(sentence) === index);
     }
 
     async function hasFeatureOrigins(key) {
@@ -12101,6 +12117,7 @@ section[data-testid="hero-parent"].enh-editorial-native-hidden { display: none !
                 FEATURE_DETAILS,
                 getFeatureOrigins,
                 describeFeatureOrigins,
+                describeFeatureConsent,
                 releasableOriginsFor,
                 getSetting: key => get(key),
             });

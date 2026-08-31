@@ -180,6 +180,8 @@ function loadScriptTestHooks({ withoutDeleteValue = false } = {}) {
         REQUIRED_ORIGINS,
         getFeatureOrigins,
         describeFeatureOrigins,
+        describeFeatureConsent,
+        describeOriginHosts,
         originsHeldByOtherEnabledFeatures,
         releasableOriginsFor,
         BACKUP_ENVELOPE_KEY,
@@ -3923,11 +3925,37 @@ test('external access is requested per feature, not demanded at install', () => 
         ['https://query.wikidata.org/*', 'https://www.rottentomatoes.com/*'],
         'once no sibling needs it, the shared resolver is released too');
 
-    // Origin patterns are not user-facing text.
-    assert.strictEqual(hooks.describeFeatureOrigins('inlineRTScore'), 'www.rottentomatoes.com and query.wikidata.org');
+    /* Origin patterns are not user-facing text, and neither are hostnames. This used to
+       require "www.rottentomatoes.com and query.wikidata.org": those are the hosts the
+       code calls, not the services a reader recognizes, and "backend.metacritic.com" read
+       like something had gone wrong. The providers declare a name; use it. */
+    assert.strictEqual(hooks.describeFeatureOrigins('inlineRTScore'), 'Rotten Tomatoes and Wikidata');
+    assert.strictEqual(hooks.describeFeatureOrigins('inlineMetacriticScore'), 'Metacritic and Wikidata',
+        'the service is Metacritic, whatever its API host is called');
     assert.strictEqual(hooks.describeFeatureOrigins('servarrIntegration'), 'your own computer',
         'four loopback patterns should read as one plain phrase');
     assert(!/\*/.test(hooks.describeFeatureOrigins('removeAds')), 'wildcards must not reach the user');
+    /* The only sentence this name appears in is "needs access to ...", so naming the hosts
+       accurately still reads as though the extension wanted to advertise. It says what the
+       access is for instead. */
+    assert.strictEqual(hooks.describeFeatureOrigins('removeAds'), 'the ad and tracking hosts it blocks');
+    assert(!/https?:\/\/|\.com|\.org/.test(hooks.describeFeatureOrigins('inlineRTScore')),
+        'no part of a URL may reach the user');
+    /* A feature with origins but no provider declaration still has to say something true,
+       so a new origin group reads sensibly before it is declared. */
+    assert.strictEqual(hooks.describeOriginHosts(['https://example.test/*', 'http://127.0.0.1/*']).join('|'),
+        'example.test|your own computer',
+        'an undeclared group falls back to hostnames rather than naming nothing');
+
+    // What is sent, shown where the grant is actually made.
+    const consent = hooks.describeFeatureConsent('inlineRTScore');
+    assert.strictEqual(consent.length, 2, 'each provider behind a feature states its own case');
+    assert(consent.every(sentence => /\.$/.test(sentence)), 'consent lines must read as sentences');
+    assert(consent.some(sentence => /Rotten Tomatoes/.test(sentence)), 'and name the service they describe');
+    // Array.from first: a collection returned from the sandbox has a different realm's
+    // prototype, so deepStrictEqual rejects it even when the contents match.
+    assert.strictEqual(Array.from(hooks.describeFeatureConsent('nonexistentFeature')).length, 0,
+        'a feature with no declared provider claims nothing about what it sends');
 
     /* THE defect this guards: chrome.permissions is not exposed to content scripts. They
        get runtime, storage, i18n, extension, csi, dom and loadTimes and nothing else. A
