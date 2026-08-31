@@ -54,6 +54,7 @@ const instrumented = userscript.replace(/\}\)\(\);\s*$/, `globalThis.__imdbEnhan
     getScoreCorrection,
     setScoreCorrection,
     cacheSet,
+    cacheGet,
     getAvailabilityCacheKey,
     renderAvailability: data => {
         const feature = features.find(candidate => candidate.key === 'streamAvailability');
@@ -246,10 +247,62 @@ await runFixture('title', async (window, hooks) => {
     hooks.stopFeature('inlineRTScore');
     correctionWidget.remove();
 
-    // Availability cache misses must advance immediately to the offline request stub.
+    // Provider-backed fixtures must advance immediately to their deterministic response.
     // Visibility itself is not under test here, and happy-dom never intersects a node.
     window.IntersectionObserver = undefined;
     const imdbId = 'tt0133093';
+    const useFixtureResponse = responder => {
+        window.GM_xmlhttpRequest = options => {
+            window.__fixtureRequests.push(options);
+            window.queueMicrotask(() => {
+                const response = responder(options);
+                options.onload?.({ status:200, responseText:'', finalUrl:options.url, ...response });
+            });
+            return { abort() {} };
+        };
+    };
+
+    const rtWrongIdentity = `<script type="application/ld+json">${JSON.stringify({
+        '@type':'Movie', name:'Wrong Film', dateCreated:'2020',
+        url:'https://www.rottentomatoes.com/m/wrong-film',
+        aggregateRating:{ ratingValue:'99' },
+    })}</script>`;
+    assert(hooks.setScoreCorrection(imdbId, 'rottenTomatoes', {
+        mode:'url', url:'https://www.rottentomatoes.com/m/the_matrix', title:'The Matrix', year:1999,
+    }));
+    useFixtureResponse(() => ({
+        responseText:rtWrongIdentity,
+        finalUrl:'https://www.rottentomatoes.com/search?search=the%20matrix',
+    }));
+    await hooks.runFeature('inlineRTScore');
+    assert.match(requireSelector(window.document, '#enh-rt-widget').textContent,
+        /Saved Rotten Tomatoes match unavailable/,
+        'a correction redirected to a search page must not bless unrelated score markup');
+    assert.equal(hooks.cacheGet(`rt_${imdbId}`), null,
+        'an invalid Rotten Tomatoes final URL must not populate the title cache');
+    hooks.stopFeature('inlineRTScore');
+
+    const lbWrongIdentity = `<script type="application/ld+json">${JSON.stringify({
+        '@type':'Movie', name:'Wrong Film', dateCreated:'2020',
+        url:'https://letterboxd.com/film/wrong-film/',
+        aggregateRating:{ ratingValue:'4.99', ratingCount:1 },
+    })}</script>`;
+    assert(hooks.setScoreCorrection(imdbId, 'letterboxd', {
+        mode:'url', url:'https://letterboxd.com/film/the-matrix/', title:'The Matrix', year:1999,
+    }));
+    useFixtureResponse(() => ({
+        responseText:lbWrongIdentity,
+        finalUrl:'https://letterboxd.com/films/popular/',
+    }));
+    await hooks.runFeature('inlineLetterboxdScore');
+    assert.match(requireSelector(window.document, '#enh-lb-widget').textContent,
+        /Saved Letterboxd match unavailable/,
+        'a correction redirected away from a title must not bless unrelated score markup');
+    assert.equal(hooks.cacheGet(`lb_${imdbId}`), null,
+        'an invalid Letterboxd final URL must not populate the title cache');
+    hooks.stopFeature('inlineLetterboxdScore');
+
+    // Availability cache misses must advance immediately to the offline request stub.
     const justWatchCache = {
         providers:['Netflix'],
         url:'https://www.justwatch.com/us/movie/the-matrix',
@@ -341,6 +394,82 @@ await runFixture('title', async (window, hooks) => {
         'TMDB attribution must never appear on JustWatch data');
     requireSelector(window.document, '#enh-jw-widget').remove();
 
+    const justWatchHtml = '<meta name="description" content="Watch The Matrix online on Netflix today">'
+        + `<script type="application/ld+json">${JSON.stringify({
+            '@type':'Movie', name:'The Matrix', dateCreated:'1999-03-31',
+        })}</script>`;
+    assert(hooks.setScoreCorrection(imdbId, 'justWatch', {
+        mode:'url', url:'https://www.justwatch.com/gb/movie/the-matrix', title:'The Matrix', year:1999,
+    }));
+    useFixtureResponse(options => ({ responseText:justWatchHtml, finalUrl:options.url }));
+    window.GM_setValue('imdb_enh_availabilitySource', 'justwatch');
+    window.GM_setValue('imdb_enh_availabilityRegion', 'US');
+    const requestsBeforeUsCorrection = window.__fixtureRequests.length;
+    await hooks.runFeature('streamAvailability');
+    const usCorrectionRequests = window.__fixtureRequests.slice(requestsBeforeUsCorrection);
+    assert.equal(usCorrectionRequests.length, 1);
+    assert.equal(usCorrectionRequests[0].url, 'https://www.justwatch.com/us/movie/the-matrix',
+        'a saved GB title must be requested through the active US region');
+    assert.equal(hooks.cacheGet(hooks.getAvailabilityCacheKey(imdbId, 'justwatch', 'US')).url,
+        'https://www.justwatch.com/us/movie/the-matrix');
+    hooks.stopFeature('streamAvailability');
+
+    window.GM_setValue('imdb_enh_availabilityRegion', 'GB');
+    const requestsBeforeGbCorrection = window.__fixtureRequests.length;
+    await hooks.runFeature('streamAvailability');
+    const gbCorrectionRequests = window.__fixtureRequests.slice(requestsBeforeGbCorrection);
+    assert.equal(gbCorrectionRequests.length, 1);
+    assert.equal(gbCorrectionRequests[0].url, 'https://www.justwatch.com/gb/movie/the-matrix',
+        'the same saved title must follow a later region change');
+    assert.equal(hooks.cacheGet(hooks.getAvailabilityCacheKey(imdbId, 'justwatch', 'GB')).url,
+        'https://www.justwatch.com/gb/movie/the-matrix');
+    hooks.stopFeature('streamAvailability');
+    assert(hooks.setScoreCorrection(imdbId, 'justWatch', null));
+
+    const tmdbGbKey = hooks.getAvailabilityCacheKey(imdbId, 'tmdb', 'GB');
+    window.GM_deleteValue(`cache_${tmdbGbKey}`);
+    window.GM_setValue('imdb_enh_availabilitySource', 'tmdb');
+    window.GM_setValue('imdb_enh_availabilityRegion', 'GB');
+    window.GM_setValue('imdb_enh_tmdbReadToken', 'fixture-token');
+    useFixtureResponse(options => ({
+        responseText:JSON.stringify(options.url.includes('/3/find/')
+            ? { movie_results:[{ id:603 }], tv_results:[], tv_episode_results:[] }
+            : { results:{ GB:{
+                link:'https://www.themoviedb.org/movie/603/watch?locale=GB',
+                flatrate:[], ads:[], rent:[], buy:[],
+            } } }),
+    }));
+    const requestsBeforeTmdbNoOffer = window.__fixtureRequests.length;
+    await hooks.runFeature('streamAvailability');
+    availabilityWidget = requireSelector(window.document, '#enh-jw-widget');
+    assert.match(availabilityWidget.textContent, /TMDB.*Not streamable in GB.*TMDB APIs.*JustWatch/s,
+        'a fresh TMDB no-offer answer must retain its source, region, and attribution');
+    availabilityLink = requireSelector(window.document, '#enh-jw-widget a');
+    assert.equal(availabilityLink.href, 'https://www.themoviedb.org/movie/603/watch?locale=GB',
+        'a fresh TMDB no-offer answer must link back to TMDB');
+    assert.equal(window.__fixtureRequests.length - requestsBeforeTmdbNoOffer, 2,
+        'a fresh TMDB answer needs one identity request and one provider request');
+    assert.deepEqual({ ...hooks.cacheGet(tmdbGbKey) }, {
+        unavailable:true,
+        reason:'region',
+        source:'tmdb',
+        region:'GB',
+        url:'https://www.themoviedb.org/movie/603/watch?locale=GB',
+    });
+    hooks.stopFeature('streamAvailability');
+
+    const requestsBeforeCachedTmdb = window.__fixtureRequests.length;
+    await hooks.runFeature('streamAvailability');
+    availabilityWidget = requireSelector(window.document, '#enh-jw-widget');
+    assert.match(availabilityWidget.textContent, /TMDB.*Not streamable in GB.*TMDB APIs.*JustWatch/s,
+        'the cached TMDB no-offer answer must retain its source and region');
+    assert.equal(requireSelector(window.document, '#enh-jw-widget a').href,
+        'https://www.themoviedb.org/movie/603/watch?locale=GB',
+        'the cached TMDB no-offer answer must not fall back to JustWatch');
+    assert.equal(window.__fixtureRequests.length, requestsBeforeCachedTmdb,
+        'a fresh cached no-offer answer must not contact TMDB again');
+    hooks.stopFeature('streamAvailability');
+
     const emptyStats = hooks.createLocalStatsPanel();
     window.document.body.appendChild(emptyStats);
     assert.match(emptyStats.textContent, /No local viewing history yet/,
@@ -366,8 +495,27 @@ await runFixture('title', async (window, hooks) => {
     assert.equal(stats.seen, 1);
     assert.equal(stats.viewings, 1);
 
+    window.GM_setValue('imdb_enh_availabilitySource', 'justwatch');
+    window.GM_xmlhttpRequest = options => {
+        window.__fixtureRequests.push(options);
+        window.queueMicrotask(() => options.onerror?.({ error:'fixture network disabled' }));
+        return { abort() {} };
+    };
     hooks.createSettingsPanel();
     requireSelector(window.document, '#enh-local-stats-title');
+    const regionInput = requireSelector(window.document, '#enh-setting-availabilityRegion');
+    const regionField = regionInput.closest('.enh-servarr-field');
+    assert.equal(regionField.hidden, false,
+        'the region control must be visible when JustWatch is selected');
+    const availabilitySource = requireSelector(window.document, '#enh-availability-source');
+    availabilitySource.value = 'tmdb';
+    availabilitySource.dispatchEvent(new window.Event('change', { bubbles:true }));
+    assert.equal(regionField.hidden, false,
+        'switching to TMDB must keep the shared region control visible');
+    availabilitySource.value = 'justwatch';
+    availabilitySource.dispatchEvent(new window.Event('change', { bubbles:true }));
+    assert.equal(regionField.hidden, false,
+        'switching back to JustWatch must keep the shared region control visible');
     assert.match(requireSelector(window.document, '.enh-stats-card').textContent, /Action/,
         'the rendered stats view must include metadata captured from the marked title');
     assert.match(requireSelector(window.document, '.enh-stats-card').textContent, /2:16/,

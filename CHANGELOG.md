@@ -40,6 +40,10 @@
 
 ### Fixed
 
+- Saved Rotten Tomatoes and Letterboxd matches now trust the page where the request actually landed. A redirect to search, a listing page, or another site can no longer be parsed and cached under the saved title. Saved JustWatch matches also follow the active country instead of continuing to request the country embedded in the original URL.
+
+- A TMDB result with no offers now keeps its source, country, regional watch link, and attribution in the cache. Reading that answer again no longer labels it as JustWatch or opens a JustWatch search. The country control remains visible for both availability sources.
+
 - Provider HTTP errors now keep their status and response message through the shared request path. Server errors qualify for the bounded stale score fallback and are recorded as HTTP failures. Authentication refusals remain retryable instead of being cached as unavailable for 24 hours.
 
 - The extension background worker now refuses an optional service request unless that service's host access is currently granted. A provider with a permissive CORS policy could previously answer the worker even after the user declined or removed access. The check happens before credentials are read and before any network request starts.

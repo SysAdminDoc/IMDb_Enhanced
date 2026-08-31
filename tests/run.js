@@ -169,6 +169,9 @@ function loadScriptTestHooks({ withoutDeleteValue = false, withheldCredentials =
         CACHE_MAX_TTL,
         WIKIDATA_ID_TTL,
         normalizeScoreCorrectionUrl,
+        resolveScoreCorrectionResponseUrl,
+        getJustWatchCorrectionRequestUrl,
+        resolveJustWatchCorrectionResponseUrl,
         scoreCorrectionUrlsMatch,
         normalizeScoreCorrections,
         getScoreCorrections,
@@ -2917,6 +2920,44 @@ test('score corrections persist outside cache storage and survive settings expor
     assert.strictEqual(hooks.normalizeScoreCorrectionUrl('justWatch', 'https://www.justwatch.com/gb/movie/the-thing'),
         'https://www.justwatch.com/gb/movie/the-thing');
     assert.strictEqual(hooks.normalizeScoreCorrectionUrl('justWatch', 'https://justwatch.com.evil.test/us/movie/the-thing'), '');
+    assert.strictEqual(
+        hooks.resolveScoreCorrectionResponseUrl(
+            'rottenTomatoes', {}, 'https://www.rottentomatoes.com/m/the_thing'),
+        'https://www.rottentomatoes.com/m/the_thing',
+        'a response without redirect metadata may retain the validated request URL'
+    );
+    assert.strictEqual(
+        hooks.resolveScoreCorrectionResponseUrl(
+            'rottenTomatoes', { finalUrl:'https://www.rottentomatoes.com/search?search=thing' },
+            'https://www.rottentomatoes.com/m/the_thing'),
+        '',
+        'an invalid same-host final URL must not fall back to the requested title URL'
+    );
+    assert.strictEqual(
+        hooks.resolveScoreCorrectionResponseUrl(
+            'letterboxd', { finalUrl:'https://example.test/film/the-thing/' },
+            'https://letterboxd.com/film/the-thing/'),
+        '',
+        'a foreign final URL must not inherit the identity of the requested title'
+    );
+    assert.strictEqual(
+        hooks.getJustWatchCorrectionRequestUrl('https://www.justwatch.com/gb/movie/the-thing', 'US'),
+        'https://www.justwatch.com/us/movie/the-thing',
+        'a saved JustWatch title must be requested in the active region'
+    );
+    assert.strictEqual(
+        hooks.resolveJustWatchCorrectionResponseUrl(
+            { finalUrl:'https://www.justwatch.com/us/movie/the-thing' },
+            'https://www.justwatch.com/us/movie/the-thing', 'US'),
+        'https://www.justwatch.com/us/movie/the-thing'
+    );
+    assert.strictEqual(
+        hooks.resolveJustWatchCorrectionResponseUrl(
+            { finalUrl:'https://www.justwatch.com/gb/movie/the-thing' },
+            'https://www.justwatch.com/us/movie/the-thing', 'US'),
+        '',
+        'a redirect back to the saved region must not be cached under the active region'
+    );
 
     assert(hooks.cacheSet(`rt_${imdbId}`, { tomatometer:12 }), 'the volatile score fixture must be stored');
     assert(hooks.setScoreCorrection(imdbId, 'rottenTomatoes', {
@@ -4706,17 +4747,18 @@ test('external access is requested per feature, not demanded at install', () => 
        that failed only for want of a grant records nothing. */
     assert(script.includes('async function cacheUnavailableUnlessBlocked'),
         'a blocked lookup must not poison the cache');
-    /* Six: the three score sources, JustWatch, and availability twice in its TMDB branch.
-       Provider failures must pass the error so authentication refusals cannot become a
-       24-hour unavailable answer. An empty TMDB region is a valid answer and has no error. */
-    assert.strictEqual((script.match(/cacheUnavailableUnlessBlocked\(this\.key, cacheKey(?:, (?:lookupError|tmdbError))?\)/g) || []).length, 6,
+    /* Five: the three score sources, JustWatch, and the TMDB failure branch. Provider
+       failures must pass the error so authentication refusals cannot become a 24-hour
+       unavailable answer. An empty TMDB region stores its structured source and region
+       answer directly, so it does not pass through the failure-only helper. */
+    assert.strictEqual((script.match(/cacheUnavailableUnlessBlocked\(this\.key, cacheKey(?:, (?:lookupError|tmdbError))?\)/g) || []).length, 5,
         'every score and availability lookup must use the guarded form');
     assert.strictEqual((script.match(/cacheUnavailableUnlessBlocked\(this\.key, cacheKey, lookupError\)/g) || []).length, 4,
         'each ordinary provider failure must pass its real error to the cache guard');
     assert.strictEqual((script.match(/cacheUnavailableUnlessBlocked\(this\.key, cacheKey, tmdbError\)/g) || []).length, 1,
         'the TMDB failure must pass its real error to the cache guard');
-    assert.strictEqual((script.match(/cacheUnavailableUnlessBlocked\(this\.key, cacheKey\)/g) || []).length, 1,
-        'only a valid empty-region answer may use the guard without an error');
+    assert.strictEqual((script.match(/cacheUnavailableUnlessBlocked\(this\.key, cacheKey\)/g) || []).length, 0,
+        'the failure-only guard must never be called without the provider error');
     /* The unguarded form. Recording "unavailable" for 24 hours when the only problem was a
        missing grant outlives the fix, so no lookup may reach for it directly. */
     const lookupRegion = script.slice(script.indexOf("key: 'inlineRTScore'"), script.indexOf("key: 'trailerPopover'"));
@@ -4813,12 +4855,12 @@ test('TMDB availability resolves an IMDb id and reads only the chosen region', (
     assert(hooks.getJustWatchSearchUrl('The Matrix').startsWith('https://www.justwatch.com/us/'),
         'and the default still works');
     // Said out loud rather than rendered as nothing, which read as broken.
-    assert(script.includes('`Not streamable in ${getAvailabilityRegion()}`'),
+    assert(script.includes('`Not streamable in ${region}`'),
         'a region with no offers must say so');
     /* Both paths reach it: a lookup that came back with nothing for this region, and a
        cached entry that turns out to hold nothing. Counted rather than matched once,
        because either alone satisfies a substring check while the other has regressed. */
-    assert.strictEqual((script.match(/this\._renderUnavailable\('region'\)/g) || []).length, 2,
+    assert.strictEqual((script.match(/this\._renderUnavailable\('region',/g) || []).length, 2,
         'every path that finds no offers must say so rather than reporting a generic failure');
     assert(/\[\['Rent', rent\], \['Buy', buy\]\]/.test(script),
         'renting and buying must be listed apart from streaming');

@@ -2771,6 +2771,14 @@
         } catch { return ''; }
     }
 
+    /* Redirect provenance is part of a corrected match. A response that landed on a
+       search page or another host must not be parsed under the trusted URL that was
+       requested, because identity override would then bless markup from the wrong page. */
+    function resolveScoreCorrectionResponseUrl(provider, response, requestedUrl) {
+        const finalUrl = typeof response?.finalUrl === 'string' ? response.finalUrl.trim() : '';
+        return normalizeScoreCorrectionUrl(provider, finalUrl || requestedUrl);
+    }
+
     function scoreCorrectionUrlsMatch(provider, left, right) {
         const first = normalizeScoreCorrectionUrl(provider, left);
         const second = normalizeScoreCorrectionUrl(provider, right);
@@ -5527,6 +5535,26 @@ section[id*="quote" i] .ipc-list-card { padding: 4px 0 !important; margin: 2px 0
     function getJustWatchRegionPath() {
         return getAvailabilityRegion().toLowerCase();
     }
+    function getJustWatchCorrectionRequestUrl(value, region = getAvailabilityRegion()) {
+        const normalized = normalizeScoreCorrectionUrl('justWatch', value);
+        const normalizedRegion = String(region || '').trim().toUpperCase();
+        if (!normalized || !/^[A-Z]{2}$/.test(normalizedRegion)) return '';
+        try {
+            const parsed = new URL(normalized);
+            parsed.pathname = parsed.pathname.replace(/^\/[a-z]{2}\//i, `/${normalizedRegion.toLowerCase()}/`);
+            return parsed.href;
+        } catch { return ''; }
+    }
+    function resolveJustWatchCorrectionResponseUrl(response, requestedUrl, region = getAvailabilityRegion()) {
+        const resolved = resolveScoreCorrectionResponseUrl('justWatch', response, requestedUrl);
+        const normalizedRegion = String(region || '').trim().toUpperCase();
+        if (!resolved || !/^[A-Z]{2}$/.test(normalizedRegion)) return '';
+        try {
+            return new URL(resolved).pathname.split('/').filter(Boolean)[0]?.toUpperCase() === normalizedRegion
+                ? resolved
+                : '';
+        } catch { return ''; }
+    }
     function getJustWatchSearchUrl(title = getTitleText()) {
         return `https://www.justwatch.com/${getJustWatchRegionPath()}/search?q=${encodeURIComponent(title || '')}`;
     }
@@ -6929,15 +6957,15 @@ section[id*="quote" i] .ipc-list-card { padding: 4px 0 !important; margin: 2px 0
                 try {
                     const response = await httpGet(correction.url, { cancelOnRouteChange:true });
                     if (!isCurrent()) return;
-                    const resolvedUrl = normalizeScoreCorrectionUrl('rottenTomatoes', response.finalUrl || correction.url);
-                    const corrected = parseRTDetailPage(
+                    const resolvedUrl = resolveScoreCorrectionResponseUrl('rottenTomatoes', response, correction.url);
+                    const corrected = resolvedUrl ? parseRTDetailPage(
                         response.responseText,
                         correction.title || title,
                         correction.year || year,
                         type,
-                        resolvedUrl || correction.url,
+                        resolvedUrl,
                         true
-                    );
+                    ) : null;
                     if (corrected) {
                         const data = withScoreCorrection(corrected, correction);
                         cacheSet(cacheKey, data);
@@ -7100,14 +7128,14 @@ section[id*="quote" i] .ipc-list-card { padding: 4px 0 !important; margin: 2px 0
                 try {
                     const response = await httpGet(correction.url, { cancelOnRouteChange:true });
                     if (!isCurrent()) return;
-                    const resolvedUrl = normalizeScoreCorrectionUrl('letterboxd', response.finalUrl || correction.url);
-                    const corrected = parseLetterboxdDetailPage(
+                    const resolvedUrl = resolveScoreCorrectionResponseUrl('letterboxd', response, correction.url);
+                    const corrected = resolvedUrl ? parseLetterboxdDetailPage(
                         response.responseText,
                         correction.title || title,
                         correction.year || year,
-                        resolvedUrl || correction.url,
+                        resolvedUrl,
                         true
-                    );
+                    ) : null;
                     if (corrected) {
                         const data = withScoreCorrection(corrected, correction);
                         cacheSet(cacheKey, data);
@@ -7390,10 +7418,11 @@ section[id*="quote" i] .ipc-list-card { padding: 4px 0 !important; margin: 2px 0
             if (!imdbId || !title) return;
 
             const availabilitySource = getEffectiveAvailabilitySource();
+            const availabilityRegion = getAvailabilityRegion();
             /* Source and region are part of the answer. The old jw_<id> key and the
                short-lived tmdb_<id> key are deliberately not read, so neither can cross
                an adapter or region boundary after an upgrade. */
-            const cacheKey = getAvailabilityCacheKey(imdbId, availabilitySource, getAvailabilityRegion());
+            const cacheKey = getAvailabilityCacheKey(imdbId, availabilitySource, availabilityRegion);
             const correction = availabilitySource === 'justwatch'
                 ? getScoreCorrection(imdbId, 'justWatch')
                 : null;
@@ -7410,7 +7439,7 @@ section[id*="quote" i] .ipc-list-card { padding: 4px 0 !important; margin: 2px 0
                 return;
             }
             if (cached) {
-                if (cached.unavailable) this._renderUnavailable();
+                if (cached.unavailable) this._renderUnavailable(cached.reason || 'unavailable', cached);
                 else this._render(cached);
                 return;
             }
@@ -7439,9 +7468,16 @@ section[id*="quote" i] .ipc-list-card { padding: 4px 0 !important; margin: 2px 0
                     /* A region with no offers is an answer, not a failure, and saying so
                        beats rendering nothing: "not here" is information, and without it
                        the panel looked broken. */
-                    await cacheUnavailableUnlessBlocked(this.key, cacheKey);
+                    const unavailable = {
+                        unavailable:true,
+                        reason:'region',
+                        source:'tmdb',
+                        region:result.region || availabilityRegion,
+                        url:result.url || '',
+                    };
+                    cacheSet(cacheKey, unavailable, CACHE_UNAVAILABLE_TTL);
                     if (!isCurrent()) return;
-                    this._renderUnavailable('region');
+                    this._renderUnavailable('region', unavailable);
                     return;
                 } catch (error) { tmdbError = error; }
                 if (!isCurrent()) return;
@@ -7459,11 +7495,14 @@ section[id*="quote" i] .ipc-list-card { padding: 4px 0 !important; margin: 2px 0
             const expected = { title, year:getTitleYear(), typePath:getJustWatchTypePath() };
             if (correction?.mode === 'url') {
                 try {
-                    const response = await httpGet(correction.url, {
+                    const requestUrl = getJustWatchCorrectionRequestUrl(correction.url, availabilityRegion);
+                    if (!requestUrl) throw new Error('Saved JustWatch match is invalid');
+                    const response = await httpGet(requestUrl, {
                         headers, timeout:12000, cancelOnRouteChange:true,
                     });
                     if (!isCurrent()) return;
-                    const resolvedUrl = normalizeScoreCorrectionUrl('justWatch', response.finalUrl || correction.url);
+                    const resolvedUrl = resolveJustWatchCorrectionResponseUrl(
+                        response, requestUrl, availabilityRegion);
                     const parsed = resolvedUrl
                         ? this._parse(response.responseText, resolvedUrl, expected, true)
                         : null;
@@ -7544,7 +7583,7 @@ section[id*="quote" i] .ipc-list-card { padding: 4px 0 !important; margin: 2px 0
             /* Rentable but not streamable is still an answer, and the panel used to give
                up on it entirely. A cached entry from before this shipped has no offers,
                so the streaming list stands in for all of it. */
-            if (!summary && !rent.length && !buy.length) { this._renderUnavailable('region'); return; }
+            if (!summary && !rent.length && !buy.length) { this._renderUnavailable('region', data); return; }
             /* Each adapter returns a title page on its own service. Pick the trust
                boundary from the adapter that produced the payload; checking every URL
                against JustWatch discarded TMDB's region-aware watch link. */
@@ -7601,17 +7640,28 @@ section[id*="quote" i] .ipc-list-card { padding: 4px 0 !important; margin: 2px 0
             `;
             bar.appendChild(w);
         },
-        _renderUnavailable(reason = 'unavailable') {
+        _renderUnavailable(reason = 'unavailable', detail = null) {
             document.getElementById('enh-jw-widget')?.remove();
             const bar = findRatingBar();
             if (!bar) return;
-            const usingJustWatch = getEffectiveAvailabilitySource() !== 'tmdb';
+            const source = detail?.source === 'tmdb' || detail?.source === 'justwatch'
+                ? detail.source
+                : getEffectiveAvailabilitySource();
+            const usingJustWatch = source !== 'tmdb';
+            const storedRegion = String(detail?.region || '').trim().toUpperCase();
+            const region = AVAILABILITY_REGION_PATTERN.test(storedRegion)
+                ? storedRegion
+                : getAvailabilityRegion();
+            const fallbackUrl = usingJustWatch
+                ? getJustWatchSearchUrl()
+                : `https://www.themoviedb.org/search?query=${encodeURIComponent(getTitleText())}`;
+            const href = usingJustWatch
+                ? getSavedScoreCorrectionUrl('justWatch', fallbackUrl)
+                : normalizeTrustedUrl(detail?.url, 'themoviedb.org', fallbackUrl);
             const w = makeEl('div', { id: 'enh-jw-widget', className: 'enh-score-widget enh-score-widget--muted enh-score-widget--availability' },
                 makeEl('div', { className: 'enh-score-widget__label' }, 'STREAMING'),
                 makeEl('a', {
-                    href: usingJustWatch
-                        ? getSavedScoreCorrectionUrl('justWatch', getJustWatchSearchUrl())
-                        : getJustWatchSearchUrl(),
+                    href,
                     target: '_blank',
                     rel: 'noopener noreferrer',
                     className: 'enh-score-widget__score enh-score-widget__score--availability',
@@ -7623,12 +7673,13 @@ section[id*="quote" i] .ipc-list-card { padding: 4px 0 !important; margin: 2px 0
             /* "Not streamable in GB" answers the question; "availability unavailable"
                only says the extension gave up. */
             const availabilityNote = reason === 'excluded' ? describeProfileExclusion(this.key)
-                : reason === 'region' ? `Not streamable in ${getAvailabilityRegion()}`
+                : reason === 'region' ? `Not streamable in ${region}`
                 : reason === 'corrected-none' ? 'Marked as no entry on JustWatch'
                 : reason === 'correction-failed' ? 'Saved JustWatch match unavailable'
                 : 'Availability unavailable';
             appendUnavailableNote(w, reason, availabilityNote);
             if (usingJustWatch && reason !== 'excluded') appendScoreCorrectionAction(w, 'justWatch', this.key);
+            else if (!usingJustWatch && reason === 'region') appendProviderAttribution(w, 'tmdb');
             bar.appendChild(w);
         },
         destroy() { document.getElementById('enh-jw-widget')?.remove(); }
@@ -13454,7 +13505,6 @@ section[data-testid="hero-parent"].enh-editorial-native-hidden { display: none !
                     event.target.value = value;
                     if (!trySaveSetting('availabilitySource', value)) return;
                     tokenField.hidden = value !== 'tmdb';
-                    regionField.hidden = value !== 'tmdb';
                     refreshFeature('streamAvailability');
                     markSaved();
                 },
@@ -13480,12 +13530,11 @@ section[data-testid="hero-parent"].enh-editorial-native-hidden { display: none !
                 placeholder:'Two-letter country code, such as US or GB',
                 refreshKey:'streamAvailability',
             });
-            regionField.hidden = getAvailabilitySource() !== 'tmdb';
             return makeEl('div', { className:'enh-settings-callout', style:{ marginTop:'12px' } },
                 makeEl('strong', {}, 'Where availability comes from'),
                 select,
                 makeEl('span', { className:'enh-settings-card-description' },
-                    'TMDB publishes this data through a documented API and asks for a token of your own, free from themoviedb.org. JustWatch is read by parsing their page. Choosing TMDB without a token says so rather than quietly reading the page instead.'),
+                    'Both sources use the two-letter region below. TMDB publishes its data through a documented API and asks for a token of your own, free from themoviedb.org. JustWatch is read by parsing their page. Choosing TMDB without a token says so rather than quietly reading the page instead.'),
                 tokenField,
                 regionField
             );
