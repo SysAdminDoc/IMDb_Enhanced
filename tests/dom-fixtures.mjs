@@ -12,6 +12,11 @@ const userscript = fs.readFileSync(path.join(root, 'IMDb_Enhanced.user.js'), 'ut
 
 let Window;
 try {
+    if (process.env.IMDB_ENH_FORCE_NO_HAPPY_DOM === '1') {
+        const forced = new Error("Cannot find package 'happy-dom'");
+        forced.code = 'ERR_MODULE_NOT_FOUND';
+        throw forced;
+    }
     ({ Window } = await import('happy-dom'));
 } catch (error) {
     if (error?.code === 'ERR_MODULE_NOT_FOUND' && /happy-dom/.test(String(error?.message))) {
@@ -37,8 +42,11 @@ const instrumented = userscript.replace(/\}\)\(\);\s*$/, `globalThis.__imdbEnhan
     describeCollectionRuntime,
     getPageSurface,
     createSettingsPanel,
+    createLocalStatsPanel,
     destroySettingsChrome,
     summarizeLocalStats,
+    cancelPendingRouteWork,
+    stopAllFeatures: () => features.forEach(stopFeature),
     initFeature: key => {
         const feature = features.find(candidate => candidate.key === key);
         if (!feature) throw new Error('Unknown feature: ' + key);
@@ -66,10 +74,14 @@ function requireSelector(document, selector) {
 async function abortWindow(window) {
     // happy-dom can leave its abort promise unresolved after an assertion interrupts
     // DOM work. Its abort call clears resources synchronously, so bound only the wait.
-    await Promise.race([
-        window.happyDOM.abort(),
-        new Promise(resolve => setTimeout(resolve, 250)),
-    ]);
+    try {
+        await Promise.race([
+            window.happyDOM.abort(),
+            new Promise(resolve => setTimeout(resolve, 250)),
+        ]);
+    } finally {
+        window.close();
+    }
 }
 
 async function waitForSelector(window, selector, timeout = 500) {
@@ -112,6 +124,10 @@ async function runFixture(name, run) {
     window.document.close();
     installUserscriptGlobals(window);
     window.eval(instrumented);
+    // Let the userscript's queued boot observe the neutral host before switching the
+    // fixture URL. Otherwise happy-dom runs the delayed boot after setURL(), starts every
+    // default feature, and leaves four 60-second visibility waits behind the focused test.
+    await new Promise(resolve => window.setTimeout(resolve, 0));
     window.happyDOM.setURL(definition.url);
 
     try {
@@ -129,6 +145,8 @@ async function runFixture(name, run) {
         }
         throw error;
     } finally {
+        window.__imdbEnhancedDomTest?.stopAllFeatures();
+        window.__imdbEnhancedDomTest?.cancelPendingRouteWork();
         await abortWindow(window);
     }
 }
@@ -141,6 +159,12 @@ await runFixture('title', async (window, hooks) => {
     assert.equal(hooks.getMediaType(), 'movie');
     assert.equal(Number(hooks.getIMDbRating()), 8.7);
     requireSelector(window.document, '[data-testid="hero__primary-text"]');
+
+    const emptyStats = hooks.createLocalStatsPanel();
+    window.document.body.appendChild(emptyStats);
+    assert.match(emptyStats.textContent, /No local viewing history yet/,
+        'a fresh install must render the local-stats empty state');
+    emptyStats.remove();
 
     assert.equal(hooks.initFeature('collapsibleSections'), true);
     assert.equal(hooks.initFeature('quickCopyID'), true);
@@ -167,6 +191,11 @@ await runFixture('title', async (window, hooks) => {
         'the rendered stats view must include metadata captured from the marked title');
     assert.match(requireSelector(window.document, '.enh-stats-card').textContent, /2:16/,
         'the rendered stats view must include known runtime');
+    assert.equal(requireSelector(window.document, '#enh-csv-apply').disabled, true,
+        'CSV apply must stay blocked until a preview has run');
+    assert.match(requireSelector(window.document, '#enh-csv-file').closest('.enh-settings-card').textContent,
+        /does not change IMDb Watched status/,
+        'the rendered import control must distinguish local history from the IMDb account');
     const csvTextarea = requireSelector(window.document, '#enh-csv-textarea');
     csvTextarea.value = 'Const,Your Rating,Date Rated,Title\ntt0133093,9,2026-01-02,The Matrix';
     csvTextarea.dispatchEvent(new window.Event('input', { bubbles:true }));
@@ -218,16 +247,33 @@ await runFixture('chart', async (window, hooks) => {
     assert.deepEqual(summary, { counted:2, missing:1, minutes:317, total:3 });
     assert.equal(hooks.describeCollectionRuntime(summary),
         '3 titles · 5:17 total from 2 · 1 without a listed runtime');
+    assert.equal(hooks.initFeature('watchedMarking'), true);
+    (await waitForSelector(window, 'li.ipc-metadata-list-summary-item .enh-mark-btn--watched')).click();
+    const stored = hooks.getUserMarks().tt0111161;
+    assert.deepEqual({ year:stored.year, imdbRating:stored.imdbRating, runtime:stored.runtime }, {
+        year:1994, imdbRating:9.3, runtime:142,
+    }, 'a real collection-card mark click must retain the metadata already rendered in that row');
+    hooks.stopFeature('watchedMarking');
 });
 
-/* Prove a selector regression reports the selector itself, rather than only a generic
-   assertion and a large DOM dump. The real failure path also writes the full DOM above. */
+/* Drive the real catch path. This proves both parts of the failure contract: the broken
+   selector is named and the artifact path points to a DOM file that was actually written. */
 {
-    const window = new Window();
-    let message = '';
-    try { requireSelector(window.document, '[data-testid="deliberately-missing"]'); }
-    catch (error) { message = error.message; }
-    assert.match(message, /\[data-testid="deliberately-missing"\]/);
-    await abortWindow(window);
-    console.log('ok - selector failures name the offending selector and retain a DOM artifact path');
+    const artifactPath = path.join(artifactDir, 'title.html');
+    let failure = null;
+    try {
+        await runFixture('title', async window => {
+            requireSelector(window.document, '[data-testid="deliberately-missing"]');
+        });
+    } catch (error) {
+        failure = error;
+    }
+    assert.ok(failure, 'the deliberate selector failure must reach the artifact-writing path');
+    assert.match(failure.message, /\[data-testid="deliberately-missing"\]/);
+    assert.match(failure.message, /DOM artifact: tests[\\/]artifacts[\\/]dom-fixtures[\\/]title\.html/);
+    assert.equal(fs.existsSync(artifactPath), true, 'the reported DOM artifact must exist');
+    assert.match(fs.readFileSync(artifactPath, 'utf8'), /The Matrix/,
+        'the artifact must contain the rendered fixture DOM');
+    fs.rmSync(artifactPath, { force:true });
+    console.log('ok - selector failures name the offending selector and write the reported DOM artifact');
 }

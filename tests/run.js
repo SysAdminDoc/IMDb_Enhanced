@@ -169,6 +169,7 @@ function loadScriptTestHooks({ withoutDeleteValue = false, withheldCredentials =
         normalizeUserMark,
         normalizeUserNote,
         USER_MARK_RECORD_VERSION,
+        USER_MARK_VIEWINGS_MAX,
         USER_MARK_NOTE_LIMIT,
         readPersonBirthDate,
         isPersonDeceased,
@@ -465,6 +466,14 @@ function loadScriptTestHooks({ withoutDeleteValue = false, withheldCredentials =
 
 test('userscript parses', () => {
     execFileSync(process.execPath, ['--check', scriptPath], { stdio: 'pipe' });
+});
+
+test('DOM fixtures skip cleanly when the optional DOM dependency is absent', () => {
+    const output = execFileSync(process.execPath, [path.join(root, 'tests', 'dom-fixtures.mjs')], {
+        encoding:'utf8',
+        env:{ ...process.env, IMDB_ENH_FORCE_NO_HAPPY_DOM:'1' },
+    });
+    assert.match(output, /DOM fixture harness skipped/);
 });
 
 test('metadata stays distribution-safe', () => {
@@ -1415,7 +1424,7 @@ test('local statistics aggregate bounded history without inventing missing data'
         tt0078748:{
             v:2, state:'watched', title:'Alien', ts:2,
             viewings:[{ date:'2025-04-05', rating:7 }],
-            rating:7, year:1979, genres:['Horror', 'Sci-Fi'], imdbRating:8.5, runtime:117,
+            rating:7, year:1979, genres:['Horror', 'sci-fi'], imdbRating:8.5, runtime:117,
         },
         tt0084787:{ v:2, state:'skip', title:'The Thing', ts:4, year:1982, genres:['Horror'] },
         tt0111161:{ v:2, state:'watched', title:'Shawshank', ts:5 },
@@ -1462,6 +1471,28 @@ test('local statistics aggregate bounded history without inventing missing data'
     });
     assert.strictEqual(review.reviewYear.label, '2026');
     assert.strictEqual(review.reviewYear.count, 10);
+
+    const crowdedYears = {};
+    for (let year = 2016; year <= 2023; year += 1) {
+        crowdedYears[`tt${year}000`] = {
+            v:2, state:'watched', title:String(year), ts:year,
+            viewings:Array.from({ length:11 }, (_, index) => ({
+                date:`${year}-01-${String(index + 1).padStart(2, '0')}`,
+            })),
+        };
+    }
+    crowdedYears.tt2026000 = {
+        v:2, state:'watched', title:'2026', ts:2026,
+        viewings:Array.from({ length:10 }, (_, index) => ({
+            date:`2026-01-${String(index + 1).padStart(2, '0')}`,
+        })),
+    };
+    const crowdedReview = hooks.summarizeLocalStats(crowdedYears);
+    assert.strictEqual(crowdedReview.years.length, hooks.LOCAL_STATS_GROUP_LIMIT);
+    assert.strictEqual(crowdedReview.years.some(item => item.label === '2026'), false,
+        'the display list should stay bounded when more than eight years have activity');
+    assert.deepStrictEqual(JSON.parse(JSON.stringify(crowdedReview.reviewYear)), { label:'2026', count:10 },
+        'year-review eligibility must be calculated before the display list is truncated');
     assert.strictEqual(hooks.summarizeLocalStats({}).markedTitles, 0, 'fresh installs need a real empty state');
     assert.strictEqual(stats.topGenres.length <= hooks.LOCAL_STATS_GROUP_LIMIT, true);
 });
@@ -1505,6 +1536,35 @@ test('CSV import maps IMDb and Letterboxd headers without relying on column posi
     ].join('\n'), {});
     assert.strictEqual(reversed.marks.tt0083658.rating, 9,
         'the later Rating column should win and convert the five-star value');
+});
+
+test('CSV import reports every storage bound instead of silently dropping history', () => {
+    const hooks = loadScriptTestHooks();
+    const viewingRows = Array.from({ length:hooks.USER_MARK_VIEWINGS_MAX + 1 }, (_, index) => {
+        const date = new Date(Date.UTC(2026, 0, index + 1)).toISOString().slice(0, 10);
+        return `tt0133093,${date},The Matrix`;
+    });
+    const bounded = hooks.prepareCsvMarkImport([
+        'Const,Date Rated,Title',
+        ...viewingRows,
+    ].join('\n'), {});
+    assert.strictEqual(bounded.importedRows, hooks.USER_MARK_VIEWINGS_MAX + 1);
+    assert.strictEqual(bounded.marks.tt0133093.viewings.length, hooks.USER_MARK_VIEWINGS_MAX);
+    assert.strictEqual(bounded.droppedViewings, 1);
+    assert.match(hooks.describeCsvMarkImport(bounded), /1 viewing event over the 100-per-title limit not retained/);
+
+    const rowLimited = hooks.prepareCsvMarkImport([
+        'Const,Title',
+        ...Array.from({ length:hooks.CSV_IMPORT_ROW_LIMIT + 2 }, () => 'tt0133093,The Matrix'),
+    ].join('\n'), {});
+    assert.strictEqual(rowLimited.importedRows, hooks.CSV_IMPORT_ROW_LIMIT);
+    assert.strictEqual(rowLimited.skippedRows, 2);
+
+    assert.throws(
+        () => hooks.parseCsvTable('Const,Title\n' + 'x'.repeat(hooks.SETTINGS_IMPORT_TEXT_LIMIT)),
+        /under 4 MB/,
+        'the text-size ceiling should fail before parsing an oversized CSV'
+    );
 });
 
 test('generic CSV rows resolve only against unambiguous stored title identities', () => {

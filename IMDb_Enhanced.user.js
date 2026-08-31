@@ -1631,6 +1631,7 @@
         let skippedRows = Math.max(0, rows.length - 1 - dataRows.length);
         let importedRows = 0;
         let resolvedRows = 0;
+        let droppedViewings = 0;
         const touched = new Set();
         const importedAt = Date.now();
 
@@ -1671,6 +1672,13 @@
             const event = state === 'watched' && date
                 ? [{ date, ...(rating !== null ? { rating } : {}) }]
                 : [];
+            if (event.length) {
+                const previousViewings = normalizeViewingEvents(previous.viewings);
+                const eventKey = `${event[0].date}\u0000${event[0].rating ?? ''}`;
+                const alreadyStored = previousViewings.some(viewing =>
+                    `${viewing.date}\u0000${viewing.rating ?? ''}` === eventKey);
+                if (!alreadyStored && previousViewings.length >= USER_MARK_VIEWINGS_MAX) droppedViewings += 1;
+            }
             const viewingTimestamp = date ? Date.parse(`${date}T12:00:00.000Z`) : importedAt;
             merged[imdbId] = {
                 ...previous,
@@ -1702,6 +1710,7 @@
             importedTitles,
             resolvedRows,
             skippedRows,
+            droppedViewings,
             droppedTitles:touched.size - importedTitles,
             marks,
         };
@@ -1715,6 +1724,9 @@
         ];
         if (result.resolvedRows) parts.push(`${result.resolvedRows} matched to titles already stored here`);
         if (result.skippedRows) parts.push(`${result.skippedRows} skipped`);
+        if (result.droppedViewings) {
+            parts.push(`${result.droppedViewings} viewing ${result.droppedViewings === 1 ? 'event' : 'events'} over the ${USER_MARK_VIEWINGS_MAX}-per-title limit not retained`);
+        }
         if (result.droppedTitles) parts.push(`${result.droppedTitles} over the ${USER_MARKS_MAX}-title limit`);
         return `${parts.join('; ')}. Nothing has been changed yet.`;
     }
@@ -1734,6 +1746,7 @@
         const entries = normalizeUserMarkEntries(source || {});
         const years = new Map();
         const genres = new Map();
+        const genreLabels = new Map();
         const decades = new Map();
         let seen = 0;
         let skipped = 0;
@@ -1758,7 +1771,11 @@
             if (!belongsToHistory) return;
             historyTitles += 1;
             const markGenres = normalizeUserMarkGenres(mark.genres);
-            markGenres.forEach(genre => incrementLocalStat(genres, genre));
+            markGenres.forEach(genre => {
+                const key = genre.toLocaleLowerCase();
+                if (!genreLabels.has(key)) genreLabels.set(key, genre);
+                incrementLocalStat(genres, key);
+            });
             const releaseYear = normalizeUserMarkYear(mark.year);
             if (releaseYear !== null) incrementLocalStat(decades, `${Math.floor(releaseYear / 10) * 10}s`);
             const personal = normalizeUserMarkRating(mark.rating);
@@ -1773,10 +1790,11 @@
             if (markGenres.length || releaseYear !== null || imdb !== null || runtime !== null) metadataTitles += 1;
         });
 
-        const activity = rankLocalStats(years, true);
-        const reviewYear = activity
+        const reviewYear = [...years.entries()]
+            .map(([label, count]) => ({ label:String(label), count }))
             .filter(item => item.count >= 10)
             .sort((a, b) => Number(b.label) - Number(a.label))[0] || null;
+        const activity = rankLocalStats(years, true);
         return {
             records:entries.length,
             markedTitles:seen + skipped,
@@ -1791,7 +1809,7 @@
             historyTitles,
             metadataTitles,
             years:activity,
-            topGenres:rankLocalStats(genres),
+            topGenres:rankLocalStats(genres).map(item => ({ ...item, label:genreLabels.get(item.label) || item.label })),
             decades:rankLocalStats(decades, true),
             reviewYear,
         };

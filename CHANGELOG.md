@@ -38,6 +38,12 @@
 
 ### Fixed
 
+- CSV previews now report viewing events displaced by the 100-event per-title limit. A valid row can still update the title and rating metadata, but its history event is no longer dropped without an explicit count.
+
+- Local genre statistics merge case variants such as `Sci-Fi` and `sci-fi`, and year-review eligibility is calculated from every activity year before the visible chart is limited to eight rows.
+
+- The DOM fixture self-test now drives the real failure path, writes the DOM artifact it reports, and verifies that file before removing it. The suite also pins the clean skip without happy-dom, renders the fresh stats empty state, checks preview gating and local-only copy, and clicks a real collection-card mark through to stored metadata.
+
 - A TMDB token is no longer attached to a plain HTTP request. Public service credentials now require HTTPS, while local Radarr, Sonarr, and media-server connections can still use HTTP on loopback.
 
 - Credentialed requests refuse redirects based on the fact that the worker attached a secret, not on the header name supplied by the caller. Renaming a header can no longer turn redirect following back on.
