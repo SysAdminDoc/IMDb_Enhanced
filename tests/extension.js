@@ -105,8 +105,12 @@ FIREFOX_COPIED_FILES.forEach(name => {
 /* The behavioural coverage for these lives in tests/background.js, which executes the
    worker. These two only guard against the hardening being deleted wholesale, since a
    background.js that no longer classifies redirects would still load and answer. */
-assert(background.includes("redirect: carriesCredentials ? 'error' : 'follow'"),
-    'a credential-bearing privileged fetch must forbid redirects rather than follow them');
+/* 'manual' rather than 'error': both stop the hop, but only 'manual' is distinguishable
+   from an unreachable host, which browsers report with the identical opaque TypeError. */
+assert(background.includes("redirect: carriesCredentials ? 'manual' : 'follow'"),
+    'a credential-bearing privileged fetch must not follow redirects');
+assert(background.includes("response.type === 'opaqueredirect'"),
+    'a stopped redirect must be recognized from the response, not inferred from an error message');
 assert(background.includes('describeRequestUrl(finalUrl)'),
     'the privileged fetch must re-validate the URL a response actually came from');
 

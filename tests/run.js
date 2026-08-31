@@ -1740,7 +1740,10 @@ test('settings exports are canonical and fully re-importable', () => {
             state:index % 2 ? 'watched' : 'skip', title:'T'.repeat(160), ts:index,
         };
     }
-    const maximumSites = Array.from({ length:50 }, (_, index) => ({
+    /* Derived from the real limit, not a copy of what it used to be: when the site-list
+       ceiling went 50 -> 250 for the FMHY catalog, a hard-coded 50 quietly stopped
+       testing the maximum this guarantee is about. */
+    const maximumSites = Array.from({ length:maximumHooks.SITE_LIST_LIMIT }, (_, index) => ({
         name:`Site ${index}`,
         url:`https://example.com/${'a'.repeat(4000)}?q={{TITLE}}&i=${index}`,
         color:'#6366f1',
@@ -2596,6 +2599,11 @@ test('the FMHY catalog offers valid, unique, addable destinations', () => {
     });
     assert(total >= 150, `the catalog should carry the full FMHY streaming list (got ${total})`);
     assert(total <= hooks.SITE_LIST_LIMIT, 'every catalog entry must be addable within the site-list limit');
+    /* save() validates every row, so an incomplete row left elsewhere in the editor also
+       fails an Add. Blaming storage for that sends the user after the wrong thing. */
+    const addHandler = script.slice(script.indexOf("className:'enh-site-catalog__add'"));
+    assert(/lastSaveFailure === 'validation'[\s\S]{0,160}?incomplete site row/.test(addHandler.slice(0, 1600)),
+        'a failed catalog add must distinguish an invalid row from a storage failure');
     /* Filtering hides entries with the hidden property. The UA stylesheet's [hidden]
        rule loses to the entry's own display declaration, so without this the filter
        leaves every entry of a matching group on screen. */

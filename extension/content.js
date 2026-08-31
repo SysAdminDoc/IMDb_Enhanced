@@ -9082,7 +9082,13 @@ section[data-testid="hero-parent"].enh-editorial-native-hidden { display: none !
                             if (!save()) {
                                 row.remove();
                                 updateCount();
-                                showToast(`Could not save ${site.name}. Check ${STORAGE_HOST_LABEL}.`, 4500);
+                                /* save() validates every row, so an incomplete row the
+                                   user left elsewhere in the editor fails this one too.
+                                   Telling them to check storage sends them after the
+                                   wrong thing entirely. */
+                                showToast(lastSaveFailure === 'validation'
+                                    ? `Finish or remove the incomplete site row before adding ${site.name}`
+                                    : `Could not save ${site.name}. Check ${STORAGE_HOST_LABEL}.`, 4500);
                                 return;
                             }
                             addedCount += 1;
