@@ -338,6 +338,7 @@
         aria_close_correction_panel: 'Close correction panel',
         aria_close_settings: 'Close settings',
         aria_close_trailer: 'Close trailer',
+        aria_collapse_named_section: 'Collapse $1',
         aria_confirm_clearing_saved_title_marks: 'Confirm clearing $1 saved title marks',
         aria_copy_imdb_id: 'Copy IMDb ID $1',
         aria_correct_match: 'Correct $1 match',
@@ -348,6 +349,7 @@
         aria_destination_row_in_list: '$1 in $2',
         aria_dim_titles_rated_below: 'Dim titles rated below',
         aria_dismiss_the_update_notice: 'Dismiss the $1 update notice',
+        aria_expand_named_section: 'Expand $1',
         aria_filter_by_private_marks: 'Filter by private marks',
         aria_filter_catalog_destinations: 'Filter catalog destinations',
         aria_find_subtitles_for: 'Find subtitles for $1',
@@ -595,6 +597,11 @@
         label_private_marks: 'Private marks',
         label_private_title_marks: 'Private title marks',
         label_rate: 'Rate',
+        label_rating_average: 'Average',
+        label_rating_good: 'Good',
+        label_rating_great: 'Great',
+        label_rating_poor: 'Poor',
+        label_rating_unrated: 'N/A',
         label_ratings: 'Ratings',
         label_region: 'Region',
         label_request: 'Request',
@@ -624,6 +631,8 @@
         label_url: 'URL',
         label_via_omdb: 'via OMDb',
         label_wrong: 'Wrong?',
+        menu_copy_settings_backup: 'Copy settings backup (no credentials)',
+        menu_reset_all_settings: 'Reset all settings (with undo)',
         permissions_access_declined_note: 'Access was not granted. IMDb Enhanced stays inactive until you allow it to run on IMDb.',
         permissions_access_granted_note: 'Access granted. Reload any IMDb tabs that were already open.',
         permissions_access_scope_note: 'Access covers IMDb, the score and trailer services the settings enable, and your own localhost media servers. Nothing else is requested.',
@@ -633,6 +642,7 @@
         permissions_no_additional_access_required: 'No additional site access is required.',
         permissions_open_recovery: 'Backup, restore, and reset',
         permissions_page_title: 'IMDb Enhanced',
+        permissions_recovery_still_available: 'stay available even without site access.',
         permissions_site_access_granted: 'Site access granted',
         permissions_site_access_needed: 'Site access needed',
         provider_amazonAds_consent: 'Blocks requests to these hosts. Nothing is sent to them.',
@@ -660,9 +670,11 @@
         recovery_backup_intro: 'A normal backup leaves out integration API keys and tokens and tells you which it left out.',
         recovery_backup_is_encrypted: 'This backup is encrypted. Enter its passphrase.',
         recovery_build_version: 'Build version',
+        recovery_cache_summary: '$1 entries · $2',
         recovery_cancel: 'Cancel',
         recovery_checking_site_access: 'Checking site access…',
         recovery_clipboard_unavailable: 'Clipboard unavailable',
+        recovery_consent_allowed: 'Allowed.',
         recovery_consent_recorded: 'Consent recorded.',
         recovery_consent_was_not_given_so_those_lookups: 'Consent was not given, so those lookups should stay off.',
         recovery_consent_withdrawn_turn_off_the_score_and: 'Consent withdrawn. Turn off the score and availability lookups too.',
@@ -672,6 +684,8 @@
         recovery_diagnostics_report_copied: 'Diagnostics report copied.',
         recovery_encrypt_and_copy: 'Encrypt and copy',
         recovery_encrypted_backup_note: 'The backup is encrypted in this browser with the passphrase you choose. There is no way to recover the contents if you forget it.',
+        recovery_grant: 'Grant',
+        recovery_grant_access_to: 'Grant access to $1',
         recovery_grant_imdb_access: 'Grant IMDb access',
         recovery_granted_and_the_feature_is_on: 'Granted, and the feature is on.',
         recovery_granted_but_the_feature_is_switched_off: 'Granted, but the feature is switched off.',
@@ -706,6 +720,8 @@
         recovery_restore_button: 'Restore',
         recovery_restored: 'Restored $1 settings.',
         recovery_restored_some_skipped: 'Restored $1 settings; skipped $2 unrecognized.',
+        recovery_revoke: 'Revoke',
+        recovery_revoke_access_to: 'Revoke access to $1',
         recovery_script_version: 'Script version',
         recovery_section_could_not_be_read: 'The $1 section could not be read, but the actions below still work.',
         recovery_section_site_access: 'site access',
@@ -723,6 +739,7 @@
         recovery_the_restore_failed_nothing_was_changed: 'The restore failed. Nothing was changed.',
         recovery_the_undo_failed_nothing_was_changed: 'The undo failed. Nothing was changed.',
         recovery_title_marks: 'Title marks',
+        recovery_unavailable: 'unavailable',
         recovery_undo_available_note: 'Available until you leave this page.',
         recovery_undo_done: 'Undone. $1 settings were put back.',
         recovery_undo_the_reset: 'Undo the reset',
@@ -779,6 +796,12 @@
         settings_focused_tools_for_series_and_episode_lists: 'Focused tools for series and episode lists.',
         settings_genres_appear_as_titles_are_marked_or: 'Genres appear as titles are marked or imported.',
         settings_grant_access: 'Grant access',
+        settings_heading_appearance: 'Appearance',
+        settings_heading_diagnostics: 'Diagnostics',
+        settings_heading_people: 'People',
+        settings_heading_preview: 'Preview',
+        settings_heading_score_sources: 'Score sources',
+        settings_heading_updates: 'Updates',
         settings_history_metadata_coverage_one: '$2 of $1 history title has year, genre, score, or runtime metadata. $3',
         settings_history_metadata_coverage_other: '$2 of $1 history titles have year, genre, score, or runtime metadata. $3',
         settings_imdb_and_letterboxd_exports_become_local_seen: 'IMDb and Letterboxd exports become local Seen marks. This does not change IMDb Watched status or any IMDb list. IMDb Labs account import is a separate feature.',
@@ -864,19 +887,25 @@
         text_added: 'Added',
         text_adding: 'Adding...',
         text_adding_title_through: 'Adding $1 through $2',
+        text_age_parenthetical: '(age $1)',
+        text_all_of_them: 'all',
         text_all_opened: 'All opened',
+        text_audience_score: 'Audience: $1%',
         text_automatic_matching_is_active: 'Automatic matching is active.',
         text_availability_unavailable: 'Availability unavailable',
         text_available: 'Available',
         text_below_avg: 'Below Avg',
         text_cache_remaining: '$1 cached entries · $2',
+        text_cached_on: 'Cached $1',
         text_candidate_matches_could_not_be_loaded: 'Candidate matches could not be loaded. Paste a title URL or mark no entry.',
         text_candidate_response_was_too_large_or_empty: 'Candidate response was too large or empty',
         text_cast_crew: 'Cast & crew',
         text_checking_server_for_title: 'Checking $1 for $2',
         text_clause_separator: '; ',
         text_clear_all: 'Clear all',
+        text_clear_cached_third_party_lookups: 'Clear cached third-party lookups',
         text_clear_loaded_season: 'Clear loaded season',
+        text_clear_title: 'Clear $1',
         text_click_or_press_enter_to_reveal: 'Click or press Enter to reveal',
         text_click_or_press_enter_to_reveal_episode: 'Click or press Enter to reveal episode synopsis',
         text_click_or_press_enter_to_reveal_plot: 'Click or press Enter to reveal plot synopsis',
@@ -884,7 +913,10 @@
         text_confirm_clear_marks: 'Confirm clear $1',
         text_copy_all_links: 'Copy all links',
         text_copy_imdb_ids: 'Copy $1 IMDb IDs',
+        text_copy_settings_to_the_clipboard_without_integration: 'Copy settings to the clipboard without integration credentials',
         text_copy_subtitle_links_for_this_season: 'Copy subtitle links for this season',
+        text_copy_value: 'Copy $1',
+        text_correct_source_match: 'Correct $1',
         text_correction_candidate_count_one: '$1 candidate match.',
         text_correction_candidate_count_other: '$1 candidate matches.',
         text_count_skipped: '$1 skipped',
@@ -896,6 +928,7 @@
         text_csv_titles_over_limit: '$1 over the $2-title limit',
         text_csv_viewings_over_limit_one: '$1 viewing event over the $2-per-title limit not retained',
         text_csv_viewings_over_limit_other: '$1 viewing events over the $2-per-title limit not retained',
+        text_encrypted_backup_with_credentials: 'Encrypted backup with credentials',
         text_ep_calendar: 'Ep Calendar',
         text_episode_guide: 'Episode guide',
         text_episodes_list: 'Episodes List',
@@ -904,11 +937,14 @@
         text_filter_title_count_one: '$2: $1 title',
         text_filter_title_count_other: '$2: $1 titles',
         text_get_it: 'Get it',
+        text_heatmap_legend: 'Colours: 8+ great · 7+ good · 6+ average · 5+ below · under 5 poor',
         text_imdb_enhanced_settings: 'IMDb Enhanced settings',
         text_imdb_weights_its_displayed_rating: 'IMDb weights its displayed rating to resist vote brigading, so a wide gap means the raw votes disagree with what the page shows.',
         text_import_failed_check_the_json_syntax_and: 'Import failed. Check the JSON syntax and try again.',
         text_import_failed_no_settings_were_changed: 'Import failed. No settings were changed.',
+        text_import_settings_from_json: 'Import settings from JSON',
         text_in_library: 'In Library',
+        text_justwatch_reads_their_page: 'JustWatch (reads their page)',
         text_link_group_reviews: 'Reviews',
         text_link_group_search: 'Search',
         text_link_group_subtitles: 'Subtitles',
@@ -918,6 +954,7 @@
         text_loading_candidate_matches: 'Loading candidate matches...',
         text_loading_trailer: 'Loading trailer...',
         text_local_mark_cleared: 'Local mark cleared',
+        text_manual_title_url: 'Manual title URL',
         text_mapped_by_imdb_enhanced_through_wikidata: 'Mapped by IMDb Enhanced through Wikidata',
         text_mark_loaded_season_seen: 'Mark loaded season seen',
         text_marked_as_no_entry_on_justwatch: 'Marked as no entry on JustWatch',
@@ -929,14 +966,18 @@
         text_movie_sites: 'Movie Sites',
         text_needs_a_tmdb_read_token: 'Needs a TMDB read token',
         text_needs_an_omdb_key: 'Needs an OMDb key',
+        text_next_episode: 'Next: $1',
         text_no_cached_entries: 'No cached entries.',
         text_no_candidate_matches_were_found_paste: 'No candidate matches were found. Paste a title URL or mark no entry.',
+        text_no_catalog_sites_match_this_filter: 'No catalog sites match this filter.',
         text_no_entry: 'No entry',
         text_no_external_sites: 'no external sites',
         text_no_importable_rows_skipped_one: 'No importable rows found. $1 row was skipped.',
         text_no_importable_rows_skipped_other: 'No importable rows found. $1 rows were skipped.',
+        text_no_local_title_marks_yet: 'No local title marks yet.',
         text_no_matching_title_found: 'No matching title found',
         text_no_titles_on_this_page_to_pick: 'No titles on this page to pick from.',
+        text_none_of_count_opened: '0 of $1 opened',
         text_not_available_in_this_build: 'Not available in this build',
         text_not_found: 'Not found',
         text_not_streaming: 'Not streaming',
@@ -948,16 +989,21 @@
         text_open_trailer_search_on_youtube: 'Open trailer search on YouTube',
         text_parents_guide: 'Parents guide',
         text_partly_available: 'Partly available',
+        text_paste_exported_settings_json: 'Paste exported settings JSON',
         text_pick_something: 'Pick something',
+        text_picked_nothing_opened: 'Picked $1. Nothing was opened.',
         text_preview_required_nothing_has_been_changed: 'Preview required. Nothing has been changed.',
         text_processing: 'Processing',
+        text_queue_link_meta: '$1 · New tab',
         text_queue_opened_progress: '$1 of $2 opened',
         text_ratings_grid: 'Ratings Grid',
+        text_reads_the_published_version_once_a_day: 'Reads the published version once a day. Nothing about you is sent.',
         text_replace_key: 'Replace key',
         text_replace_token: 'Replace token',
         text_requested: 'Requested',
         text_requesting: 'Requesting...',
         text_requesting_title_through: 'Requesting $1 through $2',
+        text_reset_preferences_title_marks_and_integration: 'Reset preferences, title marks, and integration credentials',
         text_response_was_too_large_or_empty: 'Response was too large or empty',
         text_restore_a_settings_backup: 'Restore a settings backup',
         text_runtime_complete: '$1 · $2',
@@ -979,10 +1025,13 @@
         text_saved_rotten_tomatoes_match_unavailable: 'Saved Rotten Tomatoes match unavailable',
         text_saving: 'Saving…',
         text_score_unavailable: 'Score unavailable',
+        text_scores_availability_and_reference: 'Scores, availability and reference',
+        text_search_site_for_title: 'Search $1 for $2',
         text_seen_of_loaded: 'Seen $1/$2 loaded',
         text_server_has_title: '$1: already in library',
         text_server_lacks_title: '$1: not found',
         text_settings_saved: 'Saved',
+        text_site_search_queue: '$1 search queue',
         text_skip_titles_i_have_marked: 'Skip titles I have marked',
         text_summary_separator: ' · ',
         text_the_overseerr_instance_did_not_recognize_this: 'The Overseerr instance did not recognize this IMDb title',
@@ -1000,13 +1049,18 @@
         text_title_is_partly_available: '$1 is partly available',
         text_title_poster: '$1 poster',
         text_tmdb_rejected_this_token: 'TMDB rejected this token',
+        text_tmdb_their_api_needs_your_token: 'TMDB (their API, needs your token)',
         text_trailer_unavailable: 'Trailer unavailable',
         text_two_items_joined: '$1 and $2',
         text_unavailable: 'Unavailable',
         text_undo_the_last_settings_reset: 'Undo the last settings reset',
+        text_undone: 'Undone.',
+        text_update_available: 'IMDb Enhanced $1 is available — this build is $2.',
         text_use_a_valid_title_url: 'Use a valid $1 title URL.',
         text_use_automatic: 'Use automatic',
         text_user_reviews: 'User reviews',
+        text_user_score: 'User: $1',
+        text_uses_light_for_os_light_mode_and: 'Uses Light for OS light mode and Dark for OS dark mode.',
         text_view_full_cast_crew: 'View full cast & crew',
         toast_a_site_list_can_contain_up: 'A site list can contain up to $1 destinations',
         toast_all_imdb_watched_on_this_page_one: 'All $1 IMDb Watched title on this page already has a local mark',
@@ -2582,8 +2636,8 @@
     // =========================================================================
     function parseCsvTable(value) {
         const text = String(value || '').replace(/^\uFEFF/, '');
-        if (!text.trim()) throw new Error(t('error_csv_empty'));
-        if (text.length > SETTINGS_IMPORT_TEXT_LIMIT) throw new Error(t('error_csv_too_large'));
+        if (!text.trim()) throw failure('unknown', t('error_csv_empty'));
+        if (text.length > SETTINGS_IMPORT_TEXT_LIMIT) throw failure('unknown', t('error_csv_too_large'));
         const rows = [];
         let row = [];
         let field = '';
@@ -2610,7 +2664,7 @@
                 continue;
             }
             if (character === '"') {
-                if (field) throw new Error(t('error_csv_stray_quote'));
+                if (field) throw failure('unknown', t('error_csv_stray_quote'));
                 quoted = true;
             } else if (character === ',') {
                 row.push(field);
@@ -2622,9 +2676,9 @@
                 field += character;
             }
         }
-        if (quoted) throw new Error(t('error_csv_unterminated_quote'));
+        if (quoted) throw failure('unknown', t('error_csv_unterminated_quote'));
         if (field || row.length) pushRow();
-        if (!rows.length) throw new Error(t('error_csv_no_header'));
+        if (!rows.length) throw failure('unknown', t('error_csv_no_header'));
         return rows;
     }
 
@@ -2722,7 +2776,7 @@
         const rows = parseCsvTable(value);
         const columns = describeCsvColumns(rows[0]);
         if (columns.imdbId < 0 && columns.title < 0 && columns.originalTitle < 0) {
-            throw new Error(t('error_csv_no_usable_column'));
+            throw failure('unknown', t('error_csv_no_usable_column'));
         }
         const existing = Object.fromEntries(normalizeUserMarkEntries(currentMarks || {}));
         const merged = { ...existing };
@@ -2984,7 +3038,7 @@
             };
             pendingRouteWorkCancels.add(cancel);
             obs.observe(root, { childList: true, subtree: true });
-            timer = setTimeout(() => finish(reject, new Error(t('text_timed_out_waiting_for_page_content'))), timeout);
+            timer = setTimeout(() => finish(reject, failure('timeout', t('text_timed_out_waiting_for_page_content'))), timeout);
         });
     }
 
@@ -3201,7 +3255,7 @@
         },
             makeEl('div', { className:'enh-editorial-watch__header' },
                 makeEl('h2', { id:'enh-editorial-watch-title' }, t('label_reviews_research')),
-                makeEl('p', {}, 'Scores, availability and reference')
+                makeEl('p', {}, t('text_scores_availability_and_reference'))
             ),
             makeEl('div', { id:'enh-editorial-research-slot' })
         );
@@ -3917,7 +3971,7 @@
 
     function prepareSettingsImport(data) {
         if (!data || Array.isArray(data) || typeof data !== 'object') {
-            throw new Error(t('error_settings_not_an_object'));
+            throw failure('parse', t('error_settings_not_an_object'));
         }
         /* A backup written by a newer version can contain shapes this build would
            quietly coerce to defaults. Refusing is recoverable; silently rewriting the
@@ -3940,7 +3994,7 @@
             if (normalized) entries.push(normalized);
             else ignored++;
         });
-        if (!entries.length) throw new Error(t('error_settings_none_recognized'));
+        if (!entries.length) throw failure('unknown', t('error_settings_none_recognized'));
         return { entries, ignored };
     }
 
@@ -4012,7 +4066,7 @@
     function getCryptoSubtle() {
         const provider = typeof crypto !== 'undefined' ? crypto : null;
         if (!provider?.subtle || typeof provider.getRandomValues !== 'function') {
-            throw new Error(t('error_backup_no_web_crypto'));
+            throw failure('unknown', t('error_backup_no_web_crypto'));
         }
         return provider;
     }
@@ -4076,21 +4130,21 @@
        authenticates, so tampering fails as a decryption error rather than as garbage. */
     async function readEncryptedBackup(data, passphrase) {
         const version = Number(data?.[BACKUP_ENVELOPE_KEY]);
-        if (!Number.isInteger(version) || version < 1) throw new Error(t('error_backup_unrecognized'));
+        if (!Number.isInteger(version) || version < 1) throw failure('unknown', t('error_backup_unrecognized'));
         if (version > BACKUP_ENVELOPE_VERSION) {
             throw new Error(`This encrypted backup was written by a newer version of IMDb Enhanced (format ${version}). Update first, then import.`);
         }
         const kdf = data.kdf || {};
         const cipher = data.cipher || {};
         if (kdf.name !== 'PBKDF2' || kdf.hash !== 'SHA-256' || cipher.name !== 'AES-GCM') {
-            throw new Error(t('error_backup_unsupported_parameters'));
+            throw failure('selector', t('error_backup_unsupported_parameters'));
         }
         const iterations = Number(kdf.iterations);
         if (!Number.isInteger(iterations) || iterations < 1000 || iterations > 5000000) {
-            throw new Error(t('error_backup_bad_kdf_cost'));
+            throw failure('unknown', t('error_backup_bad_kdf_cost'));
         }
         const secret = String(passphrase ?? '');
-        if (!secret) throw new Error(t('error_backup_passphrase_required'));
+        if (!secret) throw failure('unknown', t('error_backup_passphrase_required'));
         const provider = getCryptoSubtle();
         let salt;
         let iv;
@@ -4099,19 +4153,19 @@
             salt = base64ToBytes(kdf.salt);
             iv = base64ToBytes(cipher.iv);
             ciphertext = base64ToBytes(data.ciphertext);
-        } catch { throw new Error(t('error_backup_malformed')); }
+        } catch { throw failure('parse', t('error_backup_malformed')); }
         if (salt.length < 8 || iv.length !== BACKUP_IV_BYTES || !ciphertext.length) {
-            throw new Error(t('error_backup_malformed'));
+            throw failure('parse', t('error_backup_malformed'));
         }
         const key = await deriveBackupKey(provider, secret, salt, iterations);
         let plaintext;
         try {
             plaintext = await provider.subtle.decrypt({ name:'AES-GCM', iv }, key, ciphertext);
         } catch {
-            throw new Error(t('error_backup_wrong_passphrase'));
+            throw failure('unknown', t('error_backup_wrong_passphrase'));
         }
         try { return JSON.parse(new TextDecoder().decode(plaintext)); }
-        catch { throw new Error(t('error_backup_not_settings_json')); }
+        catch { throw failure('parse', t('error_backup_not_settings_json')); }
     }
 
     function applySettingsImport(entries) {
@@ -4123,7 +4177,7 @@
                 value:get(key),
             }]));
         } catch {
-            throw new Error(t('error_settings_unreadable'));
+            throw failure('unknown', t('error_settings_unreadable'));
         }
 
         const touched = [];
@@ -4415,7 +4469,7 @@
         const latest = getUpdateNotice();
         if (!latest || document.getElementById('enh-update-notice') || !document.body) return;
         const notice = makeEl('div', { id:'enh-update-notice', role:'status' },
-            makeEl('span', {}, `IMDb Enhanced ${latest} is available — this build is ${VERSION}.`),
+            makeEl('span', {}, t('text_update_available', [latest, VERSION])),
             makeEl('a', {
                 className:'enh-update-notice__link',
                 href:'https://github.com/SysAdminDoc/IMDb_Enhanced/releases',
@@ -4626,9 +4680,9 @@
     }
     function parseJSONResponse(response, maxLength = LOCAL_RESPONSE_TEXT_LIMIT) {
         const raw = typeof response?.responseText === 'string' ? response.responseText : '';
-        if (raw.length > maxLength) throw new Error(t('error_response_too_large'));
+        if (raw.length > maxLength) throw failure('unknown', t('error_response_too_large'));
         try { return JSON.parse(raw || 'null'); }
-        catch { throw new Error(t('error_response_not_json')); }
+        catch { throw failure('parse', t('error_response_not_json')); }
     }
     function normalizeRequestErrorText(value) {
         if (typeof value !== 'string' && typeof value !== 'number') return '';
@@ -4830,7 +4884,7 @@
     async function seerrRequest(path, opts = {}) {
         const cfg = getSeerrConfig();
         if (!isLocalServarrUrl(cfg.baseUrl)) {
-            throw new Error(t('error_seerr_local_only'));
+            throw failure('unknown', t('error_seerr_local_only'));
         }
         return httpRequest(buildLocalServiceUrl(cfg.baseUrl, `api/v1/${String(path).replace(/^\/+/, '')}`, opts.query), {
             method: opts.method || 'GET',
@@ -4859,7 +4913,7 @@
     async function servarrRequest(kind, path, opts = {}) {
         const cfg = getServarrConfig(kind);
         if (!isLocalServarrUrl(cfg.baseUrl)) {
-            throw new Error(t('error_servarr_local_only'));
+            throw failure('unknown', t('error_servarr_local_only'));
         }
         return httpRequest(buildServarrUrl(cfg, path, opts.query), {
             method: opts.method || 'GET',
@@ -5000,7 +5054,7 @@
     }
     async function mediaServerRequest(cfg, path, opts = {}) {
         if (!isLocalServiceUrl(cfg.baseUrl)) {
-            throw new Error(t('error_media_server_local_only'));
+            throw failure('unknown', t('error_media_server_local_only'));
         }
         const query = { ...(opts.query || {}) };
         const headerName = cfg.kind === 'plex' ? 'X-Plex-Token' : 'X-Emby-Token';
@@ -5070,6 +5124,18 @@
         aborted: t('journal_aborted'),
         unknown: t('journal_unknown'),
     };
+
+    /* Every failure this script raises says what kind it is. The classifier below can
+       read English prose as a last resort, which is right for an error the browser or a
+       script manager raised and wrong for one of ours: our messages come from the
+       catalog, so under any other locale the words it matches on are simply not there
+       and every one of them would be filed as unknown. The category is stored, so that
+       is a journal that means something different depending on the reader's language. */
+    function failure(category, message) {
+        const error = new Error(message);
+        error.imdbEnhancedCategory = category;
+        return error;
+    }
 
     /* Classification reads the error, but only ever emits one of the fixed categories
        above — no substring of the message is retained. */
@@ -6364,12 +6430,12 @@ section[id*="quote" i] .ipc-list-card { padding: 4px 0 !important; margin: 2px 0
     }
     function ratingColor(val) {
         const n = parseFloat(val);
-        const [bg, label] = isNaN(n) ? ['#555', 'N/A']
-            : n >= 8.0 ? ['#22c55e', 'Great']
-                : n >= 7.0 ? ['#84cc16', 'Good']
-                    : n >= 6.0 ? ['#eab308', 'Average']
+        const [bg, label] = isNaN(n) ? ['#555', t('label_rating_unrated')]
+            : n >= 8.0 ? ['#22c55e', t('label_rating_great')]
+                : n >= 7.0 ? ['#84cc16', t('label_rating_good')]
+                    : n >= 6.0 ? ['#eab308', t('label_rating_average')]
                         : n >= 5.0 ? ['#f97316', t('text_below_avg')]
-                            : ['#ef4444', 'Poor'];
+                            : ['#ef4444', t('label_rating_poor')];
         return { bg, text:readableTextColor(bg), label };
     }
     function mcColor(s) { return s >= 75 ? '#6c3' : s >= 50 ? '#ffbd3f' : s >= 25 ? '#ff6874' : '#f00'; }
@@ -7574,7 +7640,7 @@ section[id*="quote" i] .ipc-list-card { padding: 4px 0 !important; margin: 2px 0
         } else if (provider === 'metacritic') {
             const response = await httpGet(getMetacriticSearchUrl(title, mediaType), { cancelOnRouteChange:true });
             const source = toBoundedText(response.responseText, EXTERNAL_RESPONSE_TEXT_LIMIT);
-            if (!source) throw new Error(t('text_candidate_response_was_too_large_or_empty'));
+            if (!source) throw failure('unknown', t('text_candidate_response_was_too_large_or_empty'));
             const payload = JSON.parse(source);
             candidates = collectMetacriticCandidates(payload?.data?.items || [], mediaType);
         } else if (provider === 'justWatch') {
@@ -7672,7 +7738,7 @@ section[id*="quote" i] .ipc-list-card { padding: 4px 0 !important; margin: 2px 0
                 'aria-label':t('aria_correct_match', [config.label]),
             },
                 makeEl('div', { className:'enh-score-correction__header' },
-                    makeEl('strong', {}, `Correct ${config.label}`),
+                    makeEl('strong', {}, t('text_correct_source_match', [config.label])),
                     makeEl('button', {
                         type:'button', className:'enh-score-correction__close', 'aria-label':t('aria_close_correction_panel'),
                         onClick:() => closePanel(true),
@@ -7687,7 +7753,7 @@ section[id*="quote" i] .ipc-list-card { padding: 4px 0 !important; margin: 2px 0
                 ),
                 status,
                 choices,
-                makeEl('label', { className:'enh-score-correction__label' }, 'Manual title URL', manualInput),
+                makeEl('label', { className:'enh-score-correction__label' }, t('text_manual_title_url'), manualInput),
                 makeEl('div', { className:'enh-score-correction__actions' },
                     makeEl('button', {
                         type:'button', className:'enh-score-correction__button',
@@ -7875,7 +7941,7 @@ section[id*="quote" i] .ipc-list-card { padding: 4px 0 !important; margin: 2px 0
         widget.classList.add('enh-score-widget--stale');
         const date = new Date(stale.ts).toISOString().slice(0, 10);
         widget.appendChild(makeEl('div', { className:'enh-score-stale' },
-            makeEl('span', { className:'enh-score-stale__age' }, `Cached ${date}`),
+            makeEl('span', { className:'enh-score-stale__age' }, t('text_cached_on', [date])),
             makeEl('button', {
                 type:'button',
                 className:'enh-score-stale__retry',
@@ -8053,7 +8119,7 @@ section[id*="quote" i] .ipc-list-card { padding: 4px 0 !important; margin: 2px 0
             );
             w.append(makeEl('div', { className:'enh-score-widget__label' }, 'TOMATOMETER'), scoreLink);
             announceScore('Rotten Tomatoes', `${score}%`);
-            if (hasAudience) w.appendChild(makeEl('div', { className:'enh-score-widget__sub' }, `Audience: ${audience}%`));
+            if (hasAudience) w.appendChild(makeEl('div', { className:'enh-score-widget__sub' }, t('text_audience_score', [audience])));
             if (data.via === 'omdb') {
                 w.appendChild(makeEl('div', { className:'enh-score-widget__sub' }, t('label_via_omdb')));
                 appendProviderAttribution(w, 'omdb');
@@ -8286,7 +8352,7 @@ section[id*="quote" i] .ipc-list-card { padding: 4px 0 !important; margin: 2px 0
                     const response = await httpGet(getMetacriticSearchUrl(query, mediaType), { cancelOnRouteChange:true });
                     if (!isCurrent()) return;
                     const source = toBoundedText(response.responseText, EXTERNAL_RESPONSE_TEXT_LIMIT);
-                    if (!source) throw new Error(t('text_response_was_too_large_or_empty'));
+                    if (!source) throw failure('unknown', t('text_response_was_too_large_or_empty'));
                     const items = JSON.parse(source)?.data?.items || [];
                     const candidate = collectMetacriticCandidates(items, mediaType)
                         .find(item => scoreCorrectionUrlsMatch('metacritic', item.url, correction.url));
@@ -8318,7 +8384,7 @@ section[id*="quote" i] .ipc-list-card { padding: 4px 0 !important; margin: 2px 0
                 const res = await httpGet(url, { cancelOnRouteChange:true });
                 if (!isCurrent()) return;
                 const source = toBoundedText(res.responseText, EXTERNAL_RESPONSE_TEXT_LIMIT);
-                if (!source) throw new Error(t('text_response_was_too_large_or_empty'));
+                if (!source) throw failure('unknown', t('text_response_was_too_large_or_empty'));
                 const obj = JSON.parse(source);
                 const items = obj?.data?.items || [];
                 /* Where Wikidata names the Metacritic slug, prefer the result that
@@ -8385,7 +8451,7 @@ section[id*="quote" i] .ipc-list-card { padding: 4px 0 !important; margin: 2px 0
                 }, hasScore ? String(score) : '--'))
             );
             if (hasUserScore) {
-                w.appendChild(makeEl('div', { className:'enh-score-widget__sub' }, `User: ${userScore.toFixed(1)}`));
+                w.appendChild(makeEl('div', { className:'enh-score-widget__sub' }, t('text_user_score', [userScore.toFixed(1)])));
             }
             if (data.via === 'omdb') {
                 w.appendChild(makeEl('div', { className:'enh-score-widget__sub' }, t('label_via_omdb')));
@@ -8520,7 +8586,7 @@ section[id*="quote" i] .ipc-list-card { padding: 4px 0 !important; margin: 2px 0
             if (correction?.mode === 'url') {
                 try {
                     const requestUrl = getJustWatchCorrectionRequestUrl(correction.url, availabilityRegion);
-                    if (!requestUrl) throw new Error(t('text_saved_justwatch_match_is_invalid'));
+                    if (!requestUrl) throw failure('parse', t('text_saved_justwatch_match_is_invalid'));
                     const response = await httpGet(requestUrl, {
                         headers, timeout:12000, cancelOnRouteChange:true,
                     });
@@ -8741,10 +8807,13 @@ section[id*="quote" i] .ipc-list-card { padding: 4px 0 !important; margin: 2px 0
                 /* aria-expanded says a region is open; aria-controls says which one. */
                 if (!sec.id) sec.id = `enh-section-${id}`;
                 const btn = makeEl('button', {
-                    className: 'enh-collapse-btn', type: 'button', title: collapsed ? 'Expand section' : 'Collapse section',
+                    className: 'enh-collapse-btn', type: 'button',
+                    title: collapsed ? t('text_expand_section') : t('text_collapse_section'),
                     'aria-controls': sec.id,
                     'aria-expanded': String(!collapsed),
-                    'aria-label': `${collapsed ? 'Expand' : 'Collapse'} ${sectionLabel}`,
+                    'aria-label': collapsed
+                        ? t('aria_expand_named_section', [sectionLabel])
+                        : t('aria_collapse_named_section', [sectionLabel]),
                     textContent: collapsed ? '+' : '-',
                     onClick: () => {
                         const now = !sec.classList.contains('enh-section--collapsed');
@@ -8753,7 +8822,9 @@ section[id*="quote" i] .ipc-list-card { padding: 4px 0 !important; margin: 2px 0
                         btn.textContent = now ? '+' : '-';
                         btn.title = now ? t('text_expand_section') : t('text_collapse_section');
                         btn.setAttribute('aria-expanded', String(!now));
-                        btn.setAttribute('aria-label', `${now ? 'Expand' : 'Collapse'} ${sectionLabel}`);
+                        btn.setAttribute('aria-label', now
+                            ? t('aria_expand_named_section', [sectionLabel])
+                            : t('aria_collapse_named_section', [sectionLabel]));
                     }
                 });
                 sec.insertBefore(btn, sec.firstChild);
@@ -8999,7 +9070,7 @@ section[id*="quote" i] .ipc-list-card { padding: 4px 0 !important; margin: 2px 0
                         className,
                         dataset:{ url },
                         style:{ '--btn-color':site.color },
-                        title:`Search ${site.name} for ${title}`,
+                        title:t('text_search_site_for_title', [site.name, title]),
                         'aria-label': t('aria_open_search_for', [site.name, title]),
                     }, ...contents);
                 };
@@ -9083,7 +9154,7 @@ section[id*="quote" i] .ipc-list-card { padding: 4px 0 !important; margin: 2px 0
                 });
                 bar.appendChild(makeEl('div', { className:'enh-external-links__header' },
                     makeEl('div', { className:'enh-external-links__title' }, t('label_reviews_research')),
-                    makeEl('div', { className:'enh-external-links__hint' }, 'Scores, availability and reference')
+                    makeEl('div', { className:'enh-external-links__hint' }, t('text_scores_availability_and_reference'))
                 ));
                 const externalGroups = makeEl('div', { className:'enh-external-groups' });
                 groupSitesByCategory(links).forEach(groupData => {
@@ -9215,7 +9286,7 @@ section[id*="quote" i] .ipc-list-card { padding: 4px 0 !important; margin: 2px 0
             const body = overlay.querySelector('.enh-trailer-body');
             try {
                 const videoId = normalizeYouTubeVideoId(await this._getVideoId());
-                if (!videoId) throw new Error(t('text_trailer_unavailable'));
+                if (!videoId) throw failure('unknown', t('text_trailer_unavailable'));
                 if (generation !== this._modalGeneration || !body.isConnected) return;
                 body.replaceChildren(makeEl('iframe', {
                     src:`https://www.youtube-nocookie.com/embed/${videoId}?autoplay=1&rel=0`,
@@ -9345,7 +9416,7 @@ section[id*="quote" i] .ipc-list-card { padding: 4px 0 !important; margin: 2px 0
             const cached = cacheKey ? cacheGet(cacheKey) : null;
             const cachedVideoId = normalizeYouTubeVideoId(cached?.videoId);
             if (cachedVideoId) return cachedVideoId;
-            if (cached?.unavailable) throw new Error(t('text_trailer_unavailable'));
+            if (cached?.unavailable) throw failure('unknown', t('text_trailer_unavailable'));
 
             const res = await httpGet(getTrailerSearchUrl(), {
                 timeout: 12000,
@@ -9355,7 +9426,7 @@ section[id*="quote" i] .ipc-list-card { padding: 4px 0 !important; margin: 2px 0
             const videoId = parseYouTubeTrailerVideoId(res.responseText, getTitleText(), getTitleYear());
             if (!videoId) {
                 if (cacheKey) cacheSetUnavailable(cacheKey);
-                throw new Error(t('text_trailer_unavailable'));
+                throw failure('unknown', t('text_trailer_unavailable'));
             }
             if (cacheKey) cacheSet(cacheKey, { videoId });
             return videoId;
@@ -10339,11 +10410,11 @@ section[id*="quote" i] .ipc-list-card { padding: 4px 0 !important; margin: 2px 0
                 const response = await seerrRequest('search', { query:{ query:imdbId }, cancelOnRouteChange:true });
                 if (!isCurrent()) return false;
                 const match = selectSeerrSearchResult(parseJSONResponse(response)?.results, imdbId, mediaType);
-                if (!match) throw new Error(t('text_the_overseerr_instance_did_not_recognize_this'));
+                if (!match) throw failure('unknown', t('text_the_overseerr_instance_did_not_recognize_this'));
                 tmdbId = match.tmdbId;
             }
             const body = buildSeerrRequestBody(mediaType, tmdbId);
-            if (!body) throw new Error(t('text_the_overseerr_instance_returned_an_unusable_title'));
+            if (!body) throw failure('unknown', t('text_the_overseerr_instance_returned_an_unusable_title'));
             if (!isCurrent()) return false;
             /* httpRequest owns serialization; pre-stringifying here would encode the
                body twice and send Overseerr a JSON string where it expects an object. */
@@ -10386,7 +10457,7 @@ section[id*="quote" i] .ipc-list-card { padding: 4px 0 !important; margin: 2px 0
                 if (item) return item;
             }
             if (!isCurrent()) return null;
-            throw new Error(t('text_no_matching_title_found'));
+            throw failure('unknown', t('text_no_matching_title_found'));
         },
         async _add(kind, imdbId, title, year, isCurrent) {
             const item = await this._lookup(kind, { imdbId, title, year }, isCurrent);
@@ -10873,7 +10944,7 @@ section[id*="quote" i] .ipc-list-card { padding: 4px 0 !important; margin: 2px 0
                     }, `S${index + 1} ${average.toFixed(1)}`));
                 });
                 summary.appendChild(makeEl('span', { className:'enh-heatmap-legend' },
-                    'Colours: 8+ great · 7+ good · 6+ average · 5+ below · under 5 poor'));
+                    t('text_heatmap_legend')));
                 table.parentElement?.insertBefore(summary, table.nextSibling);
             }).catch(() => { /* the grid is absent on titles without episodes */ });
         },
@@ -11084,7 +11155,7 @@ section[id*="quote" i] .ipc-list-card { padding: 4px 0 !important; margin: 2px 0
                     showToast(t('toast_copied_imdb_ids', [ids.length]));
                     btn.textContent = t('text_copy_imdb_ids', [ids.length]);
                 },
-            }, `Copy ${this._ids().length || 'all'} IMDb IDs`);
+            }, t('text_copy_imdb_ids', [this._ids().length || t('text_all_of_them')]));
 
             const target = document.querySelector('main') || document.body;
             target.insertBefore(btn, target.firstElementChild || null);
@@ -11352,7 +11423,7 @@ section[id*="quote" i] .ipc-list-card { padding: 4px 0 !important; margin: 2px 0
                 setTextIfChanged(count, describeSeasonProgress(summary));
                 if (summary.next) {
                     next.href = `https://www.imdb.com/title/${summary.next.id}/`;
-                    setTextIfChanged(next, `Next: ${summary.next.label || summary.next.id}`);
+                    setTextIfChanged(next, t('text_next_episode', [summary.next.label || summary.next.id]));
                     next.hidden = false;
                 } else {
                     next.removeAttribute('href');
@@ -11441,7 +11512,7 @@ section[id*="quote" i] .ipc-list-card { padding: 4px 0 !important; margin: 2px 0
                 undo.hidden = true;
                 refreshFeature('watchedMarking');
                 this._paint();
-                setTextIfChanged(note, 'Undone.');
+                setTextIfChanged(note, t('text_undone'));
                 showToast(t('toast_season_marks_restored'));
             };
 
@@ -11543,7 +11614,7 @@ section[id*="quote" i] .ipc-list-card { padding: 4px 0 !important; margin: 2px 0
                 || marks[chosen.id]?.title
                 || chosen.id;
             // Highlighted and announced, never opened: choosing is the user's to do.
-            setTextIfChanged(this._result, `Picked ${title}. Nothing was opened.`);
+            setTextIfChanged(this._result, t('text_picked_nothing_opened', [title]));
         },
         destroy() {
             removeCSS('enh-roulette-css');
@@ -11664,7 +11735,7 @@ section[id*="quote" i] .ipc-list-card { padding: 4px 0 !important; margin: 2px 0
             });
             const status = makeEl('p', {
                 className:'enh-multi-search-queue__status', role:'status', 'aria-live':'polite',
-            }, `0 of ${entries.length} opened`);
+            }, t('text_none_of_count_opened', [entries.length]));
             const list = makeEl('ol', { className:'enh-multi-search-queue__list' });
             const openNext = makeEl('a', {
                 className:'enh-multi-search-queue__action', target:'_blank', rel:'noopener noreferrer',
@@ -11700,7 +11771,7 @@ section[id*="quote" i] .ipc-list-card { padding: 4px 0 !important; margin: 2px 0
                     'aria-label':t('aria_open_on_in_a_new_tab', [entry.name, site.name]),
                 },
                     makeEl('span', {}, entry.name),
-                    makeEl('span', { className:'enh-multi-search-queue__link-meta' }, `${entry.id} · New tab`)
+                    makeEl('span', { className:'enh-multi-search-queue__link-meta' }, t('text_queue_link_meta', [entry.id]))
                 );
                 link.addEventListener('click', () => {
                     setTimeout(() => markOpened(index), 0);
@@ -11733,7 +11804,7 @@ section[id*="quote" i] .ipc-list-card { padding: 4px 0 !important; margin: 2px 0
             queue.append(
                 makeEl('div', { className:'enh-multi-search-queue__header' },
                     makeEl('div', {},
-                        makeEl('h3', { className:'enh-multi-search-queue__title' }, `${site.name} search queue`),
+                        makeEl('h3', { className:'enh-multi-search-queue__title' }, t('text_site_search_queue', [site.name])),
                         makeEl('p', { className:'enh-multi-search-queue__description' },
                             `Browsers allow one new tab per click.${limited}`
                         ),
@@ -11817,7 +11888,7 @@ section[id*="quote" i] .ipc-list-card { padding: 4px 0 !important; margin: 2px 0
             addThemedCSS(t => `
                 .enh-person-age { color: ${t.tx2}; font-weight: 700; margin-left: 6px; }
             `, 'enh-castAges');
-            host.appendChild(makeEl('span', { className:'enh-person-age' }, `(age ${age})`));
+            host.appendChild(makeEl('span', { className:'enh-person-age' }, t('text_age_parenthetical', [age])));
         },
         destroy() {
             removeCSS('enh-castAges');
@@ -11836,7 +11907,7 @@ section[id*="quote" i] .ipc-list-card { padding: 4px 0 !important; margin: 2px 0
                 if (!imdbId) return;
                 const btn = makeEl('button', {
                     id:'enh-copy-id', className:'enh-action-btn', type:'button',
-                    title:`Copy ${imdbId}`, 'aria-label': t('aria_copy_imdb_id', [imdbId]),
+                    title:t('text_copy_value', [imdbId]), 'aria-label': t('aria_copy_imdb_id', [imdbId]),
                     innerHTML: `<svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.5" stroke-linecap="round" stroke-linejoin="round"><rect x="9" y="9" width="13" height="13" rx="2"/><path d="M5 15H4a2 2 0 0 1-2-2V4a2 2 0 0 1 2-2h9a2 2 0 0 1 2 2v1"/></svg><span>${imdbId}</span>`,
                     onClick: () => showToast(copyTextToClipboard(imdbId)
                         ? `Copied ${imdbId}`
@@ -13679,7 +13750,7 @@ section[data-testid="hero-parent"].enh-editorial-native-hidden { display: none !
                 'aria-label':t('aria_filter_catalog_destinations'),
             });
             const groupsWrap = makeEl('div', { className:'enh-site-catalog__groups' });
-            const emptyNote = makeEl('div', { className:'enh-site-catalog__empty' }, 'No catalog sites match this filter.');
+            const emptyNote = makeEl('div', { className:'enh-site-catalog__empty' }, t('text_no_catalog_sites_match_this_filter'));
             emptyNote.hidden = true;
             refreshCatalogStates = () => {
                 const names = listedNames();
@@ -14063,7 +14134,7 @@ section[data-testid="hero-parent"].enh-editorial-native-hidden { display: none !
             clearAll.disabled = entries.length === 0;
             rows.replaceChildren();
             if (!entries.length) {
-                rows.appendChild(makeEl('div', { className:'enh-marks-empty' }, 'No local title marks yet.'));
+                rows.appendChild(makeEl('div', { className:'enh-marks-empty' }, t('text_no_local_title_marks_yet')));
                 return;
             }
             entries.forEach(([id, record]) => {
@@ -14092,7 +14163,7 @@ section[data-testid="hero-parent"].enh-editorial-native-hidden { display: none !
                 const clear = makeEl('button', {
                     type:'button',
                     className:'enh-mark-row__clear',
-                    title:`Clear ${title}`,
+                    title:t('text_clear_title', [title]),
                     'aria-label':t('aria_clear_mark_for', [title]),
                     onClick: () => {
                         /* Clearing from here removes the record outright, note included,
@@ -14481,7 +14552,7 @@ section[data-testid="hero-parent"].enh-editorial-native-hidden { display: none !
 
         const experiencePage = pages.get('experience');
         experiencePage.classList.add('enh-settings-page--experience');
-        const themeCard = makeCard('Appearance', t('settings_choose_the_tonal_base_for_imdb_enhanced'));
+        const themeCard = makeCard(t('settings_heading_appearance'), t('settings_choose_the_tonal_base_for_imdb_enhanced'));
         const themeSelector = makeEl('div', { className:'enh-theme-selector' });
         const curTheme = getActiveThemeId();
         [
@@ -14518,7 +14589,7 @@ section[data-testid="hero-parent"].enh-editorial-native-hidden { display: none !
         const autoThemeRow = makeEl('div', { className:'enh-settings-row enh-theme-auto-row' },
             makeEl('div', { className:'enh-settings-row-copy' },
                 makeEl('span', { className:'enh-settings-label' }, t('aria_follow_system_theme')),
-                makeEl('span', { className:'enh-settings-help' }, 'Uses Light for OS light mode and Dark for OS dark mode.')
+                makeEl('span', { className:'enh-settings-help' }, t('text_uses_light_for_os_light_mode_and'))
             )
         );
         const autoThemeToggle = makeEl('label', { className:'enh-toggle' });
@@ -14587,8 +14658,8 @@ section[data-testid="hero-parent"].enh-editorial-native-hidden { display: none !
                     markSaved();
                 },
             },
-                makeEl('option', { value:'justwatch' }, 'JustWatch (reads their page)'),
-                makeEl('option', { value:'tmdb' }, 'TMDB (their API, needs your token)')
+                makeEl('option', { value:'justwatch' }, t('text_justwatch_reads_their_page')),
+                makeEl('option', { value:'tmdb' }, t('text_tmdb_their_api_needs_your_token'))
             );
             select.value = getAvailabilitySource();
             const tokenField = createSettingsInput({
@@ -14619,7 +14690,7 @@ section[data-testid="hero-parent"].enh-editorial-native-hidden { display: none !
         }
 
         const ratingsPage = pages.get('ratings');
-        const previewCard = makeCard('Preview', t('settings_sample_source_values_not_live_title_data'));
+        const previewCard = makeCard(t('settings_heading_preview'), t('settings_sample_source_values_not_live_title_data'));
         const preview = makeEl('div', { className:'enh-score-preview' });
         [
             ['8.7 /10', 'IMDb'], ['88%', t('settings_rotten_tomatoes')], ['4.2 /5', 'Letterboxd'], ['73 /100', 'Metacritic'], ['4 services', 'Streaming'],
@@ -14629,7 +14700,7 @@ section[data-testid="hero-parent"].enh-editorial-native-hidden { display: none !
         )));
         previewCard.appendChild(preview);
         ratingsPage.append(previewCard,
-            makeEl('div', { style:{ marginTop:'12px' } }, makeFeatureCard('Score sources', t('settings_choose_which_ratings_and_availability'), t('settings_title_pages'), [
+            makeEl('div', { style:{ marginTop:'12px' } }, makeFeatureCard(t('settings_heading_score_sources'), t('settings_choose_which_ratings_and_availability'), t('settings_title_pages'), [
                 'ratingGap', 'inlineRTScore', 'inlineLetterboxdScore', 'inlineMetacriticScore', 'streamAvailability',
             ])),
             createAvailabilitySourceControl(),
@@ -14666,7 +14737,7 @@ section[data-testid="hero-parent"].enh-editorial-native-hidden { display: none !
                 'watchlistBatch', 'listMultiSearch', 'listRuntimeSummary', 'markFilters', 'listRoulette',
                 'quickCopyID', 'keyboardShortcuts',
             ]),
-            makeFeatureCard('People', t('settings_additions_to_cast_and_crew_pages'), t('settings_name_pages'), [
+            makeFeatureCard(t('settings_heading_people'), t('settings_additions_to_cast_and_crew_pages'), t('settings_name_pages'), [
                 'castAges',
             ])
         ));
@@ -14728,7 +14799,7 @@ section[data-testid="hero-parent"].enh-editorial-native-hidden { display: none !
         dataPage.appendChild(dataSummary);
         dataPage.appendChild(createLocalStatsPanel(registerCleanup));
         const importPanel = makeEl('div', { className:'enh-import-panel', id:'enh-import-panel', hidden:'hidden' },
-            makeEl('label', { className:'enh-import-label', for:'enh-import-textarea' }, 'Paste exported settings JSON'),
+            makeEl('label', { className:'enh-import-label', for:'enh-import-textarea' }, t('text_paste_exported_settings_json')),
             makeEl('textarea', {
                 id:'enh-import-textarea', className:'enh-import-textarea', spellcheck:'false', maxlength:String(SETTINGS_IMPORT_TEXT_LIMIT),
                 placeholder:t('field_modernui_true_themevariant_dark'),
@@ -14749,7 +14820,7 @@ section[data-testid="hero-parent"].enh-editorial-native-hidden { display: none !
             )
         );
         const securePanel = makeEl('div', { className:'enh-import-panel', id:'enh-secure-export-panel', hidden:'hidden' },
-            makeEl('div', { className:'enh-import-label' }, 'Encrypted backup with credentials'),
+            makeEl('div', { className:'enh-import-label' }, t('text_encrypted_backup_with_credentials')),
             makeEl('div', { className:'enh-settings-card-description' },
                 t('settings_choose_a_passphrase_the_backup_is_encrypted')
             ),
@@ -14843,7 +14914,7 @@ section[data-testid="hero-parent"].enh-editorial-native-hidden { display: none !
                 // Re-merge against storage at the moment of the write. A preview left
                 // open in one tab must not erase marks saved from another tab meanwhile.
                 const prepared = prepareCsvMarkImport(csvTextarea.value, getUserMarks(true));
-                if (!prepared.importedRows) throw new Error(t('settings_no_importable_rows_were_found_nothing_was'));
+                if (!prepared.importedRows) throw failure('unknown', t('settings_no_importable_rows_were_found_nothing_was'));
                 applySettingsImport([{ key:'userMarks', value:prepared.marks }]);
                 document.dispatchEvent(new CustomEvent('imdb-enhanced:marks-updated'));
                 const skipped = prepared.skippedRows ? ` ${prepared.skippedRows} rows were skipped.` : '';
@@ -14868,19 +14939,19 @@ section[data-testid="hero-parent"].enh-editorial-native-hidden { display: none !
         );
         const backupCard = makeCard(t('settings_backup_restore'), t('settings_a_backup_covers_preferences_sites_and_title'));
         backupCard.appendChild(makeEl('div', { className:'enh-data-actions' },
-            makeEl('button', { type:'button', className:'enh-settings-footer-btn', id:'enh-export-btn', title:'Copy settings to the clipboard without integration credentials' }, t('label_export_settings')),
+            makeEl('button', { type:'button', className:'enh-settings-footer-btn', id:'enh-export-btn', title:t('text_copy_settings_to_the_clipboard_without_integration') }, t('label_export_settings')),
             makeEl('button', {
                 type:'button', className:'enh-settings-footer-btn', id:'enh-secure-export-btn',
                 title:t('settings_copy_a_passphrase_encrypted_backup_that'),
                 'aria-controls':'enh-secure-export-panel', 'aria-expanded':'false',
             }, t('settings_export_with_credentials')),
             makeEl('button', {
-                type:'button', className:'enh-settings-footer-btn', id:'enh-import-btn', title:'Import settings from JSON',
+                type:'button', className:'enh-settings-footer-btn', id:'enh-import-btn', title:t('text_import_settings_from_json'),
                 'aria-controls':'enh-import-panel', 'aria-expanded':'false',
             }, t('settings_import_settings')),
             makeEl('button', {
                 type:'button', className:'enh-settings-footer-btn enh-settings-footer-btn--danger',
-                id:'enh-reset-btn', title:'Reset preferences, title marks, and integration credentials',
+                id:'enh-reset-btn', title:t('text_reset_preferences_title_marks_and_integration'),
                 'aria-controls':'enh-reset-panel', 'aria-expanded':'false',
             }, t('settings_reset_all_settings'))
         ));
@@ -14899,18 +14970,18 @@ section[data-testid="hero-parent"].enh-editorial-native-hidden { display: none !
         );
         const cacheCard = makeCard(t('settings_cached_lookups'), t('settings_scores_and_availability_lookups_are_cached'));
         cacheCard.append(
-            makeEl('button', { type:'button', className:'enh-settings-footer-btn', id:'enh-clearcache-btn', title:'Clear cached third-party lookups' }, t('label_clear_cache')),
+            makeEl('button', { type:'button', className:'enh-settings-footer-btn', id:'enh-clearcache-btn', title:t('text_clear_cached_third_party_lookups') }, t('label_clear_cache')),
             makeEl('div', { className:'enh-settings-card-description', id:'enh-cache-status', style:{ marginTop:'8px' } },
                 `${cacheCount()} entries currently cached, using ${formatCacheBytes(cacheBytes())} of ${formatCacheBytes(CACHE_TOTAL_BYTE_BUDGET)}. The oldest are dropped automatically as that fills.`)
         );
         /* Only the extension builds can be stale — the userscript updates through its
            manager — so the control exists only where it means something. */
         if (IS_EXTENSION_BUILD) {
-            const updateCard = makeCard('Updates', t('settings_this_build_cannot_update_itself_so_it'));
+            const updateCard = makeCard(t('settings_heading_updates'), t('settings_this_build_cannot_update_itself_so_it'));
             const updateRow = makeEl('div', { className:'enh-settings-row' },
                 makeEl('div', { className:'enh-settings-row-copy' },
-                    makeEl('span', { className:'enh-settings-label' }, 'Tell me about new versions'),
-                    makeEl('span', { className:'enh-settings-help' }, 'Reads the published version once a day. Nothing about you is sent.')
+                    makeEl('span', { className:'enh-settings-label' }, t('aria_tell_me_about_new_versions')),
+                    makeEl('span', { className:'enh-settings-help' }, t('text_reads_the_published_version_once_a_day'))
                 )
             );
             const updateToggle = makeEl('label', { className:'enh-toggle' });
@@ -14931,7 +15002,7 @@ section[data-testid="hero-parent"].enh-editorial-native-hidden { display: none !
             dataPage.appendChild(updateCard);
         }
 
-        const diagnosticsCard = makeCard('Diagnostics', t('settings_a_readable_summary_for_bug_reports_credentials'));
+        const diagnosticsCard = makeCard(t('settings_heading_diagnostics'), t('settings_a_readable_summary_for_bug_reports_credentials'));
         diagnosticsCard.append(
             makeEl('button', {
                 type:'button', className:'enh-settings-footer-btn', id:'enh-diagnostics-btn',
@@ -15470,7 +15541,7 @@ section[data-testid="hero-parent"].enh-editorial-native-hidden { display: none !
             if (!document.getElementById('enh-settings-overlay')) createSettingsPanel();
             if (!settingsOpen) toggleSettings();
         });
-        register('Copy settings backup (no credentials)', () => {
+        register(t('menu_copy_settings_backup'), () => {
             try {
                 const payload = getExportSettings();
                 const omitted = payload[EXPORT_REDACTED_KEY] || [];
@@ -15509,7 +15580,7 @@ section[data-testid="hero-parent"].enh-editorial-native-hidden { display: none !
                 showToast(error?.message || t('recovery_the_undo_failed_nothing_was_changed'), 5000);
             }
         });
-        register('Reset all settings (with undo)', () => {
+        register(t('menu_reset_all_settings'), () => {
             let snapshot;
             try { snapshot = prepareSettingsImport(getExportSettings({ includeCredentials:true })).entries; }
             catch (error) {

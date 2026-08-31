@@ -23,6 +23,9 @@
   "aria_close_trailer": {
     "message": "[!! Close trailer !!]"
   },
+  "aria_collapse_named_section": {
+    "message": "[!! Collapse $1 !!]"
+  },
   "aria_confirm_clearing_saved_title_marks": {
     "message": "[!! Confirm clearing $1 saved title marks !!]"
   },
@@ -52,6 +55,9 @@
   },
   "aria_dismiss_the_update_notice": {
     "message": "[!! Dismiss the $1 update notice !!]"
+  },
+  "aria_expand_named_section": {
+    "message": "[!! Expand $1 !!]"
   },
   "aria_filter_by_private_marks": {
     "message": "[!! Filter by private marks !!]"
@@ -794,6 +800,21 @@
   "label_rate": {
     "message": "[!! Rate !!]"
   },
+  "label_rating_average": {
+    "message": "[!! Average !!]"
+  },
+  "label_rating_good": {
+    "message": "[!! Good !!]"
+  },
+  "label_rating_great": {
+    "message": "[!! Great !!]"
+  },
+  "label_rating_poor": {
+    "message": "[!! Poor !!]"
+  },
+  "label_rating_unrated": {
+    "message": "[!! N/A !!]"
+  },
   "label_ratings": {
     "message": "[!! Ratings !!]"
   },
@@ -881,6 +902,12 @@
   "label_wrong": {
     "message": "[!! Wrong? !!]"
   },
+  "menu_copy_settings_backup": {
+    "message": "[!! Copy settings backup (no credentials) !!]"
+  },
+  "menu_reset_all_settings": {
+    "message": "[!! Reset all settings (with undo) !!]"
+  },
   "permissions_access_declined_note": {
     "message": "[!! Access was not granted. IMDb Enhanced stays inactive until you allow it to run on IMDb. !!]"
   },
@@ -907,6 +934,9 @@
   },
   "permissions_page_title": {
     "message": "[!! IMDb Enhanced !!]"
+  },
+  "permissions_recovery_still_available": {
+    "message": "[!! stay available even without site access. !!]"
   },
   "permissions_site_access_granted": {
     "message": "[!! Site access granted !!]"
@@ -989,6 +1019,9 @@
   "recovery_build_version": {
     "message": "[!! Build version !!]"
   },
+  "recovery_cache_summary": {
+    "message": "[!! $1 entries · $2 !!]"
+  },
   "recovery_cancel": {
     "message": "[!! Cancel !!]"
   },
@@ -997,6 +1030,9 @@
   },
   "recovery_clipboard_unavailable": {
     "message": "[!! Clipboard unavailable !!]"
+  },
+  "recovery_consent_allowed": {
+    "message": "[!! Allowed. !!]"
   },
   "recovery_consent_recorded": {
     "message": "[!! Consent recorded. !!]"
@@ -1024,6 +1060,12 @@
   },
   "recovery_encrypted_backup_note": {
     "message": "[!! The backup is encrypted in this browser with the passphrase you choose. There is no way to recover the contents if you forget it. !!]"
+  },
+  "recovery_grant": {
+    "message": "[!! Grant !!]"
+  },
+  "recovery_grant_access_to": {
+    "message": "[!! Grant access to $1 !!]"
   },
   "recovery_grant_imdb_access": {
     "message": "[!! Grant IMDb access !!]"
@@ -1127,6 +1169,12 @@
   "recovery_restored_some_skipped": {
     "message": "[!! Restored $1 settings; skipped $2 unrecognized. !!]"
   },
+  "recovery_revoke": {
+    "message": "[!! Revoke !!]"
+  },
+  "recovery_revoke_access_to": {
+    "message": "[!! Revoke access to $1 !!]"
+  },
   "recovery_script_version": {
     "message": "[!! Script version !!]"
   },
@@ -1177,6 +1225,9 @@
   },
   "recovery_title_marks": {
     "message": "[!! Title marks !!]"
+  },
+  "recovery_unavailable": {
+    "message": "[!! unavailable !!]"
   },
   "recovery_undo_available_note": {
     "message": "[!! Available until you leave this page. !!]"
@@ -1345,6 +1396,24 @@
   },
   "settings_grant_access": {
     "message": "[!! Grant access !!]"
+  },
+  "settings_heading_appearance": {
+    "message": "[!! Appearance !!]"
+  },
+  "settings_heading_diagnostics": {
+    "message": "[!! Diagnostics !!]"
+  },
+  "settings_heading_people": {
+    "message": "[!! People !!]"
+  },
+  "settings_heading_preview": {
+    "message": "[!! Preview !!]"
+  },
+  "settings_heading_score_sources": {
+    "message": "[!! Score sources !!]"
+  },
+  "settings_heading_updates": {
+    "message": "[!! Updates !!]"
   },
   "settings_history_metadata_coverage_one": {
     "message": "[!! $2 of $1 history title has year, genre, score, or runtime metadata. $3 !!]"
@@ -1601,8 +1670,17 @@
   "text_adding_title_through": {
     "message": "[!! Adding $1 through $2 !!]"
   },
+  "text_age_parenthetical": {
+    "message": "[!! (age $1) !!]"
+  },
+  "text_all_of_them": {
+    "message": "[!! all !!]"
+  },
   "text_all_opened": {
     "message": "[!! All opened !!]"
+  },
+  "text_audience_score": {
+    "message": "[!! Audience: $1% !!]"
   },
   "text_automatic_matching_is_active": {
     "message": "[!! Automatic matching is active. !!]"
@@ -1618,6 +1696,9 @@
   },
   "text_cache_remaining": {
     "message": "[!! $1 cached entries · $2 !!]"
+  },
+  "text_cached_on": {
+    "message": "[!! Cached $1 !!]"
   },
   "text_candidate_matches_could_not_be_loaded": {
     "message": "[!! Candidate matches could not be loaded. Paste a title URL or mark no entry. !!]"
@@ -1637,8 +1718,14 @@
   "text_clear_all": {
     "message": "[!! Clear all !!]"
   },
+  "text_clear_cached_third_party_lookups": {
+    "message": "[!! Clear cached third-party lookups !!]"
+  },
   "text_clear_loaded_season": {
     "message": "[!! Clear loaded season !!]"
+  },
+  "text_clear_title": {
+    "message": "[!! Clear $1 !!]"
   },
   "text_click_or_press_enter_to_reveal": {
     "message": "[!! Click or press Enter to reveal !!]"
@@ -1661,8 +1748,17 @@
   "text_copy_imdb_ids": {
     "message": "[!! Copy $1 IMDb IDs !!]"
   },
+  "text_copy_settings_to_the_clipboard_without_integration": {
+    "message": "[!! Copy settings to the clipboard without integration credentials !!]"
+  },
   "text_copy_subtitle_links_for_this_season": {
     "message": "[!! Copy subtitle links for this season !!]"
+  },
+  "text_copy_value": {
+    "message": "[!! Copy $1 !!]"
+  },
+  "text_correct_source_match": {
+    "message": "[!! Correct $1 !!]"
   },
   "text_correction_candidate_count_one": {
     "message": "[!! $1 candidate match. !!]"
@@ -1697,6 +1793,9 @@
   "text_csv_viewings_over_limit_other": {
     "message": "[!! $1 viewing events over the $2-per-title limit not retained !!]"
   },
+  "text_encrypted_backup_with_credentials": {
+    "message": "[!! Encrypted backup with credentials !!]"
+  },
   "text_ep_calendar": {
     "message": "[!! Ep Calendar !!]"
   },
@@ -1721,6 +1820,9 @@
   "text_get_it": {
     "message": "[!! Get it !!]"
   },
+  "text_heatmap_legend": {
+    "message": "[!! Colours: 8+ great · 7+ good · 6+ average · 5+ below · under 5 poor !!]"
+  },
   "text_imdb_enhanced_settings": {
     "message": "[!! IMDb Enhanced settings !!]"
   },
@@ -1733,8 +1835,14 @@
   "text_import_failed_no_settings_were_changed": {
     "message": "[!! Import failed. No settings were changed. !!]"
   },
+  "text_import_settings_from_json": {
+    "message": "[!! Import settings from JSON !!]"
+  },
   "text_in_library": {
     "message": "[!! In Library !!]"
+  },
+  "text_justwatch_reads_their_page": {
+    "message": "[!! JustWatch (reads their page) !!]"
   },
   "text_link_group_reviews": {
     "message": "[!! Reviews !!]"
@@ -1762,6 +1870,9 @@
   },
   "text_local_mark_cleared": {
     "message": "[!! Local mark cleared !!]"
+  },
+  "text_manual_title_url": {
+    "message": "[!! Manual title URL !!]"
   },
   "text_mapped_by_imdb_enhanced_through_wikidata": {
     "message": "[!! Mapped by IMDb Enhanced through Wikidata !!]"
@@ -1796,11 +1907,17 @@
   "text_needs_an_omdb_key": {
     "message": "[!! Needs an OMDb key !!]"
   },
+  "text_next_episode": {
+    "message": "[!! Next: $1 !!]"
+  },
   "text_no_cached_entries": {
     "message": "[!! No cached entries. !!]"
   },
   "text_no_candidate_matches_were_found_paste": {
     "message": "[!! No candidate matches were found. Paste a title URL or mark no entry. !!]"
+  },
+  "text_no_catalog_sites_match_this_filter": {
+    "message": "[!! No catalog sites match this filter. !!]"
   },
   "text_no_entry": {
     "message": "[!! No entry !!]"
@@ -1814,11 +1931,17 @@
   "text_no_importable_rows_skipped_other": {
     "message": "[!! No importable rows found. $1 rows were skipped. !!]"
   },
+  "text_no_local_title_marks_yet": {
+    "message": "[!! No local title marks yet. !!]"
+  },
   "text_no_matching_title_found": {
     "message": "[!! No matching title found !!]"
   },
   "text_no_titles_on_this_page_to_pick": {
     "message": "[!! No titles on this page to pick from. !!]"
+  },
+  "text_none_of_count_opened": {
+    "message": "[!! 0 of $1 opened !!]"
   },
   "text_not_available_in_this_build": {
     "message": "[!! Not available in this build !!]"
@@ -1853,8 +1976,14 @@
   "text_partly_available": {
     "message": "[!! Partly available !!]"
   },
+  "text_paste_exported_settings_json": {
+    "message": "[!! Paste exported settings JSON !!]"
+  },
   "text_pick_something": {
     "message": "[!! Pick something !!]"
+  },
+  "text_picked_nothing_opened": {
+    "message": "[!! Picked $1. Nothing was opened. !!]"
   },
   "text_preview_required_nothing_has_been_changed": {
     "message": "[!! Preview required. Nothing has been changed. !!]"
@@ -1862,11 +1991,17 @@
   "text_processing": {
     "message": "[!! Processing !!]"
   },
+  "text_queue_link_meta": {
+    "message": "[!! $1 · New tab !!]"
+  },
   "text_queue_opened_progress": {
     "message": "[!! $1 of $2 opened !!]"
   },
   "text_ratings_grid": {
     "message": "[!! Ratings Grid !!]"
+  },
+  "text_reads_the_published_version_once_a_day": {
+    "message": "[!! Reads the published version once a day. Nothing about you is sent. !!]"
   },
   "text_replace_key": {
     "message": "[!! Replace key !!]"
@@ -1882,6 +2017,9 @@
   },
   "text_requesting_title_through": {
     "message": "[!! Requesting $1 through $2 !!]"
+  },
+  "text_reset_preferences_title_marks_and_integration": {
+    "message": "[!! Reset preferences, title marks, and integration credentials !!]"
   },
   "text_response_was_too_large_or_empty": {
     "message": "[!! Response was too large or empty !!]"
@@ -1946,6 +2084,12 @@
   "text_score_unavailable": {
     "message": "[!! Score unavailable !!]"
   },
+  "text_scores_availability_and_reference": {
+    "message": "[!! Scores, availability and reference !!]"
+  },
+  "text_search_site_for_title": {
+    "message": "[!! Search $1 for $2 !!]"
+  },
   "text_seen_of_loaded": {
     "message": "[!! Seen $1/$2 loaded !!]"
   },
@@ -1957,6 +2101,9 @@
   },
   "text_settings_saved": {
     "message": "[!! Saved !!]"
+  },
+  "text_site_search_queue": {
+    "message": "[!! $1 search queue !!]"
   },
   "text_skip_titles_i_have_marked": {
     "message": "[!! Skip titles I have marked !!]"
@@ -2009,6 +2156,9 @@
   "text_tmdb_rejected_this_token": {
     "message": "[!! TMDB rejected this token !!]"
   },
+  "text_tmdb_their_api_needs_your_token": {
+    "message": "[!! TMDB (their API, needs your token) !!]"
+  },
   "text_trailer_unavailable": {
     "message": "[!! Trailer unavailable !!]"
   },
@@ -2021,6 +2171,12 @@
   "text_undo_the_last_settings_reset": {
     "message": "[!! Undo the last settings reset !!]"
   },
+  "text_undone": {
+    "message": "[!! Undone. !!]"
+  },
+  "text_update_available": {
+    "message": "[!! IMDb Enhanced $1 is available — this build is $2. !!]"
+  },
   "text_use_a_valid_title_url": {
     "message": "[!! Use a valid $1 title URL. !!]"
   },
@@ -2029,6 +2185,12 @@
   },
   "text_user_reviews": {
     "message": "[!! User reviews !!]"
+  },
+  "text_user_score": {
+    "message": "[!! User: $1 !!]"
+  },
+  "text_uses_light_for_os_light_mode_and": {
+    "message": "[!! Uses Light for OS light mode and Dark for OS dark mode. !!]"
   },
   "text_view_full_cast_crew": {
     "message": "[!! View full cast & crew !!]"

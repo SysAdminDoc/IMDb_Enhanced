@@ -781,6 +781,17 @@ function checkGeneratedProfile(dir, compute, rebuildCommand) {
             throw new Error(`${name}/${entry} is stale; run ${rebuildCommand}.`);
         }
     });
+    /* The locale files are generated too, from the same catalog, and were checked by
+       name alone: a directory whose messages.json no longer matched the source passed.
+       They are what a translated build actually reads, so compare the bytes. */
+    Object.entries(localeFiles()).forEach(([locale, messages]) => {
+        const entry = `_locales/${locale}/messages.json`;
+        const written = path.join(dir, '_locales', locale, 'messages.json');
+        if (!fs.existsSync(written)) throw new Error(`${name}/${entry} is missing; run ${rebuildCommand}.`);
+        if (fs.readFileSync(written, 'utf8') !== `${JSON.stringify(messages, null, 2)}\n`) {
+            throw new Error(`${name}/${entry} is stale; run ${rebuildCommand}.`);
+        }
+    });
     /* Everything else in the directory is a copy of a file in extension/, including the
        background worker that holds the credential-injection code. Comparing the bytes is
        the only way to notice one that was edited in place. */

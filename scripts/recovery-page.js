@@ -191,7 +191,7 @@ async function renderDataConsentRow(list) {
         const granted = await api.contains();
         state.dataset.state = granted ? 'granted' : 'missing';
         state.textContent = granted
-            ? 'Allowed.'
+            ? core.t('recovery_consent_allowed')
             : core.t('recovery_not_allowed_so_those_lookups_should_stay');
         button.textContent = granted ? 'Withdraw' : 'Allow';
         button.className = granted ? '' : 'primary';
@@ -264,10 +264,11 @@ function renderAccessList() {
             state.textContent = granted
                 ? (enabled ? core.t('recovery_granted_and_the_feature_is_on') : core.t('recovery_granted_but_the_feature_is_switched_off'))
                 : (enabled ? core.t('recovery_not_granted_so_this_feature_cannot_work') : core.t('recovery_not_granted'));
-            button.textContent = granted ? 'Revoke' : 'Grant';
+            button.textContent = granted ? core.t('recovery_revoke') : core.t('recovery_grant');
             button.className = granted ? '' : 'primary';
-            button.setAttribute('aria-label',
-                `${granted ? 'Revoke' : 'Grant'} access to ${core.describeFeatureOrigins(key)}`);
+            button.setAttribute('aria-label', granted
+                ? core.t('recovery_revoke_access_to', [core.describeFeatureOrigins(key)])
+                : core.t('recovery_grant_access_to', [core.describeFeatureOrigins(key)]));
         };
 
         button.addEventListener('click', async () => {
@@ -305,12 +306,12 @@ function renderAccessList() {
 /* ---- Storage summary ---------------------------------------------------------- */
 
 function renderSummary() {
-    let marks = 'unavailable';
+    let marks = core.t('recovery_unavailable');
     try { marks = String(Object.keys(core.getUserMarks(true) || {}).length); }
     catch { /* reported as unavailable */ }
     $('mark-count').textContent = marks;
-    try { $('cache-summary').textContent = `${core.cacheCount()} entries · ${core.formatCacheBytes(core.cacheBytes())}`; }
-    catch { $('cache-summary').textContent = 'unavailable'; }
+    try { $('cache-summary').textContent = core.t('recovery_cache_summary', [core.cacheCount(), core.formatCacheBytes(core.cacheBytes())]); }
+    catch { $('cache-summary').textContent = core.t('recovery_unavailable'); }
 }
 
 /* ---- Diagnostics -------------------------------------------------------------- */

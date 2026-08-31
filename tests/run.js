@@ -815,7 +815,10 @@ test('the update notice is extension-only, dismissible, and validates what it re
     assert.strictEqual((script.match(/id:'enh-update-notice'/g) || []).length, 1,
         'the notice element id must be unique — the settings toggle must not reuse it');
     assert(script.includes("id:'enh-update-notice-toggle'"), 'the settings control needs its own id');
-    assert(/if \(IS_EXTENSION_BUILD\) \{[\s\S]{0,400}?Tell me about new versions/.test(script),
+    // The control's label is a catalog entry, so it is found by key and read from there.
+    const updateBlock = script.slice(script.indexOf('if (IS_EXTENSION_BUILD) {', script.indexOf('enh-update-notice-toggle') - 3000));
+    const updateControl = [...updateBlock.slice(0, 900).matchAll(/t\('([A-Za-z0-9_@]+)'\)/g)].map(match => match[1]);
+    assert(updateControl.some(key => /new versions/i.test(messageCatalog[key] || '')),
         'the control belongs only in the build that can be stale');
     // A version string is interpolated into the page, so it is validated on read.
     assert(/\^\[0-9\]\+\(\?:\\.\[0-9\]\+\)\{0,3\}\$/.test(script),
@@ -4019,7 +4022,8 @@ test('the roulette picks from what is visible and never navigates', () => {
     assert(body.includes('scrollIntoView'), 'the pick must be scrolled to');
     assert(!/window\.open|location\.href\s*=|\.click\(\)/.test(body),
         'the roulette must never navigate or open anything on its own');
-    assert(body.includes('Nothing was opened.'), 'and it should say so');
+    const said = [...body.matchAll(/t\('([A-Za-z0-9_@]+)'/g)].map(match => messageCatalog[match[1]] || '');
+    assert(said.some(text => text.includes('Nothing was opened.')), 'and it should say so');
 
     // Only rows the page is actually showing: a filtered-out row is not a candidate,
     // or the pick scrolls to something invisible.
@@ -4126,7 +4130,9 @@ test('an unreachable provider falls back to a labelled cached value', () => {
         'the failure must be captured, not discarded, or its kind cannot be judged');
     const helper = script.slice(script.indexOf('function renderStaleScore'));
     assert(helper.includes("new Date(stale.ts).toISOString().slice(0, 10)"), 'the fallback must show its date');
-    assert(helper.includes('`Cached ${date}`'), 'the fallback must say it is cached');
+    const cachedNote = /t\('([A-Za-z0-9_@]+)', \[date\]\)/.exec(helper);
+    assert(cachedNote && /^cached /i.test(messageCatalog[cachedNote[1]] || ''),
+        'the fallback must say it is cached');
     assert(helper.includes('refreshFeature(feature.key)'), 'the fallback must offer a retry');
     /* Asserted as the literal guard, not as an ordering: indexOf returns -1 when the call
        is gone, and -1 sorts before everything, so an ordering check passes against a
@@ -5293,143 +5299,177 @@ test('the permissions popup fills its copy from the installed locale', () => {
 });
 
 /* The gate. Everything above says the catalog works; this says nothing is left outside
-   it. It reads the source the way the migration did — a quoted string that reads like a
-   sentence, on a line that is not resolving DOM, styles or stored identity — and the list
-   it produces has to be empty. Adding a hard-coded sentence to a feature is what this
-   catches, months from now, when nobody remembers the rule.
+   it. It tokenizes the source — properly, because the first version of this check split
+   lines on a regex and a three-character literal like 'div' desynchronised every quote
+   after it — and reports any string that reads like something a person is shown and is
+   not on its way through t().
 
-   The exclusions are named individually and each is a decision, not an oversight. */
+   Adding a hard-coded sentence to a feature is what this catches, months from now, when
+   nobody remembers the rule. The exclusions are named individually below and each one is
+   a decision rather than a rule. */
+const readableStrings = source => {
+    const found = [];
+    let index = 0;
+    let line = 1;
+    const isEscaped = position => {
+        let slashes = 0;
+        while (position - slashes - 1 >= 0 && source[position - slashes - 1] === '\\') slashes += 1;
+        return slashes % 2 === 1;
+    };
+    while (index < source.length) {
+        const ch = source[index];
+        if (ch === '\n') { line += 1; index += 1; continue; }
+        if (ch === '/' && source[index + 1] === '/') {
+            while (index < source.length && source[index] !== '\n') index += 1;
+            continue;
+        }
+        if (ch === '/' && source[index + 1] === '*') {
+            index += 2;
+            while (index < source.length && !(source[index] === '*' && source[index + 1] === '/')) {
+                if (source[index] === '\n') line += 1;
+                index += 1;
+            }
+            index += 2;
+            continue;
+        }
+        if (ch === "'" || ch === '"') {
+            const openedAt = index;
+            const openLine = line;
+            index += 1;
+            while (index < source.length) {
+                if (source[index] === '\n') break;
+                if (source[index] === ch && !isEscaped(index)) break;
+                index += 1;
+            }
+            if (source[index] === ch) {
+                found.push({
+                    line: openLine,
+                    text: source.slice(openedAt + 1, index).replace(/\\'/g, "'").replace(/\\"/g, '"'),
+                    before: source.slice(Math.max(0, openedAt - 60), openedAt),
+                    after: source.slice(index + 1, index + 3),
+                });
+                index += 1;
+            }
+            continue;
+        }
+        /* Template literals are read for their attribute values and text nodes rather
+           than as one string, because that is what the score widgets build markup with. */
+        if (ch === '`') {
+            const openLine = line;
+            const start = index;
+            index += 1;
+            while (index < source.length && !(source[index] === '`' && !isEscaped(index))) {
+                if (source[index] === '\n') line += 1;
+                index += 1;
+            }
+            const body = source.slice(start + 1, index);
+            index += 1;
+            [
+                ...body.matchAll(/(?:aria-label|title|placeholder|alt)="([^"${}]*)"/g),
+                ...body.matchAll(/>([^<>${}]+)</g),
+            ].forEach(match => found.push({ line:openLine, text:match[1].trim(), before:'`markup`', after:'' }));
+            /* And the plain kind: the chunks between its substitutions are the sentence
+               someone reads, so they are judged by where the literal itself sits. */
+            if (!/[<>]/.test(body)) {
+                body.split(/\$\{[^{}]*\}/).forEach(chunk => found.push({
+                    line: openLine,
+                    text: chunk.trim(),
+                    before: source.slice(Math.max(0, start - 60), start),
+                    after: '',
+                }));
+            }
+            continue;
+        }
+        index += 1;
+    }
+    return found;
+};
+
 test('every sentence in the source comes from the catalog', () => {
-    const lines = script.split('\n');
-    const catalogStart = lines.findIndex(line => line.includes('const MESSAGES = Object.freeze({'));
-    const catalogEnd = lines.findIndex((line, index) => index > catalogStart && /^    \}\);$/.test(line));
-    assert(catalogStart > 0 && catalogEnd > catalogStart, 'the catalog should be locatable');
-
-    /* The watch destinations and the FMHY catalog are several hundred service names.
-       A service is called what it is called in every language. */
-    const catalogsStart = lines.findIndex(line => line.includes('const DEFAULT_WATCH_SITES = ['));
-    const catalogsEnd = lines.findIndex(line => line.includes('const CATALOG_ROW_COLORS = ['));
-    assert(catalogsStart > 0 && catalogsEnd > catalogsStart, 'the site catalogs should be locatable');
-
+    /* A name is a name in every language. */
+    const BRANDS = new Set([
+        'IMDb', 'IMDb Enhanced', 'Rotten Tomatoes', 'Metacritic', 'Letterboxd', 'JustWatch',
+        'TMDB', 'OMDb', 'YouTube', 'Wikidata', 'Plex', 'Jellyfin', 'Emby', 'Radarr', 'Sonarr',
+        'Overseerr', 'RT', 'LB', 'MC', 'TOMATOMETER', 'LETTERBOXD', 'METASCORE', 'SERVARR',
+        'Box Office Mojo', 'Ep Calendar', 'Box Office',
+    ]);
     /* Named one at a time, because each is a reason rather than a rule. */
     const DELIBERATE = new Map([
-        ['Rotten Tomatoes', 'a brand, and the name OMDb keys its Ratings array by'],
-        ['Box Office Mojo', 'a brand'],
-        ['Ep Calendar', 'a brand'],
         ['add to watch', "IMDb's own control text, matched against the page"],
         ['watch list', "IMDb's own control text, matched against the page"],
-        ['Route changed', 'an abort reason carried in an error, not shown as itself'],
-        ['Unknown error', 'written into a stored journal entry, which keeps its own locale'],
-        ['IMDb Enhanced diagnostics', 'a bug report, which is read by whoever receives it'],
-        ['not configured', 'part of that same report'],
-        ['accelerometer; autoplay; clipboard-write; encrypted-media; gyroscope; picture-in-picture; web-share',
-            'an iframe allow list, which is syntax'],
+        ['watchlist', "IMDb's own control text, matched against the page"],
         ['Bottom Sponsored Advertisement', "IMDb's own aria-label, matched as a selector"],
         ['Sponsored Content', "IMDb's own aria-label, matched as a selector"],
-        ['IMDb Enhanced', 'the name of the thing'],
+        ['Route changed', 'an abort reason carried inside an error, never shown as itself'],
+        ['Unknown error', 'written into a stored journal entry, which keeps its own locale'],
+        ['IMDb Enhanced diagnostics', 'a bug report, read by whoever receives it'],
+        ['not configured', 'part of that same report'],
+        ['configured', 'part of that same report'],
+        ['unknown', 'part of that same report'],
+        ['accelerometer; autoplay; clipboard-write; encrypted-media; gyroscope; picture-in-picture; web-share',
+            'an iframe allow list, which is syntax'],
     ]);
 
-    // A line that resolves DOM, styles or stored identity is not showing anyone a sentence.
-    const RESOLVING = /querySelector|\.closest\(|\.matches\(|classList|className|dataset|font-family|Segoe UI|createElement|getAttribute\(|setAttribute\('(?:data-|class|id)|\bid:|localeCompare|\.includes\('|startsWith\(|endsWith\(|JSON\.parse|new RegExp|storageKey|PREFIX|\.replace\(/;
+    /* What position a string is in decides whether anyone reads it. These are the ones
+       that reach a person: an element's text, a label, a title, an accessible name, a
+       toast, a status line. A selector, a key, a class name and a URL are none of them. */
+    const SHOWN = /(?:\b(?:label|title|placeholder|alt)\s*:\s*|textContent\s*=\s*|setTextIfChanged\([^,]+,\s*|showToast\(\s*|say\(\s*|setAttribute\('aria-label',\s*|'aria-label'\s*:\s*|make(?:Card|FeatureCard|FeatureSummaryCard)\(\s*|register\(\s*|\}, )$/;
 
-    const inComment = new Array(lines.length).fill(false);
-    let open = false;
-    lines.forEach((line, index) => {
-        inComment[index] = open;
-        let rest = open ? line : line.replace(/'(?:[^'\\]|\\.)*'/g, "''").replace(/"(?:[^"\\]|\\.)*"/g, '""');
-        for (;;) {
-            if (open) {
-                const close = rest.indexOf('*/');
-                if (close === -1) break;
-                rest = rest.slice(close + 2); open = false;
-            } else {
-                const start = rest.indexOf('/*');
-                if (start === -1) break;
-                rest = rest.slice(start + 2); open = true;
-            }
-        }
-    });
-
-    const readsLikeASentence = text => {
-        if (text.length < 4 || !/\s/.test(text)) return false;
-        if (/^https?:|^\/|^\.|^#|^--/.test(text)) return false;
-        if (/[{}<>[\]"]|\bpx\b|\brem\b|^\d/.test(text)) return false;
-        if (/\\n|\\t|[()|*+$\\]/.test(text)) return false;
-        return /^[A-Z“‘]/.test(text) || /\b(the|a|an|is|are|to|of|no|not|and|or|on|in)\b/i.test(text);
+    const readsLikeSomethingShown = text => {
+        if (!text || text.length < 3) return false;
+        if (BRANDS.has(text) || DELIBERATE.has(text)) return false;
+        if (!/[A-Za-z]{2}/.test(text)) return false;
+        if (/^https?:|^\/|^#|^\.|^--|^[a-z-]+\/[a-z-]+$/.test(text)) return false;
+        // A selector, a class, a data attribute, a CSS value, a storage key.
+        if (/[[\]{}<>=~^]|\bpx\b|\brem\b|^[a-z]+(-[a-z0-9]+)+$|^[a-z]+([A-Z][a-z0-9]*)+$/.test(text)) return false;
+        if (/^[a-z]+$/.test(text) && !/\s/.test(text)) return false;
+        return true;
     };
 
-    const stranded = [];
-    lines.forEach((line, index) => {
-        if (index >= catalogStart && index <= catalogEnd) return;
-        if (index >= catalogsStart && index <= catalogsEnd) return;
-        if (inComment[index]) return;
-        const trimmed = line.trim();
-        if (trimmed.startsWith('//') || trimmed.startsWith('*') || trimmed.startsWith('/*')) return;
-        if (RESOLVING.test(line)) return;
-        for (const match of line.matchAll(/'((?:[^'\\\n]|\\.){4,})'/g)) {
-            const text = match[1].replace(/\\'/g, "'").trim();
-            if (!readsLikeASentence(text) || DELIBERATE.has(text)) continue;
-            stranded.push(`${index + 1}: ${text}`);
-        }
-    });
-    assert.deepStrictEqual(stranded, [],
-        'these sentences are written at the call site instead of coming from the catalog');
-
-    /* Short labels are the other half of the same problem: a button reading "Retry" or a
-       tab reading "Data" is as untranslated as a sentence is, and the sentence check
-       above cannot see them because they are one or two words. Read from the positions a
-       label actually occupies. Names are excluded because a name is a name everywhere. */
-    const BRANDS = new Set([
-        'Metacritic', 'Letterboxd', 'JustWatch', 'TMDB', 'OMDb', 'YouTube', 'Wikidata',
-        'Plex', 'Jellyfin', 'Emby', 'Radarr', 'Sonarr', 'Overseerr', 'IMDb',
-        'RT', 'LB', 'TOMATOMETER', 'LETTERBOXD', 'METASCORE', 'SERVARR', 'Rotten Tomatoes',
-        'Box Office Mojo', 'Ep Calendar',
-    ]);
-    const labelPatterns = [
-        /(?:\b(?:label|title)\s*:\s*|\btextContent\s*=\s*)'([^'\n]{2,24})'/g,
-        // The element form has to end the call: `}, 'storage', …` is an argument, not text.
-        /\}, '([^'\n]{2,24})'\)/g,
+    const sources = [
+        ['IMDb_Enhanced.user.js', script],
+        ...MESSAGE_CONSUMERS.map(file => [path.basename(file), fs.readFileSync(file, 'utf8')]),
     ];
-    const strandedLabels = [];
-    lines.forEach((line, index) => {
-        if (index >= catalogStart && index <= catalogEnd) return;
-        if (index >= catalogsStart && index <= catalogsEnd) return;
-        if (inComment[index]) return;
-        const trimmed = line.trim();
-        if (trimmed.startsWith('//') || trimmed.startsWith('*') || trimmed.startsWith('/*')) return;
-        labelPatterns.forEach(pattern => {
-            for (const match of line.matchAll(pattern)) {
-                const text = match[1];
-                if (/\s{2}|[{}<>[\]"/#.]|^\$/.test(text)) continue;
-                if (!/[A-Za-z]/.test(text)) continue;
-                if (BRANDS.has(text) || DELIBERATE.has(text)) continue;
-                strandedLabels.push(`${index + 1}: ${text}`);
-            }
+
+    const stranded = [];
+    sources.forEach(([name, source]) => {
+        const lines = source.split('\n');
+        /* The watch destinations and the FMHY catalog are several hundred service names,
+           and a service is called what it is called everywhere. */
+        const sitesStart = lines.findIndex(line => line.includes('const DEFAULT_WATCH_SITES = ['));
+        const sitesEnd = lines.findIndex(line => line.includes('const CATALOG_ROW_COLORS = ['));
+        const catalogStart = lines.findIndex(line => line.includes('const MESSAGES = Object.freeze({'));
+        const catalogEnd = lines.findIndex((line, index) => index > catalogStart && /^    \}\);$/.test(line));
+        readableStrings(source).forEach(entry => {
+            if (catalogStart >= 0 && entry.line > catalogStart && entry.line <= catalogEnd + 1) return;
+            if (sitesStart >= 0 && entry.line > sitesStart && entry.line <= sitesEnd + 1) return;
+            if (!readsLikeSomethingShown(entry.text)) return;
+            if (entry.after.startsWith(':')) return;
+            if (entry.before !== '`markup`' && !SHOWN.test(entry.before)) return;
+            stranded.push(`${name}:${entry.line}: ${entry.text}`);
         });
     });
-    assert.deepStrictEqual(strandedLabels, [],
-        'these labels are written at the call site instead of coming from the catalog');
-
-    /* The score widgets build two of their states as markup rather than elements, which
-       put words in a third place the two checks above cannot see: an attribute value and
-       a text node inside a template literal. */
-    const markup = [
-        ...script.matchAll(/(?:aria-label|title|placeholder)="([A-Za-z][^"${}]{3,})"/g),
-        ...script.matchAll(/>([A-Za-z][^<>${}]{3,})</g),
-    ].map(match => match[1].trim())
-        .filter(text => text && !BRANDS.has(text) && !DELIBERATE.has(text));
-    assert.deepStrictEqual(markup, [],
-        'markup built as a template literal must take its words from the catalog too');
+    assert.deepStrictEqual(stranded, [],
+        'these words are written where they are shown instead of coming from the catalog');
 
     /* The other half of the same rule. Choosing a noun or a verb with a ternary produces
        correct English and nothing else: how many forms a count has, and which words
        change, belong to the language. tCount and a pair of keys, every time. */
-    const pluralByTernary = [...script.matchAll(/=== 1 \? '[^']+' : '[^']+'/g)]
-        .map(match => match[0])
-        // tCount's own choice of suffix is the mechanism, not a sentence.
-        .filter(found => found !== "=== 1 ? '_one' : '_other'");
+    const pluralByTernary = sources.flatMap(([name, source]) =>
+        [...source.matchAll(/=== 1 \? '[^']+' : '[^']+'/g)]
+            .map(match => `${name}: ${match[0]}`)
+            .filter(found => !found.endsWith("=== 1 ? '_one' : '_other'")));
     assert.deepStrictEqual(pluralByTernary, [],
         'a count-dependent sentence needs tCount and its _one/_other keys, not a ternary');
+
+    /* An error this script raises carries its own category. The classifier can fall back
+       to reading English out of a message, which is right for one the browser raised and
+       wrong for one of ours: our words come from the catalog, so under another locale
+       they are simply not the words it matches on, and the category is stored. */
+    const untypedThrows = [...script.matchAll(/new Error\(t(?:Count)?\('([A-Za-z0-9_@]+)'/g)]
+        .map(match => match[1]);
+    assert.deepStrictEqual(untypedThrows, [],
+        'a failure raised with catalog text must declare its category through failure()');
 });
 
 /* The one rule that keeps translation from changing behaviour: nothing decides what to do
@@ -5599,8 +5639,11 @@ test('userscript managers get backup, restore, reset-with-undo and settings comm
         'menu registration must tolerate a manager without the API and stay off other hosts');
     // The reset command must capture an undo snapshot before it destroys anything, and
     // that snapshot must include credentials or the undo silently loses them.
-    const command = script.slice(script.indexOf("register('Reset all settings (with undo)'"));
-    const body = command.slice(0, command.indexOf("register('Undo"));
+    /* Located by the key its label comes from, and bounded by the next command rather
+       than by one named command, since the catalog does not fix their order. */
+    const resetKey = messageKeyFor('Reset all settings (with undo)');
+    const command = script.slice(script.indexOf(`register(t('${resetKey}')`));
+    const body = command.slice(0, command.indexOf('register(', 10));
     assert(body.indexOf('getExportSettings({ includeCredentials:true })') < body.indexOf('applySettingsImport(getDefaultSettingsEntries())'),
         'the undo snapshot must be taken before the reset writes');
     assert(/snapshot = prepareSettingsImport\(getExportSettings\(\{ includeCredentials:true \}\)\)/.test(body),
