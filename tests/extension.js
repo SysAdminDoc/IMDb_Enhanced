@@ -330,7 +330,7 @@ assert(!/headers\[[^\]]*\]\s*=\s*(?:get|getSetting)\(\s*'(?:radarr|sonarr|seerr|
 
 /* IE-92: the store profile. Asserted against the generated output rather than the source,
    because what a reviewer reads is the file that ships. `npm test` builds it first. */
-const { applyStoreProfile, PROVIDER_REGISTRY: originLists } = require('../scripts/build-extension.js');
+const { applyStoreProfile, computeStoreBuild, STORE_COPIED_FILES, PROVIDER_REGISTRY: originLists } = require('../scripts/build-extension.js');
 const storeContent = applyStoreProfile(content);
 assert(storeContent.includes("const DISTRIBUTION_PROFILE = 'store';"),
     'a store build must know which build it is, so it can say why a source is missing');
@@ -373,4 +373,36 @@ assert.strictEqual((source.match(/if \(featureExcludedByProfile\(this\.key\)\) \
 assert(source.includes('function describeProfileExclusion(key)'),
     'and say which source is missing rather than just going quiet');
 
-console.log(`Extension manifest and generated content are valid at v${pkg.version}, for both builds.`);
+/* Everything above computes the store profile in this process, which says nothing about
+   the directory that gets zipped and uploaded. extension-firefox/ is read from disk for
+   exactly this reason and extension-store/ was not, so a stale or hand-edited store build
+   was undetectable. `npm test` builds it with --store first. */
+const storeDir = path.join(root, 'extension-store');
+assert(fs.existsSync(storeDir),
+    'extension-store/ is missing; npm test must build it with --store before validating it');
+const store = computeStoreBuild();
+Object.entries(store.files).forEach(([name, expected]) => {
+    assert.strictEqual(
+        fs.readFileSync(path.join(storeDir, name), 'utf8'),
+        expected,
+        `extension-store/${name} diverges from the generator; run npm run build:store`);
+});
+assert.strictEqual(store.manifest.version, pkg.version, 'the built store manifest is a release behind');
+[...STORE_COPIED_FILES, ...Object.values(store.manifest.icons || {})].forEach(name => {
+    assert(fs.existsSync(path.join(storeDir, name)), `store build is missing ${name}`);
+});
+/* The listing text is read before the code is. Reusing the default description would
+   advertise score widgets this build deliberately leaves out. */
+assert.notStrictEqual(store.manifest.description, manifest.description,
+    'the store build must describe what it ships, not what the full build ships');
+assert(store.manifest.description.length <= 132,
+    'Chrome truncates a manifest description past 132 characters');
+store.excluded.forEach(id => {
+    const label = originLists.PROVIDERS[id].label;
+    assert(!store.manifest.description.toLowerCase().includes(label.toLowerCase()),
+        `the store description advertises ${label}, which that build excludes`);
+});
+assert(/TMDB/.test(store.manifest.description),
+    'and it must name the source availability actually comes from there');
+
+console.log(`Extension manifest and generated content are valid at v${pkg.version}, for all three builds.`);

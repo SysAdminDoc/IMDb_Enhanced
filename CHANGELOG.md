@@ -40,6 +40,8 @@
 
 ### Fixed
 
+- The web-store build carries its own listing description now. It used to reuse the full build's, which advertises score widgets and a directory of watch destinations that this build deliberately leaves out. The suite also reads the built `extension-store/` directory back and compares it with the generator, so a stale or hand-edited store build fails the tests instead of reaching a reviewer.
+
 - In a web-store build, a feature whose source that build does not ship now says "Not available in this build" and names the missing service, instead of reporting a missing site permission and offering a Grant button that could never have worked. The other builds are unchanged.
 
 - A rejected match correction no longer leaves the wrong match on screen in the extension. A write to extension storage is optimistic, so the panel could keep showing a correction the browser refused. The failure now clears every correction-backed cache for that title, refreshes the affected widgets, and says the previous match was restored.
