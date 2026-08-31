@@ -2829,7 +2829,19 @@
         const prefix = SCORE_CORRECTION_CACHE_PREFIXES[provider];
         if (!prefix || !/^tt\d{5,12}$/.test(String(imdbId || ''))) return;
         try {
-            if (typeof GM_deleteValue === 'function') GM_deleteValue(`cache_${prefix}${imdbId}`);
+            if (typeof GM_deleteValue !== 'function') return;
+            if (provider === 'justWatch') {
+                const regionalPrefix = 'cache_availability_justwatch_';
+                const titleSuffix = `_${imdbId}`;
+                GM_listValues().forEach(storageKey => {
+                    if (storageKey === `cache_${prefix}${imdbId}`
+                        || (storageKey.startsWith(regionalPrefix) && storageKey.endsWith(titleSuffix))) {
+                        GM_deleteValue(storageKey);
+                    }
+                });
+                return;
+            }
+            GM_deleteValue(`cache_${prefix}${imdbId}`);
         } catch { /* the durable correction still wins over any cache entry */ }
     }
 
@@ -6131,6 +6143,12 @@ section[id*="quote" i] .ipc-list-card { padding: 4px 0 !important; margin: 2px 0
         const stored = String(get('availabilityRegion') || '').trim().toUpperCase();
         return AVAILABILITY_REGION_PATTERN.test(stored) ? stored : 'US';
     }
+    function getAvailabilityCacheKey(imdbId, source = getEffectiveAvailabilitySource(), region = getAvailabilityRegion()) {
+        const normalizedSource = source === 'tmdb' ? 'tmdb' : 'justwatch';
+        const candidateRegion = String(region || '').trim().toUpperCase();
+        const normalizedRegion = AVAILABILITY_REGION_PATTERN.test(candidateRegion) ? candidateRegion : 'US';
+        return `availability_${normalizedSource}_${normalizedRegion}_${imdbId}`;
+    }
     function readTmdbToken() {
         return readCredential('tmdbReadToken');
     }
@@ -7341,7 +7359,10 @@ section[id*="quote" i] .ipc-list-card { padding: 4px 0 !important; margin: 2px 0
             if (!imdbId || !title) return;
 
             const availabilitySource = getEffectiveAvailabilitySource();
-            const cacheKey = `${availabilitySource === 'tmdb' ? 'tmdb_' : 'jw_'}${imdbId}`;
+            /* Source and region are part of the answer. The old jw_<id> key and the
+               short-lived tmdb_<id> key are deliberately not read, so neither can cross
+               an adapter or region boundary after an upgrade. */
+            const cacheKey = getAvailabilityCacheKey(imdbId, availabilitySource, getAvailabilityRegion());
             const correction = availabilitySource === 'justwatch'
                 ? getScoreCorrection(imdbId, 'justWatch')
                 : null;

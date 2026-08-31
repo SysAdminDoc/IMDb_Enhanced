@@ -40,6 +40,8 @@
 
 ### Fixed
 
+- Availability cache entries are now separated by source and country. Switching between TMDB and JustWatch can no longer show the other source's answer or attribution, and changing country no longer serves the previous country's providers. Old source-blind entries are ignored safely.
+
 - TMDB availability results now open the regional TMDB watch page returned by the API. The widget used to reject that address as though it had to belong to JustWatch, then send every result to a hard-coded US search. Each source now validates its own host before the link is shown.
 
 - CSV previews now report viewing events displaced by the 100-event per-title limit. A valid row can still update the title and rating metadata, but its history event is no longer dropped without an explicit count.

@@ -53,6 +53,8 @@ const instrumented = userscript.replace(/\}\)\(\);\s*$/, `globalThis.__imdbEnhan
     appendScoreCorrectionAction,
     getScoreCorrection,
     setScoreCorrection,
+    cacheSet,
+    getAvailabilityCacheKey,
     renderAvailability: data => {
         const feature = features.find(candidate => candidate.key === 'streamAvailability');
         feature._render(data);
@@ -63,6 +65,12 @@ const instrumented = userscript.replace(/\}\)\(\);\s*$/, `globalThis.__imdbEnhan
         const feature = features.find(candidate => candidate.key === key);
         if (!feature) throw new Error('Unknown feature: ' + key);
         return startFeature(feature, { context:'fixture' });
+    },
+    runFeature: async key => {
+        const feature = features.find(candidate => candidate.key === key);
+        if (!feature) throw new Error('Unknown feature: ' + key);
+        advanceFeatureGeneration(feature);
+        await feature.init();
     },
     stopFeature: key => {
         const feature = features.find(candidate => candidate.key === key);
@@ -238,6 +246,65 @@ await runFixture('title', async (window, hooks) => {
     hooks.stopFeature('inlineRTScore');
     correctionWidget.remove();
 
+    // Availability cache misses must advance immediately to the offline request stub.
+    // Visibility itself is not under test here, and happy-dom never intersects a node.
+    window.IntersectionObserver = undefined;
+    const imdbId = 'tt0133093';
+    const justWatchCache = {
+        providers:['Netflix'],
+        url:'https://www.justwatch.com/us/movie/the-matrix',
+    };
+    const tmdbCache = {
+        source:'tmdb',
+        region:'US',
+        providers:['Max'],
+        offers:{ stream:['Max'], rent:[], buy:[] },
+        url:'https://www.themoviedb.org/movie/603/watch?locale=US',
+    };
+    hooks.cacheSet(hooks.getAvailabilityCacheKey(imdbId, 'justwatch', 'US'), justWatchCache);
+    hooks.cacheSet(hooks.getAvailabilityCacheKey(imdbId, 'tmdb', 'US'), tmdbCache);
+
+    window.GM_setValue('imdb_enh_availabilitySource', 'tmdb');
+    window.GM_setValue('imdb_enh_availabilityRegion', 'US');
+    await hooks.runFeature('streamAvailability');
+    let availabilityWidget = requireSelector(window.document, '#enh-jw-widget');
+    assert.match(availabilityWidget.textContent, /TMDB.*Max/s);
+    assert.doesNotMatch(availabilityWidget.textContent, /Netflix/,
+        'a cached JustWatch answer must not render while TMDB is selected');
+    hooks.stopFeature('streamAvailability');
+
+    window.GM_setValue('imdb_enh_availabilitySource', 'justwatch');
+    await hooks.runFeature('streamAvailability');
+    availabilityWidget = requireSelector(window.document, '#enh-jw-widget');
+    assert.match(availabilityWidget.textContent, /JW.*Netflix/s);
+    assert.doesNotMatch(availabilityWidget.textContent, /TMDB|Max/,
+        'a cached TMDB answer and its attribution must not render while JustWatch is selected');
+    hooks.stopFeature('streamAvailability');
+
+    window.GM_setValue('imdb_enh_availabilitySource', 'tmdb');
+    window.GM_setValue('imdb_enh_availabilityRegion', 'GB');
+    await hooks.runFeature('streamAvailability');
+    availabilityWidget = requireSelector(window.document, '#enh-jw-widget');
+    assert.doesNotMatch(availabilityWidget.textContent, /Max/,
+        'changing region must not render the previous region\'s cached TMDB answer');
+    hooks.stopFeature('streamAvailability');
+
+    window.GM_deleteValue(`cache_${hooks.getAvailabilityCacheKey(imdbId, 'justwatch', 'US')}`);
+    hooks.cacheSet(`jw_${imdbId}`, {
+        providers:['Legacy Stream'],
+        url:'https://www.justwatch.com/us/movie/legacy',
+    });
+    window.GM_setValue('imdb_enh_availabilitySource', 'justwatch');
+    window.GM_setValue('imdb_enh_availabilityRegion', 'US');
+    const requestsBeforeLegacyRead = window.__fixtureRequests.length;
+    await hooks.runFeature('streamAvailability');
+    availabilityWidget = requireSelector(window.document, '#enh-jw-widget');
+    assert.doesNotMatch(availabilityWidget.textContent, /Legacy Stream/,
+        'the source-blind legacy cache key must be ignored after upgrade');
+    assert.ok(window.__fixtureRequests.length > requestsBeforeLegacyRead,
+        'ignoring a legacy cache entry must continue to a fresh provider lookup');
+    hooks.stopFeature('streamAvailability');
+
     hooks.renderAvailability({
         source:'tmdb',
         region:'US',
@@ -270,6 +337,8 @@ await runFixture('title', async (window, hooks) => {
     assert.equal(availabilityLink.href, 'https://www.justwatch.com/us/movie/the-matrix',
         'a JustWatch payload must retain its JustWatch trust boundary');
     assert.match(requireSelector(window.document, '#enh-jw-widget').textContent, /JW.*Via JustWatch/s);
+    assert.doesNotMatch(requireSelector(window.document, '#enh-jw-widget').textContent, /TMDB/,
+        'TMDB attribution must never appear on JustWatch data');
     requireSelector(window.document, '#enh-jw-widget').remove();
 
     const emptyStats = hooks.createLocalStatsPanel();

@@ -227,6 +227,7 @@ function loadScriptTestHooks({ withoutDeleteValue = false, withheldCredentials =
         PROVIDERS,
         describeProfileExclusion,
         getAvailabilityRegion,
+        getAvailabilityCacheKey,
         getJustWatchSearchUrl,
         isTmdbConfigured,
         originsHeldByOtherEnabledFeatures,
@@ -2929,6 +2930,19 @@ test('score corrections persist outside cache storage and survive settings expor
     assert.strictEqual(saved.year, 1982);
     assert(hooks.setScoreCorrection(imdbId, 'letterboxd', { mode:'none' }));
     assert.strictEqual(hooks.getScoreCorrection(imdbId, 'letterboxd').mode, 'none');
+
+    const justWatchUsKey = hooks.getAvailabilityCacheKey(imdbId, 'justwatch', 'US');
+    const justWatchGbKey = hooks.getAvailabilityCacheKey(imdbId, 'justwatch', 'GB');
+    assert(hooks.cacheSet(justWatchUsKey, { providers:['US service'] }));
+    assert(hooks.cacheSet(justWatchGbKey, { providers:['GB service'] }));
+    assert(hooks.cacheSet(`jw_${imdbId}`, { providers:['Legacy service'] }));
+    assert(hooks.setScoreCorrection(imdbId, 'justWatch', { mode:'none' }));
+    assert.strictEqual(hooks.cacheGet(justWatchUsKey), null,
+        'a JustWatch correction must invalidate the title in every cached region');
+    assert.strictEqual(hooks.cacheGet(justWatchGbKey), null,
+        'regional cache invalidation must not stop after the first match');
+    assert.strictEqual(hooks.cacheGet(`jw_${imdbId}`), null,
+        'correction invalidation must also remove the source-blind legacy key');
 
     hooks.cacheGC(true);
     assert.strictEqual(hooks.getScoreCorrection(imdbId, 'rottenTomatoes').url,
