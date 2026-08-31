@@ -666,7 +666,7 @@
         embyUrl: 'http://localhost:8096', embyApiKey: '',
         // TV
         tvEpisodeTools: true, tvShowEnhancements: true, subtitleLinks: true,
-        episodeHeatmap: true, ratingGap: true, seasonProgress: true,
+        episodeHeatmap: true, ratingGap: true, seasonProgress: true, episodeSubtitles: true,
         castAges: true,
         // Utility
         quickCopyID: true, watchlistBatch: true, listMultiSearch: true, listRuntimeSummary: true,
@@ -727,6 +727,7 @@
         episodeHeatmap: 'Colours IMDb’s own season×episode grid by rating and adds season averages, on the Ratings tab of a series.',
         ratingGap: 'On the Ratings tab, compares IMDb’s weighted rating with the unweighted mean of the raw votes.',
         subtitleLinks: 'Adds subtitle lookup links in the details section.',
+        episodeSubtitles: 'Adds a subtitle link to every episode on an episode list, plus a button that copies them all for the loaded season.',
         quickCopyID: 'Adds a visible IMDb ID copy button beside the title.',
         watchlistBatch: 'Adds a watchlist-page button that copies all visible IMDb title IDs.',
         listMultiSearch: 'Builds a popup-safe queue of up to 20 title links on watchlist, list, and chart pages.',
@@ -7911,6 +7912,97 @@ section[id*="quote" i] .ipc-list-card { padding: 4px 0 !important; margin: 2px 0
         destroy() { removeCSS('enh-subtitleLinks'); document.getElementById('enh-sub-row')?.remove(); }
     });
 
+    /* Per-episode subtitle links. Every episode has its own IMDb id, and both services
+       index by it, so a link per row needs no lookup at all.
+
+       opensubtitles.com is the primary because opensubtitles.org sits behind an anti-bot
+       wall: an ordinary anchor a person clicks still works there, which is exactly why
+       these are plain anchors and nothing here is ever fetched. Fetching would need a
+       @connect grant the project does not want and would hit the wall regardless. */
+    function buildEpisodeSubtitleUrl(imdbId) {
+        return /^tt\d+$/.test(imdbId || '') ? `https://www.opensubtitles.com/en/en/search-all/q-${imdbId}` : '';
+    }
+    function buildEpisodeSubtitleExport(rows) {
+        return rows
+            .map(row => ({ label: row.label || row.id, url: buildEpisodeSubtitleUrl(row.id) }))
+            .filter(entry => entry.url)
+            .map(entry => `${entry.label}\t${entry.url}`)
+            .join('\n');
+    }
+
+    reg({
+        key: 'episodeSubtitles', name: 'Per-episode subtitle links', group: 'TV',
+        init() {
+            if (!isIMDbHost()) return;
+            if (getPageSurface() !== 'episodes') return;
+            const isCurrent = createFeatureGuard(this);
+
+            addThemedCSS(t => `
+                .enh-ep-sub {
+                    display: inline-flex; align-items: center; margin: 6px 0 0;
+                    padding: 2px 8px; border-radius: 6px;
+                    border: 1px solid ${t.bd1}; background: ${t.sf0};
+                    color: ${t.blue} !important; text-decoration: none !important;
+                    font: 650 10px/1.6 -apple-system, BlinkMacSystemFont, 'Segoe UI', sans-serif;
+                }
+                .enh-ep-sub:hover { color: ${t.blueHi} !important; border-color: ${t.accentBorder}; }
+                #enh-ep-sub-export { margin: 8px 0 0; }
+            `, 'enh-episode-subtitles-css');
+
+            const paint = () => {
+                if (!isCurrent()) return;
+                readLoadedEpisodes().forEach(row => {
+                    if (row.node.querySelector?.('.enh-ep-sub')) return;
+                    const url = buildEpisodeSubtitleUrl(row.id);
+                    if (!url) return;
+                    row.node.appendChild(makeEl('a', {
+                        href:url,
+                        target:'_blank',
+                        rel:'noopener noreferrer',
+                        className:'enh-ep-sub',
+                        'aria-label':`Find subtitles for ${row.label || row.id}`,
+                    }, 'Subtitles'));
+                });
+            };
+            paint();
+
+            const exportBtn = makeEl('button', {
+                type:'button',
+                className:'enh-settings-footer-btn',
+                id:'enh-ep-sub-export',
+                onClick: () => {
+                    const rows = readLoadedEpisodes();
+                    const text = buildEpisodeSubtitleExport(rows);
+                    if (!text) { showToast('No episodes are loaded to export'); return; }
+                    showToast(copyTextToClipboard(text)
+                        ? `Copied subtitle links for ${rows.length} loaded episodes`
+                        : COPY_FAILURE_MESSAGE, 3000);
+                },
+            }, 'Copy subtitle links for this season');
+            const target = document.querySelector('main') || document.body;
+            target.insertBefore(exportBtn, target.firstElementChild?.nextSibling || null);
+
+            // A season tab swap replaces every row without a route change.
+            let frame = null;
+            const observer = new MutationObserver(() => {
+                if (frame) return;
+                frame = requestAnimationFrame(() => { frame = null; paint(); });
+            });
+            observer.observe(target, { childList:true, subtree:true });
+            this._observer = observer;
+            this._cancelFrame = () => { if (frame) cancelAnimationFrame(frame); frame = null; };
+        },
+        destroy() {
+            removeCSS('enh-episode-subtitles-css');
+            this._observer?.disconnect();
+            this._observer = null;
+            this._cancelFrame?.();
+            this._cancelFrame = null;
+            document.querySelectorAll('.enh-ep-sub').forEach(node => node.remove());
+            document.getElementById('enh-ep-sub-export')?.remove();
+        },
+    });
+
     // #########################################################################
     //
     //  UTILITY FEATURES
@@ -11169,7 +11261,8 @@ section[data-testid="hero-parent"].enh-editorial-native-hidden { display: none !
                 'searchButtons', 'externalLinks', 'trailerPopover', 'expandedLinkMenu', 'watchedMarking', 'titleNotes',
             ]),
             makeFeatureCard('TV & episodes', 'Focused tools for series and episode lists.', 'TV', [
-                'tvEpisodeTools', 'tvShowEnhancements', 'subtitleLinks', 'episodeHeatmap', 'seasonProgress',
+                'tvEpisodeTools', 'tvShowEnhancements', 'subtitleLinks', 'episodeSubtitles',
+                'episodeHeatmap', 'seasonProgress',
             ]),
             makeFeatureCard('Lists & shortcuts', 'Batch actions and quick navigation.', 'Lists', [
                 'watchlistBatch', 'listMultiSearch', 'listRuntimeSummary', 'markFilters', 'listRoulette',
@@ -11682,7 +11775,7 @@ section[data-testid="hero-parent"].enh-editorial-native-hidden { display: none !
         'watchedMarking', 'markFilters', 'castAges',
     ]);
     const EPISODE_LIST_FEATURE_KEYS = new Set([
-        ...SECONDARY_PAGE_FEATURE_KEYS, 'tvEpisodeTools', 'seasonProgress',
+        ...SECONDARY_PAGE_FEATURE_KEYS, 'tvEpisodeTools', 'seasonProgress', 'episodeSubtitles',
     ]);
     /* The ratings tab is a title subpage that additionally owns IMDb's episode grid. */
     const RATINGS_FEATURE_KEYS = new Set([

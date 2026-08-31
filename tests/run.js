@@ -56,6 +56,8 @@ function loadScriptTestHooks({ withoutDeleteValue = false } = {}) {
         prepareSettingsImport,
         readHeatmapSeasons,
         readLoadedEpisodes,
+        buildEpisodeSubtitleUrl,
+        buildEpisodeSubtitleExport,
         summarizeSeasonProgress,
         describeSeasonProgress,
         summarizeHeatmapSeason,
@@ -2891,6 +2893,45 @@ test('local request errors stay concise and text-only', () => {
         'Request failed',
         'non-numeric status values should not be coerced into UI text'
     );
+});
+
+/* IE-15: every episode has its own IMDb id and both subtitle services index by it, so a
+   link per row needs no lookup at all. */
+test('episode subtitle links are plain anchors and export in bulk', () => {
+    const hooks = loadScriptTestHooks();
+
+    assert.strictEqual(hooks.buildEpisodeSubtitleUrl('tt0959621'),
+        'https://www.opensubtitles.com/en/en/search-all/q-tt0959621');
+    // Never build a link from something that is not an IMDb id.
+    ['', null, 'nm0000206', 'tt', '../../etc', 'tt123 x'].forEach(bad => {
+        assert.strictEqual(hooks.buildEpisodeSubtitleUrl(bad), '', `${bad} must not become a link`);
+    });
+
+    const rows = [
+        { id:'tt0959621', label:'S1.E1 ∙ Pilot' },
+        { id:'tt1054724', label:'S1.E2' },
+        { id:'nm0000206', label:'not an episode' },
+    ];
+    const exported = hooks.buildEpisodeSubtitleExport(rows);
+    assert.strictEqual(exported.split('\n').length, 2, 'only real episodes are exported');
+    assert(exported.startsWith('S1.E1 ∙ Pilot\thttps://www.opensubtitles.com/en/en/search-all/q-tt0959621'),
+        'each line pairs the episode with its link');
+
+    const feature = script.slice(script.indexOf("key: 'episodeSubtitles'"));
+    const body = feature.slice(0, feature.indexOf('destroy() {') + 400);
+    /* Plain anchors, never a request. opensubtitles.org sits behind an anti-bot wall that
+       a person's click passes and a fetch never will, and fetching would need a @connect
+       grant this project deliberately does not hold. */
+    ['httpGet', 'httpRequest', 'GM_xmlhttpRequest', 'fetch('].forEach(token => {
+        assert(!body.includes(token), `subtitle links must not ${token}`);
+    });
+    assert(!/@connect\s+opensubtitles/.test(script), 'no cross-origin grant may be added for subtitles');
+    assert(body.includes("rel:'noopener noreferrer'"), 'outbound links must not leak opener or referrer');
+    assert(body.includes("target:'_blank'"), 'a subtitle link should open beside the episode list');
+    // Rows arrive with a season tab swap, and the link must not be added twice.
+    assert(body.includes("row.node.querySelector?.('.enh-ep-sub')"), 'a row must not gain two links');
+    assert(body.includes('new MutationObserver'), 'a season swap must be picked up');
+    assert(body.includes("this._observer?.disconnect()"), 'the observer must be torn down with the route');
 });
 
 /* IE-83: per-episode marking does not scale to a season, let alone a series. */
