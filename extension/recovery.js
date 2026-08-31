@@ -13328,26 +13328,39 @@ section[data-testid="hero-parent"].enh-editorial-native-hidden { display: none !
 
             /* Features that reach a third party say so, and say whether that access is
                currently granted. Without this a denied request is indistinguishable from
-               a broken feature. */
+               a broken feature.
+
+               A build that does not ship a feature's source is a different state again.
+               Asking for access there would name an origin the manifest does not declare,
+               so the request could not succeed and the row would blame the user for a
+               decision the build made. */
+            const excludedByProfile = featureExcludedByProfile(feature.key);
             const origins = getFeatureOrigins(feature.key);
             let access = null;
             let grantButton = null;
             if (origins.length && supportsOptionalPermissions()) {
                 access = makeEl('span', { className:'enh-settings-access', role:'status' });
-                grantButton = makeEl('button', {
-                    type:'button',
-                    className:'enh-settings-access-btn',
-                    hidden:'hidden',
-                    onClick: async () => {
-                        if (await openOptionsPage()) showToast('Grant site access on the page that just opened, then return here.', 5000);
-                    },
-                }, 'Grant access');
+                if (!excludedByProfile) {
+                    grantButton = makeEl('button', {
+                        type:'button',
+                        className:'enh-settings-access-btn',
+                        hidden:'hidden',
+                        onClick: async () => {
+                            if (await openOptionsPage()) showToast('Grant site access on the page that just opened, then return here.', 5000);
+                        },
+                    }, 'Grant access');
+                }
                 const copy = row.querySelector('.enh-settings-row-copy');
                 copy.appendChild(access);
-                copy.appendChild(grantButton);
+                if (grantButton) copy.appendChild(grantButton);
             }
             const paintAccess = async () => {
                 if (!access) return;
+                if (excludedByProfile) {
+                    access.dataset.state = 'excluded';
+                    access.textContent = describeProfileExclusion(feature.key);
+                    return;
+                }
                 if (!get(feature.key)) {
                     access.textContent = '';
                     access.dataset.state = 'off';
@@ -13365,7 +13378,7 @@ section[data-testid="hero-parent"].enh-editorial-native-hidden { display: none !
             paintAccess();
             /* Access can be granted or revoked on the options page while this panel is
                open, so the row re-reads rather than trusting what it painted at build. */
-            if (access) {
+            if (access && !excludedByProfile) {
                 document.addEventListener('imdb-enhanced:permissions-changed', paintAccess);
                 registerCleanup(() => document.removeEventListener('imdb-enhanced:permissions-changed', paintAccess));
             }

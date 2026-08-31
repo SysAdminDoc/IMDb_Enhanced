@@ -40,6 +40,8 @@
 
 ### Fixed
 
+- In a web-store build, a feature whose source that build does not ship now says "Not available in this build" and names the missing service, instead of reporting a missing site permission and offering a Grant button that could never have worked. The other builds are unchanged.
+
 - A rejected match correction no longer leaves the wrong match on screen in the extension. A write to extension storage is optimistic, so the panel could keep showing a correction the browser refused. The failure now clears every correction-backed cache for that title, refreshes the affected widgets, and says the previous match was restored.
 
 - Saved Rotten Tomatoes and Letterboxd matches now trust the page where the request actually landed. A redirect to search, a listing page, or another site can no longer be parsed and cached under the saved title. Saved JustWatch matches also follow the active country instead of continuing to request the country embedded in the original URL.

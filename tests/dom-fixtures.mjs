@@ -2,6 +2,7 @@ import assert from 'node:assert/strict';
 import fs from 'node:fs';
 import path from 'node:path';
 import { fileURLToPath } from 'node:url';
+import { createRequire } from 'node:module';
 
 const root = path.resolve(path.dirname(fileURLToPath(import.meta.url)), '..');
 const fixtureDir = process.env.IMDB_ENH_FIXTURE_DIR
@@ -9,6 +10,7 @@ const fixtureDir = process.env.IMDB_ENH_FIXTURE_DIR
     : path.join(root, 'tests', 'fixtures');
 const artifactDir = path.join(root, 'tests', 'artifacts', 'dom-fixtures');
 const userscript = fs.readFileSync(path.join(root, 'IMDb_Enhanced.user.js'), 'utf8');
+const { applyStoreProfile } = createRequire(import.meta.url)('../scripts/build-extension.js');
 
 let Window;
 try {
@@ -131,7 +133,11 @@ function installUserscriptGlobals(window) {
     };
 }
 
-async function runFixture(name, run) {
+/* The store profile is a build, not a setting, so the only honest way to exercise it is
+   to run the code the store build actually ships. `source` takes the transformed script;
+   `extension` installs the chrome surface the userscript uses to decide it is an
+   extension, since the per-feature access line only exists there. */
+async function runFixture(name, run, { source = instrumented, extension = null } = {}) {
     const definition = fixtureByName.get(name);
     assert.ok(definition, `fixture "${name}" is missing from manifest.json`);
     const fixturePath = path.join(fixtureDir, `${name}.html`);
@@ -146,7 +152,8 @@ async function runFixture(name, run) {
     window.document.write(html);
     window.document.close();
     installUserscriptGlobals(window);
-    window.eval(instrumented);
+    if (extension) window.chrome = extension;
+    window.eval(source);
     // Let the userscript's queued boot observe the neutral host before switching the
     // fixture URL. Otherwise happy-dom runs the delayed boot after setURL(), starts every
     // default feature, and leaves four 60-second visibility waits behind the focused test.
@@ -584,6 +591,58 @@ await runFixture('chart', async (window, hooks) => {
     }, 'a real collection-card mark click must retain the metadata already rendered in that row');
     hooks.stopFeature('watchedMarking');
 });
+
+/* IE-99: a store build does not ship the Rotten Tomatoes, Metacritic, Letterboxd or
+   JustWatch parsers, and its manifest never declares their origins. The settings row for
+   such a feature used to offer a Grant button that could not possibly succeed. Exercised
+   against the script the store build actually ships, with the chrome surface that makes
+   the access line exist at all. */
+{
+    const storeSource = applyStoreProfile(instrumented);
+    assert.notEqual(storeSource, instrumented, 'the store transform must rewrite the script it is given');
+    const permissionQuestions = [];
+    const chromeStub = {
+        runtime: {
+            id: 'imdb-enhanced-store-fixture',
+            lastError: undefined,
+            sendMessage(message, callback) {
+                permissionQuestions.push(message && message.type);
+                if (typeof callback === 'function') callback({ granted:false, ok:false });
+            },
+        },
+    };
+    await runFixture('title', async (window, hooks) => {
+        hooks.createSettingsPanel();
+        const rowFor = label => {
+            const found = Array.from(window.document.querySelectorAll('.enh-settings-row'))
+                .find(row => row.querySelector('.enh-settings-label')?.textContent === label);
+            assert.ok(found, `settings row "${label}" was not rendered`);
+            return found;
+        };
+        const excluded = rowFor('Rotten Tomatoes scores');
+        const excludedAccess = excluded.querySelector('.enh-settings-access');
+        assert.ok(excludedAccess, 'an excluded feature must still say why it cannot work');
+        assert.equal(excludedAccess.textContent, 'Not available in this build (Rotten Tomatoes)');
+        assert.equal(excludedAccess.dataset.state, 'excluded');
+        assert.equal(excluded.querySelector('.enh-settings-access-btn'), null,
+            'a build that excludes the source must not offer to request access to it');
+        assert.doesNotMatch(excludedAccess.textContent, /needs access to/,
+            'an excluded feature must not be reported as a missing grant');
+
+        const shipped = rowFor('Streaming availability');
+        await new Promise(resolve => window.setTimeout(resolve, 0));
+        const shippedAccess = shipped.querySelector('.enh-settings-access');
+        assert.ok(shippedAccess, 'a feature that does ship must still report its access state');
+        assert.equal(shippedAccess.dataset.state, 'missing',
+            'TMDB survives the store cut, so availability is a grant question, not an exclusion');
+        assert.ok(shipped.querySelector('.enh-settings-access-btn'),
+            'and it keeps the affordance that can actually resolve it');
+        assert.ok(permissionQuestions.includes('imdb-enhanced:permissions-contains'),
+            'the shipped feature must have asked the background about a real grant');
+        hooks.destroySettingsChrome();
+    }, { source:storeSource, extension:chromeStub });
+    console.log('ok - a store build names the sources it cannot ship instead of asking for access to them');
+}
 
 /* Drive the real catch path. This proves both parts of the failure contract: the broken
    selector is named and the artifact path points to a DOM file that was actually written. */
