@@ -22,10 +22,37 @@ new Set([
 ]).forEach(iconPath => {
     assert(fs.existsSync(path.join(root, 'extension', iconPath)), `extension icon asset missing: ${iconPath}`);
 });
-assert(manifest.host_permissions.includes('https://www.imdb.com/*'), 'IMDb host permission missing');
-assert(manifest.host_permissions.includes('https://backend.metacritic.com/*'), 'Metacritic host permission missing');
-assert(manifest.host_permissions.includes('https://*.amazon-adsystem.com/*'), 'ad-rule host permission missing');
-assert(manifest.host_permissions.includes('http://localhost/*'), 'localhost host permission missing');
+/* IE-75: the install prompt is what a user reads to decide whether to trust this, and it
+   used to describe every score, ad, video and loopback origin whether or not the feature
+   was on. IMDb is the only thing the extension cannot work without. */
+assert.deepStrictEqual(manifest.host_permissions, ['https://www.imdb.com/*'],
+    'only IMDb access may be required at install');
+[
+    'https://backend.metacritic.com/*', 'https://www.rottentomatoes.com/*',
+    'https://letterboxd.com/*', 'https://www.justwatch.com/*', 'https://www.youtube.com/*',
+    'https://query.wikidata.org/*', 'https://*.amazon-adsystem.com/*',
+    'http://localhost/*', 'http://127.0.0.1/*',
+].forEach(origin => {
+    assert(manifest.optional_host_permissions.includes(origin), `${origin} should be optional, not required`);
+    assert(!manifest.host_permissions.includes(origin), `${origin} must not be required at install`);
+});
+/* Derived from the userscript's feature map, never maintained beside it: a hand-kept
+   second list is how a feature quietly keeps a permission it no longer uses. */
+assert(/const FEATURE_ORIGIN_GROUPS = \{[\s\S]*?\n    \};/.test(source),
+    'the userscript must declare which origins each feature needs');
+/* Collected from the declaration region by text, independently of how the build computes
+   the union, so this catches a feature group the manifest forgot and a manifest entry no
+   feature asks for. */
+const originRegion = source.match(/const LOOPBACK_ORIGINS = \[[\s\S]*?const OPTIONAL_ORIGINS = [^;]+;/);
+assert(originRegion, 'the origin declarations must stay in one readable region');
+const declaredOrigins = [...new Set((originRegion[0].match(/'(https?:\/\/[^']+)'/g) || []).map(s => s.slice(1, -1)))]
+    .filter(origin => !manifest.host_permissions.includes(origin));
+assert.deepStrictEqual(
+    manifest.optional_host_permissions.slice().sort(),
+    declaredOrigins.slice().sort(),
+    'the manifest optional origins must be exactly the union of the feature groups');
+assert(source.includes('const OPTIONAL_ORIGINS = [...new Set(Object.values(FEATURE_ORIGIN_GROUPS).flat())]'),
+    'the optional origin list must be derived structurally, not enumerated by hand');
 assert.strictEqual(manifest.background.service_worker, 'background.js');
 assert.strictEqual(manifest.content_scripts[0].js[0], 'content.js');
 assert.strictEqual(manifest.content_scripts[0].run_at, 'document_start');
@@ -90,10 +117,15 @@ const firefox = toFirefoxManifest(manifest);
 assert.deepStrictEqual(firefox.background, { scripts:['background.js'] }, 'Firefox needs an event page, not a service worker');
 assert.strictEqual(firefox.browser_specific_settings.gecko.id, FIREFOX_ADDON_ID, 'Firefox build needs a stable add-on id');
 assert.strictEqual(firefox.browser_specific_settings.gecko.strict_min_version, '142.0', 'the data-collection declaration AMO requires needs Firefox 140+ (Android 142+)');
+/* Nothing is required because with every optional feature off, nothing is transmitted.
+   But "none" full stop was not true: an enabled score or availability lookup sends the
+   title and year read from the page to a third party, which is page content leaving the
+   browser. It is declared optional because it happens only for sources the user turns
+   on, and those now request their origins at that moment. */
 assert.deepStrictEqual(
     firefox.browser_specific_settings.gecko.data_collection_permissions,
-    { required:['none'] },
-    'Firefox reviews require an explicit data-collection declaration');
+    { required:['none'], optional:['websiteContent'] },
+    'the data-collection declaration must match what enabled lookups actually transmit');
 assert.strictEqual(firefox.action.default_popup, 'permissions.html', 'Firefox needs a surface that can request opt-in host permissions');
 assert.strictEqual(firefox.minimum_chrome_version, undefined, 'Chromium-only keys must not ship to Firefox');
 assert.strictEqual(firefox.manifest_version, 3, 'Firefox build must remain Manifest V3');

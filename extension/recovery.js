@@ -278,6 +278,40 @@
         'TITLE', 'TITLE_RAW', 'TITLE_DASH', 'TITLE_SLUG',
         'IMDB_ID', 'IMDB_NUM', 'TRAKT_TYPE', 'YEAR',
     ]);
+    /* Which origins each feature actually needs, and nothing more. The extension used to
+       demand every score, availability, ad, video and loopback origin at install even
+       when the feature was switched off, so the install prompt described a far broader
+       reach than the product had. Only IMDb is required now; everything here is optional
+       and requested from the click that enables the feature.
+
+       This is also the manifest's source of truth — scripts/build-extension.js derives
+       optional_host_permissions from it, so the two cannot drift. A second hand-written
+       list is exactly how enumerated scope rots.
+
+       Wikidata appears under each score source because it is the shared identity
+       resolver those lookups go through before touching the service itself. */
+    const LOOPBACK_ORIGINS = [
+        'http://localhost/*', 'https://localhost/*',
+        'http://127.0.0.1/*', 'https://127.0.0.1/*',
+    ];
+    const WIKIDATA_ORIGIN = 'https://query.wikidata.org/*';
+    const FEATURE_ORIGIN_GROUPS = {
+        inlineRTScore: ['https://www.rottentomatoes.com/*', WIKIDATA_ORIGIN],
+        inlineMetacriticScore: ['https://backend.metacritic.com/*', WIKIDATA_ORIGIN],
+        inlineLetterboxdScore: ['https://letterboxd.com/*', WIKIDATA_ORIGIN],
+        streamAvailability: ['https://www.justwatch.com/*'],
+        trailerPopover: ['https://www.youtube.com/*'],
+        removeAds: [
+            'https://*.amazon-adsystem.com/*', 'https://advertising.amazon.dev/*',
+            'https://images-na.ssl-images-amazon.com/*', 'https://sb.scorecardresearch.com/*',
+            'https://fls-na.amazon.com/*', 'https://unagi.amazon.com/*', 'https://unagi-na.amazon.com/*',
+        ],
+        servarrIntegration: LOOPBACK_ORIGINS,
+        mediaServerIntegration: LOOPBACK_ORIGINS,
+    };
+    const REQUIRED_ORIGINS = ['https://www.imdb.com/*'];
+    const OPTIONAL_ORIGINS = [...new Set(Object.values(FEATURE_ORIGIN_GROUPS).flat())].sort();
+
     const AD_SHELL_SELECTOR = [
         '.nas-slot',
         '.slot_wrapper',
@@ -8249,6 +8283,15 @@ section[data-testid="hero-parent"].enh-editorial-native-hidden { display: none !
 }
 
 /* Toggle switch */
+.enh-settings-access {
+    display: block;
+    margin-top: 4px;
+    font: 500 10px/1.35 -apple-system, BlinkMacSystemFont, 'Segoe UI', sans-serif;
+    color: ${t.tx3};
+}
+.enh-settings-access[data-state="granted"] { color: ${t.green}; }
+.enh-settings-access[data-state="missing"] { color: ${t.accent}; }
+.enh-settings-access:empty { display: none; }
 .enh-toggle { position: relative; width: 40px; height: 22px; flex-shrink: 0; }
 .enh-toggle input { opacity: 0; width: 0; height: 0; position: absolute; }
 .enh-toggle-track {
@@ -8705,6 +8748,84 @@ section[data-testid="hero-parent"].enh-editorial-native-hidden { display: none !
     let previousDocumentOverflow = '';
     let activeSettingsPage = 'experience';
     let settingsPanelCleanup = null;
+
+    // =========================================================================
+    //  OPTIONAL HOST PERMISSIONS (extension builds only)
+    // =========================================================================
+    /* A script manager grants @connect at install and has no runtime equivalent, so all
+       of this is inert there and the state readers report "granted" rather than
+       inventing a restriction the platform does not have. */
+    const supportsOptionalPermissions = () =>
+        IS_EXTENSION_BUILD && typeof chrome !== 'undefined' && Boolean(chrome.permissions);
+
+    /* Gecko's chrome.* alias is callback-style while Chromium's returns a promise. The
+       callback form is accepted by both, which is the same reason the background uses it. */
+    function callPermissionsApi(method, argument) {
+        return new Promise(resolve => {
+            try {
+                const result = chrome.permissions[method](argument, value => {
+                    void chrome.runtime?.lastError;
+                    resolve(value === true);
+                });
+                if (result && typeof result.then === 'function') result.then(value => resolve(value === true), () => resolve(false));
+            } catch { resolve(false); }
+        });
+    }
+
+    function getFeatureOrigins(key) {
+        return FEATURE_ORIGIN_GROUPS[key] || [];
+    }
+
+    /* Origin patterns are not something to put in front of a user. Loopback collapses to
+       one plain phrase rather than four near-identical URLs. */
+    function describeFeatureOrigins(key) {
+        const origins = getFeatureOrigins(key);
+        const loopback = origins.some(origin => /\/\/(localhost|127\.0\.0\.1)\//.test(origin));
+        const hosts = origins
+            .filter(origin => !/\/\/(localhost|127\.0\.0\.1)\//.test(origin))
+            .map(origin => origin.replace(/^https?:\/\//, '').replace(/\/\*$/, '').replace(/^\*\./, ''));
+        const names = loopback ? [...hosts, 'your own computer'] : hosts;
+        if (names.length <= 1) return names[0] || 'no external sites';
+        if (names.length === 2) return `${names[0]} and ${names[1]}`;
+        return `${names.slice(0, -1).join(', ')} and ${names[names.length - 1]}`;
+    }
+
+    async function hasFeatureOrigins(key) {
+        const origins = getFeatureOrigins(key);
+        if (!origins.length || !supportsOptionalPermissions()) return true;
+        return callPermissionsApi('contains', { origins });
+    }
+
+    async function requestFeatureOrigins(key) {
+        const origins = getFeatureOrigins(key);
+        if (!origins.length || !supportsOptionalPermissions()) return true;
+        // Must be called synchronously enough from the user's click that the gesture is
+        // still live; permissions.request rejects otherwise.
+        return callPermissionsApi('request', { origins });
+    }
+
+    /* Only give back what nothing else still needs. Wikidata is shared by three score
+       sources and the loopback origins by both local integrations, so turning one off
+       must not revoke access the others depend on. */
+    function originsHeldByOtherEnabledFeatures(key) {
+        return new Set(
+            Object.entries(FEATURE_ORIGIN_GROUPS)
+                .filter(([otherKey]) => otherKey !== key && get(otherKey) !== false && get(otherKey))
+                .flatMap(([, origins]) => origins)
+        );
+    }
+
+    function releasableOriginsFor(key) {
+        const held = originsHeldByOtherEnabledFeatures(key);
+        return getFeatureOrigins(key).filter(origin => !held.has(origin));
+    }
+
+    async function releaseFeatureOrigins(key) {
+        if (!supportsOptionalPermissions()) return true;
+        const origins = releasableOriginsFor(key);
+        if (!origins.length) return true;
+        return callPermissionsApi('remove', { origins });
+    }
 
     function refreshFeature(key) {
         const feature = features.find(f => f.key === key);
@@ -9565,18 +9686,58 @@ section[data-testid="hero-parent"].enh-editorial-native-hidden { display: none !
                 ...(detail ? { 'aria-describedby':helpId } : {}),
             });
             input.checked = get(feature.key);
-            input.addEventListener('change', () => {
+
+            /* Features that reach a third party say so, and say whether that access is
+               currently granted. Without this a denied request is indistinguishable from
+               a broken feature. */
+            const origins = getFeatureOrigins(feature.key);
+            let access = null;
+            if (origins.length && supportsOptionalPermissions()) {
+                access = makeEl('span', { className:'enh-settings-access', role:'status' });
+                row.querySelector('.enh-settings-row-copy').appendChild(access);
+            }
+            const paintAccess = async () => {
+                if (!access) return;
+                if (!get(feature.key)) {
+                    access.textContent = '';
+                    access.dataset.state = 'off';
+                    return;
+                }
+                const granted = await hasFeatureOrigins(feature.key);
+                access.dataset.state = granted ? 'granted' : 'missing';
+                access.textContent = granted
+                    ? `Site access granted for ${describeFeatureOrigins(feature.key)}`
+                    : `Needs access to ${describeFeatureOrigins(feature.key)} — turn this off and on again to allow it`;
+            };
+            paintAccess();
+
+            input.addEventListener('change', async () => {
                 const enabled = input.checked;
+                /* Ask before persisting. A feature recorded as on while its origins were
+                   refused is enabled in name only: it would run, fail every request, and
+                   look broken rather than declined. The request has to happen in this
+                   handler because it is the live user gesture. */
+                if (enabled && !(await requestFeatureOrigins(feature.key))) {
+                    input.checked = false;
+                    showToast(`${feature.name} stays off: access to ${describeFeatureOrigins(feature.key)} was not granted.`, 5000);
+                    paintAccess();
+                    return;
+                }
                 if (!trySaveSetting(feature.key, enabled)) {
                     input.checked = !enabled;
+                    paintAccess();
                     return;
                 }
                 if (enabled && shouldInitFeature(feature)) {
                     startFeature(feature, { context:'settings', notify:true });
                 } else if (!enabled) {
                     stopFeature(feature);
+                    // Hand back what nothing else still needs, so a disabled feature
+                    // stops being a standing grant.
+                    releaseFeatureOrigins(feature.key);
                 }
                 (FEATURE_DEPENDENTS[feature.key] || []).forEach(refreshFeature);
+                paintAccess();
                 markSaved();
             });
             toggle.append(input, makeEl('span', { className:'enh-toggle-track' }));

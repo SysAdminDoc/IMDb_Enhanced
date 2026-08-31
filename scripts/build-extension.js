@@ -30,6 +30,24 @@ if (!/^\(function \(\) \{/.test(sourceBody.trim())) throw new Error('Userscript 
 const BOOT_ATTRIBUTE = 'data-imdb-enhanced-booting';
 const BOOT_TIMEOUT_MS = 1500;
 
+/* The manifest's origins are derived from the userscript's FEATURE_ORIGIN_GROUPS rather
+   than maintained beside it. A hand-kept second list is how a feature quietly keeps a
+   permission it no longer uses, or loses one it does — and the install prompt is the
+   thing users read to decide whether to trust this at all. Evaluated rather than parsed,
+   because the map is plain data built from a couple of shared constants. */
+function readOriginLists() {
+    const block = source.match(/const LOOPBACK_ORIGINS = \[[\s\S]*?const OPTIONAL_ORIGINS = [^;]+;/);
+    if (!block) throw new Error('Origin groups could not be read from the userscript.');
+    // eslint-disable-next-line no-new-func
+    const evaluate = new Function(`${block[0]}\nreturn { FEATURE_ORIGIN_GROUPS, REQUIRED_ORIGINS, OPTIONAL_ORIGINS };`);
+    const lists = evaluate();
+    if (!lists.REQUIRED_ORIGINS.length) throw new Error('REQUIRED_ORIGINS is empty.');
+    if (!lists.OPTIONAL_ORIGINS.length) throw new Error('OPTIONAL_ORIGINS is empty.');
+    const overlap = lists.OPTIONAL_ORIGINS.filter(origin => lists.REQUIRED_ORIGINS.includes(origin));
+    if (overlap.length) throw new Error(`Origins cannot be both required and optional: ${overlap.join(', ')}`);
+    return lists;
+}
+
 function readAdShellSelector() {
     const block = source.match(/const AD_SHELL_SELECTOR = \[([\s\S]*?)\]\.join\(','\);/);
     if (!block) throw new Error('AD_SHELL_SELECTOR could not be read from the userscript.');
@@ -280,6 +298,9 @@ const bootCss = buildBootCss();
 const bootCssPath = path.join(extensionDir, 'boot.css');
 const manifest = JSON.parse(fs.readFileSync(manifestPath, 'utf8'));
 manifest.version = packageJson.version;
+const originLists = readOriginLists();
+manifest.host_permissions = originLists.REQUIRED_ORIGINS;
+manifest.optional_host_permissions = originLists.OPTIONAL_ORIGINS;
 const serializedManifest = `${JSON.stringify(manifest, null, 2)}\n`;
 
 /* Firefox implements Manifest V3 with event pages rather than service workers and
@@ -294,9 +315,17 @@ function toFirefoxManifest(base) {
         gecko: {
             id: FIREFOX_ADDON_ID,
             strict_min_version: FIREFOX_MIN_VERSION,
-            // Everything stays in local extension storage; nothing is transmitted
-            // anywhere, so the add-on declares no data collection at all.
-            data_collection_permissions: { required:['none'] },
+            /* Nothing is required, because with every optional feature off the add-on
+               transmits nothing: preferences, marks and cached lookups never leave local
+               storage and there is no service to report to.
+               `websiteContent` is declared as optional and is the truthful part. The old
+               declaration was a flat "none", but an enabled score or availability lookup
+               sends the title and year read from the IMDb page to a third-party service
+               so it can find the matching entry. That is page content leaving the
+               browser, and a user deciding whether to enable it deserves to see it said.
+               It is optional because it happens only for the sources they switch on, and
+               those now request their origins at that moment. */
+            data_collection_permissions: { required:['none'], optional:['websiteContent'] },
         },
     };
     firefox.action = { ...base.action, default_popup:'permissions.html' };

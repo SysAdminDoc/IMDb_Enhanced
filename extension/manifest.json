@@ -16,24 +16,26 @@
     "declarativeNetRequestWithHostAccess"
   ],
   "host_permissions": [
-    "https://www.imdb.com/*",
-    "https://www.rottentomatoes.com/*",
-    "https://backend.metacritic.com/*",
-    "https://letterboxd.com/*",
-    "https://www.justwatch.com/*",
-    "https://www.youtube.com/*",
-    "https://query.wikidata.org/*",
-    "https://*.amazon-adsystem.com/*",
-    "https://advertising.amazon.dev/*",
-    "https://images-na.ssl-images-amazon.com/*",
-    "https://sb.scorecardresearch.com/*",
-    "https://fls-na.amazon.com/*",
-    "https://unagi.amazon.com/*",
-    "https://unagi-na.amazon.com/*",
-    "http://localhost/*",
-    "https://localhost/*",
+    "https://www.imdb.com/*"
+  ],
+  "optional_host_permissions": [
     "http://127.0.0.1/*",
-    "https://127.0.0.1/*"
+    "http://localhost/*",
+    "https://*.amazon-adsystem.com/*",
+    "https://127.0.0.1/*",
+    "https://advertising.amazon.dev/*",
+    "https://backend.metacritic.com/*",
+    "https://fls-na.amazon.com/*",
+    "https://images-na.ssl-images-amazon.com/*",
+    "https://letterboxd.com/*",
+    "https://localhost/*",
+    "https://query.wikidata.org/*",
+    "https://sb.scorecardresearch.com/*",
+    "https://unagi-na.amazon.com/*",
+    "https://unagi.amazon.com/*",
+    "https://www.justwatch.com/*",
+    "https://www.rottentomatoes.com/*",
+    "https://www.youtube.com/*"
   ],
   "background": {
     "service_worker": "background.js"

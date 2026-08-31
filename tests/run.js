@@ -141,6 +141,13 @@ function loadScriptTestHooks({ withoutDeleteValue = false } = {}) {
         CREDENTIAL_SETTING_KEYS,
         EXPORT_REDACTED_KEY,
         EXPORT_METADATA_KEYS,
+        FEATURE_ORIGIN_GROUPS,
+        OPTIONAL_ORIGINS,
+        REQUIRED_ORIGINS,
+        getFeatureOrigins,
+        describeFeatureOrigins,
+        originsHeldByOtherEnabledFeatures,
+        releasableOriginsFor,
         BACKUP_ENVELOPE_KEY,
         getFeatureKeys: () => features.map(feature => feature.key),
         FEATURE_DETAILS,
@@ -2843,6 +2850,76 @@ test('local request errors stay concise and text-only', () => {
         'Request failed',
         'non-numeric status values should not be coerced into UI text'
     );
+});
+
+/* IE-75: the extension required every score, ad, video and loopback origin at install
+   even with the feature switched off, so the install prompt described a far broader reach
+   than the product had. */
+test('external access is requested per feature, not demanded at install', () => {
+    const hooks = loadScriptTestHooks();
+    const groups = hooks.FEATURE_ORIGIN_GROUPS;
+
+    // Every group belongs to a real setting, or it is asking for something nothing uses.
+    const defaults = Object.fromEntries(hooks.getDefaultSettingsEntries().map(entry => [entry.key, entry.value]));
+    Object.keys(groups).forEach(key => {
+        assert(Object.prototype.hasOwnProperty.call(defaults, key),
+            `${key} declares origins but is not a setting`);
+        assert(groups[key].length, `${key} declares an empty origin group`);
+    });
+    // Conversely, every feature that talks to a third party must declare it.
+    ['inlineRTScore', 'inlineMetacriticScore', 'inlineLetterboxdScore', 'streamAvailability',
+        'trailerPopover', 'servarrIntegration', 'mediaServerIntegration'].forEach(key => {
+        assert(groups[key]?.length, `${key} reaches a third party but declares no origins`);
+    });
+    assert(!hooks.OPTIONAL_ORIGINS.includes('https://www.imdb.com/*'),
+        'IMDb is required, so it must not also be optional');
+
+    /* Wikidata is the shared identity resolver for three score sources and loopback is
+       shared by both local integrations, so turning one off must not revoke access the
+       others still depend on. */
+    const shared = 'https://query.wikidata.org/*';
+    ['inlineRTScore', 'inlineMetacriticScore', 'inlineLetterboxdScore'].forEach(key => {
+        assert(groups[key].includes(shared), `${key} resolves identity through Wikidata and must declare it`);
+    });
+    hooks.seedStoredSetting('inlineMetacriticScore', true);
+    hooks.seedStoredSetting('inlineLetterboxdScore', false);
+    hooks.seedStoredSetting('streamAvailability', false);
+    const stillHeld = hooks.originsHeldByOtherEnabledFeatures('inlineRTScore');
+    assert(stillHeld.has(shared), 'a shared origin another enabled source needs must not be released');
+    assert(!stillHeld.has('https://www.rottentomatoes.com/*'), 'an origin only this feature needs is releasable');
+    // The set the release path actually hands to permissions.remove, not just the helper.
+    assert.deepStrictEqual([...hooks.releasableOriginsFor('inlineRTScore')], ['https://www.rottentomatoes.com/*'],
+        'disabling one score source must not revoke the resolver its siblings still use');
+    hooks.seedStoredSetting('inlineMetacriticScore', false);
+    hooks.seedStoredSetting('inlineLetterboxdScore', false);
+    assert.deepStrictEqual(
+        [...hooks.releasableOriginsFor('inlineRTScore')].sort(),
+        ['https://query.wikidata.org/*', 'https://www.rottentomatoes.com/*'],
+        'once no sibling needs it, the shared resolver is released too');
+
+    // Origin patterns are not user-facing text.
+    assert.strictEqual(hooks.describeFeatureOrigins('inlineRTScore'), 'www.rottentomatoes.com and query.wikidata.org');
+    assert.strictEqual(hooks.describeFeatureOrigins('servarrIntegration'), 'your own computer',
+        'four loopback patterns should read as one plain phrase');
+    assert(!/\*/.test(hooks.describeFeatureOrigins('removeAds')), 'wildcards must not reach the user');
+
+    /* The request must sit in the change handler: permissions.request only works during
+       a live user gesture, which a later async continuation no longer has. Verified
+       against a real install, where an ungestured request errors. */
+    // Anchored on makeFeatureRow: the site editor also registers a change handler, and
+    // slicing from the first match in the file lands on that one instead.
+    const featureRow = script.slice(script.indexOf('const makeFeatureRow = feature =>'));
+    const handler = featureRow.slice(featureRow.indexOf("input.addEventListener('change'"));
+    const body = handler.slice(0, handler.indexOf('toggle.append'));
+    assert(body.includes('feature.key'), 'the sliced handler should be the feature toggle');
+    assert(/if \(enabled && !\(await requestFeatureOrigins\(feature\.key\)\)\)/.test(body),
+        'enabling must request the feature origins from the click itself');
+    assert(body.indexOf('requestFeatureOrigins') < body.indexOf('trySaveSetting'),
+        'access must be requested before the setting is persisted, or a refusal leaves it on in name only');
+    assert(/input\.checked = false;[\s\S]{0,200}?stays off/.test(body),
+        'a refused request must leave the toggle off and say why');
+    assert(body.includes('releaseFeatureOrigins(feature.key)'),
+        'disabling a feature must hand back access nothing else needs');
 });
 
 /* IE-79: a userscript has no toolbar surface, so the manager's menu is its equivalent
