@@ -171,6 +171,7 @@ function loadScriptTestHooks({ withoutDeleteValue = false } = {}) {
     let sandboxWriteCount = 0;
     let sandboxFailWriteAt = null;
     let sandboxFailAllWrites = false;
+    const sandboxDocumentListeners = [];
     let sandboxClipboardFailure = false;
     let sandboxMediaListenerCount = 0;
     const sandboxValues = new Map();
@@ -197,8 +198,13 @@ function loadScriptTestHooks({ withoutDeleteValue = false } = {}) {
             documentElement: {},
             querySelector: () => null,
             querySelectorAll: () => [],
-            addEventListener: () => {},
-            removeEventListener: () => {},
+            // Recorded rather than discarded: the cache's quota-recovery path is a
+            // document listener, and a stub that drops registrations makes it untestable.
+            addEventListener: (type, listener) => { sandboxDocumentListeners.push({ type, listener }); },
+            removeEventListener: (type, listener) => {
+                const index = sandboxDocumentListeners.findIndex(e => e.type === type && e.listener === listener);
+                if (index >= 0) sandboxDocumentListeners.splice(index, 1);
+            },
             dispatchEvent: () => true,
             createElement: tag => {
                 if (tag !== 'textarea') return {};
@@ -268,6 +274,13 @@ function loadScriptTestHooks({ withoutDeleteValue = false } = {}) {
     sandbox.window.__enhTest.setClipboardFailure = value => { sandboxClipboardFailure = Boolean(value); };
     sandbox.window.__enhTest.getStorageKeys = () => [...sandboxValues.keys()];
     sandbox.window.__enhTest.getRawStorage = key => sandboxValues.get(key);
+    // The MV3 bridge reports a rejected write through this event, naming the key. The
+    // sandbox is a synchronous manager, so this is how that path gets exercised.
+    sandbox.window.__enhTest.dispatchStorageFailure = key => {
+        sandboxDocumentListeners
+            .filter(entry => entry.type === 'imdb-enhanced:settings-save-failed')
+            .forEach(entry => entry.listener({ type:entry.type, detail:{ key } }));
+    };
     sandbox.window.__enhTest.getCapturedRequests = () => [...sandboxRequests];
     sandbox.window.__enhTest.setTestHostname = hostname => { location.hostname = hostname; };
     /* Builds a minimal hero subtree so control-resolution can be exercised for real
@@ -1287,6 +1300,36 @@ test('eviction order follows last access, not write order', () => {
     assert(hooks.cacheGet('aged_0'), 'the oldest entry should still be readable before eviction');
     for (let index = 20; index < 40; index += 1) hooks.cacheSet(`aged_${index}`, { payload, index });
     assert(hooks.cacheGet('aged_0'), 'a recently read entry must outlive never-read entries written after it');
+});
+
+/* In the extension build GM_setValue cannot be synchronous, so cacheSet's write returns
+   normally and the rejection arrives later. Without a path that reacts to it, the whole
+   quota-recovery layer was userscript-only: the extension would report success, never
+   evict, and never tell anyone — in the one build where a 10 MiB quota makes it likely. */
+test('an asynchronously reported cache write failure still evicts and reports', () => {
+    const hooks = loadScriptTestHooks();
+    const payload = 'x'.repeat(200 * 1024);
+    for (let index = 0; index < 25; index += 1) hooks.cacheSet(`late_${index}`, { payload, index });
+    const before = hooks.readCacheUsage();
+    assert(before.entries.length > 6, 'the cache needs entries for the eviction to be observable');
+
+    hooks.dispatchStorageFailure('cache_late_24');
+    const after = hooks.readCacheUsage();
+    assert(after.entries.length < before.entries.length,
+        'a reported cache write failure must make room rather than leaving the cache full');
+    assert(after.entries.length <= Math.floor(hooks.CACHE_MAX_ENTRIES / 4),
+        'recovery should fall back to a fraction of the budget, as the synchronous path does');
+    const failures = hooks.getFeatureFailures().filter(entry => entry.key === 'cache');
+    assert(failures.length, 'the user must be told the cache is not being written');
+    assert(!/late_24/.test(failures[failures.length - 1].message), 'the report must not carry the cache key');
+
+    // A settings failure is the settings UI's business, not the cache's.
+    const settings = loadScriptTestHooks();
+    settings.cacheSet('kept', { value:true });
+    settings.dispatchStorageFailure('imdb_enh_themeVariant');
+    assert.strictEqual(settings.getFeatureFailures().filter(entry => entry.key === 'cache').length, 0,
+        'a settings write failure must not be reported as a cache problem');
+    assert(settings.cacheGet('kept'), 'a settings write failure must not evict the cache');
 });
 
 test('a persistently full quota reports a scrubbed failure and a recovery action', () => {

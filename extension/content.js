@@ -66,9 +66,14 @@
        rejection is reported two ways: the failure event fires immediately, and the next
        synchronous write throws so the calling control sees it. */
     let __writeFailure = null;
-    const __reportWriteFailure = error => {
+    /* The failing key travels with the failure. A caller that manages its own storage
+       budget — the lookup cache does — cannot act on "some write failed"; it has to know
+       which one, and it cannot learn that from the next-call throw below, because that
+       throw surfaces on whatever call happens to come next and may be a different key
+       entirely, or be swallowed by a caller that legitimately ignores its own failures. */
+    const __reportWriteFailure = (error, key) => {
         __writeFailure = error instanceof Error ? error : new Error(String(error && error.message || 'Extension storage write failed'));
-        try { document.dispatchEvent(new CustomEvent('imdb-enhanced:settings-save-failed')); }
+        try { document.dispatchEvent(new CustomEvent('imdb-enhanced:settings-save-failed', { detail:{ key } })); }
         catch { /* the next synchronous write still surfaces it */ }
     };
     const __takeWriteFailure = () => {
@@ -77,17 +82,38 @@
         __writeFailure = null;
         throw error;
     };
+    /* A rejected write means the value never reached storage. Leaving it in the mirror
+       makes GM_getValue and GM_listValues describe a store that does not exist, which for
+       the cache means its byte accounting counts bytes nothing is holding and it stops
+       evicting when it should. The mirror is put back unless a later write to the same
+       key has already replaced what we put there. */
+    const __rollbackMirror = (key, had, previous, written) => {
+        if (__state[key] !== written) return;
+        if (had) __state[key] = previous;
+        else delete __state[key];
+    };
     globalThis.GM_setValue = (key, value) => {
         __takeWriteFailure();
-        __state[key] = __clone(value);
-        __storage('set', { [key]:__state[key] }).catch(__reportWriteFailure);
+        const had = Object.prototype.hasOwnProperty.call(__state, key);
+        const previous = had ? __state[key] : undefined;
+        const written = __clone(value);
+        __state[key] = written;
+        __storage('set', { [key]:written }).catch(error => {
+            __rollbackMirror(key, had, previous, written);
+            __reportWriteFailure(error, key);
+        });
         if (key === 'imdb_enh_removeAds') __sendAdState(value !== false);
     };
     globalThis.GM_listValues = () => Object.keys(__state);
     globalThis.GM_deleteValue = key => {
         __takeWriteFailure();
+        const had = Object.prototype.hasOwnProperty.call(__state, key);
+        const previous = had ? __state[key] : undefined;
         delete __state[key];
-        __storage('remove', key).catch(__reportWriteFailure);
+        __storage('remove', key).catch(error => {
+            if (had && !Object.prototype.hasOwnProperty.call(__state, key)) __state[key] = previous;
+            __reportWriteFailure(error, key);
+        });
         if (key === 'imdb_enh_removeAds') __sendAdState(true);
     };
     /* copyTextToClipboard reports success from this call returning, so a rejected
@@ -787,14 +813,41 @@
        figures, never the key or payload — and hand them the control that fixes it. */
     function reportCacheQuotaFailure(bytes) {
         try {
-            recordFeatureFailure({ key:'cache' }, 'storage',
-                `cache write of ${bytes} bytes failed after eviction; storage quota appears full`);
+            recordFeatureFailure({ key:'cache' }, 'storage', bytes > 0
+                ? `cache write of ${bytes} bytes failed after eviction; storage quota appears full`
+                : 'a cache write was rejected by storage; quota appears full');
         } catch { /* the toast below is the part the user needs */ }
         if (cacheQuotaFailureNotified) return;
         cacheQuotaFailureNotified = true;
         try {
             showToast(`${STORAGE_HOST_LABEL} is full, so lookups are not being cached. Settings → Data → Clear cache frees it.`, 6000);
         } catch { /* console warning already recorded the failure */ }
+    }
+
+    /* Under a script manager GM_setValue is synchronous, so cacheSet learns about a full
+       quota from the write throwing and evicts and retries right there. The extension
+       bridge cannot be synchronous — chrome.storage.local is a promise — so that write
+       returns normally and the rejection arrives later. Without this the entire recovery
+       path was userscript-only: the extension would report the write as successful, never
+       evict, and never tell the user, which is the one build where a 10 MiB quota makes it
+       likely. The bridge names the failing key, so only cache failures are handled here;
+       settings failures belong to the settings UI. */
+    if (typeof document !== 'undefined' && typeof document.addEventListener === 'function') {
+        document.addEventListener('imdb-enhanced:settings-save-failed', event => {
+            const key = event?.detail?.key;
+            if (!isCacheStorageKey(key)) return;
+            try {
+                // The mirror has already rolled the failed entry back, so this measures
+                // what is really stored and makes room for the next write.
+                evictCacheEntries(readCacheUsage(), {
+                    byteBudget: Math.floor(CACHE_TOTAL_BYTE_BUDGET / 4),
+                    maxEntries: Math.floor(CACHE_MAX_ENTRIES / 4),
+                });
+            } catch (error) {
+                console.warn('[IMDb Enhanced] cache eviction after a failed write did not complete:', error);
+            }
+            reportCacheQuotaFailure(0);
+        });
     }
 
     function cacheGet(key) {

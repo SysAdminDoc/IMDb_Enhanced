@@ -40,7 +40,7 @@ function createManagerAdapter() {
     const store = new Map();
     let failWrite = null;
     let failClipboard = null;
-    const observed = { writeFailures: 0, clipboardFailures: 0 };
+    const observed = { writeFailures: 0, clipboardFailures: 0, writeFailureKeys: [] };
 
     return {
         name: 'userscript manager',
@@ -69,6 +69,9 @@ function createManagerAdapter() {
             },
         },
         externalChange: (key, value) => { store.set(key, value); },
+        // A manager writes synchronously, so a caller always knows which write failed:
+        // the throw happens at its own call site. Only the async bridge has to say.
+        asyncWrites: false,
         failNextWrite: error => { failWrite = error; },
         failNextClipboard: error => { failClipboard = error; },
         observed,
@@ -84,7 +87,7 @@ let pendingResponseUrl = 'https://example.test/final';
 async function createBridgeAdapter() {
     const store = Object.create(null);
     const changeListeners = [];
-    const observed = { writeFailures: 0, clipboardFailures: 0 };
+    const observed = { writeFailures: 0, clipboardFailures: 0, writeFailureKeys: [] };
     let failWriteMessage = null;
     let clipboardRejection = null;
 
@@ -154,12 +157,16 @@ async function createBridgeAdapter() {
         document: {
             documentElement: { setAttribute() {}, removeAttribute() {} },
             dispatchEvent: event => {
-                if (event.type === 'imdb-enhanced:settings-save-failed') observed.writeFailures += 1;
+                if (event.type === 'imdb-enhanced:settings-save-failed') {
+                    observed.writeFailures += 1;
+                    observed.writeFailureKeys.push(event.detail?.key);
+                }
                 if (event.type === 'imdb-enhanced:clipboard-failed') observed.clipboardFailures += 1;
                 return true;
             },
         },
-        CustomEvent: class { constructor(type) { this.type = type; } },
+        // detail was dropped here, which made a failure event's payload untestable.
+        CustomEvent: class { constructor(type, options = {}) { this.type = type; this.detail = options.detail; } },
     };
     context.globalThis = context;
     vm.createContext(context);
@@ -186,6 +193,7 @@ async function createBridgeAdapter() {
             store[key] = value;
             changeListeners.forEach(fn => fn({ [key]: { newValue: value } }, 'local'));
         },
+        asyncWrites: true,
         failNextWrite: error => { failWriteMessage = error.message; },
         failNextClipboard: error => { clipboardRejection = error; },
         observed,
@@ -247,6 +255,45 @@ async function runContract(adapter) {
         await adapter.settle();
         assert(threw, 'a storage failure must reach the caller, not just the UI');
     });
+
+    /* A rejected write means the value never reached storage, so a reader must not go on
+       seeing it. The MV3 bridge writes to its mirror first and only learns of the
+       rejection later, which left GM_getValue and GM_listValues describing a store that
+       did not exist — and the lookup cache sizes itself from exactly those two, so it
+       counted bytes nothing was holding and stopped evicting when it should have. */
+    await check(label, 'a rejected write leaves no trace in what the store reports', async () => {
+        gm.setValue('imdb_enh_rollback', 'original');
+        await adapter.settle();
+        adapter.failNextWrite(new Error('simulated quota failure'));
+        try { gm.setValue('imdb_enh_rollback', 'never-stored'); } catch { /* reported below */ }
+        await adapter.settle();
+        assert.strictEqual(gm.getValue('imdb_enh_rollback', null), 'original',
+            'a value that failed to store must not be readable afterwards');
+
+        adapter.failNextWrite(new Error('simulated quota failure'));
+        try { gm.setValue('imdb_enh_brand_new', 'never-stored'); } catch { /* reported below */ }
+        await adapter.settle();
+        assert.strictEqual(gm.getValue('imdb_enh_brand_new', null), null,
+            'a new key whose write failed must not appear to exist');
+        assert(!gm.listValues().includes('imdb_enh_brand_new'),
+            'a key whose write failed must not be listed');
+    });
+
+    /* Only meaningful where writes are asynchronous. A synchronous manager satisfies this
+       by construction — the throw lands at the caller's own call site, so it already
+       knows which key. The bridge's rejection arrives later, and its next-call throw can
+       surface on a completely different key, so it has to name the one that failed or a
+       caller managing its own storage budget (the lookup cache) cannot act on it. */
+    if (adapter.asyncWrites) {
+        await check(label, 'a write failure names the key that failed', async () => {
+            adapter.observed.writeFailureKeys.length = 0;
+            adapter.failNextWrite(new Error('simulated quota failure'));
+            try { gm.setValue('cache_rt_tt0133093', 'x'); } catch { /* reported via the event */ }
+            await adapter.settle();
+            assert.deepStrictEqual(adapter.observed.writeFailureKeys, ['cache_rt_tt0133093'],
+                'the failure event must identify the key whose write was rejected');
+        });
+    }
 
     await check(label, 'a refused clipboard write throws rather than announcing a copy', async () => {
         let threw = false;

@@ -661,14 +661,41 @@
        figures, never the key or payload — and hand them the control that fixes it. */
     function reportCacheQuotaFailure(bytes) {
         try {
-            recordFeatureFailure({ key:'cache' }, 'storage',
-                `cache write of ${bytes} bytes failed after eviction; storage quota appears full`);
+            recordFeatureFailure({ key:'cache' }, 'storage', bytes > 0
+                ? `cache write of ${bytes} bytes failed after eviction; storage quota appears full`
+                : 'a cache write was rejected by storage; quota appears full');
         } catch { /* the toast below is the part the user needs */ }
         if (cacheQuotaFailureNotified) return;
         cacheQuotaFailureNotified = true;
         try {
             showToast(`${STORAGE_HOST_LABEL} is full, so lookups are not being cached. Settings → Data → Clear cache frees it.`, 6000);
         } catch { /* console warning already recorded the failure */ }
+    }
+
+    /* Under a script manager GM_setValue is synchronous, so cacheSet learns about a full
+       quota from the write throwing and evicts and retries right there. The extension
+       bridge cannot be synchronous — chrome.storage.local is a promise — so that write
+       returns normally and the rejection arrives later. Without this the entire recovery
+       path was userscript-only: the extension would report the write as successful, never
+       evict, and never tell the user, which is the one build where a 10 MiB quota makes it
+       likely. The bridge names the failing key, so only cache failures are handled here;
+       settings failures belong to the settings UI. */
+    if (typeof document !== 'undefined' && typeof document.addEventListener === 'function') {
+        document.addEventListener('imdb-enhanced:settings-save-failed', event => {
+            const key = event?.detail?.key;
+            if (!isCacheStorageKey(key)) return;
+            try {
+                // The mirror has already rolled the failed entry back, so this measures
+                // what is really stored and makes room for the next write.
+                evictCacheEntries(readCacheUsage(), {
+                    byteBudget: Math.floor(CACHE_TOTAL_BYTE_BUDGET / 4),
+                    maxEntries: Math.floor(CACHE_MAX_ENTRIES / 4),
+                });
+            } catch (error) {
+                console.warn('[IMDb Enhanced] cache eviction after a failed write did not complete:', error);
+            }
+            reportCacheQuotaFailure(0);
+        });
     }
 
     function cacheGet(key) {
