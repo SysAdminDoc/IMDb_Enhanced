@@ -268,6 +268,7 @@ function loadScriptTestHooks({ withoutDeleteValue = false, withheldCredentials =
         releasableOriginsFor,
         BACKUP_ENVELOPE_KEY,
         getFeatureKeys: () => features.map(feature => feature.key),
+        getFeatureNames: () => features.map(feature => [feature.key, feature.name]),
         FEATURE_DETAILS,
         SETTINGS_IMPORT_TEXT_LIMIT,
         CACHE_ENTRY_TEXT_LIMIT,
@@ -5102,13 +5103,66 @@ test('an extension build reads the installed locale and falls back deterministic
             },
         },
     });
+    /* Provider consent and feature copy are resolved while the script evaluates, so the
+       lookup is used before this test asks for anything. Reading a call by position was
+       reading whichever key the source happened to resolve first; what the assertion is
+       about is the arguments a given key arrives with. */
+    const callFor = key => {
+        const call = asked.find(([asked_key]) => asked_key === key);
+        assert(call, `getMessage was never asked for ${key}`);
+        return Array.from(call).map(part => (Array.isArray(part) ? Array.from(part) : part));
+    };
     assert.strictEqual(hooks.t(translatedKey), 'ZUGRIFF GEWAEHREN',
         'an installed translation must win over the embedded English');
-    assert.deepStrictEqual(Array.from(asked[0]).map(part => (Array.isArray(part) ? Array.from(part) : part)), [translatedKey, []]);
+    assert.deepStrictEqual(callFor(translatedKey), [translatedKey, []]);
     assert.strictEqual(hooks.t(untranslatedKey, [3]), 'Cleared 3 saved title marks',
         'a key the locale does not carry falls back to English, substitutions and all');
-    assert.deepStrictEqual(Array.from(asked[1]).map(part => (Array.isArray(part) ? Array.from(part) : part)), [untranslatedKey, ['3']],
+    assert.deepStrictEqual(callFor(untranslatedKey), [untranslatedKey, ['3']],
         'substitutions reach getMessage as strings, which is what it accepts');
+});
+
+/* The settings panel is where most of the words are, and they came from three data
+   tables rather than from call sites: every feature's name and description, and every
+   provider's consent sentence. A key that resolves to itself is the failure this catches
+   — a settings row labelled "feature_removeAds_name" is worse than the English it
+   replaced, and nothing else in the suite would notice. Checked in both directions so a
+   renamed feature cannot leave its sentences behind in the catalog either. */
+test('every feature and provider gets its words from the catalog', () => {
+    const hooks = loadScriptTestHooks();
+    const declared = new Set(Object.keys(hooks.MESSAGES));
+    const expected = new Set();
+
+    hooks.getFeatureNames().forEach(([key, name]) => {
+        expected.add(`feature_${key}_name`);
+        expected.add(`feature_${key}_detail`);
+        assert(declared.has(`feature_${key}_name`), `${key} has no catalog entry for its label`);
+        assert(declared.has(`feature_${key}_detail`), `${key} has no catalog entry for its description`);
+        // t returns the key itself when nothing carries it, which is what a broken lookup shows.
+        assert.notStrictEqual(name, `feature_${key}_name`, `${key} renders its own catalog key as a label`);
+        assert(name && name.trim(), `${key} has no label`);
+        assert.notStrictEqual(hooks.FEATURE_DETAILS[key], `feature_${key}_detail`,
+            `${key} renders its own catalog key as a description`);
+    });
+
+    Object.entries(hooks.PROVIDERS).forEach(([id, provider]) => {
+        expected.add(`provider_${id}_consent`);
+        assert(declared.has(`provider_${id}_consent`), `${id} has no catalog entry for its consent line`);
+        assert.notStrictEqual(provider.consent, `provider_${id}_consent`,
+            `${id} shows its own catalog key where the consent sentence belongs`);
+        /* An empty attribution means the provider asks for no credit. One that asks for
+           credit has to say so in the catalog like everything else. */
+        if (provider.attribution) {
+            expected.add(`provider_${id}_attribution`);
+            assert(declared.has(`provider_${id}_attribution`), `${id} has no catalog entry for its credit line`);
+            assert.notStrictEqual(provider.attribution, `provider_${id}_attribution`,
+                `${id} shows its own catalog key where the credit line belongs`);
+        }
+    });
+
+    const stranded = [...declared]
+        .filter(key => /^(feature|provider)_/.test(key) && !expected.has(key));
+    assert.deepStrictEqual(stranded, [],
+        'the catalog carries feature or provider text for something that no longer exists');
 });
 
 /* The one rule that keeps translation from changing behaviour: nothing decides what to do

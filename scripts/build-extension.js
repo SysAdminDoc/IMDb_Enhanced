@@ -53,9 +53,15 @@ function readNumericConstant(name) {
 function readOriginLists() {
     const block = source.match(/const LOOPBACK_ORIGINS = \[[\s\S]*?const TRANSMITTED_DATA_CATEGORIES = [\s\S]*?\)\]\.sort\(\);/);
     if (!block) throw new Error('The provider registry could not be read from the userscript.');
-    const preamble = ['CACHE_TTL', 'CACHE_MAX_TTL']
-        .map(name => `const ${name} = ${readNumericConstant(name)};`)
-        .join('\n');
+    /* The consent sentences and attribution lines are catalog entries now, so the block
+       cannot be evaluated without the lookup that resolves them. English is the right
+       answer here in every build: what this reader feeds is the manifest and Firefox's
+       data-collection declaration, which are not localized files. */
+    const preamble = [
+        ...['CACHE_TTL', 'CACHE_MAX_TTL'].map(name => `const ${name} = ${readNumericConstant(name)};`),
+        `const __messages = ${JSON.stringify(MESSAGE_CATALOG)};`,
+        'const t = key => (Object.prototype.hasOwnProperty.call(__messages, key) ? __messages[key] : key);',
+    ].join('\n');
     // eslint-disable-next-line no-new-func
     const evaluate = new Function(`${preamble}\n${block[0]}\nreturn { PROVIDERS, FEATURE_PROVIDERS, FEATURE_ORIGIN_GROUPS, REQUIRED_ORIGINS, OPTIONAL_ORIGINS, TRANSMITTED_DATA_CATEGORIES, DISTRIBUTION_PROFILES, PROVIDER_REQUIRED_FIELDS };`);
     const lists = evaluate();

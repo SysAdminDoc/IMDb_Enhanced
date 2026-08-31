@@ -395,6 +395,96 @@
         aria_use_theme: 'Use $1 theme',
         aria_watch_movie_and_show_sites: 'Watch movie and show sites',
         aria_where_streaming_availability_comes_from: 'Where streaming availability comes from',
+        feature_castAges_detail: 'Shows a living person’s current age next to their birth date. IMDb already prints the age at death for people who have died.',
+        feature_castAges_name: 'Person age',
+        feature_collapsibleSections_detail: 'Adds per-section collapse controls and remembers each state.',
+        feature_collapsibleSections_name: 'Collapsible sections',
+        feature_compactHeader_detail: 'Slims the IMDb header while keeping it readable and stable.',
+        feature_compactHeader_name: 'Compact header',
+        feature_dimLowRated_detail: 'Fades the artwork of titles rated below your threshold on lists, charts, and search results. Text and controls stay fully readable, and hovering restores the image.',
+        feature_dimLowRated_name: 'Dim low-rated titles',
+        feature_editorialTitleSurface_detail: 'Rebuilds title pages into a stable editorial hero with dedicated action, rating, and research regions.',
+        feature_editorialTitleSurface_name: 'Editorial title layout',
+        feature_enhancedRatingDisplay_detail: 'Elevates IMDb rating and popularity blocks with clearer emphasis.',
+        feature_enhancedRatingDisplay_name: 'Refined rating display',
+        feature_episodeHeatmap_detail: 'Colours IMDb’s own season×episode grid by rating and adds season averages, on the Ratings tab of a series.',
+        feature_episodeHeatmap_name: 'Episode heatmap colours',
+        feature_episodeSubtitles_detail: 'Adds a subtitle link to every episode on an episode list, plus a button that copies them all for the loaded season.',
+        feature_episodeSubtitles_name: 'Per-episode subtitle links',
+        feature_expandSummaries_detail: 'Releases IMDb’s line clamp so long summaries and biographies read in full without a per-block click.',
+        feature_expandSummaries_name: 'Expand truncated summaries',
+        feature_expandedLinkMenu_detail: 'Groups additional movie, review, subtitle, and TV lookup links.',
+        feature_expandedLinkMenu_name: 'Expanded link menu',
+        feature_externalLinks_detail: 'Adds trusted research and trailer links near the title.',
+        feature_externalLinks_name: 'External links bar',
+        feature_inlineLetterboxdScore_detail: 'Shows Letterboxd average ratings inline for films when available.',
+        feature_inlineLetterboxdScore_name: 'Letterboxd scores',
+        feature_inlineMetacriticScore_detail: 'Shows Metacritic score feedback inline when available.',
+        feature_inlineMetacriticScore_name: 'Metacritic scores',
+        feature_inlineRTScore_detail: 'Shows Rotten Tomatoes score feedback inline when available.',
+        feature_inlineRTScore_name: 'Rotten Tomatoes scores',
+        feature_keyboardShortcuts_detail: 'Optional. Enables ? for settings, c to copy, r for rating, and t for top.',
+        feature_keyboardShortcuts_name: 'Optional keyboard shortcuts',
+        feature_listMultiSearch_detail: 'Builds a popup-safe queue of up to 20 title links on watchlist, list, and chart pages.',
+        feature_listMultiSearch_name: 'List multi-search',
+        feature_listRoulette_detail: 'Adds a button to watchlists, lists, and charts that picks one title at random and scrolls to it. It never opens anything.',
+        feature_listRoulette_name: 'Pick something to watch',
+        feature_listRuntimeSummary_detail: 'Totals how long the titles on a watchlist, list, or chart would take to watch, and says how many had no runtime listed.',
+        feature_listRuntimeSummary_name: 'List runtime summary',
+        feature_markFilters_detail: 'Adds an All / Unseen / Seen / Skipped filter with counts to lists, charts, watchlists, search results, and filmographies. Needs private marks.',
+        feature_markFilters_name: 'Filter by private marks',
+        feature_mediaServerIntegration_detail: 'Checks configured local Plex, Jellyfin, and Emby servers and shows whether the title is already in your library.',
+        feature_mediaServerIntegration_name: 'Plex/Jellyfin/Emby indicator',
+        feature_modernUI_detail: 'Applies the selected theme, typography, focus, and component treatment.',
+        feature_modernUI_name: 'Modern IMDb skin',
+        feature_quickCopyID_detail: 'Adds a visible IMDb ID copy button beside the title.',
+        feature_quickCopyID_name: 'Quick copy IMDb ID',
+        feature_quickNav_detail: 'Adds a right-side section navigator on wide screens.',
+        feature_quickNav_name: 'Section navigator',
+        feature_ratingColorCoding_detail: 'Adds a small quality label beside the IMDb score.',
+        feature_ratingColorCoding_name: 'Rating quality labels',
+        feature_ratingGap_detail: 'On the Ratings tab, compares IMDb’s weighted rating with the unweighted mean of the raw votes.',
+        feature_ratingGap_name: 'Weighted vs unweighted rating',
+        feature_removeAds_detail: 'Hides current IMDb ad placements, sponsored shells, and tracking pixels as early as the page allows.',
+        feature_removeAds_name: 'Hide ads and sponsored shells',
+        feature_removeAppBanner_detail: 'Hides app-install prompts shown on desktop pages.',
+        feature_removeAppBanner_name: 'Hide app banners',
+        feature_removeContribution_detail: 'Removes contribution calls to action from detail pages.',
+        feature_removeContribution_name: 'Hide contribution prompts',
+        feature_removeNewsSection_detail: 'Keeps the page focused by removing IMDb news modules.',
+        feature_removeNewsSection_name: 'Hide news modules',
+        feature_removeProUpsell_detail: 'Hides explicit IMDbPro prompts and links from title and name pages while preserving list controls.',
+        feature_removeProUpsell_name: 'Hide IMDbPro upsells',
+        feature_removeRelatedInterests_detail: 'Hides broad interest recommendations that dilute title and cast pages.',
+        feature_removeRelatedInterests_name: 'Hide related interests',
+        feature_removeSponsoredRecs_detail: 'Suppresses sponsored recommendation blocks where IMDb inserts them.',
+        feature_removeSponsoredRecs_name: 'Hide sponsored recommendations',
+        feature_searchButtons_detail: 'Adds prominent, keyboard-friendly watch-site links near the title.',
+        feature_searchButtons_name: 'Watch search buttons',
+        feature_seasonProgress_detail: 'Shows how much of the loaded season you have marked seen, links to the next unmarked episode, and marks or clears the whole loaded season in one step with an undo. Needs private marks.',
+        feature_seasonProgress_name: 'Season progress and batch marking',
+        feature_servarrIntegration_detail: 'Adds optional local Radarr/Sonarr quick-add buttons with library status indicator when API settings are configured.',
+        feature_servarrIntegration_name: 'Servarr quick-add',
+        feature_spoilerBlur_detail: 'Softens long plot text until you intentionally reveal it.',
+        feature_spoilerBlur_name: 'Spoiler blur on plot',
+        feature_streamAvailability_detail: 'Shows one-glance JustWatch streaming providers when available.',
+        feature_streamAvailability_name: 'Streaming availability',
+        feature_subtitleLinks_detail: 'Adds subtitle lookup links in the details section.',
+        feature_subtitleLinks_name: 'Subtitle links',
+        feature_titleNotes_detail: 'Adds a private note field to title pages, saved on this device and included in backups. Never sent anywhere.',
+        feature_titleNotes_name: 'Private title notes',
+        feature_trailerPopover_detail: 'Adds an in-page trailer modal backed by a click-to-fetch YouTube lookup.',
+        feature_trailerPopover_name: 'Trailer popover',
+        feature_tvEpisodeTools_detail: 'Surfaces the highest-rated episodes; synopsis blur remains opt-in through Spoiler blur on plot.',
+        feature_tvEpisodeTools_name: 'TV episode tools',
+        feature_tvShowEnhancements_detail: 'Adds TV-specific lookup shortcuts on series pages.',
+        feature_tvShowEnhancements_name: 'TV show quick links',
+        feature_watchedMarking_detail: 'Adds private Seen and Skip marks on title cards across titles, charts, lists, watchlists, filmographies, and search results. Marks stay on this device and do not change IMDb Watched.',
+        feature_watchedMarking_name: 'Private seen / skip marks',
+        feature_watchlistBatch_detail: 'Adds a watchlist-page button that copies all visible IMDb title IDs.',
+        feature_watchlistBatch_name: 'Watchlist batch ID copy',
+        feature_widerLayout_detail: 'Uses more horizontal room across normal desktop window sizes.',
+        feature_widerLayout_name: 'Wider desktop layout',
         field_a_private_note_about_this_title: 'A private note about this title. Stored on this device only.',
         field_const_your_rating_date_rated_title: 'Const,Your Rating,Date Rated,Title\ntt0133093,9,2026-08-31,The Matrix',
         field_filter_by_site_name_or_address: 'Filter by site name or address',
@@ -412,6 +502,18 @@
         field_site_name: 'Site name',
         field_sonarr_root_folder_hint: '/tv',
         field_two_letter_country_code_such_as: 'Two-letter country code, such as US or GB',
+        provider_amazonAds_consent: 'Blocks requests to these hosts. Nothing is sent to them.',
+        provider_justWatch_consent: 'Sends the title and year read from the page to JustWatch to find where it streams.',
+        provider_letterboxd_consent: 'Sends the title and year read from the page to Letterboxd to find its rating.',
+        provider_localServices_consent: 'Talks to services on your own machine. Nothing leaves it.',
+        provider_metacritic_consent: 'Sends the title and year read from the page to Metacritic to find its score.',
+        provider_omdb_attribution: 'Ratings from the OMDb API, used under CC BY-NC 4.0.',
+        provider_omdb_consent: 'Sends the IMDb id to OMDb to read its Rotten Tomatoes and Metacritic ratings. Needs your own OMDb key.',
+        provider_rottenTomatoes_consent: 'Sends the title and year read from the page to Rotten Tomatoes to find its scores.',
+        provider_tmdb_attribution: 'This extension uses TMDB and the TMDB APIs but is not endorsed, certified, or otherwise approved by TMDB. Streaming data provided by JustWatch.',
+        provider_tmdb_consent: 'Sends the IMDb id to TMDB to look up where the title streams. Needs your own TMDB read token.',
+        provider_wikidata_consent: 'Sends the IMDb id to Wikidata to find the matching page on another site.',
+        provider_youTube_consent: 'Loads the trailer from YouTube, which sees the video you opened.',
         text_all_opened: 'All opened',
         text_cache_remaining: '$1 cached entries · $2',
         text_candidate_matches_could_not_be_loaded: 'Candidate matches could not be loaded. Paste a title URL or mark no entry.',
@@ -646,7 +748,7 @@
             label: 'Rotten Tomatoes',
             origins: ['https://www.rottentomatoes.com/*'],
             transmits: 'websiteContent',
-            consent: 'Sends the title and year read from the page to Rotten Tomatoes to find its scores.',
+            consent: t('provider_rottenTomatoes_consent'),
             ttl: CACHE_TTL,
             attribution: '',
             // Answers come from parsing their pages, which a store listing should not do.
@@ -656,7 +758,7 @@
             label: 'Metacritic',
             origins: ['https://backend.metacritic.com/*'],
             transmits: 'websiteContent',
-            consent: 'Sends the title and year read from the page to Metacritic to find its score.',
+            consent: t('provider_metacritic_consent'),
             ttl: CACHE_TTL,
             attribution: '',
             profiles: ['default'],
@@ -665,7 +767,7 @@
             label: 'Letterboxd',
             origins: ['https://letterboxd.com/*'],
             transmits: 'websiteContent',
-            consent: 'Sends the title and year read from the page to Letterboxd to find its rating.',
+            consent: t('provider_letterboxd_consent'),
             ttl: CACHE_TTL,
             attribution: '',
             profiles: ['default'],
@@ -674,7 +776,7 @@
             label: 'JustWatch',
             origins: ['https://www.justwatch.com/*'],
             transmits: 'websiteContent',
-            consent: 'Sends the title and year read from the page to JustWatch to find where it streams.',
+            consent: t('provider_justWatch_consent'),
             ttl: CACHE_TTL,
             attribution: '',
             profiles: ['default'],
@@ -684,13 +786,13 @@
             origins: ['https://api.themoviedb.org/*'],
             // Only the IMDb id of the page you are on, not the title text.
             transmits: 'websiteContent',
-            consent: 'Sends the IMDb id to TMDB to look up where the title streams. Needs your own TMDB read token.',
+            consent: t('provider_tmdb_consent'),
             ttl: CACHE_TTL,
             /* Both are required and both are theirs, not a courtesy. TMDB's API terms
                mandate the endorsement disclaimer verbatim, and the watch-provider
                endpoint separately requires the data be attributed to JustWatch, on pain
                of access being revoked. Rendered wherever this data is shown. */
-            attribution: 'This extension uses TMDB and the TMDB APIs but is not endorsed, certified, or otherwise approved by TMDB. Streaming data provided by JustWatch.',
+            attribution: t('provider_tmdb_attribution'),
             // An API with a key, rather than page parsing, so a store listing can ship it.
             profiles: ['default', 'store'],
         },
@@ -699,10 +801,10 @@
             origins: ['https://www.omdbapi.com/*'],
             // The IMDb id of the page you are on, nothing read from the page itself.
             transmits: 'websiteContent',
-            consent: 'Sends the IMDb id to OMDb to read its Rotten Tomatoes and Metacritic ratings. Needs your own OMDb key.',
+            consent: t('provider_omdb_consent'),
             ttl: CACHE_TTL,
             // OMDb publishes its data under CC BY-NC 4.0, which requires the credit.
-            attribution: 'Ratings from the OMDb API, used under CC BY-NC 4.0.',
+            attribution: t('provider_omdb_attribution'),
             // A documented API with a key of your own, so a store listing can ship it.
             profiles: ['default', 'store'],
         },
@@ -710,7 +812,7 @@
             label: 'YouTube',
             origins: ['https://www.youtube.com/*'],
             transmits: 'websiteContent',
-            consent: 'Loads the trailer from YouTube, which sees the video you opened.',
+            consent: t('provider_youTube_consent'),
             ttl: CACHE_TTL,
             attribution: '',
             profiles: ['default', 'store'],
@@ -719,7 +821,7 @@
             label: 'Wikidata',
             origins: [WIKIDATA_ORIGIN],
             transmits: 'websiteContent',
-            consent: 'Sends the IMDb id to Wikidata to find the matching page on another site.',
+            consent: t('provider_wikidata_consent'),
             /* An identifier mapping does not go stale the way a score does, and validating
                one against the score TTL threw away every successful mapping on first read. */
             ttl: CACHE_MAX_TTL,
@@ -743,7 +845,7 @@
             ],
             // Access is held to block these, never to call them: nothing is ever sent.
             transmits: 'none',
-            consent: 'Blocks requests to these hosts. Nothing is sent to them.',
+            consent: t('provider_amazonAds_consent'),
             ttl: 0,
             attribution: '',
             profiles: ['default', 'store'],
@@ -752,7 +854,7 @@
             label: 'your own computer',
             origins: LOOPBACK_ORIGINS,
             transmits: 'none',
-            consent: 'Talks to services on your own machine. Nothing leaves it.',
+            consent: t('provider_localServices_consent'),
             ttl: 0,
             attribution: '',
             profiles: ['default', 'store'],
@@ -1169,51 +1271,51 @@
     ];
 
     const FEATURE_DETAILS = {
-        removeAds: 'Hides current IMDb ad placements, sponsored shells, and tracking pixels as early as the page allows.',
-        removeProUpsell: 'Hides explicit IMDbPro prompts and links from title and name pages while preserving list controls.',
-        removeNewsSection: 'Keeps the page focused by removing IMDb news modules.',
-        removeRelatedInterests: 'Hides broad interest recommendations that dilute title and cast pages.',
-        removeContribution: 'Removes contribution calls to action from detail pages.',
-        removeSponsoredRecs: 'Suppresses sponsored recommendation blocks where IMDb inserts them.',
-        removeAppBanner: 'Hides app-install prompts shown on desktop pages.',
-        modernUI: 'Applies the selected theme, typography, focus, and component treatment.',
-        editorialTitleSurface: 'Rebuilds title pages into a stable editorial hero with dedicated action, rating, and research regions.',
-        compactHeader: 'Slims the IMDb header while keeping it readable and stable.',
-        enhancedRatingDisplay: 'Elevates IMDb rating and popularity blocks with clearer emphasis.',
-        widerLayout: 'Uses more horizontal room across normal desktop window sizes.',
-        ratingColorCoding: 'Adds a small quality label beside the IMDb score.',
-        dimLowRated: 'Fades the artwork of titles rated below your threshold on lists, charts, and search results. Text and controls stay fully readable, and hovering restores the image.',
-        collapsibleSections: 'Adds per-section collapse controls and remembers each state.',
-        expandSummaries: 'Releases IMDb’s line clamp so long summaries and biographies read in full without a per-block click.',
-        spoilerBlur: 'Softens long plot text until you intentionally reveal it.',
-        quickNav: 'Adds a right-side section navigator on wide screens.',
-        inlineRTScore: 'Shows Rotten Tomatoes score feedback inline when available.',
-        inlineLetterboxdScore: 'Shows Letterboxd average ratings inline for films when available.',
-        inlineMetacriticScore: 'Shows Metacritic score feedback inline when available.',
-        streamAvailability: 'Shows one-glance JustWatch streaming providers when available.',
-        searchButtons: 'Adds prominent, keyboard-friendly watch-site links near the title.',
-        externalLinks: 'Adds trusted research and trailer links near the title.',
-        expandedLinkMenu: 'Groups additional movie, review, subtitle, and TV lookup links.',
-        trailerPopover: 'Adds an in-page trailer modal backed by a click-to-fetch YouTube lookup.',
-        castAges: 'Shows a living person’s current age next to their birth date. IMDb already prints the age at death for people who have died.',
-        watchedMarking: 'Adds private Seen and Skip marks on title cards across titles, charts, lists, watchlists, filmographies, and search results. Marks stay on this device and do not change IMDb Watched.',
-        servarrIntegration: 'Adds optional local Radarr/Sonarr quick-add buttons with library status indicator when API settings are configured.',
-        mediaServerIntegration: 'Checks configured local Plex, Jellyfin, and Emby servers and shows whether the title is already in your library.',
-        tvEpisodeTools: 'Surfaces the highest-rated episodes; synopsis blur remains opt-in through Spoiler blur on plot.',
-        tvShowEnhancements: 'Adds TV-specific lookup shortcuts on series pages.',
-        episodeHeatmap: 'Colours IMDb’s own season×episode grid by rating and adds season averages, on the Ratings tab of a series.',
-        ratingGap: 'On the Ratings tab, compares IMDb’s weighted rating with the unweighted mean of the raw votes.',
-        subtitleLinks: 'Adds subtitle lookup links in the details section.',
-        episodeSubtitles: 'Adds a subtitle link to every episode on an episode list, plus a button that copies them all for the loaded season.',
-        quickCopyID: 'Adds a visible IMDb ID copy button beside the title.',
-        watchlistBatch: 'Adds a watchlist-page button that copies all visible IMDb title IDs.',
-        listMultiSearch: 'Builds a popup-safe queue of up to 20 title links on watchlist, list, and chart pages.',
-        listRuntimeSummary: 'Totals how long the titles on a watchlist, list, or chart would take to watch, and says how many had no runtime listed.',
-        markFilters: 'Adds an All / Unseen / Seen / Skipped filter with counts to lists, charts, watchlists, search results, and filmographies. Needs private marks.',
-        titleNotes: 'Adds a private note field to title pages, saved on this device and included in backups. Never sent anywhere.',
-        listRoulette: 'Adds a button to watchlists, lists, and charts that picks one title at random and scrolls to it. It never opens anything.',
-        seasonProgress: 'Shows how much of the loaded season you have marked seen, links to the next unmarked episode, and marks or clears the whole loaded season in one step with an undo. Needs private marks.',
-        keyboardShortcuts: 'Optional. Enables ? for settings, c to copy, r for rating, and t for top.',
+        removeAds: t('feature_removeAds_detail'),
+        removeProUpsell: t('feature_removeProUpsell_detail'),
+        removeNewsSection: t('feature_removeNewsSection_detail'),
+        removeRelatedInterests: t('feature_removeRelatedInterests_detail'),
+        removeContribution: t('feature_removeContribution_detail'),
+        removeSponsoredRecs: t('feature_removeSponsoredRecs_detail'),
+        removeAppBanner: t('feature_removeAppBanner_detail'),
+        modernUI: t('feature_modernUI_detail'),
+        editorialTitleSurface: t('feature_editorialTitleSurface_detail'),
+        compactHeader: t('feature_compactHeader_detail'),
+        enhancedRatingDisplay: t('feature_enhancedRatingDisplay_detail'),
+        widerLayout: t('feature_widerLayout_detail'),
+        ratingColorCoding: t('feature_ratingColorCoding_detail'),
+        dimLowRated: t('feature_dimLowRated_detail'),
+        collapsibleSections: t('feature_collapsibleSections_detail'),
+        expandSummaries: t('feature_expandSummaries_detail'),
+        spoilerBlur: t('feature_spoilerBlur_detail'),
+        quickNav: t('feature_quickNav_detail'),
+        inlineRTScore: t('feature_inlineRTScore_detail'),
+        inlineLetterboxdScore: t('feature_inlineLetterboxdScore_detail'),
+        inlineMetacriticScore: t('feature_inlineMetacriticScore_detail'),
+        streamAvailability: t('feature_streamAvailability_detail'),
+        searchButtons: t('feature_searchButtons_detail'),
+        externalLinks: t('feature_externalLinks_detail'),
+        expandedLinkMenu: t('feature_expandedLinkMenu_detail'),
+        trailerPopover: t('feature_trailerPopover_detail'),
+        castAges: t('feature_castAges_detail'),
+        watchedMarking: t('feature_watchedMarking_detail'),
+        servarrIntegration: t('feature_servarrIntegration_detail'),
+        mediaServerIntegration: t('feature_mediaServerIntegration_detail'),
+        tvEpisodeTools: t('feature_tvEpisodeTools_detail'),
+        tvShowEnhancements: t('feature_tvShowEnhancements_detail'),
+        episodeHeatmap: t('feature_episodeHeatmap_detail'),
+        ratingGap: t('feature_ratingGap_detail'),
+        subtitleLinks: t('feature_subtitleLinks_detail'),
+        episodeSubtitles: t('feature_episodeSubtitles_detail'),
+        quickCopyID: t('feature_quickCopyID_detail'),
+        watchlistBatch: t('feature_watchlistBatch_detail'),
+        listMultiSearch: t('feature_listMultiSearch_detail'),
+        listRuntimeSummary: t('feature_listRuntimeSummary_detail'),
+        markFilters: t('feature_markFilters_detail'),
+        titleNotes: t('feature_titleNotes_detail'),
+        listRoulette: t('feature_listRoulette_detail'),
+        seasonProgress: t('feature_seasonProgress_detail'),
+        keyboardShortcuts: t('feature_keyboardShortcuts_detail'),
     };
 
     // =========================================================================
@@ -4671,7 +4773,7 @@
     // #########################################################################
 
     reg({
-        key: 'removeAds', name: 'Hide ads and sponsored shells', group: 'Cleanup',
+        key: 'removeAds', name: t('feature_removeAds_name'), group: 'Cleanup',
         init() { injectEarlyAdShell(); },
         destroy() {
             if (get('removeAds')) return;
@@ -4681,30 +4783,30 @@
     });
 
     reg({
-        key: 'removeProUpsell', name: 'Hide IMDbPro upsells', group: 'Cleanup',
+        key: 'removeProUpsell', name: t('feature_removeProUpsell_name'), group: 'Cleanup',
         css: `[data-testid="hero-subnav-bar-imdb-pro-link"],[data-testid="hero-proupsell"],
             a[href*="pro.imdb.com"],[class*="ProUpsell"],[class*="proupsell"]{display:none!important}`,
         init() { addCSS(this.css, 'enh-proUpsell'); },
         destroy() { removeCSS('enh-proUpsell'); }
     });
 
-    reg({ key: 'removeNewsSection', name: 'Hide news modules', group: 'Cleanup',
+    reg({ key: 'removeNewsSection', name: t('feature_removeNewsSection_name'), group: 'Cleanup',
         css: `section[data-testid="News"]{display:none!important}`,
         init() { addCSS(this.css, 'enh-news'); }, destroy() { removeCSS('enh-news'); } });
 
-    reg({ key: 'removeRelatedInterests', name: 'Hide related interests', group: 'Cleanup',
+    reg({ key: 'removeRelatedInterests', name: t('feature_removeRelatedInterests_name'), group: 'Cleanup',
         css: `section[data-testid="RelatedInterests"]{display:none!important}`,
         init() { addCSS(this.css, 'enh-relInt'); }, destroy() { removeCSS('enh-relInt'); } });
 
-    reg({ key: 'removeContribution', name: 'Hide contribution prompts', group: 'Cleanup',
+    reg({ key: 'removeContribution', name: t('feature_removeContribution_name'), group: 'Cleanup',
         css: `section[data-testid="contribution"]{display:none!important}`,
         init() { addCSS(this.css, 'enh-contrib'); }, destroy() { removeCSS('enh-contrib'); } });
 
-    reg({ key: 'removeSponsoredRecs', name: 'Hide sponsored recommendations', group: 'Cleanup',
+    reg({ key: 'removeSponsoredRecs', name: t('feature_removeSponsoredRecs_name'), group: 'Cleanup',
         css: `[cel_widget_id*="Sponsored"],[class*="Sponsored"]{display:none!important}`,
         init() { addCSS(this.css, 'enh-sponsRecs'); }, destroy() { removeCSS('enh-sponsRecs'); } });
 
-    reg({ key: 'removeAppBanner', name: 'Hide app banners', group: 'Cleanup',
+    reg({ key: 'removeAppBanner', name: t('feature_removeAppBanner_name'), group: 'Cleanup',
         css: `.footer__app,.imdb-footer__open-in-app-button,[class*="AppBanner"]{display:none!important}`,
         init() { addCSS(this.css, 'enh-appBanner'); }, destroy() { removeCSS('enh-appBanner'); } });
 
@@ -5487,7 +5589,7 @@ html[data-imdb-enhanced="active"] .ipc-page-background {
     setupThemeAutoSync();
 
     reg({
-        key: 'modernUI', name: 'Modern IMDb skin', group: 'Appearance',
+        key: 'modernUI', name: t('feature_modernUI_name'), group: 'Appearance',
         init() {
             injectEarlyThemeShell();
             applyThemeStyles({ refreshDependent: false });
@@ -5517,7 +5619,7 @@ html[data-imdb-enhanced="active"] .ipc-page-background {
     });
 
     reg({
-        key: 'editorialTitleSurface', name: 'Editorial title layout', group: 'Appearance',
+        key: 'editorialTitleSurface', name: t('feature_editorialTitleSurface_name'), group: 'Appearance',
         _observer: null,
         _surface: null,
         _nativeHero: null,
@@ -5644,7 +5746,7 @@ html[data-imdb-enhanced="active"] .ipc-page-background {
     });
 
     reg({
-        key: 'compactHeader', name: 'Compact header', group: 'Appearance',
+        key: 'compactHeader', name: t('feature_compactHeader_name'), group: 'Appearance',
         init() {
             addThemedCSS(t => `
                 #imdbHeader {
@@ -5661,7 +5763,7 @@ html[data-imdb-enhanced="active"] .ipc-page-background {
     });
 
     reg({
-        key: 'enhancedRatingDisplay', name: 'Refined rating display', group: 'Appearance',
+        key: 'enhancedRatingDisplay', name: t('feature_enhancedRatingDisplay_name'), group: 'Appearance',
         init() {
             addThemedCSS(t => `
                 [data-testid="hero-rating-bar__aggregate-rating"] {
@@ -5693,7 +5795,7 @@ html[data-imdb-enhanced="active"] .ipc-page-background {
         destroy() { removeCSS('enh-enhRating'); }
     });
 
-    reg({ key: 'widerLayout', name: 'Wider desktop layout', group: 'Appearance',
+    reg({ key: 'widerLayout', name: t('feature_widerLayout_name'), group: 'Appearance',
         css: `
 /* ── Full-width containers ── */
 .ipc-page-content-container--center { max-width: 100% !important; padding: 0 32px !important; }
@@ -6731,7 +6833,7 @@ section[id*="quote" i] .ipc-list-card { padding: 4px 0 !important; margin: 2px 0
     }
 
     reg({
-        key: 'ratingColorCoding', name: 'Rating quality labels', group: 'Appearance',
+        key: 'ratingColorCoding', name: t('feature_ratingColorCoding_name'), group: 'Appearance',
         init() {
             const isCurrent = createFeatureGuard(this);
             addCSS(`
@@ -7322,7 +7424,7 @@ section[id*="quote" i] .ipc-list-card { padding: 4px 0 !important; margin: 2px 0
     }
 
     reg({
-        key: 'inlineRTScore', name: 'Rotten Tomatoes scores', group: 'Scores',
+        key: 'inlineRTScore', name: t('feature_inlineRTScore_name'), group: 'Scores',
         async init() {
             const isCurrent = createFeatureGuard(this);
             const imdbId = getIMDbID(), title = getTitleText(), year = getTitleYear();
@@ -7514,7 +7616,7 @@ section[id*="quote" i] .ipc-list-card { padding: 4px 0 !important; margin: 2px 0
     });
 
     reg({
-        key: 'inlineLetterboxdScore', name: 'Letterboxd scores', group: 'Scores',
+        key: 'inlineLetterboxdScore', name: t('feature_inlineLetterboxdScore_name'), group: 'Scores',
         async init() {
             const isCurrent = createFeatureGuard(this);
             if (isTVType()) return;
@@ -7656,7 +7758,7 @@ section[id*="quote" i] .ipc-list-card { padding: 4px 0 !important; margin: 2px 0
     });
 
     reg({
-        key: 'inlineMetacriticScore', name: 'Metacritic scores', group: 'Scores',
+        key: 'inlineMetacriticScore', name: t('feature_inlineMetacriticScore_name'), group: 'Scores',
         async init() {
             const isCurrent = createFeatureGuard(this);
             const imdbId = getIMDbID(), title = getTitleText(), year = getTitleYear();
@@ -7848,7 +7950,7 @@ section[id*="quote" i] .ipc-list-card { padding: 4px 0 !important; margin: 2px 0
     });
 
     reg({
-        key: 'streamAvailability', name: 'Streaming availability', group: 'Scores',
+        key: 'streamAvailability', name: t('feature_streamAvailability_name'), group: 'Scores',
         async init() {
             const isCurrent = createFeatureGuard(this);
             const imdbId = getIMDbID(), title = getTitleText();
@@ -8129,7 +8231,7 @@ section[id*="quote" i] .ipc-list-card { padding: 4px 0 !important; margin: 2px 0
     // #########################################################################
 
     reg({
-        key: 'collapsibleSections', name: 'Collapsible sections', group: 'Layout',
+        key: 'collapsibleSections', name: t('feature_collapsibleSections_name'), group: 'Layout',
         _ids: COLLAPSIBLE_SECTION_IDS,
         init() {
             addThemedCSS(t => `
@@ -8191,7 +8293,7 @@ section[id*="quote" i] .ipc-list-card { padding: 4px 0 !important; margin: 2px 0
        Purely a clamp release: it changes no text and leaves spoiler blur intact, since
        that is a separate filter on the same nodes. */
     reg({
-        key: 'expandSummaries', name: 'Expand truncated summaries', group: 'Layout',
+        key: 'expandSummaries', name: t('feature_expandSummaries_name'), group: 'Layout',
         init() {
             addCSS(`
                 /* The clamp sits on a descendant of the component, not the component
@@ -8212,7 +8314,7 @@ section[id*="quote" i] .ipc-list-card { padding: 4px 0 !important; margin: 2px 0
     });
 
     reg({
-        key: 'spoilerBlur', name: 'Spoiler blur on plot', group: 'Layout',
+        key: 'spoilerBlur', name: t('feature_spoilerBlur_name'), group: 'Layout',
         _plot: null,
         _plotAttributes: null,
         _revealHandler: null,
@@ -8277,7 +8379,7 @@ section[id*="quote" i] .ipc-list-card { padding: 4px 0 !important; margin: 2px 0
     });
 
     reg({
-        key: 'quickNav', name: 'Section navigator', group: 'Layout',
+        key: 'quickNav', name: t('feature_quickNav_name'), group: 'Layout',
         _navItems: [
             { id:'hero-parent', label:'Overview', icon:'O' },
             { id:'title-cast', label:'Cast', icon:'C' },
@@ -8370,7 +8472,7 @@ section[id*="quote" i] .ipc-list-card { padding: 4px 0 !important; margin: 2px 0
     // #########################################################################
 
     reg({
-        key: 'searchButtons', name: 'Watch search buttons', group: 'Features',
+        key: 'searchButtons', name: t('feature_searchButtons_name'), group: 'Features',
         init() {
             if (!isIMDbHost()) return;
             const isCurrent = createFeatureGuard(this);
@@ -8478,7 +8580,7 @@ section[id*="quote" i] .ipc-list-card { padding: 4px 0 !important; margin: 2px 0
     });
 
     reg({
-        key: 'externalLinks', name: 'External links bar', group: 'Features',
+        key: 'externalLinks', name: t('feature_externalLinks_name'), group: 'Features',
         init() {
             const isCurrent = createFeatureGuard(this);
             waitForTitleSurface().then(() => {
@@ -8545,7 +8647,7 @@ section[id*="quote" i] .ipc-list-card { padding: 4px 0 !important; margin: 2px 0
     });
 
     reg({
-        key: 'trailerPopover', name: 'Trailer popover', group: 'Features',
+        key: 'trailerPopover', name: t('feature_trailerPopover_name'), group: 'Features',
         _keydown: null,
         _focusin: null,
         _lastFocused: null,
@@ -8783,7 +8885,7 @@ section[id*="quote" i] .ipc-list-card { padding: 4px 0 !important; margin: 2px 0
 
     // ===================== EXPANDED LINK MENU =====================
     reg({
-        key: 'expandedLinkMenu', name: 'Expanded link menu', group: 'Features',
+        key: 'expandedLinkMenu', name: t('feature_expandedLinkMenu_name'), group: 'Features',
         _DB: {
             'Movie Sites': [
                 { n:'Letterboxd', u:'https://letterboxd.com/imdb/{{ID}}/' },
@@ -8940,7 +9042,7 @@ section[id*="quote" i] .ipc-list-card { padding: 4px 0 !important; margin: 2px 0
     });
 
     reg({
-        key: 'watchedMarking', name: 'Private seen / skip marks', group: 'Features',
+        key: 'watchedMarking', name: t('feature_watchedMarking_name'), group: 'Features',
         _observer: null,
         _clickHandler: null,
         _raf: 0,
@@ -9289,7 +9391,7 @@ section[id*="quote" i] .ipc-list-card { padding: 4px 0 !important; margin: 2px 0
        inherits the same 5,000-record bound, the same normalizer, and the same backup and
        restore path without a second store. */
     reg({
-        key: 'titleNotes', name: 'Private title notes', group: 'Features',
+        key: 'titleNotes', name: t('feature_titleNotes_name'), group: 'Features',
         init() {
             if (!isIMDbHost()) return;
             const imdbId = getIMDbID();
@@ -9390,7 +9492,7 @@ section[id*="quote" i] .ipc-list-card { padding: 4px 0 !important; margin: 2px 0
     });
 
     reg({
-        key: 'dimLowRated', name: 'Dim low-rated titles', group: 'Appearance',
+        key: 'dimLowRated', name: t('feature_dimLowRated_name'), group: 'Appearance',
         init() {
             if (!isIMDbHost()) return;
             const isCurrent = createFeatureGuard(this);
@@ -9440,7 +9542,7 @@ section[id*="quote" i] .ipc-list-card { padding: 4px 0 !important; margin: 2px 0
     });
 
     reg({
-        key: 'markFilters', name: 'Filter by private marks', group: 'Utility',
+        key: 'markFilters', name: t('feature_markFilters_name'), group: 'Utility',
         _active: 'all',
         init() {
             if (!isIMDbHost()) return;
@@ -9587,7 +9689,7 @@ section[id*="quote" i] .ipc-list-card { padding: 4px 0 !important; margin: 2px 0
     });
 
     reg({
-        key: 'servarrIntegration', name: 'Servarr quick-add', group: 'Features',
+        key: 'servarrIntegration', name: t('feature_servarrIntegration_name'), group: 'Features',
         init() {
             if (!isIMDbHost()) return;
             const isCurrent = createFeatureGuard(this);
@@ -9805,7 +9907,7 @@ section[id*="quote" i] .ipc-list-card { padding: 4px 0 !important; margin: 2px 0
     });
 
     reg({
-        key: 'mediaServerIntegration', name: 'Plex/Jellyfin/Emby indicator', group: 'Features',
+        key: 'mediaServerIntegration', name: t('feature_mediaServerIntegration_name'), group: 'Features',
         init() {
             if (!isIMDbHost()) return;
             const isCurrent = createFeatureGuard(this);
@@ -9934,7 +10036,7 @@ section[id*="quote" i] .ipc-list-card { padding: 4px 0 !important; margin: 2px 0
     const EPISODE_CODE_PATTERN = /\bS(\d+)\s*\.\s*E(\d+)\b/i;
 
     reg({
-        key: 'tvEpisodeTools', name: 'TV episode tools', group: 'TV',
+        key: 'tvEpisodeTools', name: t('feature_tvEpisodeTools_name'), group: 'TV',
         _clickHandler: null,
         _keydownHandler: null,
         _plotAttributes: null,
@@ -10181,7 +10283,7 @@ section[id*="quote" i] .ipc-list-card { padding: 4px 0 !important; margin: 2px 0
        clearest public signal that a title's votes were pushed. Verified 2026-08-15:
        title pages no longer carry histogram data at all, so this belongs on /ratings/. */
     reg({
-        key: 'ratingGap', name: 'Weighted vs unweighted rating', group: 'Scores',
+        key: 'ratingGap', name: t('feature_ratingGap_name'), group: 'Scores',
         init() {
             const isCurrent = createFeatureGuard(this);
             addThemedCSS(t => `
@@ -10210,7 +10312,7 @@ section[id*="quote" i] .ipc-list-card { padding: 4px 0 !important; margin: 2px 0
     });
 
     reg({
-        key: 'episodeHeatmap', name: 'Episode heatmap colours', group: 'TV',
+        key: 'episodeHeatmap', name: t('feature_episodeHeatmap_name'), group: 'TV',
         init() {
             const isCurrent = createFeatureGuard(this);
             addThemedCSS(t => `
@@ -10282,7 +10384,7 @@ section[id*="quote" i] .ipc-list-card { padding: 4px 0 !important; margin: 2px 0
     });
 
     reg({
-        key: 'tvShowEnhancements', name: 'TV show quick links', group: 'TV',
+        key: 'tvShowEnhancements', name: t('feature_tvShowEnhancements_name'), group: 'TV',
         init() {
             if (!isTVType()) return;
             const isCurrent = createFeatureGuard(this);
@@ -10319,7 +10421,7 @@ section[id*="quote" i] .ipc-list-card { padding: 4px 0 !important; margin: 2px 0
     });
 
     reg({
-        key: 'subtitleLinks', name: 'Subtitle links', group: 'TV',
+        key: 'subtitleLinks', name: t('feature_subtitleLinks_name'), group: 'TV',
         init() {
             const isCurrent = createFeatureGuard(this);
             const imdbId = getIMDbID(), title = getTitleText();
@@ -10368,7 +10470,7 @@ section[id*="quote" i] .ipc-list-card { padding: 4px 0 !important; margin: 2px 0
     }
 
     reg({
-        key: 'episodeSubtitles', name: 'Per-episode subtitle links', group: 'TV',
+        key: 'episodeSubtitles', name: t('feature_episodeSubtitles_name'), group: 'TV',
         init() {
             if (!isIMDbHost()) return;
             if (getPageSurface() !== 'episodes') return;
@@ -10447,7 +10549,7 @@ section[id*="quote" i] .ipc-list-card { padding: 4px 0 !important; margin: 2px 0
     // #########################################################################
 
     reg({
-        key: 'watchlistBatch', name: 'Watchlist batch ID copy', group: 'Utility',
+        key: 'watchlistBatch', name: t('feature_watchlistBatch_name'), group: 'Utility',
         init() {
             if (!/\/user\/[^/]+\/watchlist/i.test(location.pathname)) return;
             if (document.getElementById('enh-watchlist-copy')) return;
@@ -10599,7 +10701,7 @@ section[id*="quote" i] .ipc-list-card { padding: 4px 0 !important; margin: 2px 0
     }
 
     reg({
-        key: 'listRuntimeSummary', name: 'List runtime summary', group: 'Utility',
+        key: 'listRuntimeSummary', name: t('feature_listRuntimeSummary_name'), group: 'Utility',
         init() {
             if (!isListPage()) return;
             if (document.getElementById('enh-runtime-summary')) return;
@@ -10688,7 +10790,7 @@ section[id*="quote" i] .ipc-list-card { padding: 4px 0 !important; margin: 2px 0
        used. This picks one and takes you to it — it never navigates, because the point is
        to help you choose, not to choose for you. */
     reg({
-        key: 'seasonProgress', name: 'Season progress and batch marking', group: 'TV',
+        key: 'seasonProgress', name: t('feature_seasonProgress_name'), group: 'TV',
         init() {
             if (!isIMDbHost()) return;
             if (getPageSurface() !== 'episodes') return;
@@ -10867,7 +10969,7 @@ section[id*="quote" i] .ipc-list-card { padding: 4px 0 !important; margin: 2px 0
     });
 
     reg({
-        key: 'listRoulette', name: 'Pick something to watch', group: 'Utility',
+        key: 'listRoulette', name: t('feature_listRoulette_name'), group: 'Utility',
         init() {
             if (!isListPage()) return;
             if (document.getElementById('enh-roulette')) return;
@@ -10949,7 +11051,7 @@ section[id*="quote" i] .ipc-list-card { padding: 4px 0 !important; margin: 2px 0
     });
 
     reg({
-        key: 'listMultiSearch', name: 'List multi-search', group: 'Utility',
+        key: 'listMultiSearch', name: t('feature_listMultiSearch_name'), group: 'Utility',
         init() {
             if (!isListPage()) return;
             if (document.getElementById('enh-multi-search')) return;
@@ -11197,7 +11299,7 @@ section[id*="quote" i] .ipc-list-card { padding: 4px 0 !important; margin: 2px 0
     }
 
     reg({
-        key: 'castAges', name: 'Person age', group: 'Features',
+        key: 'castAges', name: t('feature_castAges_name'), group: 'Features',
         init() {
             if (!isIMDbHost() || getPageSurface() !== 'name') return;
             const isCurrent = createFeatureGuard(this);
@@ -11219,7 +11321,7 @@ section[id*="quote" i] .ipc-list-card { padding: 4px 0 !important; margin: 2px 0
     });
 
     reg({
-        key: 'quickCopyID', name: 'Quick copy IMDb ID', group: 'Utility',
+        key: 'quickCopyID', name: t('feature_quickCopyID_name'), group: 'Utility',
         init() {
             const isCurrent = createFeatureGuard(this);
             waitForTitleSurface().then(() => {
@@ -11242,7 +11344,7 @@ section[id*="quote" i] .ipc-list-card { padding: 4px 0 !important; margin: 2px 0
     });
 
     reg({
-        key: 'keyboardShortcuts', name: 'Optional keyboard shortcuts', group: 'Utility',
+        key: 'keyboardShortcuts', name: t('feature_keyboardShortcuts_name'), group: 'Utility',
         _h: null,
         init() {
             this._h = (e) => {
