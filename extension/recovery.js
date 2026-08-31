@@ -330,6 +330,9 @@
     const USER_MARKS_MAX = 5000;
     const USER_MARKS_SCAN_LIMIT = USER_MARKS_MAX * 2;
     const USER_MARK_TITLE_LIMIT = 160;
+    const USER_MARK_VIEWINGS_MAX = 100;
+    const USER_MARK_GENRES_MAX = 12;
+    const USER_MARK_GENRE_TEXT_LIMIT = 40;
     /* Bounded like every other stored string, and counted against the same 5,000-record
        ceiling as the marks themselves — a note lives inside its title's mark record. */
     const USER_MARK_NOTE_LIMIT = 500;
@@ -360,6 +363,7 @@
     const URL_TEMPLATE_TEXT_LIMIT = 4096;
     const SETTING_TEXT_LIMIT = 4096;
     const SETTINGS_IMPORT_TEXT_LIMIT = 4 * 1024 * 1024;
+    const CSV_IMPORT_ROW_LIMIT = 10000;
     const SITE_CATEGORY_OPTIONS = [
         { key:'watch', label:'Watch', description:'Find the movie or show to watch.' },
         { key:'reviews', label:'Reviews & ratings', description:'Critics, audience scores, and discussion.' },
@@ -1474,10 +1478,78 @@
        state is a real thing to want — "the one with the twist ending" against a title you
        have not watched — and requiring a state to hold one would silently discard it.
 
-       Versioned so a later field (IE-18/IE-19 want viewing events) arrives as a migration
-       rather than a rewrite of every reader. No such field is invented here: there is
-       nothing to store in it yet. */
-    const USER_MARK_RECORD_VERSION = 1;
+       Version 2 adds bounded viewing events and the metadata used by local statistics.
+       A version-1 Seen mark gets one inferred viewing date from its original timestamp;
+       imported version-2 rows never invent a date when their CSV does not provide one. */
+    const USER_MARK_RECORD_VERSION = 2;
+    function normalizeUserMarkRating(value) {
+        if (value === '' || value === null || value === undefined) return null;
+        const rating = Number(value);
+        return Number.isFinite(rating) && rating >= 0.5 && rating <= 10
+            ? Math.round(rating * 10) / 10
+            : null;
+    }
+    function normalizeUserMarkYear(value) {
+        if (value === '' || value === null || value === undefined) return null;
+        const match = String(value).trim().match(/(?:^|\D)(\d{4})(?:\D|$)/);
+        const year = match ? Number(match[1]) : Number(value);
+        return Number.isSafeInteger(year) && year >= 1874 && year <= new Date().getUTCFullYear() + 5
+            ? year
+            : null;
+    }
+    function normalizeUserMarkRuntime(value) {
+        if (value === '' || value === null || value === undefined) return null;
+        const runtime = Number(value);
+        return Number.isSafeInteger(runtime) && runtime > 0 && runtime <= 24 * 60
+            ? runtime
+            : null;
+    }
+    function normalizeUserMarkGenres(value) {
+        const values = Array.isArray(value) ? value : String(value || '').split(/[,;|]/);
+        const genres = [];
+        const seen = new Set();
+        for (const item of values) {
+            const genre = String(item || '').replace(/[\u0000-\u001f\u007f]/g, '').trim().slice(0, USER_MARK_GENRE_TEXT_LIMIT);
+            const key = genre.toLocaleLowerCase();
+            if (!genre || seen.has(key)) continue;
+            seen.add(key);
+            genres.push(genre);
+            if (genres.length >= USER_MARK_GENRES_MAX) break;
+        }
+        return genres;
+    }
+    function normalizeViewingDate(value) {
+        const date = String(value || '').trim();
+        if (!/^\d{4}-\d{2}-\d{2}$/.test(date)) return '';
+        const parsed = new Date(`${date}T00:00:00.000Z`);
+        if (!Number.isFinite(parsed.getTime()) || parsed.toISOString().slice(0, 10) !== date) return '';
+        return date <= new Date(Date.now() + 86400000).toISOString().slice(0, 10) ? date : '';
+    }
+    function normalizeViewingEvents(value) {
+        if (!Array.isArray(value)) return [];
+        const events = [];
+        const seen = new Set();
+        for (const item of value.slice(-USER_MARK_VIEWINGS_MAX * 2)) {
+            const date = normalizeViewingDate(typeof item === 'string' ? item : item?.date);
+            if (!date) continue;
+            const rating = normalizeUserMarkRating(typeof item === 'object' ? item?.rating : null);
+            const key = `${date}\u0000${rating ?? ''}`;
+            if (seen.has(key)) continue;
+            seen.add(key);
+            events.push({ date, ...(rating !== null ? { rating } : {}) });
+        }
+        return events
+            .sort((a, b) => a.date.localeCompare(b.date))
+            .slice(-USER_MARK_VIEWINGS_MAX);
+    }
+    function mergeViewingEvents(...sources) {
+        return normalizeViewingEvents(sources.flatMap(source => Array.isArray(source) ? source : []));
+    }
+    function viewingDateFromTimestamp(value) {
+        const timestamp = Number(value);
+        if (!Number.isFinite(timestamp) || timestamp <= 0 || timestamp > Date.now() + 60000) return '';
+        return new Date(timestamp).toISOString().slice(0, 10);
+    }
     function normalizeUserMark(record) {
         if (record === 'watched' || record === 'skip') {
             return { v: USER_MARK_RECORD_VERSION, state: record, title: '', ts: 0 };
@@ -1485,14 +1557,31 @@
         if (!record || typeof record !== 'object') return null;
         const state = record.state === 'watched' || record.state === 'skip' ? record.state : '';
         const note = normalizeUserNote(record.note);
-        if (!state && !note) return null;
         const timestamp = Number(record.ts);
+        const ts = Number.isFinite(timestamp) && timestamp >= 0 && timestamp <= Date.now() + 60000 ? timestamp : 0;
+        let viewings = normalizeViewingEvents(record.viewings);
+        if (!viewings.length && state === 'watched' && Number(record.v || 1) < USER_MARK_RECORD_VERSION) {
+            const inferredDate = viewingDateFromTimestamp(ts);
+            if (inferredDate) viewings = [{ date:inferredDate }];
+        }
+        if (!state && !note && !viewings.length) return null;
+        const rating = normalizeUserMarkRating(record.rating);
+        const year = normalizeUserMarkYear(record.year);
+        const genres = normalizeUserMarkGenres(record.genres);
+        const imdbRating = normalizeUserMarkRating(record.imdbRating);
+        const runtime = normalizeUserMarkRuntime(record.runtime);
         return {
             v: USER_MARK_RECORD_VERSION,
             state,
             title: String(record.title || '').trim().slice(0, USER_MARK_TITLE_LIMIT),
-            ts:Number.isFinite(timestamp) && timestamp >= 0 && timestamp <= Date.now() + 60000 ? timestamp : 0,
+            ts,
             ...(note ? { note } : {}),
+            ...(viewings.length ? { viewings } : {}),
+            ...(rating !== null ? { rating } : {}),
+            ...(year !== null ? { year } : {}),
+            ...(genres.length ? { genres } : {}),
+            ...(imdbRating !== null ? { imdbRating } : {}),
+            ...(runtime !== null ? { runtime } : {}),
         };
     }
     /* Control characters are stripped rather than escaped: a note is rendered as text
@@ -1566,18 +1655,23 @@
     function setUserMark(imdbId, state, title = '', notifyFailure = true) {
         if (!/^tt\d+$/.test(imdbId || '')) return false;
         const marks = { ...getUserMarks(true) };
-        const existingNote = normalizeUserNote(marks[imdbId]?.note);
+        const existing = normalizeUserMark(marks[imdbId]) || {};
+        const existingNote = normalizeUserNote(existing.note);
         if (state === 'watched' || state === 'skip') {
+            const timestamp = Date.now();
+            const date = state === 'watched' ? viewingDateFromTimestamp(timestamp) : '';
             marks[imdbId] = {
+                ...existing,
                 state,
-                title: String(title || '').trim().slice(0, USER_MARK_TITLE_LIMIT),
-                ts: Date.now(),
+                title: String(title || existing.title || '').trim().slice(0, USER_MARK_TITLE_LIMIT),
+                ts:timestamp,
+                ...(date ? { viewings:mergeViewingEvents(existing.viewings, [{ date }]) } : {}),
                 // Clearing a Seen/Skip mark must not silently discard a note written
                 // against the same title.
                 ...(existingNote ? { note:existingNote } : {}),
             };
         } else if (existingNote) {
-            marks[imdbId] = { ...marks[imdbId], state:'', ts: Date.now(), note:existingNote };
+            marks[imdbId] = { ...existing, state:'', ts: Date.now(), note:existingNote };
         } else {
             delete marks[imdbId];
         }
@@ -1592,12 +1686,14 @@
         if (!/^tt\d+$/.test(imdbId || '')) return false;
         const marks = { ...getUserMarks(true) };
         const normalized = normalizeUserNote(note);
-        const existing = marks[imdbId];
+        const existing = normalizeUserMark(marks[imdbId]) || {};
         if (!normalized && !existing?.state) {
             delete marks[imdbId];
             return setUserMarks(marks, notifyFailure);
         }
+        const { note:_oldNote, ...existingWithoutNote } = existing;
         marks[imdbId] = {
+            ...existingWithoutNote,
             state: existing?.state || '',
             title: String(title || existing?.title || '').trim().slice(0, USER_MARK_TITLE_LIMIT),
             ts: Date.now(),
@@ -1607,6 +1703,248 @@
     }
     function getUserMarkEntries() {
         return Object.entries(getUserMarks()).sort((a, b) => (b[1].ts || 0) - (a[1].ts || 0));
+    }
+
+    // =========================================================================
+    //  CSV MARK IMPORT
+    // =========================================================================
+    function parseCsvTable(value) {
+        const text = String(value || '').replace(/^\uFEFF/, '');
+        if (!text.trim()) throw new Error('Paste CSV data or choose a CSV file first.');
+        if (text.length > SETTINGS_IMPORT_TEXT_LIMIT) throw new Error('CSV import is too large. Use a file under 4 MB.');
+        const rows = [];
+        let row = [];
+        let field = '';
+        let quoted = false;
+        const pushRow = () => {
+            row.push(field);
+            if (row.some(cell => String(cell).trim())) rows.push(row);
+            row = [];
+            field = '';
+        };
+        for (let index = 0; index < text.length; index += 1) {
+            const character = text[index];
+            if (quoted) {
+                if (character === '"') {
+                    if (text[index + 1] === '"') {
+                        field += '"';
+                        index += 1;
+                    } else {
+                        quoted = false;
+                    }
+                } else {
+                    field += character;
+                }
+                continue;
+            }
+            if (character === '"') {
+                if (field) throw new Error('CSV has a quote in the middle of an unquoted field.');
+                quoted = true;
+            } else if (character === ',') {
+                row.push(field);
+                field = '';
+            } else if (character === '\n' || character === '\r') {
+                if (character === '\r' && text[index + 1] === '\n') index += 1;
+                pushRow();
+            } else {
+                field += character;
+            }
+        }
+        if (quoted) throw new Error('CSV ends inside a quoted field.');
+        if (field || row.length) pushRow();
+        if (!rows.length) throw new Error('CSV does not contain a header row.');
+        return rows;
+    }
+
+    function normalizeCsvHeader(value) {
+        return String(value || '').replace(/^\uFEFF/, '').trim().toLocaleLowerCase().replace(/[^a-z0-9]/g, '');
+    }
+    function findCsvColumn(headers, names) {
+        const wanted = new Set(names);
+        return headers.findIndex(header => wanted.has(header));
+    }
+    function readCsvCell(row, index) {
+        return index >= 0 ? String(row[index] ?? '').trim() : '';
+    }
+    function normalizeCsvIMDbId(value) {
+        const raw = String(value || '').trim();
+        const explicit = raw.match(/(?:^|\/)(tt\d+)(?:\/|$|[?#])/i);
+        if (explicit) return explicit[1].toLocaleLowerCase();
+        if (/^tt\d+$/i.test(raw)) return raw.toLocaleLowerCase();
+        if (/^\d+$/.test(raw)) return `tt${raw.padStart(7, '0')}`;
+        return '';
+    }
+    function normalizeCsvLookupTitle(value) {
+        return String(value || '')
+            .normalize('NFKD')
+            .replace(/[\u0300-\u036f]/g, '')
+            .toLocaleLowerCase()
+            .replace(/[^a-z0-9]+/g, ' ')
+            .trim()
+            .replace(/\s+/g, ' ');
+    }
+    function buildStoredTitleResolver(source) {
+        const byTitle = new Map();
+        const byTitleYear = new Map();
+        const add = (map, key, imdbId) => {
+            if (!key) return;
+            if (!map.has(key)) map.set(key, imdbId);
+            else if (map.get(key) !== imdbId) map.set(key, '');
+        };
+        normalizeUserMarkEntries(source || {}).forEach(([imdbId, mark]) => {
+            const title = normalizeCsvLookupTitle(mark.title);
+            if (!title) return;
+            add(byTitle, title, imdbId);
+            if (mark.year) add(byTitleYear, `${title}\u0000${mark.year}`, imdbId);
+        });
+        return {
+            resolve(titleValue, yearValue) {
+                const title = normalizeCsvLookupTitle(titleValue);
+                if (!title) return '';
+                const year = normalizeUserMarkYear(yearValue);
+                return year !== null
+                    ? byTitleYear.get(`${title}\u0000${year}`) || ''
+                    : byTitle.get(title) || '';
+            },
+        };
+    }
+    function describeCsvColumns(headerRow) {
+        const headers = headerRow.map(normalizeCsvHeader);
+        let rating = null;
+        headers.forEach((header, index) => {
+            // Letterboxd documents that when both appear, the column appearing second
+            // wins. Assignment in header order preserves that contract.
+            if (header === 'yourrating' || header === 'rating10') rating = { index, scale:'ten' };
+            else if (header === 'rating') rating = { index, scale:'auto' };
+        });
+        const constIndex = findCsvColumn(headers, ['const']);
+        const imdbIdIndex = findCsvColumn(headers, ['imdbid']);
+        return {
+            source:constIndex >= 0 ? 'IMDb' : imdbIdIndex >= 0 ? 'Letterboxd' : 'CSV',
+            imdbId:constIndex >= 0 ? constIndex : imdbIdIndex,
+            title:findCsvColumn(headers, ['title', 'name']),
+            originalTitle:findCsvColumn(headers, ['originaltitle']),
+            year:findCsvColumn(headers, ['year', 'releaseyear']),
+            rating,
+            date:findCsvColumn(headers, ['daterated', 'watcheddate', 'datewatched', 'watchedon', 'date']),
+            genres:findCsvColumn(headers, ['genres', 'genre']),
+            imdbRating:findCsvColumn(headers, ['imdbrating']),
+            runtime:findCsvColumn(headers, ['runtimemins', 'runtimeminutes', 'runtime']),
+            state:findCsvColumn(headers, ['state', 'status']),
+        };
+    }
+    function normalizeCsvRating(value, scale) {
+        const raw = String(value || '').trim();
+        if (!raw) return null;
+        const numeric = Number(raw);
+        if (!Number.isFinite(numeric)) return null;
+        return normalizeUserMarkRating(scale === 'auto' && numeric <= 5 ? numeric * 2 : numeric);
+    }
+    function normalizeCsvRuntime(value) {
+        const raw = String(value || '').trim();
+        if (!raw) return null;
+        const match = raw.match(/\d+/);
+        return normalizeUserMarkRuntime(match ? Number(match[0]) : raw);
+    }
+    function prepareCsvMarkImport(value, currentMarks = getUserMarks(true)) {
+        const rows = parseCsvTable(value);
+        const columns = describeCsvColumns(rows[0]);
+        if (columns.imdbId < 0 && columns.title < 0 && columns.originalTitle < 0) {
+            throw new Error('CSV needs a Const or imdbID column, or a Title column that can match an existing local title.');
+        }
+        const existing = Object.fromEntries(normalizeUserMarkEntries(currentMarks || {}));
+        const merged = { ...existing };
+        const resolver = buildStoredTitleResolver(existing);
+        const dataRows = rows.slice(1, CSV_IMPORT_ROW_LIMIT + 1);
+        let skippedRows = Math.max(0, rows.length - 1 - dataRows.length);
+        let importedRows = 0;
+        let resolvedRows = 0;
+        const touched = new Set();
+        const importedAt = Date.now();
+
+        dataRows.forEach(row => {
+            const title = readCsvCell(row, columns.title) || readCsvCell(row, columns.originalTitle);
+            const rawYear = readCsvCell(row, columns.year);
+            const year = normalizeUserMarkYear(rawYear);
+            const rawDate = readCsvCell(row, columns.date);
+            const date = normalizeViewingDate(rawDate);
+            const rawRating = columns.rating ? readCsvCell(row, columns.rating.index) : '';
+            const rating = columns.rating ? normalizeCsvRating(rawRating, columns.rating.scale) : null;
+            const rawImdbRating = readCsvCell(row, columns.imdbRating);
+            const imdbRating = normalizeUserMarkRating(rawImdbRating);
+            const rawRuntime = readCsvCell(row, columns.runtime);
+            const runtime = normalizeCsvRuntime(rawRuntime);
+            const genres = normalizeUserMarkGenres(readCsvCell(row, columns.genres));
+            if ((rawYear && year === null) || (rawDate && !date) || (rawRating && rating === null)
+                || (rawImdbRating && imdbRating === null) || (rawRuntime && runtime === null)) {
+                skippedRows += 1;
+                return;
+            }
+
+            let imdbId = normalizeCsvIMDbId(readCsvCell(row, columns.imdbId));
+            if (!imdbId && title) {
+                imdbId = resolver.resolve(title, year);
+                if (imdbId) resolvedRows += 1;
+            }
+            if (!imdbId) {
+                skippedRows += 1;
+                return;
+            }
+
+            const previous = normalizeUserMark(merged[imdbId]) || {
+                v:USER_MARK_RECORD_VERSION, state:'', title:'', ts:0,
+            };
+            const rawState = readCsvCell(row, columns.state).toLocaleLowerCase();
+            const state = rawState === 'skip' || rawState === 'skipped' ? 'skip' : 'watched';
+            const event = state === 'watched' && date
+                ? [{ date, ...(rating !== null ? { rating } : {}) }]
+                : [];
+            const viewingTimestamp = date ? Date.parse(`${date}T12:00:00.000Z`) : importedAt;
+            merged[imdbId] = {
+                ...previous,
+                v:USER_MARK_RECORD_VERSION,
+                state,
+                title:String(title || previous.title || '').trim().slice(0, USER_MARK_TITLE_LIMIT),
+                ts:Math.max(Number(previous.ts) || 0, viewingTimestamp),
+                ...(event.length || previous.viewings?.length
+                    ? { viewings:mergeViewingEvents(previous.viewings, event) }
+                    : {}),
+                ...(rating !== null ? { rating } : {}),
+                ...(year !== null ? { year } : {}),
+                ...(genres.length || previous.genres?.length
+                    ? { genres:normalizeUserMarkGenres([...(previous.genres || []), ...genres]) }
+                    : {}),
+                ...(imdbRating !== null ? { imdbRating } : {}),
+                ...(runtime !== null ? { runtime } : {}),
+            };
+            touched.add(imdbId);
+            importedRows += 1;
+        });
+
+        const marks = Object.fromEntries(normalizeUserMarkEntries(merged));
+        const importedTitles = [...touched].filter(imdbId => marks[imdbId]).length;
+        return {
+            source:columns.source,
+            totalRows:rows.length - 1,
+            importedRows,
+            importedTitles,
+            resolvedRows,
+            skippedRows,
+            droppedTitles:touched.size - importedTitles,
+            marks,
+        };
+    }
+    function describeCsvMarkImport(result) {
+        if (!result?.importedRows) {
+            return `No importable rows found. ${result?.skippedRows || 0} ${result?.skippedRows === 1 ? 'row was' : 'rows were'} skipped.`;
+        }
+        const parts = [
+            `${result.source}: ${result.importedRows} ${result.importedRows === 1 ? 'row' : 'rows'} across ${result.importedTitles} ${result.importedTitles === 1 ? 'title' : 'titles'}`,
+        ];
+        if (result.resolvedRows) parts.push(`${result.resolvedRows} matched to titles already stored here`);
+        if (result.skippedRows) parts.push(`${result.skippedRows} skipped`);
+        if (result.droppedTitles) parts.push(`${result.droppedTitles} over the ${USER_MARKS_MAX}-title limit`);
+        return `${parts.join('; ')}. Nothing has been changed yet.`;
     }
     function normalizeSectionCollapseState(value) {
         if (!value || Array.isArray(value) || typeof value !== 'object') return {};
@@ -9062,13 +9400,18 @@ section[id*="quote" i] .ipc-list-card { padding: 4px 0 !important; margin: 2px 0
                 if (!rows.length) return;
                 const before = getUserMarks(true);
                 const marks = { ...before };
+                const batchTimestamp = Date.now();
+                const batchDate = viewingDateFromTimestamp(batchTimestamp);
                 rows.forEach(row => {
                     if (state === 'watched') {
+                        const previous = normalizeUserMark(marks[row.id]) || {};
                         marks[row.id] = {
+                            ...previous,
                             state:'watched',
-                            title:row.label || marks[row.id]?.title || row.id,
-                            ts:Date.now(),
-                            ...(normalizeUserNote(marks[row.id]?.note) ? { note:normalizeUserNote(marks[row.id].note) } : {}),
+                            title:row.label || previous.title || row.id,
+                            ts:batchTimestamp,
+                            ...(batchDate ? { viewings:mergeViewingEvents(previous.viewings, [{ date:batchDate }]) } : {}),
+                            ...(normalizeUserNote(previous.note) ? { note:normalizeUserNote(previous.note) } : {}),
                         };
                     } else if (normalizeUserNote(marks[row.id]?.note)) {
                         // Clearing the season must not take a note with it.
@@ -10438,6 +10781,12 @@ section[data-testid="hero-parent"].enh-editorial-native-hidden { display: none !
 }
 .enh-import-textarea:focus { border-color: ${t.accentBorder}; box-shadow: 0 0 0 2px ${t.accentMuted}; }
 .enh-import-actions { display: flex; justify-content: flex-end; gap: 8px; margin-top: 10px; }
+.enh-csv-file { width: 100%; color: ${t.tx2}; font: 500 11px/1.4 -apple-system, sans-serif; }
+.enh-csv-file::file-selector-button {
+    min-height: 30px; margin-right: 8px; padding: 5px 10px; border-radius: 7px;
+    border: 1px solid ${t.bd1}; background: ${t.sf2}; color: ${t.tx1}; cursor: pointer;
+}
+.enh-csv-preview { min-height: 34px; margin-top: 8px; color: ${t.tx2}; font-size: 11px; line-height: 1.45; }
 
 /* ════ Site Editors ════ */
 .enh-sites-grid { display: grid; grid-template-columns: repeat(2, minmax(0, 1fr)); gap: 12px; }
@@ -12253,6 +12602,88 @@ section[data-testid="hero-parent"].enh-editorial-native-hidden { display: none !
                 makeEl('button', { type:'button', className:'enh-settings-footer-btn', id:'enh-reset-cancel' }, 'Cancel')
             )
         );
+        let pendingCsvImport = null;
+        const csvTextarea = makeEl('textarea', {
+            id:'enh-csv-textarea', className:'enh-import-textarea', spellcheck:'false',
+            maxlength:String(SETTINGS_IMPORT_TEXT_LIMIT),
+            placeholder:'Const,Your Rating,Date Rated,Title\ntt0133093,9,2026-08-31,The Matrix',
+        });
+        const csvFile = makeEl('input', {
+            type:'file', id:'enh-csv-file', className:'enh-csv-file', accept:'.csv,text/csv',
+            'aria-label':'Choose an IMDb or Letterboxd CSV file',
+        });
+        const csvPreview = makeEl('div', {
+            className:'enh-csv-preview', id:'enh-csv-preview', role:'status', 'aria-live':'polite',
+        }, 'Paste CSV data or choose a file, then preview it.');
+        const csvApply = makeEl('button', {
+            type:'button', className:'enh-settings-footer-btn', id:'enh-csv-apply', disabled:'disabled',
+        }, 'Import preview');
+        const resetCsvPreview = () => {
+            pendingCsvImport = null;
+            csvApply.disabled = true;
+            csvPreview.textContent = 'Preview required. Nothing has been changed.';
+        };
+        const previewCsv = () => {
+            try {
+                pendingCsvImport = prepareCsvMarkImport(csvTextarea.value, getUserMarks(true));
+                csvPreview.textContent = describeCsvMarkImport(pendingCsvImport);
+                csvApply.disabled = !pendingCsvImport.importedRows;
+            } catch (error) {
+                pendingCsvImport = null;
+                csvApply.disabled = true;
+                csvPreview.textContent = error.message || 'CSV could not be read.';
+            }
+        };
+        csvTextarea.addEventListener('input', resetCsvPreview);
+        csvFile.addEventListener('change', async () => {
+            const file = csvFile.files?.[0];
+            if (!file) return;
+            if (file.size > SETTINGS_IMPORT_TEXT_LIMIT) {
+                resetCsvPreview();
+                csvPreview.textContent = 'CSV import is too large. Choose a file under 4 MB.';
+                return;
+            }
+            try {
+                csvTextarea.value = await file.text();
+                previewCsv();
+            } catch {
+                resetCsvPreview();
+                csvPreview.textContent = 'The selected file could not be read.';
+            }
+        });
+        const csvPreviewButton = makeEl('button', {
+            type:'button', className:'enh-settings-footer-btn', id:'enh-csv-preview-btn', onClick:previewCsv,
+        }, 'Preview CSV');
+        csvApply.addEventListener('click', () => {
+            if (!pendingCsvImport) { showToast('Preview the CSV before importing.'); return; }
+            csvApply.disabled = true;
+            try {
+                // Re-merge against storage at the moment of the write. A preview left
+                // open in one tab must not erase marks saved from another tab meanwhile.
+                const prepared = prepareCsvMarkImport(csvTextarea.value, getUserMarks(true));
+                if (!prepared.importedRows) throw new Error('No importable rows were found. Nothing was changed.');
+                applySettingsImport([{ key:'userMarks', value:prepared.marks }]);
+                document.dispatchEvent(new CustomEvent('imdb-enhanced:marks-updated'));
+                const skipped = prepared.skippedRows ? ` ${prepared.skippedRows} rows were skipped.` : '';
+                showToast(`Imported ${prepared.importedTitles} local titles from ${prepared.importedRows} CSV rows.${skipped} Reloading...`, 5000);
+                setTimeout(() => location.reload(), 1000);
+            } catch (error) {
+                csvApply.disabled = false;
+                showToast(error.message || 'CSV import failed. Previous marks were restored.', 5000);
+            }
+        });
+        const csvImportCard = makeCard('Import viewing history',
+            'IMDb and Letterboxd exports become local Seen marks. This does not change IMDb Watched status or any IMDb list. IMDb Labs account import is a separate feature.');
+        csvImportCard.append(
+            makeEl('div', { className:'enh-settings-card-description' },
+                'Rows should carry Const or imdbID. A Title and Year row can also match one unambiguous title already stored on this device. Headers are read by name, so IMDb’s Original Title column does not shift the import.'),
+            makeEl('label', { className:'enh-import-label', for:'enh-csv-file', style:{ marginTop:'10px' } }, 'Choose CSV file'),
+            csvFile,
+            makeEl('label', { className:'enh-import-label', for:'enh-csv-textarea', style:{ marginTop:'10px' } }, 'Or paste CSV data'),
+            csvTextarea,
+            csvPreview,
+            makeEl('div', { className:'enh-import-actions' }, csvPreviewButton, csvApply)
+        );
         const backupCard = makeCard('Backup & restore', 'A backup covers preferences, sites, and title marks. Integration API keys and tokens are left out unless you choose the encrypted export.');
         backupCard.appendChild(makeEl('div', { className:'enh-data-actions' },
             makeEl('button', { type:'button', className:'enh-settings-footer-btn', id:'enh-export-btn', title:'Copy settings to the clipboard without integration credentials' }, 'Export settings'),
@@ -12335,7 +12766,7 @@ section[data-testid="hero-parent"].enh-editorial-native-hidden { display: none !
         );
         dataPage.appendChild(makeEl('div', { className:'enh-settings-grid' },
             createMarksPanel(registerCleanup),
-            makeEl('div', { className:'enh-settings-stack' }, backupCard, cacheCard, journalCard, diagnosticsCard)
+            makeEl('div', { className:'enh-settings-stack' }, csvImportCard, backupCard, cacheCard, journalCard, diagnosticsCard)
         ));
         dataPage.appendChild(makeEl('div', { className:'enh-settings-callout', style:{ marginTop:'12px' } },
             makeEl('strong', {}, 'Local only'),

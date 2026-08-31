@@ -35,6 +35,8 @@ const instrumented = userscript.replace(/\}\)\(\);\s*$/, `globalThis.__imdbEnhan
     summarizeCollectionRuntime,
     describeCollectionRuntime,
     getPageSurface,
+    createSettingsPanel,
+    destroySettingsChrome,
     initFeature: key => {
         const feature = features.find(candidate => candidate.key === key);
         if (!feature) throw new Error('Unknown feature: ' + key);
@@ -146,6 +148,17 @@ await runFixture('title', async (window, hooks) => {
     assert.match(copy.textContent, /tt0133093/, 'quick-copy init must render the current title id');
     const note = await waitForSelector(window, '#enh-title-note-input');
     assert.match(note.getAttribute('aria-label') || '', /The Matrix/, 'private-note init must name the title');
+
+    hooks.createSettingsPanel();
+    const csvTextarea = requireSelector(window.document, '#enh-csv-textarea');
+    csvTextarea.value = 'Const,Your Rating,Date Rated,Title\ntt0133093,9,2026-01-02,The Matrix';
+    csvTextarea.dispatchEvent(new window.Event('input', { bubbles:true }));
+    requireSelector(window.document, '#enh-csv-preview-btn').click();
+    assert.match(requireSelector(window.document, '#enh-csv-preview').textContent, /1 row across 1 title/,
+        'CSV preview must execute in the rendered Data page');
+    assert.equal(requireSelector(window.document, '#enh-csv-apply').disabled, false,
+        'a valid CSV preview must enable the transactional import action');
+    hooks.destroySettingsChrome();
 
     ['titleNotes', 'quickCopyID', 'collapsibleSections'].forEach(hooks.stopFeature);
 });

@@ -20,6 +20,10 @@
 
 ### Added
 
+- The Data page can now paste or upload IMDb and Letterboxd CSV exports into local Seen marks. It matches headers by name, previews valid and skipped rows before writing, handles repeated viewing dates, and merges through the existing rollback transaction. Const and imdbID map directly; Title and Year can resolve against an unambiguous title already stored on the device. The screen states plainly that this does not change IMDb Watched status or lists.
+
+- Local mark records now use a versioned viewing-history shape with bounded dates, personal ratings, year, genres, IMDb rating, and runtime. Existing Seen timestamps migrate to one viewing event, while note and mark edits preserve imported metadata.
+
 - Offline DOM fixtures now execute the title, ratings, episodes, person, and chart extractors under happy-dom. The title fixture also starts and stops three real page features. Selector failures name the broken selector and retain the rendered DOM for inspection, while clean checkouts without installed development packages still skip this layer safely.
 
 - The streaming panel answers the question properly now. It tells renting and buying apart from streaming instead of running them together, so a film you can rent but not stream no longer reads as unavailable. It follows the region you set rather than always asking for the United States, on both sources. And where a title is not carried at all it says "Not streamable in GB" rather than rendering nothing, which looked like a fault.

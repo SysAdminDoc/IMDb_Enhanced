@@ -34,6 +34,8 @@ Third-party lookups omit destination cookies. Responses are rendered as text, ou
 
 **Private Notes** - A note field on title pages, up to 500 characters, saved on that device as you type and listed with your marks. A note can exist without marking the title, marking or unmarking never disturbs it, and notes travel in backups. They are excluded from the diagnostics report on purpose. They require no login and deliberately do not change or sync IMDb's account-based Watched status.
 
+**Viewing History Import.** Paste or upload an IMDb or Letterboxd CSV, inspect a count before writing anything, then merge its ratings and viewing dates into local Seen marks. Headers are matched by name, including IMDb's newer Original Title column. Rows with Const or imdbID map directly; Title and Year can match a title already stored on that device. Invalid or unresolved rows are counted and skipped. This local import never changes IMDb Watched status or an IMDb list.
+
 **TV Tools** - Highest-rated episode highlighting and TV-specific lookup shortcuts. Synopsis blur is opt-in and off by default.
 
 **List Page Tools** - Batch IMDb ID copy plus a popup-safe search queue on watchlist, custom list, and chart pages, including IMDb's locale-prefixed desktop URLs. Prepare up to 20 real new-tab links, open them one gesture at a time, or copy the full link set. A runtime summary totals how long the listed titles would take to watch, recounts as more rows load, and names how many rows had no runtime listed rather than reporting a smaller total as if it were complete.
@@ -113,7 +115,7 @@ Click the gear icon on any covered IMDb page to open the six-section settings wo
 
 ![IMDb Enhanced Experience settings](design/mockups/14-redesign-experience-1536x1024.png)
 
-The redesigned visual reference set covers every menu page: [Experience](design/mockups/14-redesign-experience-1536x1024.png), [Ratings](design/mockups/15-redesign-ratings-1536x1024.png), [Tools](design/mockups/16-redesign-tools-1536x1024.png), [Sites](design/mockups/17-redesign-sites-1536x1024.png), [Integrations](design/mockups/18-redesign-integrations-1536x1024.png), and [Data](design/mockups/19-redesign-data-1536x1024.png).
+The redesigned visual reference set covers every menu page: [Experience](design/mockups/14-redesign-experience-1536x1024.png), [Ratings](design/mockups/15-redesign-ratings-1536x1024.png), [Tools](design/mockups/16-redesign-tools-1536x1024.png), [Sites](design/mockups/17-redesign-sites-1536x1024.png), [Integrations](design/mockups/18-redesign-integrations-1536x1024.png), and [Data](design/mockups/built-data-1440x900.png).
 
 **Experience** - Theme, cleanup, appearance, and layout controls. Theme choices include a system-following mode.
 
@@ -141,7 +143,7 @@ The redesigned visual reference set covers every menu page: [Experience](design/
 
 **URL Templates** - Use `{{TITLE}}`, `{{TITLE_DASH}}`, `{{TITLE_SLUG}}`, `{{IMDB_ID}}`, `{{IMDB_NUM}}`, `{{TRAKT_TYPE}}`, `{{YEAR}}` in custom site URLs.
 
-**Import/Export** - JSON backup (including remembered section state) and validated, transactional restore up to 4 MB. Invalid or unknown fields are skipped; a storage failure restores the prior values before reporting the error.
+**Import/Export.** JSON backup and validated, transactional restore up to 4 MB, including remembered section state. The Data page also accepts IMDb and Letterboxd CSV history exports. Both import paths validate and preview before writing; a storage failure restores the prior values before reporting the error.
 
 Integration API keys and tokens are left out of an ordinary backup, which names what it omitted, and restoring one keeps whatever credentials that device already has. **Export with credentials** is the separate action that includes them: it asks for a passphrase, derives a key with PBKDF2-SHA256 at 310,000 iterations, and encrypts the backup with AES-GCM under a fresh salt and nonce. Importing one asks for the passphrase as soon as it recognizes the file. A wrong passphrase or a modified file is refused before anything is written, and nothing can recover the contents if you lose the passphrase.
 

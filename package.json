@@ -10,6 +10,7 @@
     "build:extension": "node scripts/build-extension.js",
     "check:destinations": "node scripts/check-destinations.js",
     "capture:fixtures": "node scripts/capture-fixtures.js",
+    "capture:screenshots": "node scripts/capture-settings-screenshots.js",
     "test:dom": "node tests/dom-fixtures.mjs",
     "build:firefox": "node scripts/build-extension.js --firefox",
     "test:extension": "node scripts/build-extension.js --check && node scripts/build-extension.js --firefox && node tests/extension.js && node tests/background.js && node tests/gm-contract.js",

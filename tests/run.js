@@ -165,7 +165,9 @@ function loadScriptTestHooks({ withoutDeleteValue = false, withheldCredentials =
         getUserMark,
         getUserNote,
         setUserNote,
+        normalizeUserMark,
         normalizeUserNote,
+        USER_MARK_RECORD_VERSION,
         USER_MARK_NOTE_LIMIT,
         readPersonBirthDate,
         isPersonDeceased,
@@ -174,6 +176,10 @@ function loadScriptTestHooks({ withoutDeleteValue = false, withheldCredentials =
         collectNativeWatchedTitles,
         normalizeUserMarkEntries,
         USER_MARKS_SCAN_LIMIT,
+        parseCsvTable,
+        prepareCsvMarkImport,
+        describeCsvMarkImport,
+        CSV_IMPORT_ROW_LIMIT,
         getSectionCollapseState,
         setSectionCollapsed,
         getDefaultSettingsEntries,
@@ -1346,6 +1352,142 @@ test('local marks are cached and bounded while DOM rescans stay mutation-scoped'
     );
     assert(script.includes('mutation.addedNodes.forEach'), 'watched-mark observer should scan added subtrees');
     assert(script.includes('this._pendingScanRoots.size > 50'), 'large mutation batches should retain a bounded full-scan fallback');
+});
+
+test('versioned marks retain bounded viewing history and statistics metadata', () => {
+    const hooks = loadScriptTestHooks();
+    const legacyTimestamp = Date.UTC(2024, 1, 3, 12);
+    const migrated = JSON.parse(JSON.stringify(hooks.normalizeUserMark({
+        v:1, state:'watched', title:'Legacy title', ts:legacyTimestamp,
+    })));
+    assert.strictEqual(hooks.USER_MARK_RECORD_VERSION, 2);
+    assert.strictEqual(migrated.v, 2);
+    assert.deepStrictEqual(migrated.viewings, [{ date:'2024-02-03' }],
+        'a legacy Seen timestamp should become one explicit viewing event');
+
+    const rich = JSON.parse(JSON.stringify(hooks.normalizeUserMark({
+        v:2,
+        state:'watched',
+        title:'The Matrix',
+        ts:Date.UTC(2026, 7, 31, 12),
+        viewings:[
+            { date:'2025-01-02', rating:8.5 },
+            { date:'2025-01-02', rating:8.5 },
+            { date:'2026-02-30', rating:9 },
+        ],
+        rating:9,
+        year:1999,
+        genres:['Action', 'Sci-Fi', 'action'],
+        imdbRating:8.7,
+        runtime:136,
+    })));
+    assert.deepStrictEqual(rich.viewings, [{ date:'2025-01-02', rating:8.5 }]);
+    assert.deepStrictEqual(rich.genres, ['Action', 'Sci-Fi']);
+    assert.strictEqual(rich.rating, 9);
+    assert.strictEqual(rich.year, 1999);
+    assert.strictEqual(rich.imdbRating, 8.7);
+    assert.strictEqual(rich.runtime, 136);
+
+    hooks.seedStoredSetting('userMarks', { tt0133093:rich });
+    assert(hooks.setUserMark('tt0133093', 'watched', 'The Matrix'));
+    let stored = hooks.getStoredSetting('userMarks').tt0133093;
+    assert.strictEqual(stored.year, 1999, 'changing a mark must preserve imported year metadata');
+    assert.deepStrictEqual(Array.from(stored.genres), ['Action', 'Sci-Fi'], 'changing a mark must preserve imported genres');
+    assert(stored.viewings.some(viewing => viewing.date === '2025-01-02'), 'changing a mark must preserve old viewings');
+    assert(hooks.setUserNote('tt0133093', 'Keep this'));
+    stored = hooks.getStoredSetting('userMarks').tt0133093;
+    assert.strictEqual(stored.runtime, 136, 'editing a note must preserve imported runtime metadata');
+    assert.strictEqual(stored.note, 'Keep this');
+});
+
+test('CSV import maps IMDb and Letterboxd headers without relying on column positions', () => {
+    const hooks = loadScriptTestHooks();
+    const imdb = hooks.prepareCsvMarkImport([
+        '\uFEFFConst,Your Rating,Date Rated,Title,Original Title,Title Type,IMDb Rating,Runtime (mins),Year,Genres',
+        'tt0133093,9,2026-01-02,"The Matrix, Reloaded",The Matrix Reloaded,Movie,8.7,138,2003,"Action, Sci-Fi"',
+    ].join('\r\n'), {});
+    assert.strictEqual(imdb.source, 'IMDb');
+    assert.strictEqual(imdb.importedRows, 1);
+    assert.strictEqual(imdb.importedTitles, 1);
+    const imdbMark = JSON.parse(JSON.stringify(imdb.marks.tt0133093));
+    assert.strictEqual(imdbMark.title, 'The Matrix, Reloaded');
+    assert.strictEqual(imdbMark.rating, 9);
+    assert.strictEqual(imdbMark.year, 2003);
+    assert.strictEqual(imdbMark.imdbRating, 8.7);
+    assert.strictEqual(imdbMark.runtime, 138);
+    assert.deepStrictEqual(imdbMark.genres, ['Action', 'Sci-Fi']);
+    assert.deepStrictEqual(imdbMark.viewings, [{ date:'2026-01-02', rating:9 }]);
+
+    const letterboxd = hooks.prepareCsvMarkImport([
+        'imdbID,Title,Year,Rating,Rating10,WatchedDate',
+        'tt0078748,Alien,1979,4.5,8,2025-03-01',
+        'tt0078748,Alien,1979,4,7,2026-03-02',
+    ].join('\n'), {});
+    const letterboxdMark = JSON.parse(JSON.stringify(letterboxd.marks.tt0078748));
+    assert.strictEqual(letterboxd.source, 'Letterboxd');
+    assert.strictEqual(letterboxd.importedRows, 2);
+    assert.strictEqual(letterboxd.importedTitles, 1);
+    assert.deepStrictEqual(letterboxdMark.viewings, [
+        { date:'2025-03-01', rating:8 },
+        { date:'2026-03-02', rating:7 },
+    ], 'repeated rows for one title should retain separate viewing dates');
+    assert.strictEqual(letterboxdMark.rating, 7, 'the later Rating10 column should win');
+
+    const reversed = hooks.prepareCsvMarkImport([
+        'imdbID,Title,Year,Rating10,Rating,WatchedDate',
+        'tt0083658,Blade Runner,1982,8,4.5,2025-04-03',
+    ].join('\n'), {});
+    assert.strictEqual(reversed.marks.tt0083658.rating, 9,
+        'the later Rating column should win and convert the five-star value');
+});
+
+test('generic CSV rows resolve only against unambiguous stored title identities', () => {
+    const hooks = loadScriptTestHooks();
+    const current = {
+        tt0133093:{ v:2, state:'watched', title:'The Matrix', year:1999, ts:1 },
+        tt0084787:{ v:2, state:'watched', title:'The Thing', year:1982, ts:2 },
+        tt0902272:{ v:2, state:'watched', title:'The Thing', year:2011, ts:3 },
+    };
+    const prepared = hooks.prepareCsvMarkImport([
+        'Title,Year,Rating,WatchedDate',
+        'The Matrix,1999,4.5,2025-05-01',
+        'The Thing,,4,2025-05-02',
+        'Unknown,2020,3,2025-05-03',
+    ].join('\n'), current);
+    assert.strictEqual(prepared.importedRows, 1);
+    assert.strictEqual(prepared.importedTitles, 1);
+    assert.strictEqual(prepared.resolvedRows, 1);
+    assert.strictEqual(prepared.skippedRows, 2);
+    assert.strictEqual(prepared.marks.tt0133093.rating, 9);
+    assert.match(hooks.describeCsvMarkImport(prepared), /1 matched to titles already stored here/);
+    assert.match(hooks.describeCsvMarkImport(prepared), /2 skipped/);
+    assert.throws(
+        () => hooks.parseCsvTable('Const,Title\ntt0133093,"The Matrix'),
+        /quoted field/,
+        'malformed CSV must fail before producing any import entries'
+    );
+});
+
+test('CSV mark writes use the existing rollback transaction', () => {
+    const hooks = loadScriptTestHooks();
+    const original = { tt0078748:{ v:2, state:'skip', title:'Alien', ts:1 } };
+    hooks.seedStoredSetting('userMarks', original);
+    const prepared = hooks.prepareCsvMarkImport([
+        'Const,Your Rating,Date Rated,Title',
+        'tt0133093,9,2026-01-02,The Matrix',
+    ].join('\n'), original);
+    hooks.failSettingWriteAt(1);
+    assert.throws(
+        () => hooks.applySettingsImport([{ key:'userMarks', value:prepared.marks }]),
+        /previous settings were restored/,
+        'a failed CSV write should report transaction recovery'
+    );
+    assert.deepStrictEqual(hooks.getStoredSetting('userMarks'), original,
+        'a failed CSV write must leave the previous mark store intact');
+    assert(script.includes("id:'enh-csv-file'"), 'the Data page should accept a CSV file');
+    assert(script.includes("id:'enh-csv-preview-btn'"), 'CSV import must require a preview before apply');
+    assert(script.includes('This does not change IMDb Watched status'),
+        'the UI must distinguish local import from IMDb Labs account import');
 });
 
 test('lookup caches remain bounded and storage failures do not hide fetched results', () => {
@@ -3693,7 +3835,7 @@ test('a title can carry a private note that survives backup and never leaks', ()
 
     // Records are versioned so a later field is a migration, not a rewrite.
     const record = hooks.getUserMarks(true).tt0111161;
-    assert.strictEqual(record.v, 1, 'mark records must carry their version');
+    assert.strictEqual(record.v, hooks.USER_MARK_RECORD_VERSION, 'mark records must carry their version');
 
     // Round-trips through backup and restore with everything else.
     const backup = hooks.getExportSettings();
