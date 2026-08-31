@@ -27,6 +27,7 @@ const instrumented = userscript.replace(/\}\)\(\);\s*$/, `globalThis.__imdbEnhan
     getTitleYear,
     getMediaType,
     getIMDbRating,
+    getUserMarks,
     getHistogramData,
     readLoadedEpisodes,
     readPersonBirthDate,
@@ -37,6 +38,7 @@ const instrumented = userscript.replace(/\}\)\(\);\s*$/, `globalThis.__imdbEnhan
     getPageSurface,
     createSettingsPanel,
     destroySettingsChrome,
+    summarizeLocalStats,
     initFeature: key => {
         const feature = features.find(candidate => candidate.key === key);
         if (!feature) throw new Error('Unknown feature: ' + key);
@@ -143,13 +145,28 @@ await runFixture('title', async (window, hooks) => {
     assert.equal(hooks.initFeature('collapsibleSections'), true);
     assert.equal(hooks.initFeature('quickCopyID'), true);
     assert.equal(hooks.initFeature('titleNotes'), true);
+    assert.equal(hooks.initFeature('watchedMarking'), true);
     requireSelector(window.document, 'section[data-testid="title-cast"] .enh-collapse-btn');
     const copy = await waitForSelector(window, '#enh-copy-id');
     assert.match(copy.textContent, /tt0133093/, 'quick-copy init must render the current title id');
     const note = await waitForSelector(window, '#enh-title-note-input');
     assert.match(note.getAttribute('aria-label') || '', /The Matrix/, 'private-note init must name the title');
+    requireSelector(window.document, '[data-testid="hero-media__poster"] .enh-mark-btn--watched').click();
+    const mark = hooks.getUserMarks().tt0133093;
+    assert.equal(mark.year, 1999);
+    assert.equal(mark.imdbRating, 8.7);
+    assert.equal(mark.runtime, 136);
+    assert.deepEqual(Array.from(mark.genres), ['Action', 'Sci-Fi']);
+    const stats = hooks.summarizeLocalStats(hooks.getUserMarks());
+    assert.equal(stats.seen, 1);
+    assert.equal(stats.viewings, 1);
 
     hooks.createSettingsPanel();
+    requireSelector(window.document, '#enh-local-stats-title');
+    assert.match(requireSelector(window.document, '.enh-stats-card').textContent, /Action/,
+        'the rendered stats view must include metadata captured from the marked title');
+    assert.match(requireSelector(window.document, '.enh-stats-card').textContent, /2:16/,
+        'the rendered stats view must include known runtime');
     const csvTextarea = requireSelector(window.document, '#enh-csv-textarea');
     csvTextarea.value = 'Const,Your Rating,Date Rated,Title\ntt0133093,9,2026-01-02,The Matrix';
     csvTextarea.dispatchEvent(new window.Event('input', { bubbles:true }));
@@ -160,7 +177,7 @@ await runFixture('title', async (window, hooks) => {
         'a valid CSV preview must enable the transactional import action');
     hooks.destroySettingsChrome();
 
-    ['titleNotes', 'quickCopyID', 'collapsibleSections'].forEach(hooks.stopFeature);
+    ['watchedMarking', 'titleNotes', 'quickCopyID', 'collapsibleSections'].forEach(hooks.stopFeature);
 });
 
 await runFixture('title-ratings', async (window, hooks) => {

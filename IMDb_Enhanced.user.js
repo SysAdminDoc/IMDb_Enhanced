@@ -91,6 +91,7 @@
     const USER_MARK_VIEWINGS_MAX = 100;
     const USER_MARK_GENRES_MAX = 12;
     const USER_MARK_GENRE_TEXT_LIMIT = 40;
+    const LOCAL_STATS_GROUP_LIMIT = 8;
     /* Bounded like every other stored string, and counted against the same 5,000-record
        ceiling as the marks themselves — a note lives inside its title's mark record. */
     const USER_MARK_NOTE_LIMIT = 500;
@@ -1308,6 +1309,19 @@
         if (!Number.isFinite(timestamp) || timestamp <= 0 || timestamp > Date.now() + 60000) return '';
         return new Date(timestamp).toISOString().slice(0, 10);
     }
+    function mergeUserMarkMetadata(record, metadata) {
+        const merged = { ...(record || {}) };
+        if (!metadata || typeof metadata !== 'object') return merged;
+        const year = normalizeUserMarkYear(metadata.year);
+        const genres = normalizeUserMarkGenres(metadata.genres);
+        const imdbRating = normalizeUserMarkRating(metadata.imdbRating);
+        const runtime = normalizeUserMarkRuntime(metadata.runtime);
+        if (year !== null) merged.year = year;
+        if (genres.length) merged.genres = normalizeUserMarkGenres([...(merged.genres || []), ...genres]);
+        if (imdbRating !== null) merged.imdbRating = imdbRating;
+        if (runtime !== null) merged.runtime = runtime;
+        return merged;
+    }
     function normalizeUserMark(record) {
         if (record === 'watched' || record === 'skip') {
             return { v: USER_MARK_RECORD_VERSION, state: record, title: '', ts: 0 };
@@ -1410,7 +1424,7 @@
     function getUserMark(imdbId) {
         return getUserMarks()[imdbId]?.state || '';
     }
-    function setUserMark(imdbId, state, title = '', notifyFailure = true) {
+    function setUserMark(imdbId, state, title = '', notifyFailure = true, metadata = null) {
         if (!/^tt\d+$/.test(imdbId || '')) return false;
         const marks = { ...getUserMarks(true) };
         const existing = normalizeUserMark(marks[imdbId]) || {};
@@ -1419,7 +1433,7 @@
             const timestamp = Date.now();
             const date = state === 'watched' ? viewingDateFromTimestamp(timestamp) : '';
             marks[imdbId] = {
-                ...existing,
+                ...mergeUserMarkMetadata(existing, metadata || readCurrentTitleMarkMetadata(imdbId)),
                 state,
                 title: String(title || existing.title || '').trim().slice(0, USER_MARK_TITLE_LIMIT),
                 ts:timestamp,
@@ -1703,6 +1717,84 @@
         if (result.skippedRows) parts.push(`${result.skippedRows} skipped`);
         if (result.droppedTitles) parts.push(`${result.droppedTitles} over the ${USER_MARKS_MAX}-title limit`);
         return `${parts.join('; ')}. Nothing has been changed yet.`;
+    }
+
+    function incrementLocalStat(map, key) {
+        if (!key) return;
+        map.set(key, (map.get(key) || 0) + 1);
+    }
+    function rankLocalStats(map, numeric = false) {
+        return [...map.entries()]
+            .map(([label, count]) => ({ label:String(label), count }))
+            .sort((a, b) => b.count - a.count
+                || (numeric ? Number.parseInt(b.label, 10) - Number.parseInt(a.label, 10) : a.label.localeCompare(b.label)))
+            .slice(0, LOCAL_STATS_GROUP_LIMIT);
+    }
+    function summarizeLocalStats(source) {
+        const entries = normalizeUserMarkEntries(source || {});
+        const years = new Map();
+        const genres = new Map();
+        const decades = new Map();
+        let seen = 0;
+        let skipped = 0;
+        let viewings = 0;
+        let undatedSeen = 0;
+        let rated = 0;
+        let ratingDeltaTotal = 0;
+        let ratingPairs = 0;
+        let runtimeMinutes = 0;
+        let historyTitles = 0;
+        let metadataTitles = 0;
+
+        entries.forEach(([, mark]) => {
+            if (mark.state === 'watched') seen += 1;
+            else if (mark.state === 'skip') skipped += 1;
+            const viewingEvents = normalizeViewingEvents(mark.viewings);
+            viewings += viewingEvents.length;
+            if (mark.state === 'watched' && !viewingEvents.length) undatedSeen += 1;
+            viewingEvents.forEach(event => incrementLocalStat(years, event.date.slice(0, 4)));
+
+            const belongsToHistory = mark.state === 'watched' || viewingEvents.length > 0;
+            if (!belongsToHistory) return;
+            historyTitles += 1;
+            const markGenres = normalizeUserMarkGenres(mark.genres);
+            markGenres.forEach(genre => incrementLocalStat(genres, genre));
+            const releaseYear = normalizeUserMarkYear(mark.year);
+            if (releaseYear !== null) incrementLocalStat(decades, `${Math.floor(releaseYear / 10) * 10}s`);
+            const personal = normalizeUserMarkRating(mark.rating);
+            const imdb = normalizeUserMarkRating(mark.imdbRating);
+            if (personal !== null) rated += 1;
+            if (personal !== null && imdb !== null) {
+                ratingDeltaTotal += personal - imdb;
+                ratingPairs += 1;
+            }
+            const runtime = normalizeUserMarkRuntime(mark.runtime);
+            if (runtime !== null) runtimeMinutes += runtime;
+            if (markGenres.length || releaseYear !== null || imdb !== null || runtime !== null) metadataTitles += 1;
+        });
+
+        const activity = rankLocalStats(years, true);
+        const reviewYear = activity
+            .filter(item => item.count >= 10)
+            .sort((a, b) => Number(b.label) - Number(a.label))[0] || null;
+        return {
+            records:entries.length,
+            markedTitles:seen + skipped,
+            seen,
+            skipped,
+            viewings,
+            undatedSeen,
+            rated,
+            ratingPairs,
+            ratingDelta:ratingPairs ? Math.round((ratingDeltaTotal / ratingPairs) * 100) / 100 : null,
+            runtimeMinutes,
+            historyTitles,
+            metadataTitles,
+            years:activity,
+            topGenres:rankLocalStats(genres),
+            decades:rankLocalStats(decades, true),
+            reviewYear,
+        };
     }
     function normalizeSectionCollapseState(value) {
         if (!value || Array.isArray(value) || typeof value !== 'object') return {};
@@ -2910,6 +3002,26 @@
     function getIMDbRating() {
         const ld = getLDData();
         return ld.aggregateRating?.ratingValue || null;
+    }
+
+    function parseStructuredDurationMinutes(value) {
+        const match = String(value || '').trim().match(/^PT(?:(\d{1,2})H)?(?:(\d{1,3})M)?$/i);
+        if (!match || (!match[1] && !match[2])) return null;
+        return normalizeUserMarkRuntime((Number(match[1] || 0) * 60) + Number(match[2] || 0));
+    }
+    function readCurrentTitleMarkMetadata(imdbId = getIMDbID()) {
+        if (!imdbId || imdbId !== getIMDbID()) return {};
+        const ld = getLDData();
+        const year = normalizeUserMarkYear(getTitleYear());
+        const genres = normalizeUserMarkGenres(ld?.genre);
+        const imdbRating = normalizeUserMarkRating(getIMDbRating());
+        const runtime = parseStructuredDurationMinutes(ld?.duration);
+        return {
+            ...(year !== null ? { year } : {}),
+            ...(genres.length ? { genres } : {}),
+            ...(imdbRating !== null ? { imdbRating } : {}),
+            ...(runtime !== null ? { runtime } : {}),
+        };
     }
 
     // =========================================================================
@@ -7405,7 +7517,13 @@ section[id*="quote" i] .ipc-list-card { padding: 4px 0 !important; margin: 2px 0
                 e.stopImmediatePropagation?.();
                 const action = btn.dataset.enhMarkAction;
                 const state = action === 'clear' || getUserMark(imdbId) === action ? '' : action;
-                if (!setUserMark(imdbId, state, card.dataset.enhMarkTitle || getTitleText())) return;
+                if (!setUserMark(
+                    imdbId,
+                    state,
+                    card.dataset.enhMarkTitle || getTitleText(),
+                    true,
+                    readCardMarkMetadata(card, imdbId)
+                )) return;
                 this._syncAll();
                 showToast(state
                     ? `Saved locally as ${state === 'watched' ? 'Seen' : 'Skip'} — IMDb Watched was not changed`
@@ -7595,6 +7713,24 @@ section[id*="quote" i] .ipc-list-card { padding: 4px 0 !important; margin: 2px 0
         if (!match) return null;
         const value = Number(match[2] === undefined ? match[1] : `${match[1]}.${match[2]}`);
         return Number.isFinite(value) && value > 0 && value <= 10 ? value : null;
+    }
+
+    function readCardMarkMetadata(card, imdbId = '') {
+        if (imdbId && imdbId === getIMDbID()) return readCurrentTitleMarkMetadata(imdbId);
+        const cells = card?.querySelectorAll?.(`${COLLECTION_METADATA_SELECTOR} li, ${COLLECTION_METADATA_SELECTOR} span`) || [];
+        let year = null;
+        let runtime = null;
+        for (const cell of cells) {
+            const text = cell.textContent || '';
+            if (year === null) year = normalizeUserMarkYear(text);
+            if (runtime === null) runtime = normalizeUserMarkRuntime(parseRuntimeMinutes(text));
+        }
+        const imdbRating = normalizeUserMarkRating(readCardRating(card));
+        return {
+            ...(year !== null ? { year } : {}),
+            ...(imdbRating !== null ? { imdbRating } : {}),
+            ...(runtime !== null ? { runtime } : {}),
+        };
     }
 
     function normalizeDimThreshold(value) {
@@ -10484,6 +10620,28 @@ section[data-testid="hero-parent"].enh-editorial-native-hidden { display: none !
 .enh-data-summary-item { padding: 14px; border: 1px solid ${t.bd1}; border-radius: 10px; background: ${t.sf1}; }
 .enh-data-summary-label { color: ${t.tx0}; font-size: 13px; font-weight: 700; }
 .enh-data-summary-value { margin-top: 4px; color: ${t.tx2}; font-size: 11px; }
+.enh-stats-card { margin-bottom: 12px; }
+.enh-stats-overview { display: grid; grid-template-columns: repeat(4, minmax(0, 1fr)); gap: 8px; }
+.enh-stats-metric { padding: 10px; border: 1px solid ${t.bd0}; border-radius: 9px; background: ${t.sf0}; }
+.enh-stats-metric__value { color: ${t.tx0}; font: 750 20px/1.1 -apple-system, sans-serif; }
+.enh-stats-metric__label { margin-top: 4px; color: ${t.tx3}; font: 600 10px/1.3 -apple-system, sans-serif; text-transform: uppercase; letter-spacing: .05em; }
+.enh-stats-grid { display: grid; grid-template-columns: repeat(3, minmax(0, 1fr)); gap: 10px; margin-top: 12px; }
+.enh-stats-group { min-width: 0; padding: 10px; border: 1px solid ${t.bd0}; border-radius: 9px; background: ${t.sf0}; }
+.enh-stats-group h4 { margin: 0 0 8px; color: ${t.tx1}; font: 700 11px/1.3 -apple-system, sans-serif; }
+.enh-stats-row { display: grid; grid-template-columns: minmax(48px, auto) minmax(50px, 1fr) auto; gap: 7px; align-items: center; min-height: 23px; color: ${t.tx2}; font: 550 10px/1.2 -apple-system, sans-serif; }
+.enh-stats-row__label { min-width: 0; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
+.enh-stats-row__track { height: 5px; overflow: hidden; border-radius: 999px; background: ${t.bd0}; }
+.enh-stats-row__fill { height: 100%; border-radius: inherit; background: ${t.accent}; }
+.enh-stats-row__count { color: ${t.tx1}; font-variant-numeric: tabular-nums; }
+.enh-stats-empty { padding: 18px; border: 1px dashed ${t.bd1}; border-radius: 9px; color: ${t.tx2}; font: 500 12px/1.5 -apple-system, sans-serif; background: ${t.sf0}; }
+.enh-stats-insights { margin-top: 10px; color: ${t.tx2}; font: 500 11px/1.45 -apple-system, sans-serif; }
+.enh-stats-insights strong { color: ${t.tx1}; }
+@media (max-width: 1000px) {
+    .enh-stats-grid { grid-template-columns: minmax(0, 1fr); }
+}
+@media (max-width: 680px) {
+    .enh-stats-overview { grid-template-columns: repeat(2, minmax(0, 1fr)); }
+}
 
 /* ════ Settings Footer ════ */
 .enh-settings-footer {
@@ -11703,6 +11861,7 @@ section[data-testid="hero-parent"].enh-editorial-native-hidden { display: none !
                 if (!setUserMarks({})) return;
                 refreshFeature('watchedMarking');
                 render();
+                document.dispatchEvent(new CustomEvent('imdb-enhanced:marks-updated'));
                 showToast(`Cleared ${entries.length} saved title marks`);
             },
         }, 'Clear all');
@@ -11735,6 +11894,7 @@ section[data-testid="hero-parent"].enh-editorial-native-hidden { display: none !
                 if (!setUserMarks(marks)) return;
                 refreshFeature('watchedMarking');
                 render();
+                document.dispatchEvent(new CustomEvent('imdb-enhanced:marks-updated'));
                 showToast(kept
                     ? `Imported ${imported} as local Seen; kept ${kept} existing ${kept === 1 ? 'mark' : 'marks'}`
                     : `Imported ${imported} IMDb Watched ${imported === 1 ? 'title' : 'titles'} as local Seen`);
@@ -11794,6 +11954,7 @@ section[data-testid="hero-parent"].enh-editorial-native-hidden { display: none !
                         refreshFeature('watchedMarking');
                         refreshFeature('titleNotes');
                         render();
+                        document.dispatchEvent(new CustomEvent('imdb-enhanced:marks-updated'));
                         showToast(note ? 'Mark and note removed' : 'Mark cleared');
                     },
                 }, 'Remove');
@@ -11821,6 +11982,89 @@ section[data-testid="hero-parent"].enh-editorial-native-hidden { display: none !
         });
         render();
         return panel;
+    }
+
+    function createLocalStatsList(title, items, emptyText) {
+        const group = makeEl('div', { className:'enh-stats-group' }, makeEl('h4', {}, title));
+        if (!items.length) {
+            group.appendChild(makeEl('div', { className:'enh-settings-card-description' }, emptyText));
+            return group;
+        }
+        const maximum = Math.max(...items.map(item => item.count), 1);
+        items.forEach(item => {
+            const width = `${Math.max(5, Math.round((item.count / maximum) * 100))}%`;
+            group.appendChild(makeEl('div', {
+                className:'enh-stats-row',
+                'aria-label':`${item.label}: ${item.count}`,
+            },
+                makeEl('span', { className:'enh-stats-row__label', title:item.label }, item.label),
+                makeEl('span', { className:'enh-stats-row__track', 'aria-hidden':'true' },
+                    makeEl('span', { className:'enh-stats-row__fill', style:{ width } })
+                ),
+                makeEl('span', { className:'enh-stats-row__count' }, String(item.count))
+            ));
+        });
+        return group;
+    }
+
+    function createLocalStatsPanel(registerCleanup = () => {}) {
+        const card = makeEl('section', {
+            className:'enh-settings-card enh-stats-card',
+            'aria-labelledby':'enh-local-stats-title',
+        });
+        const render = () => {
+            const stats = summarizeLocalStats(getUserMarks(true));
+            card.replaceChildren(makeEl('div', { className:'enh-settings-card-header' },
+                makeEl('div', {},
+                    makeEl('h3', { className:'enh-settings-card-title', id:'enh-local-stats-title' }, 'Local stats'),
+                    makeEl('p', { className:'enh-settings-card-description' },
+                        'Calculated on this device from your private marks and imported viewing history.')
+                ),
+                makeEl('span', { className:'enh-settings-route-badge' }, 'Local only')
+            ));
+            if (!stats.markedTitles && !stats.viewings) {
+                card.appendChild(makeEl('div', { className:'enh-stats-empty' },
+                    'No local viewing history yet. Mark a title Seen or import an IMDb or Letterboxd CSV. Nothing leaves this device.'));
+                return;
+            }
+            const overview = makeEl('div', { className:'enh-stats-overview' });
+            [
+                [stats.seen, 'Seen titles'],
+                [stats.skipped, 'Skipped titles'],
+                [stats.viewings, 'Dated viewings'],
+                [stats.rated, 'Personal ratings'],
+            ].forEach(([value, label]) => overview.appendChild(makeEl('div', { className:'enh-stats-metric' },
+                makeEl('div', { className:'enh-stats-metric__value' }, String(value)),
+                makeEl('div', { className:'enh-stats-metric__label' }, label)
+            )));
+            card.appendChild(overview);
+            card.appendChild(makeEl('div', { className:'enh-stats-grid' },
+                createLocalStatsList('Activity by year', stats.years, 'No dated viewings yet.'),
+                createLocalStatsList('Top genres', stats.topGenres, 'Genres appear as titles are marked or imported.'),
+                createLocalStatsList('Release decades', stats.decades, 'Release years appear as titles are marked or imported.')
+            ));
+            const insights = [];
+            if (stats.ratingDelta !== null) {
+                const delta = Math.abs(stats.ratingDelta).toFixed(2);
+                insights.push(Math.abs(stats.ratingDelta) < 0.005
+                    ? `Your ${stats.ratingPairs} comparable ratings match IMDb on average.`
+                    : `Your ${stats.ratingPairs} comparable ratings run ${delta} ${stats.ratingDelta > 0 ? 'higher' : 'lower'} than IMDb on average.`);
+            } else {
+                insights.push('Rating comparison appears after a title has both your rating and IMDb’s rating.');
+            }
+            if (stats.runtimeMinutes) insights.push(`${formatRuntimeTotal(stats.runtimeMinutes)} of runtime is known across Seen titles.`);
+            if (stats.reviewYear) insights.push(`${stats.reviewYear.label} has ${stats.reviewYear.count} dated viewings, enough for a year review.`);
+            else insights.push('A year review appears after 10 dated viewings in one year.');
+            if (stats.undatedSeen) insights.push(`${stats.undatedSeen} Seen ${stats.undatedSeen === 1 ? 'title has' : 'titles have'} no viewing date.`);
+            card.appendChild(makeEl('div', { className:'enh-stats-insights' },
+                makeEl('strong', {}, 'Coverage. '),
+                `${stats.metadataTitles} of ${stats.historyTitles} history ${stats.historyTitles === 1 ? 'title has' : 'titles have'} year, genre, score, or runtime metadata. ${insights.join(' ')}`
+            ));
+        };
+        document.addEventListener('imdb-enhanced:marks-updated', render);
+        registerCleanup(() => document.removeEventListener('imdb-enhanced:marks-updated', render));
+        render();
+        return card;
     }
 
     function createSettingsPanel() {
@@ -12303,6 +12547,7 @@ section[data-testid="hero-parent"].enh-editorial-native-hidden { display: none !
             )
         );
         dataPage.appendChild(dataSummary);
+        dataPage.appendChild(createLocalStatsPanel(registerCleanup));
         const importPanel = makeEl('div', { className:'enh-import-panel', id:'enh-import-panel', hidden:'hidden' },
             makeEl('label', { className:'enh-import-label', for:'enh-import-textarea' }, 'Paste exported settings JSON'),
             makeEl('textarea', {

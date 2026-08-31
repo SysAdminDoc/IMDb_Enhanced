@@ -36,6 +36,8 @@ Third-party lookups omit destination cookies. Responses are rendered as text, ou
 
 **Viewing History Import.** Paste or upload an IMDb or Letterboxd CSV, inspect a count before writing anything, then merge its ratings and viewing dates into local Seen marks. Headers are matched by name, including IMDb's newer Original Title column. Rows with Const or imdbID map directly; Title and Year can match a title already stored on that device. Invalid or unresolved rows are counted and skipped. This local import never changes IMDb Watched status or an IMDb list.
 
+**Local Personal Stats.** The Data page turns private marks and imported viewing history into local counts, activity by year, top genres, release decades, personal rating comparisons, and known runtime. Fresh installs get a clear empty state. A year review appears after 10 dated viewings in one year, and missing metadata stays missing instead of being guessed. The calculations never leave the device.
+
 **TV Tools** - Highest-rated episode highlighting and TV-specific lookup shortcuts. Synopsis blur is opt-in and off by default.
 
 **List Page Tools** - Batch IMDb ID copy plus a popup-safe search queue on watchlist, custom list, and chart pages, including IMDb's locale-prefixed desktop URLs. Prepare up to 20 real new-tab links, open them one gesture at a time, or copy the full link set. A runtime summary totals how long the listed titles would take to watch, recounts as more rows load, and names how many rows had no runtime listed rather than reporting a smaller total as if it were complete.
@@ -127,7 +129,7 @@ The redesigned visual reference set covers every menu page: [Experience](design/
 
 **Integrations** - Tabbed Radarr/Sonarr and Plex/Jellyfin/Emby local-service configuration with arrow/Home/End keyboard navigation.
 
-**Data** - Local mark review, validated JSON backup/restore up to 4 MB with optional passphrase-encrypted credential export, cache status/clearing, a persistent failure journal, and an explicit two-step reset with backup guidance.
+**Data.** Local viewing stats, private mark review, IMDb and Letterboxd CSV history import, validated JSON backup/restore up to 4 MB with optional passphrase-encrypted credential export, cache status/clearing, a persistent failure journal, and an explicit two-step reset with backup guidance.
 
 **Failure journal** - The last 20 feature failures, kept across reloads so intermittent breakage is visible. Entries record the time, the feature, the kind of page, and a failure category. They never record the error text, so a title, a lookup address, or a token echoed back by a local service cannot end up in one. Copy it into a bug report or clear it from the same card.
 

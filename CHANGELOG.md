@@ -20,6 +20,8 @@
 
 ### Added
 
+- The Data page now calculates personal viewing statistics from private marks and imported history without sending anything away. It shows Seen and Skip totals, dated activity by year, top genres, release decades, personal ratings compared with IMDb, known runtime, and a year review once one year has 10 dated viewings. Fresh installs get an empty state, and titles without metadata are reported as unknown rather than guessed. Metadata already visible on a title or list card is retained when the title is marked, so coverage improves during normal use.
+
 - The Data page can now paste or upload IMDb and Letterboxd CSV exports into local Seen marks. It matches headers by name, previews valid and skipped rows before writing, handles repeated viewing dates, and merges through the existing rollback transaction. Const and imdbID map directly; Title and Year can resolve against an unambiguous title already stored on the device. The screen states plainly that this does not change IMDb Watched status or lists.
 
 - Local mark records now use a versioned viewing-history shape with bounded dates, personal ratings, year, genres, IMDb rating, and runtime. Existing Seen timestamps migrate to one viewing event, while note and mark edits preserve imported metadata.

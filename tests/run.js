@@ -116,6 +116,7 @@ function loadScriptTestHooks({ withoutDeleteValue = false, withheldCredentials =
         getListTitleIdsFromLinks,
         getListTitlesFromLinks,
         readCardRating,
+        readCardMarkMetadata,
         normalizeDimThreshold,
         DIM_THRESHOLD_OPTIONS,
         setTextIfChanged,
@@ -180,6 +181,9 @@ function loadScriptTestHooks({ withoutDeleteValue = false, withheldCredentials =
         prepareCsvMarkImport,
         describeCsvMarkImport,
         CSV_IMPORT_ROW_LIMIT,
+        summarizeLocalStats,
+        LOCAL_STATS_GROUP_LIMIT,
+        readCurrentTitleMarkMetadata,
         getSectionCollapseState,
         setSectionCollapsed,
         getDefaultSettingsEntries,
@@ -1398,6 +1402,68 @@ test('versioned marks retain bounded viewing history and statistics metadata', (
     stored = hooks.getStoredSetting('userMarks').tt0133093;
     assert.strictEqual(stored.runtime, 136, 'editing a note must preserve imported runtime metadata');
     assert.strictEqual(stored.note, 'Keep this');
+});
+
+test('local statistics aggregate bounded history without inventing missing data', () => {
+    const hooks = loadScriptTestHooks();
+    const stats = JSON.parse(JSON.stringify(hooks.summarizeLocalStats({
+        tt0133093:{
+            v:2, state:'watched', title:'The Matrix', ts:3,
+            viewings:[{ date:'2025-01-02', rating:9 }, { date:'2026-02-03', rating:9 }],
+            rating:9, year:1999, genres:['Action', 'Sci-Fi'], imdbRating:8.7, runtime:136,
+        },
+        tt0078748:{
+            v:2, state:'watched', title:'Alien', ts:2,
+            viewings:[{ date:'2025-04-05', rating:7 }],
+            rating:7, year:1979, genres:['Horror', 'Sci-Fi'], imdbRating:8.5, runtime:117,
+        },
+        tt0084787:{ v:2, state:'skip', title:'The Thing', ts:4, year:1982, genres:['Horror'] },
+        tt0111161:{ v:2, state:'watched', title:'Shawshank', ts:5 },
+    })));
+    assert.strictEqual(stats.seen, 3);
+    assert.strictEqual(stats.skipped, 1);
+    assert.strictEqual(stats.viewings, 3);
+    assert.strictEqual(stats.undatedSeen, 1, 'a Seen mark with no date must stay explicitly undated');
+    assert.deepStrictEqual(stats.years, [
+        { label:'2025', count:2 },
+        { label:'2026', count:1 },
+    ]);
+    assert.deepStrictEqual(stats.topGenres, [
+        { label:'Sci-Fi', count:2 },
+        { label:'Action', count:1 },
+        { label:'Horror', count:1 },
+    ], 'Skip-only metadata must not influence viewing-history genres');
+    assert.deepStrictEqual(stats.decades, [
+        { label:'1990s', count:1 },
+        { label:'1970s', count:1 },
+    ]);
+    assert.strictEqual(stats.ratingPairs, 2);
+    assert.strictEqual(stats.ratingDelta, -0.6);
+    assert.strictEqual(stats.runtimeMinutes, 253);
+    assert.strictEqual(stats.historyTitles, 3);
+    assert.strictEqual(stats.reviewYear, null, 'a year review requires ten dated viewings');
+
+    const skippedAfterViewing = hooks.summarizeLocalStats({
+        tt1000001:{
+            v:2, state:'skip', title:'Seen before it was skipped', ts:1,
+            viewings:[{ date:'2024-05-01' }], year:2004,
+        },
+    });
+    assert.strictEqual(skippedAfterViewing.seen, 0);
+    assert.strictEqual(skippedAfterViewing.historyTitles, 1);
+    assert.strictEqual(skippedAfterViewing.metadataTitles, 1,
+        'metadata coverage must use the history-title denominator when a former Seen title is now skipped');
+
+    const review = hooks.summarizeLocalStats({
+        tt1000000:{
+            v:2, state:'watched', title:'Rewatched', ts:1,
+            viewings:Array.from({ length:10 }, (_, index) => ({ date:`2026-01-${String(index + 1).padStart(2, '0')}` })),
+        },
+    });
+    assert.strictEqual(review.reviewYear.label, '2026');
+    assert.strictEqual(review.reviewYear.count, 10);
+    assert.strictEqual(hooks.summarizeLocalStats({}).markedTitles, 0, 'fresh installs need a real empty state');
+    assert.strictEqual(stats.topGenres.length <= hooks.LOCAL_STATS_GROUP_LIMIT, true);
 });
 
 test('CSV import maps IMDb and Letterboxd headers without relying on column positions', () => {
@@ -3940,6 +4006,17 @@ test('low-rated cards dim their artwork only, and unrated cards are left alone',
     assert.strictEqual(hooks.readCardRating(row(null)), null, 'a card with no rating element is unrated');
     assert.strictEqual(hooks.readCardRating(row('Rate')), null, 'the rate prompt is not a score');
     assert.strictEqual(hooks.readCardRating(row('12.5')), null, 'a value outside the scale is not a score');
+    const metadataRow = row('8.7');
+    metadataRow.querySelectorAll = () => [
+        { textContent:'1999' },
+        { textContent:'2h 16m' },
+        { textContent:'R' },
+    ];
+    assert.deepStrictEqual({ ...hooks.readCardMarkMetadata(metadataRow, 'tt0133093') }, {
+        year:1999,
+        imdbRating:8.7,
+        runtime:136,
+    }, 'marking a collection card should cache the metadata IMDb already rendered');
 
     assert.strictEqual(hooks.normalizeDimThreshold('7.0'), '7.0');
     assert.strictEqual(hooks.normalizeDimThreshold('99'), '6.0', 'an unknown threshold falls back to the default');

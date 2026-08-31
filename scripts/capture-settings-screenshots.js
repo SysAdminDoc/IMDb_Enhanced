@@ -33,7 +33,13 @@ async function main() {
         body:fixture,
     }));
     await page.addInitScript({ content:`
-        const screenshotStore = new Map();
+        const screenshotStore = new Map([['imdb_enh_userMarks', {
+            tt0133093:{ v:2, state:'watched', title:'The Matrix', ts:1788177600000, year:1999, genres:['Action','Sci-Fi'], rating:9, imdbRating:8.7, runtime:136, viewings:[{date:'2025-01-02',rating:9},{date:'2026-08-31',rating:9}] },
+            tt0078748:{ v:2, state:'watched', title:'Alien', ts:1751457600000, year:1979, genres:['Horror','Sci-Fi'], rating:8.5, imdbRating:8.5, runtime:117, viewings:[{date:'2025-07-02',rating:8.5}] },
+            tt2543164:{ v:2, state:'watched', title:'Arrival', ts:1772442000000, year:2016, genres:['Drama','Sci-Fi'], rating:9, imdbRating:7.9, runtime:116, viewings:[{date:'2026-03-02',rating:9}] },
+            tt0245429:{ v:2, state:'watched', title:'Spirited Away', ts:1725181200000, year:2001, genres:['Animation','Fantasy'], rating:10, imdbRating:8.6, runtime:125, viewings:[{date:'2024-09-01',rating:10}] },
+            tt0084787:{ v:2, state:'skip', title:'The Thing', ts:1717232400000, year:1982, genres:['Horror','Sci-Fi'], imdbRating:8.2, runtime:109 },
+        }]]);
         window.GM_getValue = (key, fallback) => screenshotStore.has(key) ? screenshotStore.get(key) : fallback;
         window.GM_setValue = (key, value) => screenshotStore.set(key, structuredClone(value));
         window.GM_deleteValue = key => screenshotStore.delete(key);
@@ -56,6 +62,9 @@ async function main() {
         if (!await page.locator('#enh-csv-textarea').isVisible()) {
             throw new Error(`CSV import controls disappeared under the ${theme} theme.`);
         }
+        if (!await page.locator('#enh-local-stats-title').isVisible()) {
+            throw new Error(`Local stats disappeared under the ${theme} theme.`);
+        }
     }
     await page.locator('#enh-csv-file').setInputFiles({
         name:'imdb-ratings.csv',
@@ -66,6 +75,7 @@ async function main() {
     if (!await page.locator('#enh-csv-apply').isEnabled()) {
         throw new Error('A valid uploaded CSV did not enable the import action.');
     }
+    await page.locator('#enh-local-stats-title').scrollIntoViewIfNeeded();
     await page.addStyleTag({ content:'* { animation: none !important; transition: none !important; }' });
     await page.screenshot({ path:path.join(outputDir, 'built-data-1440x900.png') });
     await page.locator('#enh-settings-panel').screenshot({ path:path.join(outputDir, 'built-data-panel-1000x812.png') });
