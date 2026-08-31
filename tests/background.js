@@ -30,11 +30,15 @@ function loadBackground({
     fetchImpl,
     fastTimers = false,
     granted = shippedManifest.optional_host_permissions,
+    openOptionsFailure = null,
+    omitOpenOptionsPage = false,
+    tabsCreateFailure = null,
 } = {}) {
     const listeners = [];
     const calls = { fetches: [], permissions: [], tabs: [], openedOptions: 0 };
     const storage = new Map();
     const grantedOrigins = new Set(granted || []);
+    let runtimeLastError = null;
 
     const api = (result) => (arg, done) => {
         if (engine === 'chromium') return Promise.resolve(result(arg));
@@ -72,10 +76,43 @@ function loadBackground({
                 remove: (arg, done) => { calls.permissions.push(['remove', arg.origins]); arg.origins.forEach(o => grantedOrigins.delete(o)); done(true); },
                 request: (arg, done) => { calls.permissions.push(['request', arg.origins]); done(false); },
             },
-            tabs: { create: options => { calls.tabs.push(options); } },
+            tabs: {
+                create: (options, done) => {
+                    calls.tabs.push(options);
+                    if (engine === 'chromium') {
+                        return tabsCreateFailure
+                            ? Promise.reject(tabsCreateFailure)
+                            : Promise.resolve({ id:8 });
+                    }
+                    if (typeof done === 'function') queueMicrotask(() => {
+                        runtimeLastError = tabsCreateFailure
+                            ? { message:String(tabsCreateFailure.message || tabsCreateFailure) }
+                            : null;
+                        try { done(tabsCreateFailure ? undefined : { id:8 }); }
+                        finally { runtimeLastError = null; }
+                    });
+                    return undefined;
+                },
+            },
             runtime: {
-                lastError: null,
-                openOptionsPage: () => { calls.openedOptions += 1; },
+                get lastError() { return runtimeLastError; },
+                openOptionsPage: done => {
+                    calls.openedOptions += 1;
+                    if (engine === 'chromium') {
+                        return openOptionsFailure
+                            ? Promise.reject(openOptionsFailure)
+                            : Promise.resolve();
+                    }
+                    if (typeof done === 'function') queueMicrotask(() => {
+                        runtimeLastError = openOptionsFailure
+                            ? { message:String(openOptionsFailure.message || openOptionsFailure) }
+                            : null;
+                        try { done(); }
+                        finally { runtimeLastError = null; }
+                    });
+                    return undefined;
+                },
+                getURL: relativePath => `chrome-extension://test/${relativePath}`,
                 getManifest: () => ({
                     version: shippedManifest.version,
                     host_permissions: shippedManifest.host_permissions,
@@ -104,6 +141,7 @@ function loadBackground({
             declarativeNetRequest: { updateDynamicRules: api(() => undefined) },
         },
     };
+    if (omitOpenOptionsPage) delete sandbox.chrome.runtime.openOptionsPage;
     sandbox.globalThis = sandbox;
     vm.runInNewContext(backgroundSource, sandbox, { filename: backgroundPath });
 
@@ -158,6 +196,19 @@ function makeFetch(chain, { body = 'PAYLOAD', status = 200 } = {}) {
 }
 
 const request = (url, extra = {}) => ({ type: 'imdb-enhanced:http', id: 'req-1', url, ...extra });
+
+async function observeUnhandled(action) {
+    const unhandled = [];
+    const listener = reason => { unhandled.push(reason); };
+    process.on('unhandledRejection', listener);
+    try {
+        const value = await action();
+        await new Promise(resolve => setImmediate(resolve));
+        return { value, unhandled };
+    } finally {
+        process.removeListener('unhandledRejection', listener);
+    }
+}
 
 for (const engine of ['chromium', 'gecko']) {
     test(`[${engine}] an allowlisted request with no redirect succeeds`, async () => {
@@ -443,6 +494,40 @@ for (const engine of ['chromium', 'gecko']) {
             'a proxied permissions.request would fail and must not exist');
         assert(!/chrome\.permissions\.request/.test(backgroundSource),
             'the background must not attempt a request it cannot make');
+    });
+
+    test(`[${engine}] an options-page failure is reported without an unhandled rejection`, async () => {
+        const failure = new Error(`Options page failed ${'x'.repeat(400)}`);
+        const { dispatch, calls } = loadBackground({
+            engine,
+            fetchImpl: makeFetch({}),
+            openOptionsFailure: failure,
+        });
+        const { value:response, unhandled } = await observeUnhandled(() =>
+            dispatch({ type:'imdb-enhanced:open-options' }, IMDB_SENDER));
+        assert.strictEqual(response.ok, false, 'a rejected options-page call must not report success');
+        assert(response.error.startsWith('Options page failed'));
+        assert(response.error.length <= 240, 'extension API errors must be length bounded');
+        assert.strictEqual(calls.openedOptions, 1);
+        assert.strictEqual(unhandled.length, 0, 'the API rejection must be consumed by the worker');
+    });
+
+    test(`[${engine}] a fallback-tab failure is reported without an unhandled rejection`, async () => {
+        const failure = new Error(`Fallback tab failed ${'y'.repeat(400)}`);
+        const { dispatch, calls } = loadBackground({
+            engine,
+            fetchImpl: makeFetch({}),
+            omitOpenOptionsPage: true,
+            tabsCreateFailure: failure,
+        });
+        const { value:response, unhandled } = await observeUnhandled(() =>
+            dispatch({ type:'imdb-enhanced:open-options' }, IMDB_SENDER));
+        assert.strictEqual(response.ok, false, 'a rejected fallback tab must not report success');
+        assert(response.error.startsWith('Fallback tab failed'));
+        assert(response.error.length <= 240, 'fallback API errors must be length bounded');
+        assert.strictEqual(calls.tabs.length, 1);
+        assert.strictEqual(calls.tabs[0].url, 'chrome-extension://test/recovery.html');
+        assert.strictEqual(unhandled.length, 0, 'the fallback rejection must be consumed by the worker');
     });
 
     /* IE-89: the content script cannot read an integration credential at all, so it names

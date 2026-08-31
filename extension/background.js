@@ -123,10 +123,25 @@ function callApi(namespace, method, arg) {
             else resolve(value);
         };
         try {
-            const maybe = namespace[method](arg, done);
+            const maybe = arg === undefined
+                ? namespace[method](done)
+                : namespace[method](arg, done);
             if (maybe && typeof maybe.then === 'function') maybe.then(resolve, reject);
         } catch (error) { reject(error); }
     });
+}
+
+function boundedApiError(error, fallback) {
+    const message = String(error?.message || '').trim().replace(/\s+/g, ' ');
+    return (message || fallback).slice(0, 240);
+}
+
+async function openRecoveryPage() {
+    if (typeof chrome.runtime.openOptionsPage === 'function') {
+        await callApi(chrome.runtime, 'openOptionsPage');
+        return;
+    }
+    await callApi(chrome.tabs, 'create', { url:chrome.runtime.getURL('recovery.html') });
 }
 
 const activeRequests = new Map();
@@ -424,8 +439,9 @@ async function checkForUpdate() {
    Firefox opens permissions.html instead, which links to the same page. */
 if (chrome.action?.onClicked) {
     chrome.action.onClicked.addListener(() => {
-        if (chrome.runtime.openOptionsPage) chrome.runtime.openOptionsPage();
-        else chrome.tabs.create({ url: chrome.runtime.getURL('recovery.html') });
+        openRecoveryPage().catch(error => {
+            console.warn('[IMDb Enhanced] recovery page could not be opened:', boundedApiError(error, 'Extension API call failed'));
+        });
     });
 }
 
@@ -483,13 +499,12 @@ chrome.runtime.onMessage.addListener((message, sender, sendResponse) => {
     if (message?.type === 'imdb-enhanced:open-options') {
         /* Reports what happened rather than assuming it worked. The caller tells the user
            a page has opened, and saying so when it has not is worse than saying nothing. */
-        try {
-            if (chrome.runtime.openOptionsPage) chrome.runtime.openOptionsPage();
-            else chrome.tabs.create({ url: chrome.runtime.getURL('recovery.html') });
-            sendResponse({ ok:true });
-        } catch (error) {
-            sendResponse({ ok:false, error:String(error && error.message || 'The options page could not be opened') });
-        }
+        openRecoveryPage()
+            .then(() => sendResponse({ ok:true }))
+            .catch(error => sendResponse({
+                ok:false,
+                error:boundedApiError(error, 'The options page could not be opened'),
+            }));
         return true;
     }
     return undefined;

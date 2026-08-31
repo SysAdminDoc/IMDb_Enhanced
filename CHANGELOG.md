@@ -66,7 +66,7 @@
 
 - When storage is full, the page no longer keeps showing a mark that was never saved. Two marks made in quick succession would both fail to save, you would be told twice that nothing was saved, and one of them would stay on screen looking Seen until you reloaded. The extension now puts the page back to what storage actually holds rather than to whatever it last tried to write.
 
-- "Grant access" no longer claims a page has opened when it has not.
+- "Grant access" now waits for the browser to finish opening the extension page before it reports success. Promise rejections and Firefox callback errors return a bounded failure instead of leaving an unhandled worker error, including when the recovery-tab fallback fails.
 
 - Restoring a backup no longer wipes your integration keys. An encrypted backup taken from an IMDb page carried empty values rather than your real keys, because the page deliberately cannot read them, and restoring it wrote those blanks over the working ones. Backups made from the extension's own page were always fine. An empty credential in any backup is now understood as "this backup does not carry one" rather than "clear the one you have", and the encrypted export refuses to run from a page that cannot read your keys, pointing you at the page that can.
 
