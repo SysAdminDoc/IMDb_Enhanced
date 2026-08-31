@@ -1,5 +1,7 @@
 *.bak
 *.pre-polish-*.bak
+node_modules/
+tests/artifacts/
 CLAUDE.md
 CODEX_CHANGELOG.md
 .claude/

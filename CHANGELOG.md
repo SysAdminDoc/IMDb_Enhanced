@@ -20,6 +20,8 @@
 
 ### Added
 
+- Offline DOM fixtures now execute the title, ratings, episodes, person, and chart extractors under happy-dom. The title fixture also starts and stops three real page features. Selector failures name the broken selector and retain the rendered DOM for inspection, while clean checkouts without installed development packages still skip this layer safely.
+
 - The streaming panel answers the question properly now. It tells renting and buying apart from streaming instead of running them together, so a film you can rent but not stream no longer reads as unavailable. It follows the region you set rather than always asking for the United States, on both sources. And where a title is not carried at all it says "Not streamable in GB" rather than rendering nothing, which looked like a fault.
 
 - There is a third build now, for a web-store listing: `npm run build:store`. It ships without the default watch destinations and without the catalog they come from, and it asks for no access to services that are read by parsing their pages. Those score panels say "Not available in this build" and name which source is missing, instead of sitting there empty. Availability there comes from TMDB with your own token. It comes off the same source through the same script, so nothing else about it differs.

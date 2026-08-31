@@ -10,9 +10,10 @@
     "build:extension": "node scripts/build-extension.js",
     "check:destinations": "node scripts/check-destinations.js",
     "capture:fixtures": "node scripts/capture-fixtures.js",
+    "test:dom": "node tests/dom-fixtures.mjs",
     "build:firefox": "node scripts/build-extension.js --firefox",
     "test:extension": "node scripts/build-extension.js --check && node scripts/build-extension.js --firefox && node tests/extension.js && node tests/background.js && node tests/gm-contract.js",
-    "test": "node scripts/build-extension.js --firefox && node tests/run.js && node tests/extension.js && node tests/background.js && node tests/gm-contract.js",
+    "test": "node scripts/build-extension.js --firefox && node tests/run.js && node tests/dom-fixtures.mjs && node tests/extension.js && node tests/background.js && node tests/gm-contract.js",
     "version": "node scripts/sync-version.js && node scripts/build-extension.js && git add IMDb_Enhanced.user.js extension/content.js extension/manifest.json extension/boot.css README.md",
     "build:store": "node scripts/build-extension.js --store"
   },
@@ -20,5 +21,8 @@
   "repository": {
     "type": "git",
     "url": "https://github.com/SysAdminDoc/IMDb_Enhanced.git"
+  },
+  "devDependencies": {
+    "happy-dom": "20.12.0"
   }
 }

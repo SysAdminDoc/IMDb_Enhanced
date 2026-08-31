@@ -154,7 +154,7 @@ Integration API keys and tokens are left out of an ordinary backup, which names 
 ## Privacy and trust
 
 - **No telemetry, ever.** Nothing is transmitted to any IMDb Enhanced service, because there isn't one. There are no analytics, no error reporting, no accounts, and no remote configuration. Settings → Data can copy a diagnostics report for a bug report, and that report only reaches your clipboard.
-- **No runtime dependencies.** The userscript is one file with zero third-party libraries, and the extension builds are generated from it using only the Node standard library. Nothing is fetched at install or at runtime to make the project work.
+- **No runtime dependencies.** The userscript is one file with zero third-party libraries, and the extension builds are generated without bundling a dependency. The development test suite uses happy-dom after `npm ci`, but nothing is fetched at install or at runtime to make the project work.
 - **No remote code.** Everything that executes ships in the file you installed. Nothing is `eval`'d and no script is loaded from a CDN, which is also what keeps the extension builds compliant with Chrome Web Store and AMO policy.
 - **Unminified and readable.** The shipped userscript is the source. You can read every line of what you are running.
 - **Local-only storage.** Preferences, private Seen/Skip marks, and cached lookups live in your userscript manager or `chrome.storage.local`. Integration credentials for Radarr, Sonarr, Overseerr, Plex, Jellyfin, and Emby are restricted to `localhost`/`127.0.0.1` and are sent only to those services, as request headers rather than in URLs. In the extension builds those keys stay in the background worker and are never handed to the IMDb tab. A request names the key it needs, and the worker attaches it only after checking the destination is a local address and the name is one of the six it recognizes. Nothing running in the page can read a stored key, which is why the settings field shows a saved key as configured instead of displaying it.
@@ -171,6 +171,10 @@ git status --short             # no output means the shipped build matches that 
 ```
 
 `extension/content.js`, `extension/boot.css`, and `extension/manifest.json` are committed, so any difference between what ships and a rebuild from the same commit shows up as a diff.
+
+Install the development dependency once with `npm ci`, then run `npm test` to exercise the source checks, the offline IMDb DOM fixtures, both extension builds, the background worker, and both GM API implementations. `npm run test:dom` runs only the fixture suite. It covers title, ratings, episodes, person, and chart pages without contacting IMDb. A failed selector check names the selector and saves the DOM under `tests/artifacts/dom-fixtures/` for inspection.
+
+`npm run capture:fixtures` refreshes those snapshots from IMDb through a persistent browser profile. IMDb may serve a Human Verification page to an automated session, so capture is a developer maintenance command and never a required test gate. The committed sanitized snapshots keep the regular suite deterministic and offline.
 
 `npm run build:store` produces a third build, in `extension-store/`, for a web-store listing. It ships no default watch destinations and no catalog of them, and it does not request access for any service whose answers come from parsing that service's pages. Those score sources say so in place, naming which one is missing, rather than sitting empty. Streaming availability there comes from TMDB's API with a token of your own. It is generated from the same source by the same script, so the only differences are the ones listed here.
 

@@ -682,16 +682,17 @@ test('score results are announced through a region that exists before any result
         'every loading score widget must report itself busy');
 });
 
-/* The zero-dependency, no-telemetry posture is a real differentiator after the 2025-26
-   extension-compromise wave, and it was documented nowhere. */
+/* The zero-runtime-dependency, no-telemetry posture is a real differentiator after
+   the 2025-26 extension-compromise wave, and it was documented nowhere. */
 test('README states the trust posture the build actually has', () => {
     assert(/No telemetry, ever/.test(readme), 'the absence of telemetry must be stated, not implied');
     assert(/No runtime dependencies/.test(readme), 'the zero-dependency posture must be stated');
     assert(/No remote code/.test(readme), 'the absence of remote code must be stated');
     assert(/Verifying a build/.test(readme), 'readers need a way to check a build against its tag');
-    // The claims have to stay true: a dependency block would silently falsify them.
+    // The shipped files stay dependency-free. happy-dom is pinned for offline tests only.
     assert(!packageJson.dependencies, 'README claims zero runtime dependencies');
-    assert(!packageJson.devDependencies, 'README claims the build uses only the Node standard library');
+    assert.deepStrictEqual(packageJson.devDependencies, { 'happy-dom':'20.12.0' },
+        'happy-dom must remain the only development dependency');
 });
 
 /* An unpacked extension can never update itself and Chrome only permits off-store

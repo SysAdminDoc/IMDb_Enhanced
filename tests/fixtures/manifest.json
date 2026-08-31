@@ -1,0 +1,26 @@
+{
+  "capturedAt": "2026-08-31T14:00:00.000Z",
+  "note": "Sanitized offline snapshots for selector and parser regression tests. The title shape is distilled from the saved Black Mirror MHTML capture; the remaining shapes retain the live selectors and payload contracts recorded during the fixture-capture pass. npm run capture:fixtures replaces these snapshots when IMDb allows the warmed browser profile through its verification wall.",
+  "pages": [
+    {
+      "name": "title",
+      "url": "https://www.imdb.com/title/tt0133093/"
+    },
+    {
+      "name": "title-ratings",
+      "url": "https://www.imdb.com/title/tt0133093/ratings/"
+    },
+    {
+      "name": "episodes",
+      "url": "https://www.imdb.com/title/tt0903747/episodes/?season=1"
+    },
+    {
+      "name": "person",
+      "url": "https://www.imdb.com/name/nm0000206/"
+    },
+    {
+      "name": "chart",
+      "url": "https://www.imdb.com/chart/top/"
+    }
+  ]
+}
