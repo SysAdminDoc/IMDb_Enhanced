@@ -25,11 +25,16 @@ function test(name, fn) { cases.push({ name, fn }); }
    both, so every case below runs against both shapes. */
 /* fastTimers fires the worker's own request timer on the next tick instead of after ten
    seconds, so a timeout can be exercised for real rather than asserted from source. */
-function loadBackground({ engine = 'chromium', fetchImpl, fastTimers = false } = {}) {
+function loadBackground({
+    engine = 'chromium',
+    fetchImpl,
+    fastTimers = false,
+    granted = shippedManifest.optional_host_permissions,
+} = {}) {
     const listeners = [];
     const calls = { fetches: [], permissions: [], tabs: [], openedOptions: 0 };
     const storage = new Map();
-    const grantedOrigins = new Set(['https://www.rottentomatoes.com/*', 'https://query.wikidata.org/*']);
+    const grantedOrigins = new Set(granted || []);
 
     const api = (result) => (arg, done) => {
         if (engine === 'chromium') return Promise.resolve(result(arg));
@@ -156,10 +161,40 @@ const request = (url, extra = {}) => ({ type: 'imdb-enhanced:http', id: 'req-1',
 
 for (const engine of ['chromium', 'gecko']) {
     test(`[${engine}] an allowlisted request with no redirect succeeds`, async () => {
-        const { dispatch } = loadBackground({ engine, fetchImpl: makeFetch({}) });
+        const { dispatch, calls } = loadBackground({ engine, fetchImpl: makeFetch({}) });
         const response = await dispatch(request('https://letterboxd.com/film/the-matrix/'), IMDB_SENDER);
         assert.strictEqual(response.ok, true);
         assert.strictEqual(response.responseText, 'PAYLOAD');
+        assert.strictEqual(calls.permissions[0][0], 'contains');
+        assert.strictEqual(Array.from(calls.permissions[0][1]).join(','), 'https://letterboxd.com/*',
+            'an optional-origin request must prove its current grant before fetch');
+    });
+
+    test(`[${engine}] an ungranted optional origin is refused before fetch`, async () => {
+        const { dispatch, calls } = loadBackground({
+            engine,
+            fetchImpl: makeFetch({}),
+            granted: shippedManifest.optional_host_permissions
+                .filter(origin => origin !== 'https://api.themoviedb.org/*'),
+        });
+        const response = await dispatch(request('https://api.themoviedb.org/3/find/tt0133093', {
+            credentialHeader:{ name:'Authorization', ref:'tmdbReadToken' },
+        }), IMDB_SENDER);
+        assert.strictEqual(response.ok, false);
+        assert.strictEqual(response.errorType, 'permission_not_granted');
+        assert.strictEqual(calls.fetches.length, 0,
+            'CORS must not bypass a host grant the user has not made');
+        assert.strictEqual(calls.permissions.at(-1)[0], 'contains');
+        assert.strictEqual(Array.from(calls.permissions.at(-1)[1]).join(','),
+            'https://api.themoviedb.org/*');
+    });
+
+    test(`[${engine}] a required origin does not need an optional grant`, async () => {
+        const { dispatch, calls } = loadBackground({ engine, fetchImpl: makeFetch({}), granted:[] });
+        const response = await dispatch(request('https://www.imdb.com/title/tt0133093/'), IMDB_SENDER);
+        assert.strictEqual(response.ok, true);
+        assert.strictEqual(calls.permissions.length, 0,
+            'required host access must not be mistaken for an ungranted optional origin');
     });
 
     test(`[${engine}] a same-origin redirect is followed`, async () => {
@@ -344,7 +379,11 @@ for (const engine of ['chromium', 'gecko']) {
     /* chrome.permissions is not exposed to content scripts, so the settings panel cannot
        read or change host access itself and asks the background instead. */
     test(`[${engine}] the background answers permission state for the settings panel`, async () => {
-        const { dispatch, calls } = loadBackground({ engine, fetchImpl: makeFetch({}) });
+        const { dispatch, calls } = loadBackground({
+            engine,
+            fetchImpl: makeFetch({}),
+            granted:['https://www.rottentomatoes.com/*', 'https://query.wikidata.org/*'],
+        });
         const granted = await dispatch({
             type:'imdb-enhanced:permissions-contains',
             origins:['https://www.rottentomatoes.com/*', 'https://query.wikidata.org/*'],
@@ -546,11 +585,12 @@ for (const engine of ['chromium', 'gecko']) {
     test(`[${engine}] a host-bound credential is refused over plain http`, async () => {
         const { dispatch, calls, storage } = loadBackground({ engine, fetchImpl: makeFetch({}) });
         storage.set('imdb_enh_tmdbReadToken', 'TMDB-TOKEN-VALUE');
-        await dispatch(request('http://api.themoviedb.org/3/find/tt0133093?external_source=imdb_id', {
+        const response = await dispatch(request('http://api.themoviedb.org/3/find/tt0133093?external_source=imdb_id', {
             credentialHeader: { name:'Authorization', ref:'tmdbReadToken' },
         }), IMDB_SENDER);
-        assert.strictEqual(calls.fetches[0][1].headers.Authorization, undefined,
-            'a credential that leaves the machine must not travel in clear text');
+        assert.strictEqual(response.errorType, 'permission_not_granted');
+        assert.strictEqual(calls.fetches.length, 0,
+            'a public origin declared only for HTTPS must never be fetched over plain HTTP');
     });
 
     test(`[${engine}] a loopback credential is still allowed over plain http`, async () => {

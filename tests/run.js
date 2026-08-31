@@ -3620,6 +3620,16 @@ test('a refusal by the worker is not an outage, and still says what it was', () 
         assert.strictEqual(hooks.getRequestErrorMessage(failure), sentence,
             `${errorType} must still reach the user as its own sentence`);
     });
+    const missingGrant = hooks.describeRequestFailure('network', {
+        errorType:'permission_not_granted',
+        message:'Access to this service has not been granted',
+    }, 'https://api.themoviedb.org/');
+    assert.strictEqual(hooks.classifyFailure(missingGrant), 'permission',
+        'a missing optional-origin grant is a refusal, not an outage');
+    assert.strictEqual(hooks.isReachabilityFailure(missingGrant), false,
+        'a grant refusal must not render a stale provider answer');
+    assert.strictEqual(hooks.getRequestErrorMessage(missingGrant),
+        'Access to this service has not been granted');
     // An invalid URL is a refusal too, not a service that could not be reached.
     const invalid = hooks.describeRequestFailure('network', { errorType:'invalid_url', message:'Invalid HTTP(S) request' }, 'https://x.test/');
     assert.strictEqual(hooks.isReachabilityFailure(invalid), false, 'a refused URL is not an outage');

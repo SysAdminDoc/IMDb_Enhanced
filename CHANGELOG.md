@@ -40,6 +40,8 @@
 
 ### Fixed
 
+- The extension background worker now refuses an optional service request unless that service's host access is currently granted. A provider with a permissive CORS policy could previously answer the worker even after the user declined or removed access. The check happens before credentials are read and before any network request starts.
+
 - Availability cache entries are now separated by source and country. Switching between TMDB and JustWatch can no longer show the other source's answer or attribution, and changing country no longer serves the previous country's providers. Old source-blind entries are ignored safely.
 
 - TMDB availability results now open the regional TMDB watch page returned by the API. The widget used to reject that address as though it had to belong to JustWatch, then send every result to a hard-coded US search. Each source now validates its own host before the link is shown.

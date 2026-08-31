@@ -3628,6 +3628,7 @@
         redirect_destination_not_allowed:'permission',
         redirect_crossed_trust_boundary:'permission',
         invalid_url:'permission',
+        permission_not_granted:'permission',
     };
     function describeRequestFailure(fallback, response, url) {
         const category = BRIDGE_FAILURE_CATEGORIES[String(response?.errorType || '')] || fallback;

@@ -63,6 +63,35 @@ function isKnownOptionalOrigin(origin) {
     return typeof origin === 'string' && declared.includes(origin);
 }
 
+function manifestOriginMatchesTarget(pattern, target) {
+    if (typeof pattern !== 'string' || !target?.url) return false;
+    try {
+        const wildcardHost = pattern.includes('://*.');
+        const parsed = new URL(pattern.replace('://*.', '://').replace(/\*$/, ''));
+        if (parsed.protocol !== target.url.protocol) return false;
+        const hostname = parsed.hostname.toLowerCase();
+        return target.hostname === hostname
+            || (wildcardHost && target.hostname.endsWith(`.${hostname}`));
+    } catch {
+        return false;
+    }
+}
+
+async function hasRequestOriginPermission(target) {
+    const manifest = chrome.runtime.getManifest();
+    const required = (manifest.host_permissions || [])
+        .some(pattern => manifestOriginMatchesTarget(pattern, target));
+    if (required) return true;
+    const optionalPattern = (manifest.optional_host_permissions || [])
+        .find(pattern => manifestOriginMatchesTarget(pattern, target));
+    if (!optionalPattern) return false;
+    try {
+        return await callApi(chrome.permissions, 'contains', { origins:[optionalPattern] }) === true;
+    } catch {
+        return false;
+    }
+}
+
 function isLoopbackHost(hostname) {
     return LOOPBACK_HOSTS.has(String(hostname || '').toLowerCase());
 }
@@ -181,6 +210,19 @@ async function sendHttpRequest(message, sender, sendResponse) {
     const target = describeRequestUrl(url);
     if (!requestId || !target) {
         sendResponse({ ok:false, status:0, errorType:'invalid_url', error:'Invalid HTTP(S) request' });
+        return;
+    }
+    /* Declaring an optional origin says the extension may ask for it, not that the user
+       granted it. A permissive CORS response can otherwise let the worker fetch without
+       host access, bypassing the choice shown in settings. Check before reading a stored
+       credential, registering an active request, or touching fetch. */
+    if (!await hasRequestOriginPermission(target)) {
+        sendResponse({
+            ok:false,
+            status:0,
+            errorType:'permission_not_granted',
+            error:'Access to this service has not been granted',
+        });
         return;
     }
 
