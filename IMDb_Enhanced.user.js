@@ -2541,6 +2541,41 @@
     // =========================================================================
     //  ASYNC HTTP
     // =========================================================================
+    /* Carries the cause on the rejection instead of leaving it to be inferred from prose.
+       Everything that reads a failure — the stale-score fallback, the journal, the
+       per-feature status — needs the category, and guessing it from a message is how a
+       manager's untranslated response object became "unclassified". */
+    /* The extension bridge routes every failure through onerror, including a timeout, so
+       the callback that fired is not enough to tell them apart. When the background has
+       classified the failure its answer wins. Its refusal categories (redirect_blocked,
+       invalid_url and the rest) are not reachability categories and stay network, which
+       is what they were treated as before. */
+    const BRIDGE_FAILURE_CATEGORIES = { timeout:'timeout', aborted:'aborted', network:'network' };
+    function describeRequestFailure(fallback, response, url) {
+        const category = BRIDGE_FAILURE_CATEGORIES[String(response?.errorType || '')] || fallback;
+        const status = Number(response?.status) || 0;
+        // Tampermonkey and Violentmonkey use .error, the bridge uses .message, and a
+        // thrown Error arriving here has neither of those but does have a message.
+        const detail = normalizeRequestErrorText(response?.error)
+            || normalizeRequestErrorText(response?.message)
+            || normalizeRequestErrorText(response?.statusText)
+            || '';
+        const error = new Error(detail || REQUEST_FAILURE_TEXT[category] || 'Request failed');
+        error.imdbEnhancedCategory = category;
+        error.status = status;
+        // The URL is kept off the message: failures reach the journal and the diagnostics
+        // report, and neither may carry the title someone looked at.
+        error.requestHost = (() => {
+            try { return new URL(url).hostname; }
+            catch { return ''; }
+        })();
+        return error;
+    }
+    const REQUEST_FAILURE_TEXT = {
+        network: 'The service could not be reached',
+        timeout: 'The service did not answer in time',
+        aborted: 'Request aborted',
+    };
     function httpRequest(url, opts = {}) {
         return new Promise((resolve, reject) => {
             const {
@@ -2577,9 +2612,16 @@
                     headers,
                     data: hasBody ? JSON.stringify(body) : requestOptions.data,
                     onload: r => finish(r.status >= 400 ? reject : resolve, r),
-                    onerror: error => finish(reject, error),
-                    ontimeout: error => finish(reject, error),
-                    onabort: error => finish(reject, error || new Error('Request aborted')),
+                    /* A script manager hands these callbacks its own response object, not
+                       an Error. It has no name and no message, so anything downstream that
+                       reads those saw "[object Object]" and classified every provider
+                       outage as unclassified — which left the whole stale-score fallback
+                       dead in this build. Managers also disagree about the field: Tampermonkey
+                       populates .error, Violentmonkey does too but not .message. So the cause
+                       is stated here, where it is known, rather than guessed at later. */
+                    onerror: response => finish(reject, describeRequestFailure('network', response, url)),
+                    ontimeout: response => finish(reject, describeRequestFailure('timeout', response, url)),
+                    onabort: response => finish(reject, describeRequestFailure('aborted', response, url)),
                 });
             } catch (error) {
                 finish(reject, error);
@@ -3022,6 +3064,11 @@
     /* Classification reads the error, but only ever emits one of the fixed categories
        above — no substring of the message is retained. */
     function classifyFailure(error) {
+        /* A failure raised by this script says what it was. Reading that beats matching
+           prose, which cannot work at all for a script manager's response object: it has
+           no name and no message and stringifies to [object Object]. */
+        const declared = String(error?.imdbEnhancedCategory || '');
+        if (FAILURE_CATEGORY_SET.has(declared)) return declared;
         const name = String(error?.name || '');
         if (name === 'AbortError') return 'aborted';
         const text = String(error?.message || error || '').toLowerCase();
@@ -5138,8 +5185,40 @@ section[id*="quote" i] .ipc-list-card { padding: 4px 0 !important; margin: 2px 0
     /* stale-if-error, RFC 5861's shape: a bounded expired value is better than nothing
        when the provider is unreachable, but only if it says how old it is and offers a
        way to try again. */
-    function renderStaleScore(feature, cacheKey, error) {
+    /* "Score unavailable" is the right thing to say when the provider answered and had
+       nothing, and the wrong thing to say when the extension was never allowed to ask.
+       The second is the user's to fix, so it says so and offers the page that can fix it.
+       A browser only lets an extension request access from one of its own pages, which is
+       why this opens that page rather than prompting here. */
+    function appendUnavailableNote(widget, reason, unavailableText = 'Score unavailable') {
+        if (reason !== 'access') {
+            widget.appendChild(makeEl('div', { className:'enh-score-widget__sub' }, unavailableText));
+            return;
+        }
+        const note = makeEl('div', { className:'enh-score-widget__sub' }, 'Site access not granted');
+        widget.appendChild(note);
+        if (!supportsOptionalPermissions()) return;
+        widget.appendChild(makeEl('button', {
+            type:'button',
+            className:'enh-score-stale__retry',
+            onClick: () => {
+                if (openOptionsPage()) showToast('Grant site access on the page that just opened, then reload this one.', 5000);
+            },
+        }, 'Grant access'));
+    }
+
+    async function renderStaleScore(feature, cacheKey, error, isCurrent = () => true) {
         if (!isReachabilityFailure(error)) return false;
+        /* A missing host grant fails exactly like a dead host: the browser refuses the
+           request with the same opaque TypeError and no reason attached. Treating that as
+           an outage showed last week's score with a Retry button that could never succeed,
+           and hid the only thing the user can actually fix. When the origin is not granted
+           this declines, and the caller's unavailable state says so instead. */
+        if (!await hasFeatureOrigins(feature.key)) return false;
+        // That check is asynchronous, so the page may have moved on during it. Report it
+        // as handled: there is nothing left to render, and the caller must not fall
+        // through and paint an unavailable state for a title nobody is looking at.
+        if (!isCurrent()) return true;
         const stale = cacheGetStale(cacheKey);
         if (!stale) return false;
         feature._render(stale.data);
@@ -5226,12 +5305,12 @@ section[id*="quote" i] .ipc-list-card { padding: 4px 0 !important; margin: 2px 0
                expired value beats nothing, provided it is labelled with its date and
                offers a retry. A mismatch or an unparseable response is not: the lookup
                worked and the answer was absent, so an old score would contradict it. */
-            if (renderStaleScore(this, cacheKey, lookupError)) return;
+            if (await renderStaleScore(this, cacheKey, lookupError, isCurrent)) return;
             /* Nothing is recorded when the failure was only a missing host grant, so the
                next visit retries instead of reading back a stale "unavailable". */
-            await cacheUnavailableUnlessBlocked(this.key, cacheKey);
+            const blocked = await cacheUnavailableUnlessBlocked(this.key, cacheKey);
             if (!isCurrent()) return;
-            this._renderUnavailable();
+            this._renderUnavailable(blocked ? 'access' : 'unavailable');
         },
         _render(data) {
             document.getElementById('enh-rt-widget')?.remove();
@@ -5271,7 +5350,7 @@ section[id*="quote" i] .ipc-list-card { padding: 4px 0 !important; margin: 2px 0
             `;
             bar.appendChild(w);
         },
-        _renderUnavailable() {
+        _renderUnavailable(reason = 'unavailable') {
             document.getElementById('enh-rt-widget')?.remove();
             const bar = findRatingBar();
             if (!bar) return;
@@ -5283,8 +5362,8 @@ section[id*="quote" i] .ipc-list-card { padding: 4px 0 !important; margin: 2px 0
                     <span class="enh-score-widget__badge enh-score-widget__badge--outline">RT</span>
                     <span class="enh-score-widget__value">Open</span>
                 </a>
-                <div class="enh-score-widget__sub">Score unavailable</div>
             `;
+            appendUnavailableNote(w, reason);
             bar.appendChild(w);
         },
         destroy() { document.getElementById('enh-rt-widget')?.remove(); }
@@ -5329,12 +5408,12 @@ section[id*="quote" i] .ipc-list-card { padding: 4px 0 !important; margin: 2px 0
                expired value beats nothing, provided it is labelled with its date and
                offers a retry. A mismatch or an unparseable response is not: the lookup
                worked and the answer was absent, so an old score would contradict it. */
-            if (renderStaleScore(this, cacheKey, lookupError)) return;
+            if (await renderStaleScore(this, cacheKey, lookupError, isCurrent)) return;
             /* Nothing is recorded when the failure was only a missing host grant, so the
                next visit retries instead of reading back a stale "unavailable". */
-            await cacheUnavailableUnlessBlocked(this.key, cacheKey);
+            const blocked = await cacheUnavailableUnlessBlocked(this.key, cacheKey);
             if (!isCurrent()) return;
-            this._renderUnavailable();
+            this._renderUnavailable(blocked ? 'access' : 'unavailable');
         },
         _render(data) {
             document.getElementById('enh-lb-widget')?.remove();
@@ -5372,7 +5451,7 @@ section[id*="quote" i] .ipc-list-card { padding: 4px 0 !important; margin: 2px 0
             `;
             bar.appendChild(w);
         },
-        _renderUnavailable() {
+        _renderUnavailable(reason = 'unavailable') {
             document.getElementById('enh-lb-widget')?.remove();
             const bar = findRatingBar();
             if (!bar) return;
@@ -5384,8 +5463,8 @@ section[id*="quote" i] .ipc-list-card { padding: 4px 0 !important; margin: 2px 0
                     <span class="enh-score-widget__badge enh-score-widget__badge--outline">LB</span>
                     <span class="enh-score-widget__value">Open</span>
                 </a>
-                <div class="enh-score-widget__sub">Score unavailable</div>
             `;
+            appendUnavailableNote(w, reason);
             bar.appendChild(w);
         },
         destroy() { document.getElementById('enh-lb-widget')?.remove(); }
@@ -5452,12 +5531,12 @@ section[id*="quote" i] .ipc-list-card { padding: 4px 0 !important; margin: 2px 0
                expired value beats nothing, provided it is labelled with its date and
                offers a retry. A mismatch or an unparseable response is not: the lookup
                worked and the answer was absent, so an old score would contradict it. */
-            if (renderStaleScore(this, cacheKey, lookupError)) return;
+            if (await renderStaleScore(this, cacheKey, lookupError, isCurrent)) return;
             /* Nothing is recorded when the failure was only a missing host grant, so the
                next visit retries instead of reading back a stale "unavailable". */
-            await cacheUnavailableUnlessBlocked(this.key, cacheKey);
+            const blocked = await cacheUnavailableUnlessBlocked(this.key, cacheKey);
             if (!isCurrent()) return;
-            this._renderUnavailable();
+            this._renderUnavailable(blocked ? 'access' : 'unavailable');
         },
         _render(data) {
             document.getElementById('enh-mc-widget')?.remove();
@@ -5498,7 +5577,7 @@ section[id*="quote" i] .ipc-list-card { padding: 4px 0 !important; margin: 2px 0
             `;
             bar.appendChild(w);
         },
-        _renderUnavailable() {
+        _renderUnavailable(reason = 'unavailable') {
             document.getElementById('enh-mc-widget')?.remove();
             const bar = findRatingBar();
             if (!bar) return;
@@ -5510,8 +5589,8 @@ section[id*="quote" i] .ipc-list-card { padding: 4px 0 !important; margin: 2px 0
                     <span class="enh-score-widget__badge enh-score-widget__badge--outline">MC</span>
                     <span class="enh-score-widget__value">Open</span>
                 </a>
-                <div class="enh-score-widget__sub">Score unavailable</div>
             `;
+            appendUnavailableNote(w, reason);
             bar.appendChild(w);
         },
         destroy() { document.getElementById('enh-mc-widget')?.remove(); }
@@ -5576,12 +5655,12 @@ section[id*="quote" i] .ipc-list-card { padding: 4px 0 !important; margin: 2px 0
                expired value beats nothing, provided it is labelled with its date and
                offers a retry. A mismatch or an unparseable response is not: the lookup
                worked and the answer was absent, so an old score would contradict it. */
-            if (renderStaleScore(this, cacheKey, lookupError)) return;
+            if (await renderStaleScore(this, cacheKey, lookupError, isCurrent)) return;
             /* Nothing is recorded when the failure was only a missing host grant, so the
                next visit retries instead of reading back a stale "unavailable". */
-            await cacheUnavailableUnlessBlocked(this.key, cacheKey);
+            const blocked = await cacheUnavailableUnlessBlocked(this.key, cacheKey);
             if (!isCurrent()) return;
-            this._renderUnavailable();
+            this._renderUnavailable(blocked ? 'access' : 'unavailable');
         },
         _parse(html, url, expected) {
             return parseJustWatchAvailability(html, url, expected);
@@ -5622,7 +5701,7 @@ section[id*="quote" i] .ipc-list-card { padding: 4px 0 !important; margin: 2px 0
             `;
             bar.appendChild(w);
         },
-        _renderUnavailable() {
+        _renderUnavailable(reason = 'unavailable') {
             document.getElementById('enh-jw-widget')?.remove();
             const bar = findRatingBar();
             if (!bar) return;
@@ -5636,9 +5715,9 @@ section[id*="quote" i] .ipc-list-card { padding: 4px 0 !important; margin: 2px 0
                 },
                     makeEl('span', { className: 'enh-score-widget__badge enh-score-widget__badge--outline' }, 'JW'),
                     makeEl('span', { className: 'enh-score-widget__value' }, 'Open')
-                ),
-                makeEl('div', { className: 'enh-score-widget__sub' }, 'Availability unavailable')
+                )
             );
+            appendUnavailableNote(w, reason, 'Availability unavailable');
             bar.appendChild(w);
         },
         destroy() { document.getElementById('enh-jw-widget')?.remove(); }

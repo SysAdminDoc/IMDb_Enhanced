@@ -65,6 +65,7 @@ function loadScriptTestHooks({ withoutDeleteValue = false } = {}) {
         getFeatureFailures,
         recordFeatureFailure,
         classifyFailure,
+        describeRequestFailure,
         getFailureJournal,
         clearFailureJournal,
         formatFailureJournal,
@@ -3309,7 +3310,7 @@ test('an unreachable provider falls back to a labelled cached value', () => {
         'expired fallbacks are worth less than live values and go first');
 
     // Every score source uses the shared fallback, and it labels what it rendered.
-    assert.strictEqual((script.match(/renderStaleScore\(this, cacheKey, lookupError\)/g) || []).length, 4,
+    assert.strictEqual((script.match(/await renderStaleScore\(this, cacheKey, lookupError, isCurrent\)/g) || []).length, 4,
         'all four score sources must offer the fallback');
     assert.strictEqual((script.match(/\} catch \{ \/\* handled below \*\/ \}/g) || []).length, 0,
         'the failure must be captured, not discarded, or its kind cannot be judged');
@@ -3324,6 +3325,48 @@ test('an unreachable provider falls back to a labelled cached value', () => {
         'the fallback must be gated on the failure being a reachability failure');
     assert(helper.indexOf('isReachabilityFailure') < helper.indexOf('cacheGetStale'),
         'and that gate must come before an old value is even looked up');
+    /* A missing host grant is refused with the same opaque TypeError as a dead host, so
+       without this the fallback fired for it: the widget showed last week's score with a
+       Retry that could never succeed, the unavailable state that names the real problem
+       was never reached, and nothing was recorded. */
+    assert(helper.includes('if (!await hasFeatureOrigins(feature.key)) return false;'),
+        'a failure that is really a missing host grant must not be dressed up as an outage');
+    assert(helper.indexOf('hasFeatureOrigins') < helper.indexOf('cacheGetStale'),
+        'the grant check must come before an old value is looked up');
+    /* Presence first, then order. indexOf returns -1 when the guard is gone and -1 sorts
+       before everything, so an ordering check alone passes against a version that deleted
+       the guard entirely. */
+    assert(helper.includes('if (!isCurrent()) return true;'),
+        'the grant check is asynchronous, so the page must be rechecked before painting');
+    assert(helper.indexOf('if (!isCurrent()) return true;') < helper.indexOf('feature._render(stale.data)'),
+        'and that recheck must come before anything is painted');
+
+    /* A script manager hands its callbacks a response object with no name and no message.
+       classifyFailure read those, so every provider outage in the userscript build came
+       back unclassified, isReachabilityFailure said false, and this whole feature was
+       extension-only. The cause is now stated on the rejection. */
+    ['onerror', 'ontimeout', 'onabort'].forEach(callback => {
+        assert(new RegExp(`${callback}: response => finish\\(reject, describeRequestFailure\\(`).test(script),
+            `${callback} must state the cause rather than reject with the manager's own object`);
+    });
+    const hooks2 = loadScriptTestHooks();
+    const managerResponse = { status:0, readyState:4, responseText:'', error:'Network Error' };
+    assert.strictEqual(hooks2.classifyFailure(managerResponse), 'unknown',
+        'a bare manager response really does carry nothing to classify');
+    assert.strictEqual(hooks2.classifyFailure(hooks2.describeRequestFailure('network', managerResponse, 'https://www.rottentomatoes.com/x')), 'network',
+        'a network failure raised by this script must classify as network');
+    assert.strictEqual(hooks2.classifyFailure(hooks2.describeRequestFailure('timeout', managerResponse, 'https://www.rottentomatoes.com/x')), 'timeout',
+        'a timeout must classify as a timeout, not as unclassified');
+    assert.strictEqual(hooks2.classifyFailure(hooks2.describeRequestFailure('aborted', {}, 'https://www.rottentomatoes.com/x')), 'aborted',
+        'a cancelled request must stay a cancellation');
+    // The bridge routes every failure through onerror, so its own classification wins.
+    assert.strictEqual(hooks2.classifyFailure(hooks2.describeRequestFailure('network', { errorType:'timeout', message:'Timed out' }, 'https://x.test/')), 'timeout',
+        'the background knows a timeout from a dead host and the callback that fired does not');
+    assert.strictEqual(hooks2.classifyFailure(hooks2.describeRequestFailure('network', { errorType:'redirect_blocked', message:'Blocked' }, 'https://x.test/')), 'network',
+        'a refusal category that is not about reachability must stay a network failure');
+    // A failure travels to the journal and the diagnostics report, so it carries no title.
+    const described = hooks2.describeRequestFailure('network', managerResponse, 'https://www.rottentomatoes.com/m/the_matrix');
+    assert(!/the_matrix/.test(String(described.message)), 'a failure message must not carry what was looked up');
 });
 
 /* IE-87: destinations rot, and an earlier attempt at noticing that from the user's

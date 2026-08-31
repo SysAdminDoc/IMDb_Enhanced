@@ -19,7 +19,9 @@ function test(name, fn) { cases.push({ name, fn }); }
 /* The two engines differ in exactly one way that reaches this file: Chromium's chrome.*
    returns promises while Gecko's alias is callback-style. callApi is written to accept
    both, so every case below runs against both shapes. */
-function loadBackground({ engine = 'chromium', fetchImpl } = {}) {
+/* fastTimers fires the worker's own request timer on the next tick instead of after ten
+   seconds, so a timeout can be exercised for real rather than asserted from source. */
+function loadBackground({ engine = 'chromium', fetchImpl, fastTimers = false } = {}) {
     const listeners = [];
     const calls = { fetches: [], permissions: [], tabs: [], openedOptions: 0 };
     const storage = new Map();
@@ -34,7 +36,7 @@ function loadBackground({ engine = 'chromium', fetchImpl } = {}) {
 
     const sandbox = {
         console: { warn() {}, log() {}, error() {} },
-        setTimeout,
+        setTimeout: fastTimers ? (fn => setTimeout(fn, 0)) : setTimeout,
         clearTimeout,
         AbortController,
         URL,
@@ -473,6 +475,38 @@ for (const engine of ['chromium', 'gecko']) {
                 `public request carried a credential header: ${name}`);
         });
         assert.strictEqual(sent.redirect, 'follow', 'an uncredentialed public request may still follow same-origin hops');
+    });
+
+    /* A request that ran out of time and one the page cancelled on navigation both reject
+       with AbortError and the same "The user aborted a request" message, so they were
+       reported identically. Only the timer knows which happened. The distinction is load
+       bearing: the stale-score fallback treats a timeout as the provider being
+       unreachable, and a cancellation as nothing worth reacting to. */
+    test(`[${engine}] a timed-out request is reported as a timeout, not a cancellation`, async () => {
+        const abortError = Object.assign(new Error('The user aborted a request.'), { name:'AbortError' });
+        const { dispatch } = loadBackground({
+            engine,
+            fetchImpl: (url, init = {}) => new Promise((resolve, reject) => {
+                // Rejects only once the worker's own timer has fired and aborted.
+                init.signal?.addEventListener('abort', () => reject(abortError));
+            }),
+            fastTimers: true,
+        });
+        const answer = await dispatch(request('https://www.rottentomatoes.com/m/x', { timeout: 1000 }), IMDB_SENDER);
+        assert.strictEqual(answer.ok, false, 'a timed-out request must not report success');
+        assert.strictEqual(answer.errorType, 'timeout',
+            'the worker must say the request timed out rather than that it was cancelled');
+    });
+
+    test(`[${engine}] a cancelled request is still reported as a cancellation`, async () => {
+        const abortError = Object.assign(new Error('The user aborted a request.'), { name:'AbortError' });
+        const { dispatch } = loadBackground({
+            engine,
+            fetchImpl: () => Promise.reject(abortError),
+        });
+        const answer = await dispatch(request('https://www.rottentomatoes.com/m/x'), IMDB_SENDER);
+        assert.strictEqual(answer.errorType, 'aborted',
+            'an abort that did not come from the timer must stay a cancellation');
     });
 }
 

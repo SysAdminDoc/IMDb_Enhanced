@@ -20,6 +20,20 @@
 
 ### Fixed
 
+- A score source you have not granted access to no longer pretends to be a service outage. The browser refuses an ungranted request with exactly the same opaque error a dead host produces, so the widget fell back to showing last week's score with a Retry button that could never work, and the message naming the real problem was never reached. It now says the site access is not granted and offers a button that takes you to the page where you can grant it.
+
+- Your Seen and Skip marks no longer disappear without warning in the extension. Storage there is asynchronous, so a write that failed still reported success: the page went on showing the marks as saved and a reload lost them. A failed write is now noticed, the page is corrected, and you are told.
+
+- Undo on "Mark loaded season seen" no longer deletes marks you made after using it. It restored a copy of your whole mark list, so anything marked anywhere else while the Undo button was still showing was silently removed with no way back. It now reverts only the episodes that batch changed.
+
+- Removing an entry from the marks list is one operation again. It used to clear the note and then the mark, so a failure in between destroyed the note and kept the mark.
+
+- The stale-score fallback works in the userscript build at all now. A script manager reports a failed request with its own response object, which carries no error text, so every provider outage came back unclassified and the fallback never fired. It had been extension-only without anyone noticing.
+
+- A lookup that runs out of time is reported as a timeout rather than as a cancelled request, so a slow provider gets the same cached-score fallback an unreachable one does.
+
+- The extension's cache no longer keeps filling after it runs out of room. The recovery that frees space matched on a key name the extension never sends, so it could not run in the one build with a fixed 10 MB limit.
+
 - The Rotten Tomatoes widget shows the audience score again, next to the critics score. It was being looked for under a field name Rotten Tomatoes does not use, so it had never actually appeared — the widget was already built to display it. Where a title's structured data carries no critics score, that now comes from the same place rather than the widget giving up.
 
 - When a score service cannot be reached, the last score it gave is shown with the date it was cached and a Retry button, instead of the widget going blank. This only happens when the lookup could not reach the service at all: if it answered and had nothing, or answered with something that did not match the title, no old value is shown, because that would contradict what the service just said. A cached fallback is never older than the cache's own 30-day ceiling, and refreshing successfully replaces it.

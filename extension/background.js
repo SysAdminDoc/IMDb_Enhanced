@@ -171,7 +171,11 @@ async function sendHttpRequest(message, sender, sendResponse) {
     }
 
     const controller = new AbortController();
-    const timeout = setTimeout(() => controller.abort(), Math.min(
+    /* An abort is reported as AbortError whatever caused it, so a request that ran out of
+       time and one the page cancelled on navigation are indistinguishable downstream.
+       Only this timer knows which happened, so it records it. */
+    let timedOut = false;
+    const timeout = setTimeout(() => { timedOut = true; controller.abort(); }, Math.min(
         Math.max(Number(message.timeout) || 10_000, 1_000),
         REQUEST_TIMEOUT,
     ));
@@ -281,7 +285,7 @@ async function sendHttpRequest(message, sender, sendResponse) {
            leak redirect detail into fetch's TypeError, so a refused hop and a dead host
            read identically here. A refused hop is recognized above, from the response,
            which is why this is left as a plain network failure. */
-        let errorType = aborted ? 'aborted' : 'network';
+        let errorType = aborted ? (timedOut ? 'timeout' : 'aborted') : 'network';
         sendResponse({
             ok:false,
             status: Number(error?.status) || 0,
