@@ -135,6 +135,13 @@ function loadScriptTestHooks() {
         setSectionCollapsed,
         getDefaultSettingsEntries,
         getExportSettings,
+        createEncryptedBackup,
+        readEncryptedBackup,
+        isEncryptedBackup,
+        CREDENTIAL_SETTING_KEYS,
+        EXPORT_REDACTED_KEY,
+        EXPORT_METADATA_KEYS,
+        BACKUP_ENVELOPE_KEY,
         getFeatureKeys: () => features.map(feature => feature.key),
         FEATURE_DETAILS,
         SETTINGS_IMPORT_TEXT_LIMIT,
@@ -210,6 +217,14 @@ function loadScriptTestHooks() {
             },
         },
         history: {},
+        // Encrypted backups are built on Web Crypto; Node exposes the same API, so the
+        // envelope is produced and opened by the real primitives rather than a stand-in.
+        crypto: globalThis.crypto,
+        TextEncoder,
+        TextDecoder,
+        Uint8Array,
+        btoa: value => Buffer.from(String(value), 'binary').toString('base64'),
+        atob: value => Buffer.from(String(value), 'base64').toString('binary'),
         MutationObserver: class {
             constructor(callback) { this.callback = callback; }
             observe() {}
@@ -1654,11 +1669,13 @@ test('settings exports are canonical and fully re-importable', () => {
     assert.strictEqual(exported.radarrQualityProfileId, '1', 'invalid legacy values should export as safe defaults');
     const prepared = hooks.prepareSettingsImport(exported);
     assert.strictEqual(prepared.ignored, 0, 'a generated export should never contain fields its importer rejects');
-    /* The export also carries the schema marker, which describes the payload rather
-       than being a restorable setting. */
-    assert.strictEqual(prepared.entries.length, Object.keys(exported).length - 1,
-        'every exported setting except the schema marker should be restorable');
-    assert(script.includes('JSON.stringify(getExportSettings(), null, 2)'), 'clipboard export should use canonical schema data');
+    /* The export also carries metadata that describes the payload rather than being a
+       restorable setting: the schema marker and the list of credentials it redacted. */
+    const metadataKeys = Object.keys(exported).filter(key => hooks.EXPORT_METADATA_KEYS.has(key));
+    assert.strictEqual(metadataKeys.length, 2, 'the export should carry the schema marker and the redaction manifest');
+    assert.strictEqual(prepared.entries.length, Object.keys(exported).length - metadataKeys.length,
+        'every exported setting except the payload metadata should be restorable');
+    assert(script.includes('const serialized = JSON.stringify(payload, null, 2);'), 'clipboard export should use canonical schema data');
 
     const legacyPrepared = hooks.prepareSettingsImport({
         userMarks:{
@@ -2724,4 +2741,173 @@ test('local request errors stay concise and text-only', () => {
     );
 });
 
-console.log('All tests passed.');
+/* Encrypted-backup cases need real Web Crypto, which is promise-based, so they are
+   collected and awaited after the synchronous suite rather than being fired off inside
+   test() where a rejection would be swallowed and reported as a pass. */
+const asyncTests = [];
+function asyncTest(name, fn) { asyncTests.push({ name, fn }); }
+
+asyncTest('a normal backup omits every integration credential and says which', async () => {
+    const hooks = loadScriptTestHooks();
+    const credentialKeys = [...hooks.CREDENTIAL_SETTING_KEYS];
+    assert(credentialKeys.length >= 6, 'the credential key set should still cover every integration');
+    credentialKeys.forEach((key, index) => hooks.seedStoredSetting(key, `secret-${index}`));
+
+    const backup = hooks.getExportSettings();
+    const serialized = JSON.stringify(backup);
+    credentialKeys.forEach(key => {
+        assert(!Object.prototype.hasOwnProperty.call(backup, key), `${key} must not appear in a normal backup`);
+    });
+    credentialKeys.forEach((key, index) => {
+        assert(!serialized.includes(`secret-${index}`), `the value of ${key} leaked into a normal backup`);
+    });
+    /* The sandbox has its own realm, so an array it produced fails deepStrictEqual
+       against a host array on prototype identity alone. Compare contents. */
+    assert.strictEqual(
+        [...(backup[hooks.EXPORT_REDACTED_KEY] || [])].sort().join(','),
+        credentialKeys.slice().sort().join(','),
+        'a normal backup must list the credentials it left out'
+    );
+
+    // An unconfigured credential is not "omitted" — saying so would imply it existed.
+    const empty = loadScriptTestHooks();
+    assert.strictEqual([...(empty.getExportSettings()[empty.EXPORT_REDACTED_KEY] || [])].length, 0,
+        'a profile with no credentials configured should report nothing redacted');
+
+    // The redaction manifest is metadata, not a setting: it must round-trip cleanly.
+    assert.strictEqual(hooks.prepareSettingsImport(backup).ignored, 0,
+        'the redaction manifest must not count as an unrecognized field');
+});
+
+asyncTest('importing a redacted backup leaves credentials already on the device intact', async () => {
+    const hooks = loadScriptTestHooks();
+    hooks.seedStoredSetting('radarrApiKey', 'live-radarr-key');
+    hooks.seedStoredSetting('plexToken', 'live-plex-token');
+    hooks.seedStoredSetting('themeVariant', 'dark');
+
+    const fromAnotherDevice = loadScriptTestHooks();
+    fromAnotherDevice.seedStoredSetting('themeVariant', 'midnight');
+    const redacted = fromAnotherDevice.getExportSettings();
+
+    const { entries } = hooks.prepareSettingsImport(redacted);
+    hooks.applySettingsImport(entries);
+    assert.strictEqual(hooks.getStoredSetting('themeVariant'), 'midnight', 'the imported settings should apply');
+    assert.strictEqual(hooks.getStoredSetting('radarrApiKey'), 'live-radarr-key',
+        'a redacted backup must not wipe a credential the device already has');
+    assert.strictEqual(hooks.getStoredSetting('plexToken'), 'live-plex-token',
+        'a redacted backup must not wipe a credential the device already has');
+});
+
+asyncTest('an encrypted backup round-trips credentials under its passphrase', async () => {
+    const hooks = loadScriptTestHooks();
+    hooks.seedStoredSetting('radarrApiKey', 'radarr-secret-value');
+    hooks.seedStoredSetting('plexToken', 'plex-secret-value');
+    hooks.seedStoredSetting('themeVariant', 'oled');
+
+    const envelope = await hooks.createEncryptedBackup('correct horse battery');
+    assert(!envelope.includes('radarr-secret-value'), 'the ciphertext must not contain the plaintext credential');
+    assert(!envelope.includes('plex-secret-value'), 'the ciphertext must not contain the plaintext credential');
+
+    const parsed = JSON.parse(envelope);
+    assert(hooks.isEncryptedBackup(parsed), 'the envelope must identify itself');
+    assert.strictEqual(parsed.kdf.name, 'PBKDF2');
+    assert.strictEqual(parsed.kdf.hash, 'SHA-256');
+    assert(parsed.kdf.iterations >= 100000, 'the key-derivation cost must not be trivial');
+    assert.strictEqual(parsed.cipher.name, 'AES-GCM');
+
+    const opened = await hooks.readEncryptedBackup(parsed, 'correct horse battery');
+    assert.strictEqual(opened.radarrApiKey, 'radarr-secret-value');
+    assert.strictEqual(opened.plexToken, 'plex-secret-value');
+    assert.strictEqual(opened.themeVariant, 'oled');
+    // The decrypted payload is an ordinary settings object the normal importer accepts.
+    assert.strictEqual(hooks.prepareSettingsImport(opened).ignored, 0);
+
+    // Salt and nonce must be fresh per export, or two backups of one passphrase leak.
+    const second = JSON.parse(await hooks.createEncryptedBackup('correct horse battery'));
+    assert.notStrictEqual(parsed.kdf.salt, second.kdf.salt, 'each backup needs a fresh salt');
+    assert.notStrictEqual(parsed.cipher.iv, second.cipher.iv, 'each backup needs a fresh nonce');
+    assert.notStrictEqual(parsed.ciphertext, second.ciphertext, 'identical input must not produce identical ciphertext');
+});
+
+asyncTest('a wrong passphrase or tampered envelope fails before anything is written', async () => {
+    const hooks = loadScriptTestHooks();
+    hooks.seedStoredSetting('radarrApiKey', 'original-key');
+    hooks.seedStoredSetting('themeVariant', 'dark');
+    const envelope = JSON.parse(await hooks.createEncryptedBackup('the-right-passphrase'));
+
+    const snapshot = () => ({
+        key: hooks.getStoredSetting('radarrApiKey'),
+        theme: hooks.getStoredSetting('themeVariant'),
+    });
+    const before = snapshot();
+
+    await assert.rejects(
+        () => hooks.readEncryptedBackup(envelope, 'the-wrong-passphrase'),
+        /Wrong passphrase|altered/i,
+        'a wrong passphrase must be refused'
+    );
+    assert.deepStrictEqual(snapshot(), before, 'a wrong passphrase must not change stored settings');
+
+    // Flip one base64 character of the ciphertext: AES-GCM authenticates, so this is a
+    // decryption failure rather than garbage that reaches the importer.
+    const bytes = Buffer.from(envelope.ciphertext, 'base64');
+    bytes[Math.floor(bytes.length / 2)] ^= 0xff;
+    const tampered = { ...envelope, ciphertext: bytes.toString('base64') };
+    await assert.rejects(
+        () => hooks.readEncryptedBackup(tampered, 'the-right-passphrase'),
+        /Wrong passphrase|altered/i,
+        'a tampered ciphertext must be refused'
+    );
+    assert.deepStrictEqual(snapshot(), before, 'a tampered backup must not change stored settings');
+
+    await assert.rejects(() => hooks.readEncryptedBackup(envelope, ''), /passphrase/i,
+        'an empty passphrase must be refused rather than attempted');
+    await assert.rejects(
+        () => hooks.readEncryptedBackup({ ...envelope, [hooks.BACKUP_ENVELOPE_KEY]: 99 }, 'the-right-passphrase'),
+        /newer version/i,
+        'an envelope format from a future build must be refused, not mis-derived'
+    );
+    await assert.rejects(
+        () => hooks.readEncryptedBackup({ ...envelope, kdf:{ ...envelope.kdf, iterations:1 } }, 'the-right-passphrase'),
+        /key-derivation cost/i,
+        'a downgraded key-derivation cost must be refused'
+    );
+    await assert.rejects(
+        () => hooks.createEncryptedBackup('short'),
+        /at least/i,
+        'a trivially short passphrase must be refused'
+    );
+    assert.deepStrictEqual(snapshot(), before, 'no refusal path may write anything');
+});
+
+asyncTest('the Data page exposes both export paths and clears passphrases on close', () => {
+    assert(script.includes("id:'enh-secure-export-btn'"), 'the encrypted export needs its own explicit action');
+    assert(script.includes("id:'enh-import-passphrase'"), 'an encrypted import needs a passphrase field');
+    /* The passphrase row is revealed by toggling .hidden, and its own display rule
+       outranks the UA [hidden] rule — without this it is visible on every import. */
+    assert(script.includes('.enh-backup-passphrase[hidden] { display: none; }'),
+        'a hidden-toggled row that sets its own display needs a matching hidden rule');
+    assert(/if \(!secureOpen\) \{[\s\S]{0,220}?enh-secure-passphrase'\)\.value = '';/.test(script),
+        'closing the panel must clear the passphrase, as it already does for pasted JSON');
+    assert(script.includes('await readEncryptedBackup(data, overlay.querySelector'),
+        'the import path must decrypt before preparing entries');
+    assert(/isEncryptedBackup\(data\)\) \{[\s\S]{0,200}?readEncryptedBackup/.test(script),
+        'decryption must happen before prepareSettingsImport is reached');
+    assert(!/getExportSettings\(\{ includeCredentials:true \}\)/.test(
+        script.slice(script.indexOf("id:'enh-export-btn'"), script.indexOf("id:'enh-secure-export-btn'"))),
+        'the ordinary export must never request credentials');
+});
+
+(async () => {
+    for (const { name, fn } of asyncTests) {
+        try {
+            await fn();
+            console.log(`ok - ${name}`);
+        } catch (error) {
+            console.error(`not ok - ${name}`);
+            console.error(error);
+            process.exit(1);
+        }
+    }
+    console.log('All tests passed.');
+})();

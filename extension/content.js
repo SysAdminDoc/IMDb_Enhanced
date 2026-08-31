@@ -897,6 +897,11 @@
        a failed migration is retried on the next load rather than skipped. */
     const SETTINGS_SCHEMA_VERSION = 3;
     const SETTINGS_SCHEMA_KEY = 'settingsSchemaVersion';
+    /* Describes the export rather than being a setting, so import must skip it the way
+       it skips the schema marker — otherwise a redacted backup reports its own manifest
+       as an unrecognized field. */
+    const EXPORT_REDACTED_KEY = 'redactedCredentialKeys';
+    const EXPORT_METADATA_KEYS = new Set([SETTINGS_SCHEMA_KEY, EXPORT_REDACTED_KEY]);
     const SETTINGS_MIGRATIONS = [
         {
             /* v2: the standalone vote-distribution chart is retired. IMDb stopped
@@ -1859,7 +1864,7 @@
         const entries = [];
         let ignored = 0;
         Object.entries(data).forEach(([key, value]) => {
-            if (key === SETTINGS_SCHEMA_KEY) return;
+            if (EXPORT_METADATA_KEYS.has(key)) return;
             const normalized = normalizeImportedSetting(key, value);
             if (normalized) entries.push(normalized);
             else ignored++;
@@ -1880,9 +1885,21 @@
         return Object.entries(DEFAULTS).map(([key, value]) => ({ key, value:cloneSettingValue(value) }));
     }
 
-    function getExportSettings() {
+    /* A backup used to carry every Radarr, Sonarr, Overseerr, Plex, Jellyfin and Emby
+       secret in plain text, and the ordinary way to take one is a clipboard copy — a
+       surface any page can read and every clipboard manager keeps. The normal export
+       now omits them and says which it omitted; the encrypted export below is the only
+       way they leave the browser. */
+    function getExportSettings({ includeCredentials = false } = {}) {
         const data = {};
+        const redacted = [];
         Object.keys(DEFAULTS).forEach(key => {
+            if (!includeCredentials && CREDENTIAL_SETTING_KEYS.has(key)) {
+                // Only name a key that actually holds something; listing every empty
+                // credential field would imply the user had configured them.
+                if (String(get(key) || '').trim()) redacted.push(key);
+                return;
+            }
             let current = get(key);
             if (key === 'userMarks') current = getUserMarks();
             else if (key === 'sectionCollapseState') current = getSectionCollapseState();
@@ -1892,7 +1909,126 @@
             data[key] = cloneSettingValue(normalized ? normalized.value : DEFAULTS[key]);
         });
         data[SETTINGS_SCHEMA_KEY] = SETTINGS_SCHEMA_VERSION;
+        if (!includeCredentials) data[EXPORT_REDACTED_KEY] = redacted;
         return data;
+    }
+
+    // =========================================================================
+    //  ENCRYPTED CREDENTIAL BACKUP
+    // =========================================================================
+    /* Versioned so a future parameter change (iteration count, cipher) can be detected
+       rather than silently mis-derived. Salt and nonce are generated per export: reusing
+       either across two backups of the same passphrase is what breaks AES-GCM. */
+    const BACKUP_ENVELOPE_KEY = 'imdbEnhancedEncryptedBackup';
+    const BACKUP_ENVELOPE_VERSION = 1;
+    const BACKUP_KDF_ITERATIONS = 310000;
+    const BACKUP_SALT_BYTES = 16;
+    const BACKUP_IV_BYTES = 12;
+    const BACKUP_MIN_PASSPHRASE_LENGTH = 8;
+
+    function getCryptoSubtle() {
+        const provider = typeof crypto !== 'undefined' ? crypto : null;
+        if (!provider?.subtle || typeof provider.getRandomValues !== 'function') {
+            throw new Error('This browser does not expose Web Crypto, so an encrypted backup cannot be made.');
+        }
+        return provider;
+    }
+
+    function bytesToBase64(bytes) {
+        let binary = '';
+        // Chunked: spreading a large array into String.fromCharCode overflows the stack.
+        for (let index = 0; index < bytes.length; index += 8192) {
+            binary += String.fromCharCode(...bytes.subarray(index, index + 8192));
+        }
+        return btoa(binary);
+    }
+
+    function base64ToBytes(text) {
+        const binary = atob(String(text || ''));
+        const bytes = new Uint8Array(binary.length);
+        for (let index = 0; index < binary.length; index += 1) bytes[index] = binary.charCodeAt(index);
+        return bytes;
+    }
+
+    async function deriveBackupKey(provider, passphrase, salt, iterations) {
+        const material = await provider.subtle.importKey(
+            'raw', new TextEncoder().encode(passphrase), 'PBKDF2', false, ['deriveKey']
+        );
+        return provider.subtle.deriveKey(
+            { name:'PBKDF2', salt, iterations, hash:'SHA-256' },
+            material,
+            { name:'AES-GCM', length:256 },
+            false,
+            ['encrypt', 'decrypt']
+        );
+    }
+
+    async function createEncryptedBackup(passphrase) {
+        const secret = String(passphrase ?? '');
+        if (secret.length < BACKUP_MIN_PASSPHRASE_LENGTH) {
+            throw new Error(`Use a passphrase of at least ${BACKUP_MIN_PASSPHRASE_LENGTH} characters.`);
+        }
+        const provider = getCryptoSubtle();
+        const salt = provider.getRandomValues(new Uint8Array(BACKUP_SALT_BYTES));
+        const iv = provider.getRandomValues(new Uint8Array(BACKUP_IV_BYTES));
+        const key = await deriveBackupKey(provider, secret, salt, BACKUP_KDF_ITERATIONS);
+        const plaintext = new TextEncoder().encode(JSON.stringify(getExportSettings({ includeCredentials:true })));
+        const ciphertext = new Uint8Array(await provider.subtle.encrypt({ name:'AES-GCM', iv }, key, plaintext));
+        return JSON.stringify({
+            [BACKUP_ENVELOPE_KEY]: BACKUP_ENVELOPE_VERSION,
+            kdf: { name:'PBKDF2', hash:'SHA-256', iterations:BACKUP_KDF_ITERATIONS, salt:bytesToBase64(salt) },
+            cipher: { name:'AES-GCM', iv:bytesToBase64(iv) },
+            ciphertext: bytesToBase64(ciphertext),
+        }, null, 2);
+    }
+
+    function isEncryptedBackup(data) {
+        return Boolean(data && typeof data === 'object' && !Array.isArray(data)
+            && Object.prototype.hasOwnProperty.call(data, BACKUP_ENVELOPE_KEY));
+    }
+
+    /* Returns the decrypted settings object. Every failure here — wrong passphrase, a
+       tampered ciphertext, an envelope from a future build — throws before the caller
+       reaches prepareSettingsImport, so nothing is ever partially applied. AES-GCM
+       authenticates, so tampering fails as a decryption error rather than as garbage. */
+    async function readEncryptedBackup(data, passphrase) {
+        const version = Number(data?.[BACKUP_ENVELOPE_KEY]);
+        if (!Number.isInteger(version) || version < 1) throw new Error('This is not a recognized encrypted backup.');
+        if (version > BACKUP_ENVELOPE_VERSION) {
+            throw new Error(`This encrypted backup was written by a newer version of IMDb Enhanced (format ${version}). Update first, then import.`);
+        }
+        const kdf = data.kdf || {};
+        const cipher = data.cipher || {};
+        if (kdf.name !== 'PBKDF2' || kdf.hash !== 'SHA-256' || cipher.name !== 'AES-GCM') {
+            throw new Error('This encrypted backup uses parameters this version cannot read.');
+        }
+        const iterations = Number(kdf.iterations);
+        if (!Number.isInteger(iterations) || iterations < 1000 || iterations > 5000000) {
+            throw new Error('This encrypted backup declares an unusable key-derivation cost.');
+        }
+        const secret = String(passphrase ?? '');
+        if (!secret) throw new Error('Enter the passphrase this backup was encrypted with.');
+        const provider = getCryptoSubtle();
+        let salt;
+        let iv;
+        let ciphertext;
+        try {
+            salt = base64ToBytes(kdf.salt);
+            iv = base64ToBytes(cipher.iv);
+            ciphertext = base64ToBytes(data.ciphertext);
+        } catch { throw new Error('This encrypted backup is malformed and was not imported.'); }
+        if (salt.length < 8 || iv.length !== BACKUP_IV_BYTES || !ciphertext.length) {
+            throw new Error('This encrypted backup is malformed and was not imported.');
+        }
+        const key = await deriveBackupKey(provider, secret, salt, iterations);
+        let plaintext;
+        try {
+            plaintext = await provider.subtle.decrypt({ name:'AES-GCM', iv }, key, ciphertext);
+        } catch {
+            throw new Error('Wrong passphrase, or the backup has been altered. Nothing was changed.');
+        }
+        try { return JSON.parse(new TextDecoder().decode(plaintext)); }
+        catch { throw new Error('The backup decrypted but its contents are not valid settings JSON.'); }
     }
 
     function applySettingsImport(entries) {
@@ -8122,6 +8258,12 @@ section[data-testid="hero-parent"].enh-editorial-native-hidden { display: none !
     border-radius: 10px;
     background: ${t.sf1};
 }
+.enh-backup-passphrase { margin-top: 10px; display: flex; flex-direction: column; gap: 4px; }
+/* The UA's [hidden] rule loses to the display above, so the passphrase row would be
+   permanently visible. Same defect as the catalog entries. */
+.enh-backup-passphrase[hidden] { display: none; }
+.enh-backup-passphrase .enh-import-label { margin-bottom: 2px; }
+.enh-backup-passphrase .enh-servarr-input { width: 100%; }
 .enh-import-label {
     display: block;
     margin-bottom: 8px;
@@ -9571,9 +9713,41 @@ section[data-testid="hero-parent"].enh-editorial-native-hidden { display: none !
                 id:'enh-import-textarea', className:'enh-import-textarea', spellcheck:'false', maxlength:String(SETTINGS_IMPORT_TEXT_LIMIT),
                 placeholder:'{ "modernUI": true, "themeVariant": "dark" }',
             }),
+            /* Revealed only when the pasted text turns out to be an encrypted envelope,
+               so the ordinary paste-and-import path gains no extra field. */
+            makeEl('div', { className:'enh-backup-passphrase', id:'enh-import-passphrase-row', hidden:'hidden' },
+                makeEl('label', { className:'enh-import-label', for:'enh-import-passphrase' },
+                    'This backup is encrypted. Enter its passphrase.'),
+                makeEl('input', {
+                    type:'password', id:'enh-import-passphrase', className:'enh-servarr-input',
+                    autocomplete:'off', spellcheck:'false', maxlength:'256',
+                })
+            ),
             makeEl('div', { className:'enh-import-actions' },
                 makeEl('button', { type:'button', className:'enh-settings-footer-btn', id:'enh-import-apply' }, 'Apply import'),
                 makeEl('button', { type:'button', className:'enh-settings-footer-btn', id:'enh-import-cancel' }, 'Cancel')
+            )
+        );
+        const securePanel = makeEl('div', { className:'enh-import-panel', id:'enh-secure-export-panel', hidden:'hidden' },
+            makeEl('div', { className:'enh-import-label' }, 'Encrypted backup with credentials'),
+            makeEl('div', { className:'enh-settings-card-description' },
+                'Choose a passphrase. The backup is encrypted in this browser with it, and there is no way to recover the contents if you forget it.'
+            ),
+            makeEl('div', { className:'enh-backup-passphrase' },
+                makeEl('label', { className:'enh-import-label', for:'enh-secure-passphrase' }, 'Passphrase'),
+                makeEl('input', {
+                    type:'password', id:'enh-secure-passphrase', className:'enh-servarr-input',
+                    autocomplete:'new-password', spellcheck:'false', maxlength:'256',
+                }),
+                makeEl('label', { className:'enh-import-label', for:'enh-secure-passphrase-confirm' }, 'Repeat passphrase'),
+                makeEl('input', {
+                    type:'password', id:'enh-secure-passphrase-confirm', className:'enh-servarr-input',
+                    autocomplete:'new-password', spellcheck:'false', maxlength:'256',
+                })
+            ),
+            makeEl('div', { className:'enh-import-actions' },
+                makeEl('button', { type:'button', className:'enh-settings-footer-btn', id:'enh-secure-export-apply' }, 'Encrypt and copy'),
+                makeEl('button', { type:'button', className:'enh-settings-footer-btn', id:'enh-secure-export-cancel' }, 'Cancel')
             )
         );
         const resetPanel = makeEl('div', {
@@ -9590,9 +9764,14 @@ section[data-testid="hero-parent"].enh-editorial-native-hidden { display: none !
                 makeEl('button', { type:'button', className:'enh-settings-footer-btn', id:'enh-reset-cancel' }, 'Cancel')
             )
         );
-        const backupCard = makeCard('Backup & restore', 'JSON includes preferences, sites, and local integration credentials.');
+        const backupCard = makeCard('Backup & restore', 'A backup covers preferences, sites, and title marks. Integration API keys and tokens are left out unless you choose the encrypted export.');
         backupCard.appendChild(makeEl('div', { className:'enh-data-actions' },
-            makeEl('button', { type:'button', className:'enh-settings-footer-btn', id:'enh-export-btn', title:'Copy all settings to clipboard' }, 'Export settings'),
+            makeEl('button', { type:'button', className:'enh-settings-footer-btn', id:'enh-export-btn', title:'Copy settings to the clipboard without integration credentials' }, 'Export settings'),
+            makeEl('button', {
+                type:'button', className:'enh-settings-footer-btn', id:'enh-secure-export-btn',
+                title:'Copy a passphrase-encrypted backup that includes integration credentials',
+                'aria-controls':'enh-secure-export-panel', 'aria-expanded':'false',
+            }, 'Export with credentials'),
             makeEl('button', {
                 type:'button', className:'enh-settings-footer-btn', id:'enh-import-btn', title:'Import settings from JSON',
                 'aria-controls':'enh-import-panel', 'aria-expanded':'false',
@@ -9604,6 +9783,7 @@ section[data-testid="hero-parent"].enh-editorial-native-hidden { display: none !
             }, 'Reset all settings')
         ));
         backupCard.appendChild(importPanel);
+        backupCard.appendChild(securePanel);
         backupCard.appendChild(resetPanel);
         const cacheCard = makeCard('Cached lookups', 'Scores and availability lookups are cached locally for up to seven days.');
         cacheCard.append(
@@ -9666,10 +9846,22 @@ section[data-testid="hero-parent"].enh-editorial-native-hidden { display: none !
         const setDataDisclosureState = openPanel => {
             const importOpen = openPanel === 'import';
             const resetOpen = openPanel === 'reset';
+            const secureOpen = openPanel === 'secure-export';
             importPanel.hidden = !importOpen;
             resetPanel.hidden = !resetOpen;
+            securePanel.hidden = !secureOpen;
             overlay.querySelector('#enh-import-btn').setAttribute('aria-expanded', String(importOpen));
             overlay.querySelector('#enh-reset-btn').setAttribute('aria-expanded', String(resetOpen));
+            overlay.querySelector('#enh-secure-export-btn').setAttribute('aria-expanded', String(secureOpen));
+            // A passphrase must not survive its panel closing, the way pasted JSON does not.
+            if (!secureOpen) {
+                overlay.querySelector('#enh-secure-passphrase').value = '';
+                overlay.querySelector('#enh-secure-passphrase-confirm').value = '';
+            }
+            if (!importOpen) {
+                overlay.querySelector('#enh-import-passphrase').value = '';
+                overlay.querySelector('#enh-import-passphrase-row').hidden = true;
+            }
         };
 
         overlay.querySelector('.enh-settings-close').addEventListener('click', toggleSettings);
@@ -9702,19 +9894,56 @@ section[data-testid="hero-parent"].enh-editorial-native-hidden { display: none !
         registerCleanup(() => document.removeEventListener('focusin', containSettingsFocus));
         overlay.querySelector('#enh-export-btn').addEventListener('click', () => {
             try {
-                const serialized = JSON.stringify(getExportSettings(), null, 2);
+                const payload = getExportSettings();
+                const serialized = JSON.stringify(payload, null, 2);
                 if (serialized.length > SETTINGS_IMPORT_TEXT_LIMIT) {
                     showToast('Settings exceed the 4 MB backup limit. Remove stale title marks or oversized destinations first.', 5000);
                     return;
                 }
                 const copied = copyTextToClipboard(serialized);
-                showToast(copied
-                    ? 'Settings copied to clipboard'
-                    : COPY_FAILURE_MESSAGE, copied ? 2500 : 4500);
+                if (!copied) { showToast(COPY_FAILURE_MESSAGE, 4500); return; }
+                // Naming what was left out is the point: a silent omission is how someone
+                // restores a backup and then wonders why Radarr stopped working.
+                const omitted = payload[EXPORT_REDACTED_KEY] || [];
+                showToast(omitted.length
+                    ? `Settings copied. ${omitted.length} integration ${omitted.length === 1 ? 'credential was' : 'credentials were'} left out — use Export with credentials to include ${omitted.length === 1 ? 'it' : 'them'}.`
+                    : 'Settings copied to clipboard', omitted.length ? 6000 : 2500);
             } catch (error) {
                 console.warn('[IMDb Enhanced] settings export failed:', error);
                 showToast('Settings could not be read for export. No backup was copied.', 4500);
             }
+        });
+        overlay.querySelector('#enh-secure-export-btn').addEventListener('click', () => {
+            setDataDisclosureState('secure-export');
+            requestAnimationFrame(() => {
+                securePanel.scrollIntoView({ block:'nearest' });
+                overlay.querySelector('#enh-secure-passphrase').focus();
+            });
+        });
+        overlay.querySelector('#enh-secure-export-cancel').addEventListener('click', () => {
+            setDataDisclosureState('');
+            overlay.querySelector('#enh-secure-export-btn').focus();
+        });
+        overlay.querySelector('#enh-secure-export-apply').addEventListener('click', async () => {
+            const apply = overlay.querySelector('#enh-secure-export-apply');
+            const passphrase = overlay.querySelector('#enh-secure-passphrase').value;
+            const confirmation = overlay.querySelector('#enh-secure-passphrase-confirm').value;
+            if (passphrase !== confirmation) { showToast('The two passphrases do not match.', 4000); return; }
+            apply.disabled = true;
+            try {
+                const serialized = await createEncryptedBackup(passphrase);
+                if (serialized.length > SETTINGS_IMPORT_TEXT_LIMIT) {
+                    showToast('Settings exceed the 4 MB backup limit. Remove stale title marks first.', 5000);
+                    return;
+                }
+                const copied = copyTextToClipboard(serialized);
+                if (!copied) { showToast(COPY_FAILURE_MESSAGE, 4500); return; }
+                setDataDisclosureState('');
+                showToast('Encrypted backup copied. Keep the passphrase; it cannot be recovered.', 6000);
+            } catch (error) {
+                console.warn('[IMDb Enhanced] encrypted export failed:', error);
+                showToast(error?.message || 'The encrypted backup could not be created.', 5000);
+            } finally { apply.disabled = false; }
         });
         overlay.querySelector('#enh-import-btn').addEventListener('click', () => {
             setDataDisclosureState('import');
@@ -9746,12 +9975,33 @@ section[data-testid="hero-parent"].enh-editorial-native-hidden { display: none !
                 showToast(error.message || 'Reset failed. Previous settings were restored.', 4500);
             }
         });
-        overlay.querySelector('#enh-import-apply').addEventListener('click', () => {
+        /* Reveal the passphrase field as soon as the pasted text is recognizable as an
+           encrypted envelope, rather than making the user press Apply to find out. */
+        overlay.querySelector('#enh-import-textarea').addEventListener('input', () => {
+            const raw = overlay.querySelector('#enh-import-textarea').value.trim();
+            let encrypted = false;
+            if (raw.startsWith('{') && raw.includes(BACKUP_ENVELOPE_KEY)) {
+                try { encrypted = isEncryptedBackup(JSON.parse(raw)); }
+                catch { encrypted = false; }
+            }
+            const row = overlay.querySelector('#enh-import-passphrase-row');
+            if (row.hidden === encrypted) row.hidden = !encrypted;
+            if (!encrypted) overlay.querySelector('#enh-import-passphrase').value = '';
+        });
+        overlay.querySelector('#enh-import-apply').addEventListener('click', async () => {
+            const apply = overlay.querySelector('#enh-import-apply');
             const raw = overlay.querySelector('#enh-import-textarea').value.trim();
             if (!raw) { showToast('Paste settings JSON before importing'); return; }
             if (raw.length > SETTINGS_IMPORT_TEXT_LIMIT) { showToast('Import is too large. Use a complete export under 4 MB.'); return; }
+            apply.disabled = true;
             try {
-                const data = JSON.parse(raw);
+                let data = JSON.parse(raw);
+                /* Decryption happens first and completely. A wrong passphrase or an
+                   altered file fails here, before prepareSettingsImport has produced a
+                   single entry, so a bad import cannot be partially applied. */
+                if (isEncryptedBackup(data)) {
+                    data = await readEncryptedBackup(data, overlay.querySelector('#enh-import-passphrase').value);
+                }
                 const { entries, ignored } = prepareSettingsImport(data);
                 const imported = applySettingsImport(entries);
                 const skipped = ignored ? `; skipped ${ignored} invalid or unknown` : '';
@@ -9761,8 +10011,8 @@ section[data-testid="hero-parent"].enh-editorial-native-hidden { display: none !
                 const message = error instanceof SyntaxError
                     ? 'Import failed. Check the JSON syntax and try again.'
                     : error.message || 'Import failed. No settings were changed.';
-                showToast(message);
-            }
+                showToast(message, 5000);
+            } finally { apply.disabled = false; }
         });
         overlay.querySelector('#enh-clearcache-btn').addEventListener('click', () => {
             let keys;

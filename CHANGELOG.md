@@ -4,6 +4,8 @@
 
 ### Security
 
+- A backup no longer puts your API keys on the clipboard. Export settings used to include every Radarr, Sonarr, Overseerr, Plex, Jellyfin, and Emby credential in plain text, and the clipboard is readable by other pages and remembered by clipboard managers. The normal export now leaves those out and tells you which ones it left out. Restoring such a backup keeps the credentials already on that device rather than blanking them. If you do need to move them, Export with credentials asks for a passphrase and encrypts the whole backup with it (PBKDF2-SHA256 at 310,000 iterations, then AES-GCM, with a fresh salt and nonce every time). Importing one asks for the passphrase as soon as it recognizes the file, and a wrong passphrase or an altered file is refused before a single setting is written.
+
 - The extension's privileged fetch no longer follows a redirect anywhere it likes. It checked the address it was asked for, then let the network take it wherever a redirect pointed, which mattered most for calls to Radarr, Sonarr, Plex, Jellyfin, and Emby: those carry your API key in a header, and a redirect would have carried the header along to whatever answered. A request holding a credential now refuses to redirect at all, every response is re-checked against the address it actually came from, and a hop between a local and a public address is rejected outright. Letterboxd's IMDb lookup, which is a genuine redirect within its own site, still works. A blocked redirect now says so rather than reading as a network error.
 
 ### Fixed

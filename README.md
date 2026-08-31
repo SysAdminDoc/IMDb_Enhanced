@@ -117,7 +117,7 @@ The redesigned visual reference set covers every menu page: [Experience](design/
 
 **Integrations** - Tabbed Radarr/Sonarr and Plex/Jellyfin/Emby local-service configuration with arrow/Home/End keyboard navigation.
 
-**Data** - Local mark review, validated JSON backup/restore up to 4 MB, cache status/clearing, and an explicit two-step reset with backup guidance.
+**Data** - Local mark review, validated JSON backup/restore up to 4 MB with optional passphrase-encrypted credential export, cache status/clearing, and an explicit two-step reset with backup guidance.
 
 **Watch Sites** - Add, remove, reorder, show/hide, categorize, and customize streaming site buttons with name, URL template, and color. The FMHY streaming catalog sits under the editor: a filterable list of every streaming destination from that wiki, grouped by its sections (stream aggregators, P-Stream forks, dedicated server, multi-server, backups, and legal free-with-ads services). Adding one creates a normal editable row, and entries already in your list read as Added. A list holds up to 250 destinations, enough for the whole catalog at once.
 
@@ -129,7 +129,9 @@ The redesigned visual reference set covers every menu page: [Experience](design/
 
 **URL Templates** - Use `{{TITLE}}`, `{{TITLE_DASH}}`, `{{TITLE_SLUG}}`, `{{IMDB_ID}}`, `{{IMDB_NUM}}`, `{{TRAKT_TYPE}}`, `{{YEAR}}` in custom site URLs.
 
-**Import/Export** - Full JSON backup (including remembered section state) and validated, transactional restore up to 4 MB. Invalid or unknown fields are skipped; a storage failure restores the prior values before reporting the error.
+**Import/Export** - JSON backup (including remembered section state) and validated, transactional restore up to 4 MB. Invalid or unknown fields are skipped; a storage failure restores the prior values before reporting the error.
+
+Integration API keys and tokens are left out of an ordinary backup, which names what it omitted, and restoring one keeps whatever credentials that device already has. **Export with credentials** is the separate action that includes them: it asks for a passphrase, derives a key with PBKDF2-SHA256 at 310,000 iterations, and encrypts the backup with AES-GCM under a fresh salt and nonce. Importing one asks for the passphrase as soon as it recognizes the file. A wrong passphrase or a modified file is refused before anything is written, and nothing can recover the contents if you lose the passphrase.
 
 ## Themes
 
