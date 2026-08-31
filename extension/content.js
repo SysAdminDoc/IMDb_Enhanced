@@ -330,8 +330,106 @@
        IMDb's own test ids, never displayed text, so a translated string can never change
        which code path runs. */
     const MESSAGES = Object.freeze({
+        aria_action_for_title: '$1 for $2',
+        aria_candidate_matches: 'Candidate matches',
+        aria_choose_an_imdb_or_letterboxd_csv: 'Choose an IMDb or Letterboxd CSV file',
+        aria_clear_all_saved_title_marks: 'Clear all saved title marks',
+        aria_clear_mark_for: 'Clear mark for $1',
+        aria_close_correction_panel: 'Close correction panel',
+        aria_close_trailer: 'Close trailer',
+        aria_confirm_clearing_saved_title_marks: 'Confirm clearing $1 saved title marks',
+        aria_copy_imdb_id: 'Copy IMDb ID $1',
+        aria_correct_match: 'Correct $1 match',
+        aria_correct_the_match_for_this_title: 'Correct the $1 match for this title',
+        aria_destination_category: 'Destination category',
+        aria_destination_color: 'Destination color',
+        aria_destination_name: 'Destination name',
+        aria_destination_row_in_list: '$1 in $2',
+        aria_dim_titles_rated_below: 'Dim titles rated below',
+        aria_dismiss_the_update_notice: 'Dismiss the $1 update notice',
+        aria_filter_by_private_marks: 'Filter by private marks',
+        aria_filter_catalog_destinations: 'Filter catalog destinations',
+        aria_find_subtitles_for: 'Find subtitles for $1',
+        aria_follow_system_theme: 'Follow system theme',
+        aria_grant_access_to: 'Grant $1 access to $2',
+        aria_import_imdb_watched_titles_shown_on: 'Import IMDb Watched titles shown on this page into private Seen marks',
+        aria_integration_service_tabs: '$1 services',
+        aria_jump_to: 'Jump to $1',
+        aria_look_up_again: 'Look up $1 again',
+        aria_move_destination_down: 'Move destination down',
+        aria_move_destination_up: 'Move destination up',
+        aria_move_down: 'Move $1 down',
+        aria_move_up: 'Move $1 up',
+        aria_on_this_page: 'On this page',
+        aria_open_imdb_enhanced_settings: 'Open IMDb Enhanced settings',
+        aria_open_link: 'Open $1 link: $2',
+        aria_open_on_in_a_new_tab: 'Open $1 on $2 in a new tab',
+        aria_open_search_for: 'Open $1 search for $2',
+        aria_prepare_visible_titles_for: 'Prepare visible titles for $1',
+        aria_private_note: 'Private note',
+        aria_private_note_about: 'Private note about $1',
+        aria_recorded_failures: 'Recorded failures',
+        aria_remove_destination: 'Remove destination',
+        aria_remove_destination_from_list: 'Remove $1 from $2',
+        aria_reveal_episode_synopsis: 'Reveal episode synopsis',
+        aria_reveal_plot_synopsis: 'Reveal plot synopsis',
+        aria_reviews_and_research: 'Reviews and research',
+        aria_save_a_private_seen_mark_for: 'Save a private Seen mark for $1; does not change IMDb Watched',
+        aria_save_a_private_skip_mark_for: 'Save a private Skip mark for $1; does not change IMDb Watched',
+        aria_search_queue: '$1 search queue',
+        aria_season_averages: 'Season averages',
+        aria_season_progress: 'Season progress',
+        aria_show_destination_on_imdb_pages: 'Show destination on IMDb pages',
+        aria_show_on_imdb_pages: 'Show $1 on IMDb pages',
+        aria_tell_me_about_new_versions: 'Tell me about new versions',
+        aria_title_navigation: 'Title navigation',
+        aria_title_ratings_and_availability: 'Title ratings and availability',
+        aria_title_surface: '$1 title surface',
+        aria_title_topics: 'Title topics',
+        aria_title_url: '$1 title URL',
+        aria_top_rated_episodes: 'Top rated episodes',
+        aria_url_template: 'URL template',
+        aria_use_theme: 'Use $1 theme',
+        aria_watch_movie_and_show_sites: 'Watch movie and show sites',
+        aria_where_streaming_availability_comes_from: 'Where streaming availability comes from',
+        field_a_private_note_about_this_title: 'A private note about this title. Stored on this device only.',
+        field_const_your_rating_date_rated_title: 'Const,Your Rating,Date Rated,Title\ntt0133093,9,2026-08-31,The Matrix',
+        field_filter_by_site_name_or_address: 'Filter by site name or address',
+        field_http_localhost_32400: 'http://localhost:32400',
+        field_http_localhost_5055: 'http://localhost:5055',
+        field_http_localhost_7878: 'http://localhost:7878',
+        field_http_localhost_8096: 'http://localhost:8096',
+        field_http_localhost_8989: 'http://localhost:8989',
+        field_https_example_com_search_q_title: 'https://example.com/search?q={{TITLE}}',
+        field_modernui_true_themevariant_dark: '{ "modernUI": true, "themeVariant": "dark" }',
+        field_paste_a_title_url: 'Paste a $1 title URL',
+        field_paste_your_omdb_key: 'Paste your OMDb key',
+        field_paste_your_v4_read_access_token: 'Paste your v4 read access token',
+        field_radarr_root_folder_hint: '/movies',
+        field_site_name: 'Site name',
+        field_sonarr_root_folder_hint: '/tv',
+        field_two_letter_country_code_such_as: 'Two-letter country code, such as US or GB',
+        text_all_opened: 'All opened',
+        text_cache_remaining: '$1 cached entries · $2',
+        text_candidate_matches_could_not_be_loaded: 'Candidate matches could not be loaded. Paste a title URL or mark no entry.',
+        text_clear_all: 'Clear all',
+        text_confirm_clear_marks: 'Confirm clear $1',
+        text_copy_imdb_ids: 'Copy $1 IMDb IDs',
+        text_correction_candidate_count: '$1 candidate $2.',
+        text_csv_import_is_too_large_choose: 'CSV import is too large. Choose a file under 4 MB.',
+        text_no_candidate_matches_were_found_paste: 'No candidate matches were found. Paste a title URL or mark no entry.',
+        text_open_next_of: 'Open next ($1 of $2)',
+        text_preview_required_nothing_has_been_changed: 'Preview required. Nothing has been changed.',
+        text_queue_opened_progress: '$1 of $2 opened',
+        text_save_failed: 'Save failed',
+        text_saved_locally: 'Saved locally',
+        text_saved_mark_count: '$1 saved',
+        text_saving: 'Saving…',
+        text_settings_saved: 'Saved',
+        text_the_selected_file_could_not_be: 'The selected file could not be read.',
+        text_unavailable: 'Unavailable',
+        text_use_a_valid_title_url: 'Use a valid $1 title URL.',
         toast_a_site_list_can_contain_up: 'A site list can contain up to $1 destinations',
-        toast_added_to: '$1 added to $2',
         toast_all_imdb_watched_on_this_page: 'All $1 IMDb Watched $2 on this page already have a local mark',
         toast_cache_could_not_be_read_or: 'Cache could not be read or cleared.',
         toast_cache_is_already_empty: 'Cache is already empty',
@@ -348,10 +446,11 @@
         toast_could_not_start_reload_and_try: '$1 could not start. Reload and try again.',
         toast_credentials_must_be_at_most_4: 'Credentials must be at most 4,096 characters without control characters',
         toast_current_settings_could_not_be_read: 'Current settings could not be read, so nothing was reset: $1',
+        toast_destination_added_to_list: '$1 added to $2',
+        toast_destination_removed_from_list: '$1 removed from $2',
         toast_encrypted_backup_copied_keep_the_passphrase: 'Encrypted backup copied. Keep the passphrase; it cannot be recovered.',
         toast_enter_a_name_valid_http_s: 'Enter a name, valid HTTP(S) URL, category, and supported template tokens',
         toast_episode_synopsis_revealed: 'Episode synopsis revealed',
-        toast_failed: '$1 $2 failed: $3',
         toast_failure_journal_cleared: 'Failure journal cleared',
         toast_finish_or_remove_the_incomplete_site: 'Finish or remove the incomplete site row before changing the order',
         toast_finish_or_remove_the_incomplete_site_2: 'Finish or remove the incomplete site row before changing the list',
@@ -370,12 +469,12 @@
         toast_plot_synopsis_revealed: 'Plot synopsis revealed',
         toast_press_the_clear_button_again_within: 'Press the clear button again within 5 seconds to remove every mark',
         toast_preview_the_csv_before_importing: 'Preview the CSV before importing.',
-        toast_removed_from: '$1 removed from $2',
         toast_reset_settings_reloading: 'Reset $1 settings. Reloading...',
         toast_reset_settings_use_the_manager_menu: 'Reset $1 settings. Use the manager menu\'s Undo command to put them back.',
         toast_reset_to_defaults: '$1 reset to defaults',
         toast_season_marks_restored: 'Season marks restored',
         toast_sent_to_your_imdb_watchlist: 'Sent to your IMDb watchlist',
+        toast_service_action_failed: '$1 $2 failed: $3',
         toast_settings_could_not_be_read_for: 'Settings could not be read for export. No backup was copied.',
         toast_settings_exceed_the_4_mb_backup: 'Settings exceed the 4 MB backup limit. Remove stale title marks or oversized destinations first.',
         toast_settings_exceed_the_4_mb_backup_2: 'Settings exceed the 4 MB backup limit. Remove stale title marks first.',
@@ -2438,19 +2537,19 @@
             id:'enh-editorial-surface',
             className:'enh-editorial-surface',
             role:'region',
-            'aria-label':`${title} title surface`,
+            'aria-label':t('aria_title_surface', [title]),
         });
         if (posterSource) surface.style.setProperty('--enh-editorial-backdrop', getEditorialBackdropValue(posterSource));
 
         const subnav = makeEl('div', { className:'enh-editorial-subnav' });
-        const subnavLeft = makeEl('nav', { className:'enh-editorial-subnav__left', 'aria-label':'Title navigation' });
+        const subnavLeft = makeEl('nav', { className:'enh-editorial-subnav__left', 'aria-label':t('aria_title_navigation') });
         if (isTVType()) {
             subnavLeft.appendChild(makeEl('a', {
                 href:`/title/${imdbId}/episodes/`,
                 className:'enh-editorial-subnav__link',
             }, 'Episode guide'));
         }
-        const subnavRight = makeEl('nav', { className:'enh-editorial-subnav__right', 'aria-label':'Title topics' });
+        const subnavRight = makeEl('nav', { className:'enh-editorial-subnav__right', 'aria-label':t('aria_title_topics') });
         [
             ['Cast & crew', `/title/${imdbId}/fullcredits/`],
             ['User reviews', `/title/${imdbId}/reviews/`],
@@ -2481,7 +2580,7 @@
         const scoreRail = makeEl('div', {
             id:'enh-editorial-score-rail',
             role:'group',
-            'aria-label':'Title ratings and availability',
+            'aria-label':t('aria_title_ratings_and_availability'),
         });
         const hero = makeEl('div', { className:'enh-editorial-hero' }, poster, identity, scoreRail);
 
@@ -2530,7 +2629,7 @@
             titleNode.textContent = title;
             // The heading is ellipsized on desktop, so the full text has to stay readable.
             titleNode.title = title;
-            surface.setAttribute('aria-label', `${title} title surface`);
+            surface.setAttribute('aria-label', t('aria_title_surface', [title]));
             const poster = surface.querySelector('.enh-editorial-poster img');
             if (poster) poster.alt = `${title} poster`;
         }
@@ -3733,7 +3832,7 @@
                 target:'_blank', rel:'noopener noreferrer',
             }, 'Get it'),
             makeEl('button', {
-                type:'button', className:'enh-update-notice__dismiss', 'aria-label':`Dismiss the ${latest} update notice`,
+                type:'button', className:'enh-update-notice__dismiss', 'aria-label':t('aria_dismiss_the_update_notice', [latest]),
                 onClick: () => {
                     trySaveSetting('updateDismissedVersion', latest, { notify:false });
                     document.getElementById('enh-update-notice')?.remove();
@@ -6936,7 +7035,7 @@ section[id*="quote" i] .ipc-list-card { padding: 4px 0 !important; margin: 2px 0
             className:'enh-score-correction-trigger',
             'aria-expanded':'false',
             'aria-controls':panelId,
-            'aria-label':`Correct the ${config.label} match for this title`,
+            'aria-label':t('aria_correct_the_match_for_this_title', [config.label]),
         }, 'Wrong?');
         const closePanel = (restoreFocus = false) => {
             widget.querySelector?.('.enh-score-correction')?.remove();
@@ -6963,12 +7062,12 @@ section[id*="quote" i] .ipc-list-card { padding: 4px 0 !important; margin: 2px 0
             const status = makeEl('div', {
                 className:'enh-score-correction__status', role:'status', 'aria-live':'polite',
             }, 'Loading candidate matches...');
-            const choices = makeEl('div', { className:'enh-score-correction__choices', role:'group', 'aria-label':'Candidate matches' });
+            const choices = makeEl('div', { className:'enh-score-correction__choices', role:'group', 'aria-label':t('aria_candidate_matches') });
             const manualInput = makeEl('input', {
                 type:'url',
                 className:'enh-score-correction__input',
-                placeholder:`Paste a ${config.label} title URL`,
-                'aria-label':`${config.label} title URL`,
+                placeholder:t('field_paste_a_title_url', [config.label]),
+                'aria-label':t('aria_title_url', [config.label]),
                 maxlength:String(SCORE_CORRECTION_URL_LIMIT),
                 value:current?.mode === 'url' ? current.url : '',
             });
@@ -6976,12 +7075,12 @@ section[id*="quote" i] .ipc-list-card { padding: 4px 0 !important; margin: 2px 0
                 id:panelId,
                 className:'enh-score-correction',
                 role:'dialog',
-                'aria-label':`Correct ${config.label} match`,
+                'aria-label':t('aria_correct_match', [config.label]),
             },
                 makeEl('div', { className:'enh-score-correction__header' },
                     makeEl('strong', {}, `Correct ${config.label}`),
                     makeEl('button', {
-                        type:'button', className:'enh-score-correction__close', 'aria-label':'Close correction panel',
+                        type:'button', className:'enh-score-correction__close', 'aria-label':t('aria_close_correction_panel'),
                         onClick:() => closePanel(true),
                     }, '×')
                 ),
@@ -7002,7 +7101,7 @@ section[id*="quote" i] .ipc-list-card { padding: 4px 0 !important; margin: 2px 0
                             const url = normalizeScoreCorrectionUrl(provider, manualInput.value);
                             manualInput.setAttribute('aria-invalid', String(!url));
                             if (!url) {
-                                status.textContent = `Use a valid ${config.label} title URL.`;
+                                status.textContent = t('text_use_a_valid_title_url', [config.label]);
                                 return;
                             }
                             applyCorrection({ mode:'url', url });
@@ -7037,7 +7136,7 @@ section[id*="quote" i] .ipc-list-card { padding: 4px 0 !important; margin: 2px 0
                 if (!panel.isConnected) return;
                 choices.replaceChildren();
                 if (!candidates.length) {
-                    status.textContent = 'No candidate matches were found. Paste a title URL or mark no entry.';
+                    status.textContent = t('text_no_candidate_matches_were_found_paste');
                     return;
                 }
                 candidates.forEach(candidate => {
@@ -7053,9 +7152,9 @@ section[id*="quote" i] .ipc-list-card { padding: 4px 0 !important; margin: 2px 0
                         }),
                     }, label));
                 });
-                status.textContent = `${choices.children.length} candidate ${choices.children.length === 1 ? 'match' : 'matches'}.`;
+                status.textContent = t('text_correction_candidate_count', [choices.children.length, choices.children.length === 1 ? 'match' : 'matches']);
             } catch {
-                if (panel.isConnected) status.textContent = 'Candidate matches could not be loaded. Paste a title URL or mark no entry.';
+                if (panel.isConnected) status.textContent = t('text_candidate_matches_could_not_be_loaded');
             }
         });
         widget.appendChild(trigger);
@@ -7186,7 +7285,7 @@ section[id*="quote" i] .ipc-list-card { padding: 4px 0 !important; margin: 2px 0
             makeEl('button', {
                 type:'button',
                 className:'enh-score-stale__retry',
-                'aria-label':`Look up ${feature.name} again`,
+                'aria-label':t('aria_look_up_again', [feature.name]),
                 onClick: () => refreshFeature(feature.key),
             }, 'Retry')
         ));
@@ -8131,7 +8230,7 @@ section[id*="quote" i] .ipc-list-card { padding: 4px 0 !important; margin: 2px 0
                 plotFull.setAttribute('role', 'button');
                 plotFull.setAttribute('tabindex', '0');
                 plotFull.setAttribute('aria-pressed', 'false');
-                plotFull.setAttribute('aria-label', 'Reveal plot synopsis');
+                plotFull.setAttribute('aria-label', t('aria_reveal_plot_synopsis'));
                 plotFull.title = 'Click or press Enter to reveal plot synopsis';
                 const reveal = () => {
                     if (plotFull.classList.contains('enh-revealed')) return;
@@ -8209,12 +8308,12 @@ section[id*="quote" i] .ipc-list-card { padding: 4px 0 !important; margin: 2px 0
                     || document.querySelector('section[data-testid="hero-parent"]')
                 : document.querySelector(`section[data-testid="${item.id}"]`));
 
-            const nav = makeEl('nav', { id:'enh-quicknav', 'aria-label':'On this page' });
+            const nav = makeEl('nav', { id:'enh-quicknav', 'aria-label':t('aria_on_this_page') });
             this._navItems.forEach(s => {
                 if (!resolveSection(s)) return;
                 nav.appendChild(makeEl('button', {
                     className:'enh-qn-dot', type:'button', dataset:{ label:s.label }, textContent:s.label,
-                    title: s.label, 'aria-label': `Jump to ${s.label}`,
+                    title: s.label, 'aria-label': t('aria_jump_to', [s.label]),
                     /* A roving tabindex: the rail is one stop in the page's tab order and
                        arrow keys move within it, rather than every section becoming its
                        own stop between the page content and whatever follows. */
@@ -8277,7 +8376,7 @@ section[id*="quote" i] .ipc-list-card { padding: 4px 0 !important; margin: 2px 0
                 const wrap = makeEl('section', {
                     id:'enh-search-buttons',
                     role:'region',
-                    'aria-label':'Watch movie and show sites',
+                    'aria-label':t('aria_watch_movie_and_show_sites'),
                 });
                 const label = makeEl('div', { id:'enh-watch-label', className:'enh-stream-label' },
                     makeEl('span', { className:'enh-stream-label__dot' }),
@@ -8305,7 +8404,7 @@ section[id*="quote" i] .ipc-list-card { padding: 4px 0 !important; margin: 2px 0
                         dataset:{ url },
                         style:{ '--btn-color':site.color },
                         title:`Search ${site.name} for ${title}`,
-                        'aria-label': `Open ${site.name} search for ${title}`,
+                        'aria-label': t('aria_open_search_for', [site.name, title]),
                     }, ...contents);
                 };
                 /* The dock may already exist and belong to the editorial surface; this
@@ -8384,7 +8483,7 @@ section[id*="quote" i] .ipc-list-card { padding: 4px 0 !important; margin: 2px 0
                 const bar = makeEl('section', {
                     id:'enh-external-links',
                     role:'region',
-                    'aria-label':'Reviews and research',
+                    'aria-label':t('aria_reviews_and_research'),
                 });
                 bar.appendChild(makeEl('div', { className:'enh-external-links__header' },
                     makeEl('div', { className:'enh-external-links__title' }, 'Reviews & research'),
@@ -8405,7 +8504,7 @@ section[id*="quote" i] .ipc-list-card { padding: 4px 0 !important; margin: 2px 0
                             rel:'noopener noreferrer',
                             className:'enh-ext-link',
                             style:{ '--link-color':link.color },
-                            'aria-label': `Open ${getSiteCategoryLabel(link.category)} link: ${link.name}`,
+                            'aria-label': t('aria_open_link', [getSiteCategoryLabel(link.category), link.name]),
                         }, link.name));
                     });
                     group.appendChild(row);
@@ -8618,7 +8717,7 @@ section[id*="quote" i] .ipc-list-card { padding: 4px 0 !important; margin: 2px 0
                    first and last without a focusable node claiming to be hidden. */
                 makeEl('div', { className:'enh-trailer-header' },
                     makeEl('div', { className:'enh-trailer-title', id:'enh-trailer-title' }, `${getTitleText()} trailer`),
-                    makeEl('button', { type:'button', className:'enh-trailer-close', 'aria-label':'Close trailer', onClick:close }, '×')
+                    makeEl('button', { type:'button', className:'enh-trailer-close', 'aria-label':t('aria_close_trailer'), onClick:close }, '×')
                 ),
                 makeEl('div', { className:'enh-trailer-body' },
                     makeEl('div', { role:'status', 'aria-live':'polite' }, message)
@@ -8979,7 +9078,7 @@ section[id*="quote" i] .ipc-list-card { padding: 4px 0 !important; margin: 2px 0
                         dataset: { enhMarkAction: 'watched' },
                         'aria-pressed': 'false',
                         title: 'Save a private local Seen mark',
-                        'aria-label': `Save a private Seen mark for ${title || imdbId}; does not change IMDb Watched`,
+                        'aria-label': t('aria_save_a_private_seen_mark_for', [title || imdbId]),
                     }, 'Seen'),
                     makeEl('button', {
                         type: 'button',
@@ -8987,13 +9086,13 @@ section[id*="quote" i] .ipc-list-card { padding: 4px 0 !important; margin: 2px 0
                         dataset: { enhMarkAction: 'skip' },
                         'aria-pressed': 'false',
                         title: 'Save a private local Skip mark',
-                        'aria-label': `Save a private Skip mark for ${title || imdbId}; does not change IMDb Watched`,
+                        'aria-label': t('aria_save_a_private_skip_mark_for', [title || imdbId]),
                     }, 'Skip'),
                     makeEl('button', {
                         type: 'button',
                         className: 'enh-mark-btn enh-mark-btn--clear',
                         dataset: { enhMarkAction: 'clear' },
-                        'aria-label': `Clear mark for ${title || imdbId}`,
+                        'aria-label': t('aria_clear_mark_for', [title || imdbId]),
                     }, 'Clear')
                 );
                 card.appendChild(controls);
@@ -9220,8 +9319,8 @@ section[id*="quote" i] .ipc-list-card { padding: 4px 0 !important; margin: 2px 0
                     id:'enh-title-note-input',
                     maxlength:String(USER_MARK_NOTE_LIMIT),
                     spellcheck:'true',
-                    placeholder:'A private note about this title. Stored on this device only.',
-                    'aria-label':`Private note about ${getTitleText() || 'this title'}`,
+                    placeholder:t('field_a_private_note_about_this_title'),
+                    'aria-label':t('aria_private_note_about', [getTitleText() || 'this title']),
                     'aria-describedby':'enh-title-note-count',
                 });
                 count.id = 'enh-title-note-count';
@@ -9248,7 +9347,7 @@ section[id*="quote" i] .ipc-list-card { padding: 4px 0 !important; margin: 2px 0
                 area.addEventListener('input', () => {
                     paintCount();
                     status.dataset.state = '';
-                    status.textContent = 'Saving…';
+                    status.textContent = t('text_saving');
                     clearTimeout(saveTimer);
                     saveTimer = setTimeout(commit, 600);
                 });
@@ -9260,7 +9359,7 @@ section[id*="quote" i] .ipc-list-card { padding: 4px 0 !important; margin: 2px 0
                 this._cleanup = () => { clearTimeout(saveTimer); clearTimeout(statusTimer); };
 
                 const wrap = makeEl('section', {
-                    id:'enh-title-note', role:'region', 'aria-label':'Private note',
+                    id:'enh-title-note', role:'region', 'aria-label':t('aria_private_note'),
                 },
                     makeEl('div', { className:'enh-title-note__head' },
                         makeEl('span', { className:'enh-title-note__label' }, 'Private note'),
@@ -9375,7 +9474,7 @@ section[id*="quote" i] .ipc-list-card { padding: 4px 0 !important; margin: 2px 0
             `, 'enh-mark-filters-css');
 
             const bar = makeEl('div', {
-                id:'enh-mark-filters', role:'radiogroup', 'aria-label':'Filter by private marks',
+                id:'enh-mark-filters', role:'radiogroup', 'aria-label':t('aria_filter_by_private_marks'),
             }, makeEl('span', { className:'enh-mark-filters__label' }, 'Private marks'));
             const empty = makeEl('div', { className:'enh-mark-filters__empty', role:'status', 'aria-live':'polite' });
 
@@ -9549,7 +9648,7 @@ section[id*="quote" i] .ipc-list-card { padding: 4px 0 !important; margin: 2px 0
                         type:'button',
                         className:'enh-servarr-btn',
                         dataset:{ kind:action.kind, state:'add' },
-                        'aria-label': `${action.label} for ${title}`,
+                        'aria-label': t('aria_action_for_title', [action.label, title]),
                         'aria-live':'polite',
                         'aria-atomic':'true',
                         onClick: async () => {
@@ -9575,7 +9674,7 @@ section[id*="quote" i] .ipc-list-card { padding: 4px 0 !important; margin: 2px 0
                             } catch (error) {
                                 if (!isCurrent()) return;
                                 console.warn('[IMDb Enhanced] integration action failed:', error);
-                                showToast(t('toast_failed', [service, action.kind === 'seerr' ? 'request' : 'add', getRequestErrorMessage(error)]), 4500);
+                                showToast(t('toast_service_action_failed', [service, action.kind === 'seerr' ? 'request' : 'add', getRequestErrorMessage(error)]), 4500);
                                 this._setState(btn, 'add', original, originalLabel, { enabled:true });
                             }
                         },
@@ -9768,7 +9867,7 @@ section[id*="quote" i] .ipc-list-card { padding: 4px 0 !important; margin: 2px 0
                     }).catch(error => {
                         if (!isCurrent()) return;
                         pill.classList.add('enh-media-server-pill--error');
-                        state.textContent = 'Unavailable';
+                        state.textContent = t('text_unavailable');
                         pill.title = `${server.label}: ${getRequestErrorMessage(error)}`;
                     });
                 });
@@ -9983,7 +10082,7 @@ section[id*="quote" i] .ipc-list-card { padding: 4px 0 !important; margin: 2px 0
                     plot.setAttribute('role', 'button');
                     plot.setAttribute('tabindex', '0');
                     plot.setAttribute('aria-pressed', 'false');
-                    plot.setAttribute('aria-label', 'Reveal episode synopsis');
+                    plot.setAttribute('aria-label', t('aria_reveal_episode_synopsis'));
                     plot.title = 'Click or press Enter to reveal episode synopsis';
                 }
             });
@@ -10003,7 +10102,7 @@ section[id*="quote" i] .ipc-list-card { padding: 4px 0 !important; margin: 2px 0
                 .slice(0, 10);
             if (ranked.length < 10) return;
 
-            const panel = makeEl('section', { id:'enh-best-episodes', 'aria-label':'Top rated episodes' });
+            const panel = makeEl('section', { id:'enh-best-episodes', 'aria-label':t('aria_top_rated_episodes') });
             panel.appendChild(makeEl('h3', {}, 'Top rated episodes'));
             const list = makeEl('ol', { className:'enh-best-episodes-list' });
             ranked.forEach((ep, idx) => {
@@ -10146,7 +10245,7 @@ section[id*="quote" i] .ipc-list-card { padding: 4px 0 !important; margin: 2px 0
                     cell.style.setProperty('--enh-heatmap-bg', colour.bg);
                     cell.style.setProperty('--enh-heatmap-text', colour.text);
                 }));
-                const summary = makeEl('div', { id:'enh-heatmap-summary', 'aria-label':'Season averages' });
+                const summary = makeEl('div', { id:'enh-heatmap-summary', 'aria-label':t('aria_season_averages') });
                 summary.appendChild(makeEl('span', { className:'enh-heatmap-chip enh-heatmap-chip--label' }, 'Season average'));
                 seasons.forEach((episodes, index) => {
                     const average = summarizeHeatmapSeason(episodes);
@@ -10289,7 +10388,7 @@ section[id*="quote" i] .ipc-list-card { padding: 4px 0 !important; margin: 2px 0
                         target:'_blank',
                         rel:'noopener noreferrer',
                         className:'enh-ep-sub',
-                        'aria-label':`Find subtitles for ${row.label || row.id}`,
+                        'aria-label':t('aria_find_subtitles_for', [row.label || row.id]),
                     }, 'Subtitles'));
                 });
             };
@@ -10367,7 +10466,7 @@ section[id*="quote" i] .ipc-list-card { padding: 4px 0 !important; margin: 2px 0
                         return;
                     }
                     showToast(t('toast_copied_imdb_ids', [ids.length]));
-                    btn.textContent = `Copy ${ids.length} IMDb IDs`;
+                    btn.textContent = t('text_copy_imdb_ids', [ids.length]);
                 },
             }, `Copy ${this._ids().length || 'all'} IMDb IDs`);
 
@@ -10627,7 +10726,7 @@ section[id*="quote" i] .ipc-list-card { padding: 4px 0 !important; margin: 2px 0
                 onClick: () => this._batch(''),
             }, 'Clear loaded season');
 
-            const bar = makeEl('div', { id:'enh-season-progress', role:'region', 'aria-label':'Season progress' },
+            const bar = makeEl('div', { id:'enh-season-progress', role:'region', 'aria-label':t('aria_season_progress') },
                 count, next, markAll, clearAll, undo, note);
 
             this._paint = () => {
@@ -10927,7 +11026,7 @@ section[id*="quote" i] .ipc-list-card { padding: 4px 0 !important; margin: 2px 0
                     type:'button',
                     className:'enh-multi-search-btn',
                     style:{ '--btn-color': site.color },
-                    'aria-label': `Prepare visible titles for ${site.name}`,
+                    'aria-label': t('aria_prepare_visible_titles_for', [site.name]),
                     onClick: () => this._showQueue(site, btn),
                 }, site.name);
                 bar.appendChild(btn);
@@ -10945,7 +11044,7 @@ section[id*="quote" i] .ipc-list-card { padding: 4px 0 !important; margin: 2px 0
             let nextIndex = 0;
             const queue = makeEl('section', {
                 id:'enh-multi-search-queue', role:'region', tabindex:'-1',
-                'aria-label':`${site.name} search queue`,
+                'aria-label':t('aria_search_queue', [site.name]),
             });
             const status = makeEl('p', {
                 className:'enh-multi-search-queue__status', role:'status', 'aria-live':'polite',
@@ -10962,19 +11061,19 @@ section[id*="quote" i] .ipc-list-card { padding: 4px 0 !important; margin: 2px 0
                     openNext.removeAttribute('href');
                     openNext.removeAttribute('target');
                     openNext.setAttribute('aria-disabled', 'true');
-                    openNext.textContent = 'All opened';
+                    openNext.textContent = t('text_all_opened');
                     return;
                 }
                 openNext.href = entry.url;
                 openNext.target = '_blank';
                 openNext.removeAttribute('aria-disabled');
-                openNext.textContent = `Open next (${nextIndex + 1} of ${entries.length})`;
-                openNext.setAttribute('aria-label', `Open ${entry.name} on ${site.name} in a new tab`);
+                openNext.textContent = t('text_open_next_of', [nextIndex + 1, entries.length]);
+                openNext.setAttribute('aria-label', t('aria_open_on_in_a_new_tab', [entry.name, site.name]));
             };
             const markOpened = index => {
                 opened.add(index);
                 list.children[index]?.classList.add('enh-multi-search-queue__item--opened');
-                status.textContent = `${opened.size} of ${entries.length} opened`;
+                status.textContent = t('text_queue_opened_progress', [opened.size, entries.length]);
                 updateNext();
             };
 
@@ -10982,7 +11081,7 @@ section[id*="quote" i] .ipc-list-card { padding: 4px 0 !important; margin: 2px 0
                 const link = makeEl('a', {
                     href:entry.url, target:'_blank', rel:'noopener noreferrer',
                     className:'enh-multi-search-queue__link',
-                    'aria-label':`Open ${entry.name} on ${site.name} in a new tab`,
+                    'aria-label':t('aria_open_on_in_a_new_tab', [entry.name, site.name]),
                 },
                     makeEl('span', {}, entry.name),
                     makeEl('span', { className:'enh-multi-search-queue__link-meta' }, `${entry.id} · New tab`)
@@ -11121,7 +11220,7 @@ section[id*="quote" i] .ipc-list-card { padding: 4px 0 !important; margin: 2px 0
                 if (!imdbId) return;
                 const btn = makeEl('button', {
                     id:'enh-copy-id', className:'enh-action-btn', type:'button',
-                    title:`Copy ${imdbId}`, 'aria-label': `Copy IMDb ID ${imdbId}`,
+                    title:`Copy ${imdbId}`, 'aria-label': t('aria_copy_imdb_id', [imdbId]),
                     innerHTML: `<svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.5" stroke-linecap="round" stroke-linejoin="round"><rect x="9" y="9" width="13" height="13" rx="2"/><path d="M5 15H4a2 2 0 0 1-2-2V4a2 2 0 0 1 2-2h9a2 2 0 0 1 2 2v1"/></svg><span>${imdbId}</span>`,
                     onClick: () => showToast(copyTextToClipboard(imdbId)
                         ? `Copied ${imdbId}`
@@ -12753,7 +12852,7 @@ section[data-testid="hero-parent"].enh-editorial-native-hidden { display: none !
                 type:'checkbox',
                 className:'enh-site-enabled',
                 dataset:{ field:'enabled' },
-                'aria-label':'Show destination on IMDb pages',
+                'aria-label':t('aria_show_destination_on_imdb_pages'),
             });
             enabledInput.checked = site.enabled !== false;
             const visibility = makeEl('label', {
@@ -12764,8 +12863,8 @@ section[data-testid="hero-parent"].enh-editorial-native-hidden { display: none !
                 type:'text',
                 className:'enh-site-input',
                 dataset:{ field:'name' },
-                'aria-label':'Destination name',
-                placeholder:'Site name',
+                'aria-label':t('aria_destination_name'),
+                placeholder:t('field_site_name'),
                 maxlength:'40',
             });
             nameInput.value = site.name || '';
@@ -12773,7 +12872,7 @@ section[data-testid="hero-parent"].enh-editorial-native-hidden { display: none !
             const categoryInput = makeEl('select', {
                 className:'enh-site-input enh-site-select',
                 dataset:{ field:'category' },
-                'aria-label':'Destination category',
+                'aria-label':t('aria_destination_category'),
             }, ...SITE_CATEGORY_OPTIONS.map(option => makeEl('option', { value:option.key }, option.label)));
             categoryInput.value = normalizeSiteCategory(site.category, defaultCategory);
 
@@ -12781,8 +12880,8 @@ section[data-testid="hero-parent"].enh-editorial-native-hidden { display: none !
                 type:'url',
                 className:'enh-site-input',
                 dataset:{ field:'url' },
-                'aria-label':'URL template',
-                placeholder:'https://example.com/search?q={{TITLE}}',
+                'aria-label':t('aria_url_template'),
+                placeholder:t('field_https_example_com_search_q_title'),
                 maxlength:String(URL_TEMPLATE_TEXT_LIMIT),
             });
             urlInput.value = site.url || '';
@@ -12791,7 +12890,7 @@ section[data-testid="hero-parent"].enh-editorial-native-hidden { display: none !
                 type:'color',
                 className:'enh-site-color',
                 dataset:{ field:'color' },
-                'aria-label':'Destination color',
+                'aria-label':t('aria_destination_color'),
             });
             colorInput.value = normalizeColor(site.color);
 
@@ -12816,7 +12915,7 @@ section[data-testid="hero-parent"].enh-editorial-native-hidden { display: none !
                 className:'enh-site-order-btn',
                 dataset:{ action:'up' },
                 title:'Move destination up',
-                'aria-label':'Move destination up',
+                'aria-label':t('aria_move_destination_up'),
                 onClick: () => moveRow('up'),
             }, '↑');
             const moveDown = makeEl('button', {
@@ -12824,7 +12923,7 @@ section[data-testid="hero-parent"].enh-editorial-native-hidden { display: none !
                 className:'enh-site-order-btn',
                 dataset:{ action:'down' },
                 title:'Move destination down',
-                'aria-label':'Move destination down',
+                'aria-label':t('aria_move_destination_down'),
                 onClick: () => moveRow('down'),
             }, '↓');
             const order = makeEl('span', { className:'enh-site-order' }, moveUp, moveDown);
@@ -12833,7 +12932,7 @@ section[data-testid="hero-parent"].enh-editorial-native-hidden { display: none !
                 type:'button',
                 className:'enh-site-remove',
                 title:'Remove site',
-                'aria-label':'Remove destination',
+                'aria-label':t('aria_remove_destination'),
                 onClick: () => {
                     const next = row.nextSibling;
                     const previous = row.previousSibling;
@@ -12844,7 +12943,7 @@ section[data-testid="hero-parent"].enh-editorial-native-hidden { display: none !
                             || previous?.querySelector?.('[data-field="name"]')
                             || add;
                         focusTarget?.focus();
-                        showToast(t('toast_removed_from', [destination, title]));
+                        showToast(t('toast_destination_removed_from_list', [destination, title]));
                         return;
                     }
                     rows.insertBefore(row, next?.parentNode === rows ? next : null);
@@ -12859,12 +12958,12 @@ section[data-testid="hero-parent"].enh-editorial-native-hidden { display: none !
             const updateRowLabel = () => {
                 const destination = nameInput.value.trim() || 'new destination';
                 const category = getSiteCategoryLabel(categoryInput.value);
-                row.setAttribute('aria-label', `${destination} in ${title}`);
+                row.setAttribute('aria-label', t('aria_destination_row_in_list', [destination, title]));
                 row.setAttribute('aria-description', category);
-                enabledInput.setAttribute('aria-label', `Show ${destination} on IMDb pages`);
-                remove.setAttribute('aria-label', `Remove ${destination} from ${title}`);
-                moveUp.setAttribute('aria-label', `Move ${destination} up`);
-                moveDown.setAttribute('aria-label', `Move ${destination} down`);
+                enabledInput.setAttribute('aria-label', t('aria_show_on_imdb_pages', [destination]));
+                remove.setAttribute('aria-label', t('aria_remove_destination_from_list', [destination, title]));
+                moveUp.setAttribute('aria-label', t('aria_move_up', [destination]));
+                moveDown.setAttribute('aria-label', t('aria_move_down', [destination]));
             };
             nameInput.addEventListener('input', updateRowLabel);
             categoryInput.addEventListener('change', updateRowLabel);
@@ -12960,8 +13059,8 @@ section[data-testid="hero-parent"].enh-editorial-native-hidden { display: none !
             const filter = makeEl('input', {
                 type:'search',
                 className:'enh-site-input enh-site-catalog__filter',
-                placeholder:'Filter by site name or address',
-                'aria-label':'Filter catalog destinations',
+                placeholder:t('field_filter_by_site_name_or_address'),
+                'aria-label':t('aria_filter_catalog_destinations'),
             });
             const groupsWrap = makeEl('div', { className:'enh-site-catalog__groups' });
             const emptyNote = makeEl('div', { className:'enh-site-catalog__empty' }, 'No catalog sites match this filter.');
@@ -13027,7 +13126,7 @@ section[data-testid="hero-parent"].enh-editorial-native-hidden { display: none !
                             }
                             addedCount += 1;
                             updateCount();
-                            showToast(t('toast_added_to', [site.name, title]));
+                            showToast(t('toast_destination_added_to_list', [site.name, title]));
                         },
                     }, 'Add');
                     const row = makeEl('div', { className:'enh-site-catalog__entry' },
@@ -13152,7 +13251,7 @@ section[data-testid="hero-parent"].enh-editorial-native-hidden { display: none !
 
     function createIntegrationTabs(sections, fieldFactory, namespace) {
         const panel = makeEl('form', { className:'enh-servarr-panel', autocomplete:'off' });
-        const tabs = makeEl('div', { className:'enh-integration-tabs', role:'tablist', 'aria-label':`${namespace} services` });
+        const tabs = makeEl('div', { className:'enh-integration-tabs', role:'tablist', 'aria-label':t('aria_integration_service_tabs', [namespace]) });
         const panels = new Map();
         const buttons = new Map();
         const select = id => {
@@ -13204,23 +13303,23 @@ section[data-testid="hero-parent"].enh-editorial-native-hidden { display: none !
         const panel = createIntegrationTabs([
             {
                 id:'radarr', title:'Radarr', fields:[
-                    { key:'radarrUrl', label:'URL', wide:true, placeholder:'http://localhost:7878' },
+                    { key:'radarrUrl', label:'URL', wide:true, placeholder:t('field_http_localhost_7878') },
                     { key:'radarrApiKey', label:'API key', type:'password', wide:true },
-                    { key:'radarrRootFolderPath', label:'Root folder', wide:true, placeholder:'/movies' },
+                    { key:'radarrRootFolderPath', label:'Root folder', wide:true, placeholder:t('field_radarr_root_folder_hint') },
                     { key:'radarrQualityProfileId', label:'Quality profile ID', type:'number' },
                 ],
             },
             {
                 id:'sonarr', title:'Sonarr', fields:[
-                    { key:'sonarrUrl', label:'URL', wide:true, placeholder:'http://localhost:8989' },
+                    { key:'sonarrUrl', label:'URL', wide:true, placeholder:t('field_http_localhost_8989') },
                     { key:'sonarrApiKey', label:'API key', type:'password', wide:true },
-                    { key:'sonarrRootFolderPath', label:'Root folder', wide:true, placeholder:'/tv' },
+                    { key:'sonarrRootFolderPath', label:'Root folder', wide:true, placeholder:t('field_sonarr_root_folder_hint') },
                     { key:'sonarrQualityProfileId', label:'Quality profile ID', type:'number' },
                 ],
             },
             {
                 id:'seerr', title:'Overseerr', fields:[
-                    { key:'seerrUrl', label:'URL', wide:true, placeholder:'http://localhost:5055' },
+                    { key:'seerrUrl', label:'URL', wide:true, placeholder:t('field_http_localhost_5055') },
                     { key:'seerrApiKey', label:'API key', type:'password', wide:true },
                 ],
             },
@@ -13239,19 +13338,19 @@ section[data-testid="hero-parent"].enh-editorial-native-hidden { display: none !
         const panel = createIntegrationTabs([
             {
                 id:'plex', title:'Plex', fields:[
-                    { key:'plexUrl', label:'URL', wide:true, placeholder:'http://localhost:32400' },
+                    { key:'plexUrl', label:'URL', wide:true, placeholder:t('field_http_localhost_32400') },
                     { key:'plexToken', label:'Token', type:'password', wide:true },
                 ],
             },
             {
                 id:'jellyfin', title:'Jellyfin', fields:[
-                    { key:'jellyfinUrl', label:'URL', wide:true, placeholder:'http://localhost:8096' },
+                    { key:'jellyfinUrl', label:'URL', wide:true, placeholder:t('field_http_localhost_8096') },
                     { key:'jellyfinApiKey', label:'API key', type:'password', wide:true },
                 ],
             },
             {
                 id:'emby', title:'Emby', fields:[
-                    { key:'embyUrl', label:'URL', wide:true, placeholder:'http://localhost:8096' },
+                    { key:'embyUrl', label:'URL', wide:true, placeholder:t('field_http_localhost_8096') },
                     { key:'embyApiKey', label:'API key', type:'password', wide:true },
                 ],
             },
@@ -13273,20 +13372,20 @@ section[data-testid="hero-parent"].enh-editorial-native-hidden { display: none !
             clearTimeout(clearAllTimer);
             clearAllTimer = null;
             clearAllArmed = false;
-            clearAll.textContent = 'Clear all';
-            clearAll.setAttribute('aria-label', 'Clear all saved title marks');
+            clearAll.textContent = t('text_clear_all');
+            clearAll.setAttribute('aria-label', t('aria_clear_all_saved_title_marks'));
         };
         const clearAll = makeEl('button', {
             type:'button',
             className:'enh-settings-footer-btn enh-settings-footer-btn--danger',
-            'aria-label':'Clear all saved title marks',
+            'aria-label':t('aria_clear_all_saved_title_marks'),
             onClick: () => {
                 const entries = getUserMarkEntries();
                 if (!entries.length) return;
                 if (!clearAllArmed) {
                     clearAllArmed = true;
-                    clearAll.textContent = `Confirm clear ${entries.length}`;
-                    clearAll.setAttribute('aria-label', `Confirm clearing ${entries.length} saved title marks`);
+                    clearAll.textContent = t('text_confirm_clear_marks', [entries.length]);
+                    clearAll.setAttribute('aria-label', t('aria_confirm_clearing_saved_title_marks', [entries.length]));
                     clearAllTimer = setTimeout(disarmClearAll, 5000);
                     showToast(t('toast_press_the_clear_button_again_within'));
                     return;
@@ -13305,7 +13404,7 @@ section[data-testid="hero-parent"].enh-editorial-native-hidden { display: none !
         const importNative = makeEl('button', {
             type:'button',
             className:'enh-settings-footer-btn',
-            'aria-label':'Import IMDb Watched titles shown on this page into private Seen marks',
+            'aria-label':t('aria_import_imdb_watched_titles_shown_on'),
             onClick: () => {
                 const found = collectNativeWatchedTitles(document);
                 if (!found.size) {
@@ -13337,7 +13436,7 @@ section[data-testid="hero-parent"].enh-editorial-native-hidden { display: none !
         const render = () => {
             disarmClearAll();
             const entries = getUserMarkEntries();
-            count.textContent = `${entries.length} saved`;
+            count.textContent = t('text_saved_mark_count', [entries.length]);
             const summary = document.getElementById('enh-data-marks-count');
             if (summary) summary.textContent = `${entries.length} ${entries.length === 1 ? 'title' : 'titles'}`;
             clearAll.disabled = entries.length === 0;
@@ -13373,7 +13472,7 @@ section[data-testid="hero-parent"].enh-editorial-native-hidden { display: none !
                     type:'button',
                     className:'enh-mark-row__clear',
                     title:`Clear ${title}`,
-                    'aria-label':`Clear mark for ${title}`,
+                    'aria-label':t('aria_clear_mark_for', [title]),
                     onClick: () => {
                         /* Clearing from here removes the record outright, note included,
                            because this is the list's Remove action rather than a way to
@@ -13551,9 +13650,9 @@ section[data-testid="hero-parent"].enh-editorial-native-hidden { display: none !
 
         const markSaved = () => {
             saveState.classList.remove('enh-settings-save-state--error');
-            saveState.textContent = 'Saved';
+            saveState.textContent = t('text_settings_saved');
             clearTimeout(savedTimer);
-            savedTimer = setTimeout(() => { saveState.textContent = 'Saved locally'; }, 1200);
+            savedTimer = setTimeout(() => { saveState.textContent = t('text_saved_locally'); }, 1200);
         };
         const markSaveFailed = event => {
             /* The failure event now names its key, and cache writes share it. A rejected
@@ -13563,7 +13662,7 @@ section[data-testid="hero-parent"].enh-editorial-native-hidden { display: none !
             if (isCacheStorageKey(event?.detail?.key)) return;
             clearTimeout(savedTimer);
             saveState.classList.add('enh-settings-save-state--error');
-            saveState.textContent = 'Save failed';
+            saveState.textContent = t('text_save_failed');
         };
         document.addEventListener('imdb-enhanced:settings-saved', markSaved);
         document.addEventListener('imdb-enhanced:settings-save-failed', markSaveFailed);
@@ -13671,7 +13770,7 @@ section[data-testid="hero-parent"].enh-editorial-native-hidden { display: none !
                     ? `Site access granted for ${describeFeatureOrigins(feature.key)}`
                     : `Not working yet: needs access to ${describeFeatureOrigins(feature.key)}.`;
                 grantButton.hidden = granted;
-                grantButton.setAttribute('aria-label', `Grant ${feature.name} access to ${describeFeatureOrigins(feature.key)}`);
+                grantButton.setAttribute('aria-label', t('aria_grant_access_to', [feature.name, describeFeatureOrigins(feature.key)]));
             };
             paintAccess();
             /* Access can be granted or revoked on the options page while this panel is
@@ -13776,7 +13875,7 @@ section[data-testid="hero-parent"].enh-editorial-native-hidden { display: none !
                 style:{ background:theme.color },
                 dataset:{ label:theme.label, theme:theme.id },
                 title:theme.label,
-                'aria-label':`Use ${theme.label} theme`,
+                'aria-label':t('aria_use_theme', [theme.label]),
                 'aria-pressed':String(curTheme === theme.id),
                 onClick: () => {
                     try { applySettingsImport([
@@ -13801,7 +13900,7 @@ section[data-testid="hero-parent"].enh-editorial-native-hidden { display: none !
             )
         );
         const autoThemeToggle = makeEl('label', { className:'enh-toggle' });
-        const autoThemeInput = makeEl('input', { id:'enh-theme-auto', type:'checkbox', 'aria-label':'Follow system theme' });
+        const autoThemeInput = makeEl('input', { id:'enh-theme-auto', type:'checkbox', 'aria-label':t('aria_follow_system_theme') });
         autoThemeInput.checked = get('themeAuto');
         autoThemeInput.addEventListener('change', () => {
             const enabled = autoThemeInput.checked;
@@ -13831,7 +13930,7 @@ section[data-testid="hero-parent"].enh-editorial-native-hidden { display: none !
         const dimThreshold = makeEl('select', {
             className:'enh-servarr-input',
             id:'enh-dim-threshold',
-            'aria-label':'Dim titles rated below',
+            'aria-label':t('aria_dim_titles_rated_below'),
             onChange: event => {
                 const value = normalizeDimThreshold(event.target.value);
                 event.target.value = value;
@@ -13856,7 +13955,7 @@ section[data-testid="hero-parent"].enh-editorial-native-hidden { display: none !
             const select = makeEl('select', {
                 className:'enh-servarr-input',
                 id:'enh-availability-source',
-                'aria-label':'Where streaming availability comes from',
+                'aria-label':t('aria_where_streaming_availability_comes_from'),
                 onChange: event => {
                     const value = event.target.value === 'tmdb' ? 'tmdb' : 'justwatch';
                     event.target.value = value;
@@ -13873,7 +13972,7 @@ section[data-testid="hero-parent"].enh-editorial-native-hidden { display: none !
             const tokenField = createSettingsInput({
                 key:'tmdbReadToken',
                 label:'TMDB read access token',
-                placeholder:'Paste your v4 read access token',
+                placeholder:t('field_paste_your_v4_read_access_token'),
                 refreshKey:'streamAvailability',
                 wide:true,
             });
@@ -13884,7 +13983,7 @@ section[data-testid="hero-parent"].enh-editorial-native-hidden { display: none !
             const regionField = createSettingsInput({
                 key:'availabilityRegion',
                 label:'Region',
-                placeholder:'Two-letter country code, such as US or GB',
+                placeholder:t('field_two_letter_country_code_such_as'),
                 refreshKey:'streamAvailability',
             });
             return makeEl('div', { className:'enh-settings-callout', style:{ marginTop:'12px' } },
@@ -13921,7 +14020,7 @@ section[data-testid="hero-parent"].enh-editorial-native-hidden { display: none !
                 createSettingsInput({
                     key:'omdbApiKey',
                     label:'OMDb API key',
-                    placeholder:'Paste your OMDb key',
+                    placeholder:t('field_paste_your_omdb_key'),
                     refreshKey:['inlineRTScore', 'inlineMetacriticScore'],
                     wide:true,
                 })
@@ -14010,7 +14109,7 @@ section[data-testid="hero-parent"].enh-editorial-native-hidden { display: none !
             makeEl('label', { className:'enh-import-label', for:'enh-import-textarea' }, 'Paste exported settings JSON'),
             makeEl('textarea', {
                 id:'enh-import-textarea', className:'enh-import-textarea', spellcheck:'false', maxlength:String(SETTINGS_IMPORT_TEXT_LIMIT),
-                placeholder:'{ "modernUI": true, "themeVariant": "dark" }',
+                placeholder:t('field_modernui_true_themevariant_dark'),
             }),
             /* Revealed only when the pasted text turns out to be an encrypted envelope,
                so the ordinary paste-and-import path gains no extra field. */
@@ -14067,11 +14166,11 @@ section[data-testid="hero-parent"].enh-editorial-native-hidden { display: none !
         const csvTextarea = makeEl('textarea', {
             id:'enh-csv-textarea', className:'enh-import-textarea', spellcheck:'false',
             maxlength:String(SETTINGS_IMPORT_TEXT_LIMIT),
-            placeholder:'Const,Your Rating,Date Rated,Title\ntt0133093,9,2026-08-31,The Matrix',
+            placeholder:t('field_const_your_rating_date_rated_title'),
         });
         const csvFile = makeEl('input', {
             type:'file', id:'enh-csv-file', className:'enh-csv-file', accept:'.csv,text/csv',
-            'aria-label':'Choose an IMDb or Letterboxd CSV file',
+            'aria-label':t('aria_choose_an_imdb_or_letterboxd_csv'),
         });
         const csvPreview = makeEl('div', {
             className:'enh-csv-preview', id:'enh-csv-preview', role:'status', 'aria-live':'polite',
@@ -14082,7 +14181,7 @@ section[data-testid="hero-parent"].enh-editorial-native-hidden { display: none !
         const resetCsvPreview = () => {
             pendingCsvImport = null;
             csvApply.disabled = true;
-            csvPreview.textContent = 'Preview required. Nothing has been changed.';
+            csvPreview.textContent = t('text_preview_required_nothing_has_been_changed');
         };
         const previewCsv = () => {
             try {
@@ -14101,7 +14200,7 @@ section[data-testid="hero-parent"].enh-editorial-native-hidden { display: none !
             if (!file) return;
             if (file.size > SETTINGS_IMPORT_TEXT_LIMIT) {
                 resetCsvPreview();
-                csvPreview.textContent = 'CSV import is too large. Choose a file under 4 MB.';
+                csvPreview.textContent = t('text_csv_import_is_too_large_choose');
                 return;
             }
             try {
@@ -14109,7 +14208,7 @@ section[data-testid="hero-parent"].enh-editorial-native-hidden { display: none !
                 previewCsv();
             } catch {
                 resetCsvPreview();
-                csvPreview.textContent = 'The selected file could not be read.';
+                csvPreview.textContent = t('text_the_selected_file_could_not_be');
             }
         });
         const csvPreviewButton = makeEl('button', {
@@ -14169,7 +14268,7 @@ section[data-testid="hero-parent"].enh-editorial-native-hidden { display: none !
         const journalCard = makeCard('Failure journal',
             'The last 20 feature failures, kept across reloads so an intermittent problem can be seen. Each entry records when, which feature, which kind of page, and what category of failure — never a title, address, or message.');
         journalCard.append(
-            makeEl('pre', { className:'enh-journal', id:'enh-journal-body', tabindex:'0', role:'group', 'aria-label':'Recorded failures' },
+            makeEl('pre', { className:'enh-journal', id:'enh-journal-body', tabindex:'0', role:'group', 'aria-label':t('aria_recorded_failures') },
                 formatFailureJournal()),
             makeEl('div', { className:'enh-data-actions', style:{ marginTop:'10px' } },
                 makeEl('button', { type:'button', className:'enh-settings-footer-btn', id:'enh-journal-copy' }, 'Copy journal'),
@@ -14193,7 +14292,7 @@ section[data-testid="hero-parent"].enh-editorial-native-hidden { display: none !
                 )
             );
             const updateToggle = makeEl('label', { className:'enh-toggle' });
-            const updateInput = makeEl('input', { id:'enh-update-notice-toggle', type:'checkbox', 'aria-label':'Tell me about new versions' });
+            const updateInput = makeEl('input', { id:'enh-update-notice-toggle', type:'checkbox', 'aria-label':t('aria_tell_me_about_new_versions') });
             updateInput.checked = get('updateNotice') !== false;
             updateInput.addEventListener('change', () => {
                 const enabled = updateInput.checked;
@@ -14445,7 +14544,7 @@ section[data-testid="hero-parent"].enh-editorial-native-hidden { display: none !
             const remaining = cacheCount();
             const remainingBytes = cacheBytes();
             overlay.querySelector('#enh-data-cache-count').textContent =
-                `${remaining} cached entries · ${formatCacheBytes(remainingBytes)}`;
+                t('text_cache_remaining', [remaining, formatCacheBytes(remainingBytes)]);
             overlay.querySelector('#enh-cache-status').textContent = remaining
                 ? `${remaining} entries remain, using ${formatCacheBytes(remainingBytes)} of ${formatCacheBytes(CACHE_TOTAL_BYTE_BUDGET)}.`
                 : 'No cached entries.';
@@ -14466,7 +14565,7 @@ section[data-testid="hero-parent"].enh-editorial-native-hidden { display: none !
         if (document.getElementById('enh-settings-fab')) return;
         const fab = makeEl('button', {
             id:'enh-settings-fab', type:'button',
-            title:'IMDb Enhanced settings', 'aria-label':'Open IMDb Enhanced settings',
+            title:'IMDb Enhanced settings', 'aria-label':t('aria_open_imdb_enhanced_settings'),
             'aria-haspopup':'dialog', 'aria-expanded':'false',
             innerHTML: `<svg width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><circle cx="12" cy="12" r="3"/><path d="M19.4 15a1.65 1.65 0 0 0 .33 1.82l.06.06a2 2 0 0 1-2.83 2.83l-.06-.06a1.65 1.65 0 0 0-1.82-.33 1.65 1.65 0 0 0-1 1.51V21a2 2 0 0 1-4 0v-.09A1.65 1.65 0 0 0 9 19.4a1.65 1.65 0 0 0-1.82.33l-.06.06a2 2 0 0 1-2.83-2.83l.06-.06A1.65 1.65 0 0 0 4.68 15a1.65 1.65 0 0 0-1.51-1H3a2 2 0 0 1 0-4h.09A1.65 1.65 0 0 0 4.6 9a1.65 1.65 0 0 0-.33-1.82l-.06-.06a2 2 0 0 1 2.83-2.83l.06.06A1.65 1.65 0 0 0 9 4.68a1.65 1.65 0 0 0 1-1.51V3a2 2 0 0 1 4 0v.09a1.65 1.65 0 0 0 1 1.51 1.65 1.65 0 0 0 1.82-.33l.06-.06a2 2 0 0 1 2.83 2.83l-.06.06A1.65 1.65 0 0 0 19.4 9a1.65 1.65 0 0 0 1.51 1H21a2 2 0 0 1 0 4h-.09a1.65 1.65 0 0 0-1.51 1z"/></svg>`,
             onClick: toggleSettings,

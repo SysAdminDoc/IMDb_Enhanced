@@ -1924,7 +1924,8 @@ test('settings use six accessible desktop destinations', () => {
     assert(script.includes('Changes save automatically.'), 'automatic-save status missing');
     assert(script.includes('id="enh-settings-save-state" role="status" aria-live="polite" aria-atomic="true"'), 'automatic-save feedback should be announced');
     assert(script.includes("document.addEventListener('imdb-enhanced:settings-save-failed', markSaveFailed)"), 'storage failures should update the persistent save indicator');
-    assert(script.includes("saveState.textContent = 'Save failed'"), 'failed writes must not leave a saved-state claim visible');
+    assert(script.includes(`saveState.textContent = t('${messageKeyFor('Save failed')}')`),
+        'failed writes must not leave a saved-state claim visible');
     assert(!script.includes('<main class="enh-settings-main">'), 'settings dialog must not add a second page-level main landmark');
     assert(script.includes('When “Optional keyboard shortcuts” is enabled'), 'disabled-by-default shortcut hints must disclose their prerequisite');
     assert(script.includes("'aria-controls':'enh-import-panel', 'aria-expanded':'false'"), 'import disclosure state missing');
@@ -2022,7 +2023,8 @@ test('secondary interactions expose complete keyboard and toggle semantics', () 
     assert(script.includes("plot.classList.remove('enh-episode-spoiler')"), 'revealed episode plots should leave the keyboard tab order');
     assert(!script.includes("querySelectorAll('.enh-episode-spoiler, .enh-revealed')"), 'episode cleanup must not mutate another feature\'s revealed state');
     assert(script.includes('sec.insertBefore(btn, sec.firstChild)'), 'visually top-aligned collapse controls should also come first in section tab order');
-    assert(script.includes("makeEl('nav', { id:'enh-quicknav', 'aria-label':'On this page' })"), 'quick navigation should expose a named navigation landmark');
+    assert(script.includes(`makeEl('nav', { id:'enh-quicknav', 'aria-label':t('${messageKeyFor('On this page')}') })`),
+        'quick navigation should expose a named navigation landmark');
     assert(script.includes("className:'enh-qn-dot', type:'button'"), 'scripted section jumps should use button semantics rather than fake hash links');
 });
 
@@ -2049,7 +2051,8 @@ test('editorial title surface keeps primary actions and configurable destination
     /* The region is named for what it holds — its defaults are Rotten Tomatoes,
        Letterboxd, TMDB, Wikipedia and Trakt, so "Where to watch" described the
        neighbouring watch section instead. */
-    assert(script.includes("'aria-label':'Reviews and research'"), 'research links should expose a named category surface');
+    assert(script.includes(`'aria-label':t('${messageKeyFor('Reviews and research')}')`),
+        'research links should expose a named category surface');
     assert(!/'Where to watch'/.test(script), 'the research region must not reuse the watch section heading');
     assert(script.includes("textContent:s.label"), 'section navigation should show readable labels instead of cryptic glyphs');
     /* The exclusion moved into isEnhancementNode() so the test-id path shares it; the
@@ -3395,8 +3398,10 @@ test('settings preserve host scroll state and complete nested tab keyboard suppo
     assert(script.includes('maxlength:String(URL_TEMPLATE_TEXT_LIMIT)'), 'destination URLs should enforce their stored length in the editor');
     assert(script.includes('{ maxlength:String(SETTING_TEXT_LIMIT) }'), 'integration text and credential fields should expose their storage bound');
     assert(script.includes("const row = makeEl('div', { className:'enh-site-row', role:'group' })"), 'each repeated destination row should expose group context');
-    assert(script.includes("row.setAttribute('aria-label', `${destination} in ${title}`)"), 'destination groups should name their row and list');
-    assert(script.includes("remove.setAttribute('aria-label', `Remove ${destination} from ${title}`)"), 'remove controls should follow edited destination names');
+    assert(script.includes(`row.setAttribute('aria-label', t('${messageKeyFor('$1 in $2')}', [destination, title]))`),
+        'destination groups should name their row and list');
+    assert(script.includes(`remove.setAttribute('aria-label', t('${messageKeyFor('Remove $1 from $2')}', [destination, title]))`),
+        'remove controls should follow edited destination names');
     assert(script.includes("nameInput.addEventListener('input', updateRowLabel)"), 'destination group names should follow row-name edits');
     assert(/className:'enh-settings-route-badge', role:'status', 'aria-live':'polite'/.test(script), 'destination counts should announce list changes');
     assert(script.includes("previous?.querySelector?.('[data-field=\"name\"]')"), 'successful destination removal should move focus to a surviving row');

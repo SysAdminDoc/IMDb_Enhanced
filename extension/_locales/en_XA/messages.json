@@ -1,9 +1,303 @@
 {
+  "aria_action_for_title": {
+    "message": "[!! $1 for $2 !!]"
+  },
+  "aria_candidate_matches": {
+    "message": "[!! Candidate matches !!]"
+  },
+  "aria_choose_an_imdb_or_letterboxd_csv": {
+    "message": "[!! Choose an IMDb or Letterboxd CSV file !!]"
+  },
+  "aria_clear_all_saved_title_marks": {
+    "message": "[!! Clear all saved title marks !!]"
+  },
+  "aria_clear_mark_for": {
+    "message": "[!! Clear mark for $1 !!]"
+  },
+  "aria_close_correction_panel": {
+    "message": "[!! Close correction panel !!]"
+  },
+  "aria_close_trailer": {
+    "message": "[!! Close trailer !!]"
+  },
+  "aria_confirm_clearing_saved_title_marks": {
+    "message": "[!! Confirm clearing $1 saved title marks !!]"
+  },
+  "aria_copy_imdb_id": {
+    "message": "[!! Copy IMDb ID $1 !!]"
+  },
+  "aria_correct_match": {
+    "message": "[!! Correct $1 match !!]"
+  },
+  "aria_correct_the_match_for_this_title": {
+    "message": "[!! Correct the $1 match for this title !!]"
+  },
+  "aria_destination_category": {
+    "message": "[!! Destination category !!]"
+  },
+  "aria_destination_color": {
+    "message": "[!! Destination color !!]"
+  },
+  "aria_destination_name": {
+    "message": "[!! Destination name !!]"
+  },
+  "aria_destination_row_in_list": {
+    "message": "[!! $1 in $2 !!]"
+  },
+  "aria_dim_titles_rated_below": {
+    "message": "[!! Dim titles rated below !!]"
+  },
+  "aria_dismiss_the_update_notice": {
+    "message": "[!! Dismiss the $1 update notice !!]"
+  },
+  "aria_filter_by_private_marks": {
+    "message": "[!! Filter by private marks !!]"
+  },
+  "aria_filter_catalog_destinations": {
+    "message": "[!! Filter catalog destinations !!]"
+  },
+  "aria_find_subtitles_for": {
+    "message": "[!! Find subtitles for $1 !!]"
+  },
+  "aria_follow_system_theme": {
+    "message": "[!! Follow system theme !!]"
+  },
+  "aria_grant_access_to": {
+    "message": "[!! Grant $1 access to $2 !!]"
+  },
+  "aria_import_imdb_watched_titles_shown_on": {
+    "message": "[!! Import IMDb Watched titles shown on this page into private Seen marks !!]"
+  },
+  "aria_integration_service_tabs": {
+    "message": "[!! $1 services !!]"
+  },
+  "aria_jump_to": {
+    "message": "[!! Jump to $1 !!]"
+  },
+  "aria_look_up_again": {
+    "message": "[!! Look up $1 again !!]"
+  },
+  "aria_move_destination_down": {
+    "message": "[!! Move destination down !!]"
+  },
+  "aria_move_destination_up": {
+    "message": "[!! Move destination up !!]"
+  },
+  "aria_move_down": {
+    "message": "[!! Move $1 down !!]"
+  },
+  "aria_move_up": {
+    "message": "[!! Move $1 up !!]"
+  },
+  "aria_on_this_page": {
+    "message": "[!! On this page !!]"
+  },
+  "aria_open_imdb_enhanced_settings": {
+    "message": "[!! Open IMDb Enhanced settings !!]"
+  },
+  "aria_open_link": {
+    "message": "[!! Open $1 link: $2 !!]"
+  },
+  "aria_open_on_in_a_new_tab": {
+    "message": "[!! Open $1 on $2 in a new tab !!]"
+  },
+  "aria_open_search_for": {
+    "message": "[!! Open $1 search for $2 !!]"
+  },
+  "aria_prepare_visible_titles_for": {
+    "message": "[!! Prepare visible titles for $1 !!]"
+  },
+  "aria_private_note": {
+    "message": "[!! Private note !!]"
+  },
+  "aria_private_note_about": {
+    "message": "[!! Private note about $1 !!]"
+  },
+  "aria_recorded_failures": {
+    "message": "[!! Recorded failures !!]"
+  },
+  "aria_remove_destination": {
+    "message": "[!! Remove destination !!]"
+  },
+  "aria_remove_destination_from_list": {
+    "message": "[!! Remove $1 from $2 !!]"
+  },
+  "aria_reveal_episode_synopsis": {
+    "message": "[!! Reveal episode synopsis !!]"
+  },
+  "aria_reveal_plot_synopsis": {
+    "message": "[!! Reveal plot synopsis !!]"
+  },
+  "aria_reviews_and_research": {
+    "message": "[!! Reviews and research !!]"
+  },
+  "aria_save_a_private_seen_mark_for": {
+    "message": "[!! Save a private Seen mark for $1; does not change IMDb Watched !!]"
+  },
+  "aria_save_a_private_skip_mark_for": {
+    "message": "[!! Save a private Skip mark for $1; does not change IMDb Watched !!]"
+  },
+  "aria_search_queue": {
+    "message": "[!! $1 search queue !!]"
+  },
+  "aria_season_averages": {
+    "message": "[!! Season averages !!]"
+  },
+  "aria_season_progress": {
+    "message": "[!! Season progress !!]"
+  },
+  "aria_show_destination_on_imdb_pages": {
+    "message": "[!! Show destination on IMDb pages !!]"
+  },
+  "aria_show_on_imdb_pages": {
+    "message": "[!! Show $1 on IMDb pages !!]"
+  },
+  "aria_tell_me_about_new_versions": {
+    "message": "[!! Tell me about new versions !!]"
+  },
+  "aria_title_navigation": {
+    "message": "[!! Title navigation !!]"
+  },
+  "aria_title_ratings_and_availability": {
+    "message": "[!! Title ratings and availability !!]"
+  },
+  "aria_title_surface": {
+    "message": "[!! $1 title surface !!]"
+  },
+  "aria_title_topics": {
+    "message": "[!! Title topics !!]"
+  },
+  "aria_title_url": {
+    "message": "[!! $1 title URL !!]"
+  },
+  "aria_top_rated_episodes": {
+    "message": "[!! Top rated episodes !!]"
+  },
+  "aria_url_template": {
+    "message": "[!! URL template !!]"
+  },
+  "aria_use_theme": {
+    "message": "[!! Use $1 theme !!]"
+  },
+  "aria_watch_movie_and_show_sites": {
+    "message": "[!! Watch movie and show sites !!]"
+  },
+  "aria_where_streaming_availability_comes_from": {
+    "message": "[!! Where streaming availability comes from !!]"
+  },
+  "field_a_private_note_about_this_title": {
+    "message": "[!! A private note about this title. Stored on this device only. !!]"
+  },
+  "field_const_your_rating_date_rated_title": {
+    "message": "[!! Const,Your Rating,Date Rated,Title\ntt0133093,9,2026-08-31,The Matrix !!]"
+  },
+  "field_filter_by_site_name_or_address": {
+    "message": "[!! Filter by site name or address !!]"
+  },
+  "field_http_localhost_32400": {
+    "message": "[!! http://localhost:32400 !!]"
+  },
+  "field_http_localhost_5055": {
+    "message": "[!! http://localhost:5055 !!]"
+  },
+  "field_http_localhost_7878": {
+    "message": "[!! http://localhost:7878 !!]"
+  },
+  "field_http_localhost_8096": {
+    "message": "[!! http://localhost:8096 !!]"
+  },
+  "field_http_localhost_8989": {
+    "message": "[!! http://localhost:8989 !!]"
+  },
+  "field_https_example_com_search_q_title": {
+    "message": "[!! https://example.com/search?q={{TITLE}} !!]"
+  },
+  "field_modernui_true_themevariant_dark": {
+    "message": "[!! { \"modernUI\": true, \"themeVariant\": \"dark\" } !!]"
+  },
+  "field_paste_a_title_url": {
+    "message": "[!! Paste a $1 title URL !!]"
+  },
+  "field_paste_your_omdb_key": {
+    "message": "[!! Paste your OMDb key !!]"
+  },
+  "field_paste_your_v4_read_access_token": {
+    "message": "[!! Paste your v4 read access token !!]"
+  },
+  "field_radarr_root_folder_hint": {
+    "message": "[!! /movies !!]"
+  },
+  "field_site_name": {
+    "message": "[!! Site name !!]"
+  },
+  "field_sonarr_root_folder_hint": {
+    "message": "[!! /tv !!]"
+  },
+  "field_two_letter_country_code_such_as": {
+    "message": "[!! Two-letter country code, such as US or GB !!]"
+  },
+  "text_all_opened": {
+    "message": "[!! All opened !!]"
+  },
+  "text_cache_remaining": {
+    "message": "[!! $1 cached entries · $2 !!]"
+  },
+  "text_candidate_matches_could_not_be_loaded": {
+    "message": "[!! Candidate matches could not be loaded. Paste a title URL or mark no entry. !!]"
+  },
+  "text_clear_all": {
+    "message": "[!! Clear all !!]"
+  },
+  "text_confirm_clear_marks": {
+    "message": "[!! Confirm clear $1 !!]"
+  },
+  "text_copy_imdb_ids": {
+    "message": "[!! Copy $1 IMDb IDs !!]"
+  },
+  "text_correction_candidate_count": {
+    "message": "[!! $1 candidate $2. !!]"
+  },
+  "text_csv_import_is_too_large_choose": {
+    "message": "[!! CSV import is too large. Choose a file under 4 MB. !!]"
+  },
+  "text_no_candidate_matches_were_found_paste": {
+    "message": "[!! No candidate matches were found. Paste a title URL or mark no entry. !!]"
+  },
+  "text_open_next_of": {
+    "message": "[!! Open next ($1 of $2) !!]"
+  },
+  "text_preview_required_nothing_has_been_changed": {
+    "message": "[!! Preview required. Nothing has been changed. !!]"
+  },
+  "text_queue_opened_progress": {
+    "message": "[!! $1 of $2 opened !!]"
+  },
+  "text_save_failed": {
+    "message": "[!! Save failed !!]"
+  },
+  "text_saved_locally": {
+    "message": "[!! Saved locally !!]"
+  },
+  "text_saved_mark_count": {
+    "message": "[!! $1 saved !!]"
+  },
+  "text_saving": {
+    "message": "[!! Saving… !!]"
+  },
+  "text_settings_saved": {
+    "message": "[!! Saved !!]"
+  },
+  "text_the_selected_file_could_not_be": {
+    "message": "[!! The selected file could not be read. !!]"
+  },
+  "text_unavailable": {
+    "message": "[!! Unavailable !!]"
+  },
+  "text_use_a_valid_title_url": {
+    "message": "[!! Use a valid $1 title URL. !!]"
+  },
   "toast_a_site_list_can_contain_up": {
     "message": "[!! A site list can contain up to $1 destinations !!]"
-  },
-  "toast_added_to": {
-    "message": "[!! $1 added to $2 !!]"
   },
   "toast_all_imdb_watched_on_this_page": {
     "message": "[!! All $1 IMDb Watched $2 on this page already have a local mark !!]"
@@ -53,6 +347,12 @@
   "toast_current_settings_could_not_be_read": {
     "message": "[!! Current settings could not be read, so nothing was reset: $1 !!]"
   },
+  "toast_destination_added_to_list": {
+    "message": "[!! $1 added to $2 !!]"
+  },
+  "toast_destination_removed_from_list": {
+    "message": "[!! $1 removed from $2 !!]"
+  },
   "toast_encrypted_backup_copied_keep_the_passphrase": {
     "message": "[!! Encrypted backup copied. Keep the passphrase; it cannot be recovered. !!]"
   },
@@ -61,9 +361,6 @@
   },
   "toast_episode_synopsis_revealed": {
     "message": "[!! Episode synopsis revealed !!]"
-  },
-  "toast_failed": {
-    "message": "[!! $1 $2 failed: $3 !!]"
   },
   "toast_failure_journal_cleared": {
     "message": "[!! Failure journal cleared !!]"
@@ -119,9 +416,6 @@
   "toast_preview_the_csv_before_importing": {
     "message": "[!! Preview the CSV before importing. !!]"
   },
-  "toast_removed_from": {
-    "message": "[!! $1 removed from $2 !!]"
-  },
   "toast_reset_settings_reloading": {
     "message": "[!! Reset $1 settings. Reloading... !!]"
   },
@@ -136,6 +430,9 @@
   },
   "toast_sent_to_your_imdb_watchlist": {
     "message": "[!! Sent to your IMDb watchlist !!]"
+  },
+  "toast_service_action_failed": {
+    "message": "[!! $1 $2 failed: $3 !!]"
   },
   "toast_settings_could_not_be_read_for": {
     "message": "[!! Settings could not be read for export. No backup was copied. !!]"
