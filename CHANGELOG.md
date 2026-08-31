@@ -40,7 +40,7 @@
 
 ### Changed
 
-- The default watch destinations are rebuilt from the FMHY wiki's starred picks, and every one of them ships with a working search route rather than a bare homepage: Rive, Cinejoy, Movy, Flixer, Fmovies+, Cineplay, Z-Stream, Aether, 1Shows, CinemaOS, HydraHD, CineStream, Bingr, LookMovie2, and Cine.su. Each route was checked against the live site while preparing this release. Your own edits are untouched; only the defaults changed.
+- The default watch destinations are rebuilt from the FMHY wiki's starred picks, and every one of them ships with a working search route rather than a bare homepage: Rive, Cinejoy, Movy, Flixer, CorsFlix, ShuttleTV, Z-Stream, Aether, 1Shows, CinemaOS, HydraHD, CineStream, Bingr, LookMovie2, and Cine.su. Each route was checked against the live site while preparing this release. Two entries the wiki lists were dropped after that check found them redirecting onto Cineby's domain, which is closing: both answered normally, so only following the redirect showed it. Your own edits are untouched; only the defaults changed.
 
 ### Removed
 

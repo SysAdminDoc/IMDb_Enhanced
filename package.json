@@ -8,6 +8,7 @@
   },
   "scripts": {
     "build:extension": "node scripts/build-extension.js",
+    "check:destinations": "node scripts/check-destinations.js",
     "build:firefox": "node scripts/build-extension.js --firefox",
     "test:extension": "node scripts/build-extension.js --check && node scripts/build-extension.js --firefox && node tests/extension.js && node tests/background.js && node tests/gm-contract.js",
     "test": "node scripts/build-extension.js --firefox && node tests/run.js && node tests/extension.js && node tests/background.js && node tests/gm-contract.js",

@@ -373,8 +373,11 @@
         { name:'Cinejoy', color:'#10b981', url:'https://cinejoy.to/search?q={{TITLE}}', category:'watch' },
         { name:'Movy', color:'#f59e0b', url:'https://www.movy.bz/browse?q={{TITLE}}', category:'watch' },
         { name:'Flixer', color:'#06b6d4', url:'https://flixer.su/search?q={{TITLE}}', category:'watch' },
-        { name:'Fmovies+', color:'#f97316', url:'https://www.fmovies.gd/search/{{TITLE_DASH}}', category:'watch' },
-        { name:'Cineplay', color:'#ef4444', url:'https://www.cineplay.to/search?q={{TITLE}}', category:'watch' },
+        /* Two entries were replaced here after the destination health report found both
+           redirecting onto the retired domain scrubbed by the schema-3 migration. Both
+           answered 200, which is exactly why a status alone proves nothing. */
+        { name:'CorsFlix', color:'#f97316', url:'https://watch.corsflix.net/search?q={{TITLE}}', category:'watch' },
+        { name:'ShuttleTV', color:'#ef4444', url:'https://shuttletv.su/search?q={{TITLE}}', category:'watch' },
         { name:'Z-Stream', color:'#8b5cf6', url:'https://zstream.mov/search?q={{TITLE}}', category:'watch' },
         { name:'Aether', color:'#0ea5e9', url:'https://aether.ist/search?q={{TITLE}}', category:'watch' },
         { name:'1Shows', color:'#e11d48', url:'https://www.1shows.org/search?q={{TITLE}}', category:'watch' },
@@ -409,8 +412,9 @@
             { name:'PopcornMovies', url:'https://popcornmovies.ac/' },
             { name:'BingeBox', url:'https://bingebox.ac/' },
             { name:'Movy', url:'https://www.movy.bz/' },
-            { name:'Cineplay', url:'https://www.cineplay.to/' },
-            { name:'Fmovies+', url:'https://www.fmovies.gd/' },
+            /* Two entries FMHY lists here are omitted: both redirect onto the retired
+               domain the schema-3 migration scrubs, so offering them would hand people a
+               destination this build has already removed. */
             { name:'Flixer', url:'https://flixer.gd/' },
             { name:'Hexa', url:'https://hexa.su/' },
             { name:'67Movies', url:'https://67movies.nl/' },

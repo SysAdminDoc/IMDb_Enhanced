@@ -2046,6 +2046,9 @@ test('retired watch-site domains stay removed', () => {
         'cineby.sc', 'cineby.gd', 'cineby.app', 'cinevids.site',
         'streamxtv.tech', 'livnet.pages.dev', 'uflix.to', 'flixmomo.app',
         'movies2watch.vc', 'watchluna.com', '1movies.stream',
+        /* Both answered 200 while redirecting onto the retiring Cineby domain, which the
+           destination health report caught and a status check never would. */
+        'fmovies.gd', 'cineplay.to',
     ];
     deadDomains.forEach(domain => {
         assert(!script.includes(domain), `dead domain ${domain} should be removed`);
@@ -2152,8 +2155,8 @@ test('site destinations support purpose, visibility, and ordering metadata', () 
         'https://cinejoy.to/search?q={{TITLE}}',
         'https://www.movy.bz/browse?q={{TITLE}}',
         'https://flixer.su/search?q={{TITLE}}',
-        'https://www.fmovies.gd/search/{{TITLE_DASH}}',
-        'https://www.cineplay.to/search?q={{TITLE}}',
+        'https://watch.corsflix.net/search?q={{TITLE}}',
+        'https://shuttletv.su/search?q={{TITLE}}',
         'https://zstream.mov/search?q={{TITLE}}',
         'https://aether.ist/search?q={{TITLE}}',
         'https://www.1shows.org/search?q={{TITLE}}',
@@ -2878,6 +2881,60 @@ test('local request errors stay concise and text-only', () => {
         'Request failed',
         'non-numeric status values should not be coerced into UI text'
     );
+});
+
+/* IE-87: destinations rot, and an earlier attempt at noticing that from the user's
+   browser leaked browsing intent and could not tell a dead host from a missing favicon.
+   This is a developer command instead. */
+test('the destination health report classifies without guessing or leaking', () => {
+    const checker = require('../scripts/check-destinations.js');
+
+    // The sample is a fixed placeholder, never anything a user was looking at.
+    assert.strictEqual(checker.SAMPLE.IMDB_ID, 'tt0133093');
+    const script = fs.readFileSync(path.join(root, 'scripts', 'check-destinations.js'), 'utf8');
+    // `location` alone would match the redirect Location header this legitimately reads.
+    assert(!/getTitleText|getIMDbID|window\.location|document\.|GM_getValue/.test(script),
+        'the report must never read the page a user is on, or their stored settings');
+    // Advisory: a bot wall says nothing about whether a browser can reach the site.
+    assert(script.includes('process.exit(0)'), 'the report must not fail a release on its own');
+    assert(!/writeFileSync\([^)]*IMDb_Enhanced\.user\.js/.test(script),
+        'the report must never edit a destination list');
+
+    /* A challenge page is small and says so near the top. Matching the phrase anywhere
+       flagged Wikipedia and Letterboxd, whose ordinary copy mentions captchas and
+       JavaScript — and a report with false alarms in it stops being read. */
+    const realWall = '<html><head><title>Just a moment...</title></head><body>checking your browser</body></html>';
+    assert.strictEqual(checker.classifyBody(200, realWall), checker.CATEGORY.BOT_BLOCKED);
+    const bigPageMentioningCaptcha = `<html><head><title>Search results</title></head><body>${'result '.repeat(20000)}captcha</body></html>`;
+    assert.strictEqual(checker.classifyBody(200, bigPageMentioningCaptcha), checker.CATEGORY.OK,
+        'a large results page that merely mentions a captcha is not a bot wall');
+
+    assert.strictEqual(checker.classifyBody(404, '<html>nope</html>'), checker.CATEGORY.NOT_FOUND);
+    assert.strictEqual(checker.classifyBody(503, '<html>oops</html>'), checker.CATEGORY.SERVER_ERROR);
+    assert.strictEqual(checker.classifyBody(403, '<html>forbidden</html>'), checker.CATEGORY.AUTH_REQUIRED);
+    assert.strictEqual(checker.classifyBody(200, '<html>No results found</html>'), checker.CATEGORY.SEMANTIC_MISMATCH);
+    assert.strictEqual(checker.classifyBody(200, '<html>not available in your country</html>'), checker.CATEGORY.GEO_BLOCKED);
+    // The four review reasons the acceptance asks to keep distinct really are distinct.
+    assert.strictEqual(new Set([
+        checker.CATEGORY.BOT_BLOCKED, checker.CATEGORY.AUTH_REQUIRED,
+        checker.CATEGORY.GEO_BLOCKED, checker.CATEGORY.SEMANTIC_MISMATCH,
+    ]).size, 4);
+    Object.values(checker.CATEGORY).filter(c => c !== checker.CATEGORY.OK).forEach(category => {
+        assert(checker.NEEDS_REVIEW[category], `${category} needs a plain-language review reason`);
+    });
+
+    assert.strictEqual(checker.classifyNetworkError({ cause:{ code:'ENOTFOUND' } }), checker.CATEGORY.DNS_ERROR);
+    assert.strictEqual(checker.classifyNetworkError({ name:'TimeoutError' }), checker.CATEGORY.TIMEOUT);
+    assert.strictEqual(checker.classifyNetworkError({ cause:{ code:'CERT_HAS_EXPIRED' } }), checker.CATEGORY.TLS_ERROR);
+
+    // Templates expand against the placeholder, not against empty strings.
+    assert.strictEqual(checker.expand('https://x.test/s?q={{TITLE}}&y={{YEAR}}'),
+        'https://x.test/s?q=The%20Matrix&y=1999');
+    assert(checker.collectDestinations({ includeCatalog:false }).length >= 20,
+        'the report should cover every shipped default');
+    assert(checker.collectDestinations({ includeCatalog:true }).length
+        > checker.collectDestinations({ includeCatalog:false }).length,
+        '--catalog must widen the check');
 });
 
 /* IE-70: notes are paywalled by every tracker that offers them and absent from IMDb, and
