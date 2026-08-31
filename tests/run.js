@@ -24,6 +24,25 @@ const messageCatalog = (() => {
     return new Function(`${block[0]}\nreturn MESSAGES;`)();
 })();
 
+/* Every file that reads the catalog. The recovery page is bundled into the extension's
+   own document by the build and reaches the lookup through the recovery hook. */
+const MESSAGE_CONSUMERS = [
+    path.join(__dirname, '..', 'scripts', 'recovery-page.js'),
+    path.join(__dirname, '..', 'extension', 'permissions.js'),
+];
+
+/* The extension's own documents carry their English in the markup so they stay readable
+   when the settings layer cannot load, and name the catalog entry that replaces it. */
+const MESSAGE_PAGES = [
+    path.join(__dirname, '..', 'extension', 'recovery.html'),
+    path.join(__dirname, '..', 'extension', 'permissions.html'),
+];
+const taggedPageCopy = () => MESSAGE_PAGES.flatMap(file => {
+    const markup = fs.readFileSync(file, 'utf8');
+    return [...markup.matchAll(/<([a-z0-9]+)[^<>]*?\sdata-i18n="([A-Za-z0-9_@]+)"[^<>]*>([^<]*)<\/\1>/g)]
+        .map(match => ({ file:path.basename(file), key:match[2], text:match[3].trim() }));
+});
+
 function messageKeyFor(text) {
     const entry = Object.entries(messageCatalog).find(([, value]) => value === text);
     assert(entry, `no catalog entry carries the message: ${text}`);
@@ -5107,11 +5126,17 @@ test('a message resolves through the catalog and falls back to English', () => {
 
     /* Every key the code asks for exists, and every key the catalog carries is asked for.
        An orphan in either direction is a string nobody sees or a control with no words. */
-    const requested = new Set([...script.matchAll(/\bt\('([A-Za-z0-9_@]+)'/g)].map(match => match[1]));
+    /* The catalog serves the userscript and the extension's own pages, so an entry only
+       one of them asks for is not an orphan. The recovery page reaches the lookup through
+       the hook and the permissions popup goes straight to chrome.i18n; both write the key
+       as a literal, which is the whole reason this check can be exact. */
+    const asking = [script, ...MESSAGE_CONSUMERS.map(file => fs.readFileSync(file, 'utf8'))].join('\n');
+    const requested = new Set([...asking.matchAll(/\bt\('([A-Za-z0-9_@]+)'/g)].map(match => match[1]));
+    taggedPageCopy().forEach(entry => requested.add(entry.key));
     const declared = new Set(Object.keys(hooks.MESSAGES));
     const missing = [...requested].filter(key => !declared.has(key));
     assert.deepStrictEqual(missing, [], 'the code asks for messages the catalog does not carry');
-    const countKeys = new Set([...script.matchAll(/\btCount\('([A-Za-z0-9_@]+)'/g)]
+    const countKeys = new Set([...asking.matchAll(/\btCount\('([A-Za-z0-9_@]+)'/g)]
         .flatMap(match => [`${match[1]}_one`, `${match[1]}_other`]));
     const unused = [...declared].filter(key => !requested.has(key) && !countKeys.has(key));
     assert.deepStrictEqual(unused, [], 'the catalog carries messages nothing asks for');
@@ -5200,6 +5225,71 @@ test('every feature and provider gets its words from the catalog', () => {
         .filter(key => /^(feature|provider)_/.test(key) && !expected.has(key));
     assert.deepStrictEqual(stranded, [],
         'the catalog carries feature or provider text for something that no longer exists');
+});
+
+/* The recovery page keeps its English in the markup on purpose: it exists to be usable
+   when the settings layer will not load, and in that state nothing runs to fill anything
+   in. That makes the same sentence exist twice, so the two are held in step here rather
+   than left to drift — and the page must actually refill them when it can. */
+test('the extension pages and the catalog carry the same words', () => {
+    const tagged = taggedPageCopy();
+    assert(tagged.length >= 20, 'the recovery page copy should be tagged for translation');
+    tagged.forEach(entry => {
+        assert(messageCatalog[entry.key] !== undefined,
+            `${entry.file} names ${entry.key}, which the catalog does not carry`);
+        assert.strictEqual(messageCatalog[entry.key], entry.text,
+            `${entry.file} and the catalog disagree about ${entry.key}`);
+    });
+
+    MESSAGE_CONSUMERS.forEach(file => {
+        assert(/document\.querySelectorAll\('\[data-i18n\]'\)/.test(fs.readFileSync(file, 'utf8')),
+            `${path.basename(file)} has to refill its tagged copy from the catalog, or tagging it changes nothing`);
+    });
+});
+
+/* The permissions popup is its own document with no access to the userscript's closure,
+   so it reads the catalog straight from the i18n API. Run it against a stub and watch what
+   it asks for: a page that merely carries data-i18n attributes and never consults the API
+   looks identical in the source and shows English to everyone. */
+test('the permissions popup fills its copy from the installed locale', () => {
+    const source = fs.readFileSync(path.join(__dirname, '..', 'extension', 'permissions.js'), 'utf8');
+    const asked = [];
+    const element = (id, i18n) => ({
+        id,
+        dataset: i18n ? { i18n } : {},
+        textContent: 'ORIGINAL',
+        disabled: false,
+        addEventListener() {},
+    });
+    const grant = element('grant', 'permissions_grant_site_access');
+    const tagged = [grant, element('title-line', 'permissions_page_title')];
+    const byId = {
+        state: element('state'),
+        'state-text': element('state-text'),
+        detail: element('detail'),
+        grant,
+    };
+    const documentStub = {
+        documentElement: { lang:'en' },
+        getElementById: id => byId[id],
+        querySelectorAll: selector => (selector === '[data-i18n]' ? tagged : []),
+    };
+    const chromeStub = {
+        i18n: {
+            getMessage(key) { asked.push(key); return `[${key}]`; },
+            getUILanguage() { return 'de'; },
+        },
+        runtime: { getManifest: () => ({ host_permissions:[] }) },
+        permissions: { contains: (_options, callback) => { callback(true); } },
+    };
+    vm.runInNewContext(source, { document:documentStub, chrome:chromeStub, console });
+
+    assert(asked.includes('permissions_grant_site_access'),
+        'the popup must ask the i18n API for its copy rather than shipping English only');
+    assert.strictEqual(tagged[1].textContent, '[permissions_page_title]',
+        'and put the answer back into the element it tagged');
+    assert.strictEqual(documentStub.documentElement.lang, 'de',
+        'the document has to declare the language it is actually showing');
 });
 
 /* The one rule that keeps translation from changing behaviour: nothing decides what to do

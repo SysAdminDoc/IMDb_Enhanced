@@ -3,7 +3,7 @@
 <head>
 <meta charset="utf-8">
 <meta name="viewport" content="width=device-width, initial-scale=1">
-<title>IMDb Enhanced — settings recovery</title>
+<title data-i18n="recovery_page_title">IMDb Enhanced — settings recovery</title>
 <style>
     :root { color-scheme: dark; --bg:#14161a; --sf:#1b1e24; --sf2:#20242b; --bd:#2b3038; --tx:#f2f4f7; --tx2:#c2c8d2; --tx3:#99a1ae; --accent:#f5c518; --ok:#4ac07a; --warn:#e0a33a; --err:#e06a5a; }
     * { box-sizing: border-box; }
@@ -63,75 +63,75 @@
 </head>
 <body>
 <div class="wrap">
-    <h1>IMDb Enhanced — settings recovery</h1>
-    <p class="sub">Everything here works without access to IMDb, so it stays usable when the extension cannot run on the site.</p>
+    <h1 data-i18n="recovery_page_title">IMDb Enhanced — settings recovery</h1>
+    <p class="sub" data-i18n="recovery_page_intro">Everything here works without access to IMDb, so it stays usable when the extension cannot run on the site.</p>
 
     <div id="status" role="status" aria-live="polite" data-tone="info"></div>
 
     <section aria-labelledby="h-state">
-        <h2 id="h-state">Status</h2>
+        <h2 id="h-state" data-i18n="recovery_heading_status">Status</h2>
         <div class="state" id="imdb-access" data-state="checking">
             <span class="dot" aria-hidden="true"></span>
-            <span id="imdb-access-text">Checking site access…</span>
+            <span id="imdb-access-text" data-i18n="recovery_checking_site_access">Checking site access…</span>
         </div>
         <dl>
-            <dt>Script version</dt><dd id="version">—</dd>
-            <dt>Build version</dt><dd id="build-version">—</dd>
-            <dt>Title marks</dt><dd id="mark-count">—</dd>
-            <dt>Lookup cache</dt><dd id="cache-summary">—</dd>
+            <dt data-i18n="recovery_script_version">Script version</dt><dd id="version">—</dd>
+            <dt data-i18n="recovery_build_version">Build version</dt><dd id="build-version">—</dd>
+            <dt data-i18n="recovery_title_marks">Title marks</dt><dd id="mark-count">—</dd>
+            <dt data-i18n="recovery_lookup_cache">Lookup cache</dt><dd id="cache-summary">—</dd>
         </dl>
-        <p class="note" style="margin-top:12px">Granted host access:</p>
+        <p class="note" style="margin-top:12px" data-i18n="recovery_granted_host_access">Granted host access:</p>
         <ul id="permission-list"></ul>
         <div style="margin-top:12px">
-            <button type="button" id="open-imdb" hidden>Open IMDb settings</button>
-            <button type="button" id="copy-diagnostics">Copy diagnostics</button>
+            <button type="button" id="open-imdb" hidden data-i18n="recovery_open_imdb_settings">Open IMDb settings</button>
+            <button type="button" id="copy-diagnostics" data-i18n="recovery_copy_diagnostics">Copy diagnostics</button>
         </div>
     </section>
 
     <section aria-labelledby="h-access">
-        <h2 id="h-access">Site access</h2>
-        <p>Features that reach a site other than IMDb ask for access to that site only, and only when you switch them on. This page is the only place a browser will let an extension request it, so grant and revoke happen here.</p>
+        <h2 id="h-access" data-i18n="recovery_heading_site_access">Site access</h2>
+        <p data-i18n="recovery_site_access_intro">Features that reach a site other than IMDb ask for access to that site only, and only when you switch them on. This page is the only place a browser will let an extension request it, so grant and revoke happen here.</p>
         <div id="access-list"></div>
     </section>
 
     <section aria-labelledby="h-backup">
-        <h2 id="h-backup">Backup</h2>
-        <p>A normal backup leaves out integration API keys and tokens and tells you which it left out.</p>
-        <button type="button" id="export" class="primary">Copy backup</button>
-        <button type="button" id="secure-export" aria-expanded="false" aria-controls="secure-panel">Copy backup with credentials</button>
+        <h2 id="h-backup" data-i18n="recovery_heading_backup">Backup</h2>
+        <p data-i18n="recovery_backup_intro">A normal backup leaves out integration API keys and tokens and tells you which it left out.</p>
+        <button type="button" id="export" class="primary" data-i18n="recovery_copy_backup">Copy backup</button>
+        <button type="button" id="secure-export" aria-expanded="false" aria-controls="secure-panel" data-i18n="recovery_copy_backup_with_credentials">Copy backup with credentials</button>
         <div class="panel" id="secure-panel" hidden>
-            <p class="note">The backup is encrypted in this browser with the passphrase you choose. There is no way to recover the contents if you forget it.</p>
-            <label for="secure-passphrase">Passphrase</label>
+            <p class="note" data-i18n="recovery_encrypted_backup_note">The backup is encrypted in this browser with the passphrase you choose. There is no way to recover the contents if you forget it.</p>
+            <label for="secure-passphrase" data-i18n="recovery_passphrase">Passphrase</label>
             <input type="password" id="secure-passphrase" autocomplete="new-password" spellcheck="false" maxlength="256">
-            <label for="secure-passphrase-confirm">Repeat passphrase</label>
+            <label for="secure-passphrase-confirm" data-i18n="recovery_repeat_passphrase">Repeat passphrase</label>
             <input type="password" id="secure-passphrase-confirm" autocomplete="new-password" spellcheck="false" maxlength="256">
-            <div style="margin-top:12px"><button type="button" id="secure-apply" class="primary">Encrypt and copy</button></div>
+            <div style="margin-top:12px"><button type="button" id="secure-apply" class="primary" data-i18n="recovery_encrypt_and_copy">Encrypt and copy</button></div>
         </div>
     </section>
 
     <section aria-labelledby="h-restore">
-        <h2 id="h-restore">Restore</h2>
-        <label for="restore-input">Paste a backup</label>
+        <h2 id="h-restore" data-i18n="recovery_heading_restore">Restore</h2>
+        <label for="restore-input" data-i18n="recovery_paste_a_backup">Paste a backup</label>
         <textarea id="restore-input" spellcheck="false" placeholder='{ "themeVariant": "dark" }'></textarea>
         <div id="restore-passphrase-row" hidden>
-            <label for="restore-passphrase">This backup is encrypted. Enter its passphrase.</label>
+            <label for="restore-passphrase" data-i18n="recovery_backup_is_encrypted">This backup is encrypted. Enter its passphrase.</label>
             <input type="password" id="restore-passphrase" autocomplete="off" spellcheck="false" maxlength="256">
         </div>
-        <div style="margin-top:12px"><button type="button" id="restore" class="primary">Restore</button></div>
+        <div style="margin-top:12px"><button type="button" id="restore" class="primary" data-i18n="recovery_restore_button">Restore</button></div>
     </section>
 
     <section aria-labelledby="h-reset">
-        <h2 id="h-reset">Reset</h2>
-        <p>Returns every preference, site list, title mark, and integration credential to its default. You can undo it once, without leaving this page.</p>
-        <button type="button" id="reset" class="danger" aria-expanded="false" aria-controls="reset-panel">Reset everything</button>
+        <h2 id="h-reset" data-i18n="recovery_heading_reset">Reset</h2>
+        <p data-i18n="recovery_reset_intro">Returns every preference, site list, title mark, and integration credential to its default. You can undo it once, without leaving this page.</p>
+        <button type="button" id="reset" class="danger" aria-expanded="false" aria-controls="reset-panel" data-i18n="recovery_reset_everything">Reset everything</button>
         <div class="panel" id="reset-panel" hidden>
-            <p>This clears title marks and local integration credentials. Copy a backup first if you may need them.</p>
-            <button type="button" id="reset-confirm" class="danger">Yes, reset everything</button>
-            <button type="button" id="reset-cancel">Cancel</button>
+            <p data-i18n="recovery_reset_warning">This clears title marks and local integration credentials. Copy a backup first if you may need them.</p>
+            <button type="button" id="reset-confirm" class="danger" data-i18n="recovery_reset_confirm">Yes, reset everything</button>
+            <button type="button" id="reset-cancel" data-i18n="recovery_cancel">Cancel</button>
         </div>
         <div id="undo-row" hidden style="margin-top:12px">
-            <button type="button" id="undo" class="primary">Undo the reset</button>
-            <span class="note">Available until you leave this page.</span>
+            <button type="button" id="undo" class="primary" data-i18n="recovery_undo_the_reset">Undo the reset</button>
+            <span class="note" data-i18n="recovery_undo_available_note">Available until you leave this page.</span>
         </div>
     </section>
 </div>

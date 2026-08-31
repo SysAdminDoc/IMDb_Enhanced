@@ -2,7 +2,7 @@
 <html lang="en">
 <head>
 <meta charset="utf-8">
-<title>IMDb Enhanced</title>
+<title data-i18n="permissions_page_title">IMDb Enhanced</title>
 <style>
     :root { color-scheme: dark; }
     body {
@@ -32,15 +32,15 @@
 </style>
 </head>
 <body>
-<h1>IMDb Enhanced</h1>
+<h1 data-i18n="permissions_page_title">IMDb Enhanced</h1>
 <div class="state" id="state" data-state="checking">
     <span class="dot" aria-hidden="true"></span>
-    <span class="state-text" id="state-text" role="status" aria-live="polite">Checking site access…</span>
+    <span class="state-text" id="state-text" role="status" aria-live="polite" data-i18n="recovery_checking_site_access">Checking site access…</span>
 </div>
-<p id="detail">IMDb Enhanced needs access to IMDb before it can style pages, block ad shells, or look up scores.</p>
-<button type="button" id="grant" disabled>Grant site access</button>
-<p class="hint">Access covers IMDb, the score and trailer services the settings enable, and your own localhost media servers. Nothing else is requested.</p>
-<p class="hint"><a id="recovery-link" href="recovery.html" target="_blank" rel="noopener" style="color:#f5c518">Backup, restore, and reset</a> stay available even without site access.</p>
+<p id="detail" data-i18n="permissions_needs_access_note">IMDb Enhanced needs access to IMDb before it can style pages, block ad shells, or look up scores.</p>
+<button type="button" id="grant" disabled data-i18n="permissions_grant_site_access">Grant site access</button>
+<p class="hint" data-i18n="permissions_access_scope_note">Access covers IMDb, the score and trailer services the settings enable, and your own localhost media servers. Nothing else is requested.</p>
+<p class="hint"><a id="recovery-link" href="recovery.html" target="_blank" rel="noopener" style="color:#f5c518" data-i18n="permissions_open_recovery">Backup, restore, and reset</a> stay available even without site access.</p>
 <script src="permissions.js"></script>
 </body>
 </html>

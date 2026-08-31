@@ -25,9 +25,21 @@ function say(message, tone = 'info') {
 }
 
 function copyText(text) {
-    if (!navigator.clipboard?.writeText) return Promise.reject(new Error('Clipboard unavailable'));
+    if (!navigator.clipboard?.writeText) return Promise.reject(new Error(core.t('recovery_clipboard_unavailable')));
     return navigator.clipboard.writeText(text);
 }
+
+/* ---- Static page copy --------------------------------------------------------- */
+
+/* The markup carries the English so this page is still readable if the settings layer
+   never loads, which is one of the states it exists to repair. Where it does load, every
+   tagged element is refilled from the catalog, so an installed translation reaches the
+   static copy too. */
+document.querySelectorAll('[data-i18n]').forEach(element => {
+    const text = core.t(element.dataset.i18n);
+    if (text && text !== element.dataset.i18n) element.textContent = text;
+});
+document.documentElement.lang = (chrome.i18n?.getUILanguage?.() || 'en');
 
 /* ---- Version and permission state -------------------------------------------- */
 
@@ -44,7 +56,7 @@ function guard(label, render) {
     try { render(); }
     catch (error) {
         console.warn(`[IMDb Enhanced] recovery: ${label} failed`, error);
-        say(`The ${label} section could not be read, but the actions below still work.`, 'error');
+        say(core.t('recovery_section_could_not_be_read', [label]), 'error');
     }
 }
 
@@ -54,7 +66,7 @@ function renderPermissions() {
     const banner = $('imdb-access');
     if (!chrome.permissions?.getAll) {
         banner.dataset.state = 'missing';
-        $('imdb-access-text').textContent = 'Site access could not be read in this browser.';
+        $('imdb-access-text').textContent = core.t('recovery_site_access_could_not_be_read_in');
         return;
     }
     /* chrome.* is promise-based on Chromium and callback-based on Gecko; the callback
@@ -64,16 +76,16 @@ function renderPermissions() {
         const imdb = origins.some(origin => origin.includes('imdb.com'));
         banner.dataset.state = imdb ? 'granted' : 'missing';
         $('imdb-access-text').textContent = imdb
-            ? 'IMDb access is granted.'
-            : 'IMDb access is not granted, so the extension cannot run on IMDb pages.';
+            ? core.t('recovery_imdb_access_is_granted')
+            : core.t('recovery_imdb_access_is_not_granted_so_the');
         // The action beside the banner has to match it: opening IMDb when the extension
         // cannot run there is a dead end, so offer the repair instead.
         $('open-imdb').hidden = false;
-        $('open-imdb').textContent = imdb ? 'Open IMDb settings' : 'Grant IMDb access';
+        $('open-imdb').textContent = imdb ? core.t('recovery_open_imdb_settings') : core.t('recovery_grant_imdb_access');
         $('open-imdb').dataset.mode = imdb ? 'open' : 'grant';
         if (!origins.length) {
             const item = document.createElement('li');
-            item.textContent = 'No host access is currently granted.';
+            item.textContent = core.t('recovery_no_host_access_is_currently_granted');
             list.appendChild(item);
             return;
         }
@@ -91,8 +103,8 @@ $('open-imdb').addEventListener('click', async () => {
     if ($('open-imdb').dataset.mode === 'grant') {
         const granted = await permissionsFor(['https://www.imdb.com/*']).request();
         say(granted
-            ? 'IMDb access granted. Open or reload an IMDb page.'
-            : 'IMDb access was not granted, so the extension still cannot run there.', granted ? 'ok' : 'error');
+            ? core.t('recovery_imdb_access_granted_open_or_reload_an')
+            : core.t('recovery_imdb_access_was_not_granted_so_the'), granted ? 'ok' : 'error');
         renderPermissions();
         if (!granted) return;
     }
@@ -164,10 +176,10 @@ async function renderDataConsentRow(list) {
     const copy = document.createElement('div');
     const name = document.createElement('div');
     name.className = 'access-name';
-    name.textContent = 'Sending page details to score services';
+    name.textContent = core.t('recovery_sending_page_details_to_score_services');
     const detail = document.createElement('div');
     detail.className = 'access-detail';
-    detail.textContent = 'A score or availability lookup sends the title and year from the page you are on to the service it is looking them up in.';
+    detail.textContent = core.t('recovery_a_score_or_availability_lookup_sends_the');
     const state = document.createElement('div');
     state.className = 'access-state';
     copy.append(name, detail, state);
@@ -180,12 +192,12 @@ async function renderDataConsentRow(list) {
         state.dataset.state = granted ? 'granted' : 'missing';
         state.textContent = granted
             ? 'Allowed.'
-            : 'Not allowed, so those lookups should stay off.';
+            : core.t('recovery_not_allowed_so_those_lookups_should_stay');
         button.textContent = granted ? 'Withdraw' : 'Allow';
         button.className = granted ? '' : 'primary';
         button.setAttribute('aria-label', granted
-            ? 'Withdraw consent for sending page details to score services'
-            : 'Allow sending page details to score services');
+            ? core.t('recovery_withdraw_consent_for_sending_page_details_to')
+            : core.t('recovery_allow_sending_page_details_to_score_services'));
     };
 
     button.addEventListener('click', async () => {
@@ -193,14 +205,14 @@ async function renderDataConsentRow(list) {
         try {
             if (await api.contains()) {
                 await api.remove();
-                say('Consent withdrawn. Turn off the score and availability lookups too.', 'ok');
+                say(core.t('recovery_consent_withdrawn_turn_off_the_score_and'), 'ok');
             } else if (await api.request()) {
-                say('Consent recorded.', 'ok');
+                say(core.t('recovery_consent_recorded'), 'ok');
             } else {
-                say('Consent was not given, so those lookups should stay off.', 'error');
+                say(core.t('recovery_consent_was_not_given_so_those_lookups'), 'error');
             }
         } catch (error) {
-            say(error?.message || 'The consent could not be changed.', 'error');
+            say(error?.message || core.t('recovery_the_consent_could_not_be_changed'), 'error');
         } finally {
             button.disabled = false;
             await paint();
@@ -250,8 +262,8 @@ function renderAccessList() {
             const enabled = Boolean(core.getSetting(key));
             state.dataset.state = granted ? 'granted' : 'missing';
             state.textContent = granted
-                ? (enabled ? 'Granted, and the feature is on.' : 'Granted, but the feature is switched off.')
-                : (enabled ? 'Not granted, so this feature cannot work yet.' : 'Not granted.');
+                ? (enabled ? core.t('recovery_granted_and_the_feature_is_on') : core.t('recovery_granted_but_the_feature_is_switched_off'))
+                : (enabled ? core.t('recovery_not_granted_so_this_feature_cannot_work') : core.t('recovery_not_granted'));
             button.textContent = granted ? 'Revoke' : 'Grant';
             button.className = granted ? '' : 'primary';
             button.setAttribute('aria-label',
@@ -267,14 +279,14 @@ function renderAccessList() {
                        integrations. */
                     const releasable = core.releasableOriginsFor(key);
                     if (releasable.length) await permissionsFor(releasable).remove();
-                    say(`Access to ${core.describeFeatureOrigins(key)} revoked.`, 'ok');
+                    say(core.t('recovery_access_revoked', [core.describeFeatureOrigins(key)]), 'ok');
                 } else if (await api.request()) {
-                    say(`Access to ${core.describeFeatureOrigins(key)} granted. Reload any open IMDb tabs.`, 'ok');
+                    say(core.t('recovery_access_granted', [core.describeFeatureOrigins(key)]), 'ok');
                 } else {
-                    say('Access was not granted, so that feature still cannot run.', 'error');
+                    say(core.t('recovery_access_was_not_granted_so_that_feature'), 'error');
                 }
             } catch (error) {
-                say(error?.message || 'The permission could not be changed.', 'error');
+                say(error?.message || core.t('recovery_the_permission_could_not_be_changed'), 'error');
             } finally {
                 button.disabled = false;
                 await paint();
@@ -306,9 +318,9 @@ function renderSummary() {
 $('copy-diagnostics').addEventListener('click', async () => {
     try {
         await copyText(core.buildDiagnosticsReport());
-        say('Diagnostics report copied.', 'ok');
+        say(core.t('recovery_diagnostics_report_copied'), 'ok');
     } catch {
-        say('The diagnostics report could not be copied. Check this page’s clipboard permission.', 'error');
+        say(core.t('recovery_the_diagnostics_report_could_not_be_copied'), 'error');
     }
 });
 
@@ -320,10 +332,10 @@ $('export').addEventListener('click', async () => {
         await copyText(JSON.stringify(payload, null, 2));
         const omitted = payload[core.EXPORT_REDACTED_KEY] || [];
         say(omitted.length
-            ? `Backup copied. ${omitted.length} integration ${omitted.length === 1 ? 'credential was' : 'credentials were'} left out.`
-            : 'Backup copied.', 'ok');
+            ? core.tCount('recovery_backup_copied_omitting', omitted.length)
+            : core.t('recovery_backup_copied'), 'ok');
     } catch (error) {
-        say(error?.message || 'The backup could not be created.', 'error');
+        say(error?.message || core.t('recovery_the_backup_could_not_be_created'), 'error');
     }
 });
 
@@ -338,7 +350,7 @@ $('secure-export').addEventListener('click', () => {
 $('secure-apply').addEventListener('click', async () => {
     const passphrase = $('secure-passphrase').value;
     if (passphrase !== $('secure-passphrase-confirm').value) {
-        say('The two passphrases do not match.', 'error');
+        say(core.t('toast_the_two_passphrases_do_not_match'), 'error');
         return;
     }
     $('secure-apply').disabled = true;
@@ -348,9 +360,9 @@ $('secure-apply').addEventListener('click', async () => {
         $('secure-passphrase-confirm').value = '';
         securePanel.hidden = true;
         $('secure-export').setAttribute('aria-expanded', 'false');
-        say('Encrypted backup copied. Keep the passphrase; it cannot be recovered.', 'ok');
+        say(core.t('toast_encrypted_backup_copied_keep_the_passphrase'), 'ok');
     } catch (error) {
-        say(error?.message || 'The encrypted backup could not be created.', 'error');
+        say(error?.message || core.t('settings_the_encrypted_backup_could_not_be_created'), 'error');
     } finally { $('secure-apply').disabled = false; }
 });
 
@@ -372,7 +384,7 @@ restoreInput.addEventListener('input', () => {
 
 $('restore').addEventListener('click', async () => {
     const raw = restoreInput.value.trim();
-    if (!raw) { say('Paste a backup before restoring.', 'error'); return; }
+    if (!raw) { say(core.t('recovery_paste_a_backup_before_restoring'), 'error'); return; }
     $('restore').disabled = true;
     try {
         let data = JSON.parse(raw);
@@ -385,11 +397,13 @@ $('restore').addEventListener('click', async () => {
         $('restore-passphrase').value = '';
         restorePassphraseRow.hidden = true;
         renderSummary();
-        say(`Restored ${restored} settings${ignored ? `; skipped ${ignored} unrecognized` : ''}.`, 'ok');
+        say(ignored
+            ? core.t('recovery_restored_some_skipped', [restored, ignored])
+            : core.t('recovery_restored', [restored]), 'ok');
     } catch (error) {
         say(error instanceof SyntaxError
-            ? 'That is not valid JSON. Nothing was changed.'
-            : error?.message || 'The restore failed. Nothing was changed.', 'error');
+            ? core.t('recovery_that_is_not_valid_json_nothing_was')
+            : error?.message || core.t('recovery_the_restore_failed_nothing_was_changed'), 'error');
     } finally { $('restore').disabled = false; }
 });
 
@@ -430,7 +444,7 @@ $('reset-confirm').addEventListener('click', () => {
         const current = core.getExportSettings({ includeCredentials: true });
         snapshot = core.prepareSettingsImport(current).entries;
     } catch (error) {
-        say(`Current settings could not be read, so reset was not attempted: ${error?.message || 'unknown error'}`, 'error');
+        say(core.t('recovery_reset_not_attempted', [error?.message || core.t('recovery_unknown_error')]), 'error');
         return;
     }
     try {
@@ -443,13 +457,13 @@ $('reset-confirm').addEventListener('click', () => {
         $('reset').setAttribute('aria-expanded', 'false');
         $('undo-row').hidden = false;
         renderSummary();
-        say(`Reset ${count} settings. Undo is available until you leave this page.`, 'ok');
+        say(core.t('recovery_reset_done', [count]), 'ok');
         clearTimeout(undoTimer);
         undoTimer = setTimeout(clearUndo, 5 * 60 * 1000);
         // Focus would otherwise fall to the body when the panel it was in disappears.
         $('undo').focus();
     } catch (error) {
-        say(error?.message || 'The reset failed and previous settings were restored.', 'error');
+        say(error?.message || core.t('recovery_the_reset_failed_and_previous_settings_were'), 'error');
         $('reset').focus();
     }
 });
@@ -461,9 +475,9 @@ $('undo').addEventListener('click', () => {
         clearUndo();
         renderSummary();
         renderAccessList();
-        say(`Undone. ${restored} settings were put back.`, 'ok');
+        say(core.t('recovery_undo_done', [restored]), 'ok');
     } catch (error) {
-        say(error?.message || 'The undo failed. Nothing was changed.', 'error');
+        say(error?.message || core.t('recovery_the_undo_failed_nothing_was_changed'), 'error');
     }
     // The undo row is now gone, so send focus somewhere real rather than the body.
     $('reset').focus();
@@ -471,6 +485,6 @@ $('undo').addEventListener('click', () => {
 
 /* Rendered last, and each guarded on its own, so a section that cannot be read leaves
    every control above it working. */
-guard('status', renderPermissions);
-guard('site access', renderAccessList);
-guard('storage', renderSummary);
+guard(core.t('recovery_section_status'), renderPermissions);
+guard(core.t('recovery_section_site_access'), renderAccessList);
+guard(core.t('recovery_section_storage'), renderSummary);

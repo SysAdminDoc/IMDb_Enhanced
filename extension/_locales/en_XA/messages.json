@@ -674,6 +674,39 @@
   "journal_unknown": {
     "message": "[!! Unclassified !!]"
   },
+  "permissions_access_declined_note": {
+    "message": "[!! Access was not granted. IMDb Enhanced stays inactive until you allow it to run on IMDb. !!]"
+  },
+  "permissions_access_granted_note": {
+    "message": "[!! Access granted. Reload any IMDb tabs that were already open. !!]"
+  },
+  "permissions_access_scope_note": {
+    "message": "[!! Access covers IMDb, the score and trailer services the settings enable, and your own localhost media servers. Nothing else is requested. !!]"
+  },
+  "permissions_active_reload_note": {
+    "message": "[!! IMDb Enhanced is active. Open or reload an IMDb page and use the gear icon for settings. !!]"
+  },
+  "permissions_grant_site_access": {
+    "message": "[!! Grant site access !!]"
+  },
+  "permissions_needs_access_note": {
+    "message": "[!! IMDb Enhanced needs access to IMDb before it can style pages, block ad shells, or look up scores. !!]"
+  },
+  "permissions_no_additional_access_required": {
+    "message": "[!! No additional site access is required. !!]"
+  },
+  "permissions_open_recovery": {
+    "message": "[!! Backup, restore, and reset !!]"
+  },
+  "permissions_page_title": {
+    "message": "[!! IMDb Enhanced !!]"
+  },
+  "permissions_site_access_granted": {
+    "message": "[!! Site access granted !!]"
+  },
+  "permissions_site_access_needed": {
+    "message": "[!! Site access needed !!]"
+  },
   "provider_amazonAds_consent": {
     "message": "[!! Blocks requests to these hosts. Nothing is sent to them. !!]"
   },
@@ -712,6 +745,243 @@
   },
   "provider_youTube_consent": {
     "message": "[!! Loads the trailer from YouTube, which sees the video you opened. !!]"
+  },
+  "recovery_a_score_or_availability_lookup_sends_the": {
+    "message": "[!! A score or availability lookup sends the title and year from the page you are on to the service it is looking them up in. !!]"
+  },
+  "recovery_access_granted": {
+    "message": "[!! Access to $1 granted. Reload any open IMDb tabs. !!]"
+  },
+  "recovery_access_revoked": {
+    "message": "[!! Access to $1 revoked. !!]"
+  },
+  "recovery_access_was_not_granted_so_that_feature": {
+    "message": "[!! Access was not granted, so that feature still cannot run. !!]"
+  },
+  "recovery_allow_sending_page_details_to_score_services": {
+    "message": "[!! Allow sending page details to score services !!]"
+  },
+  "recovery_backup_copied": {
+    "message": "[!! Backup copied. !!]"
+  },
+  "recovery_backup_copied_omitting_one": {
+    "message": "[!! Backup copied. $1 integration credential was left out. !!]"
+  },
+  "recovery_backup_copied_omitting_other": {
+    "message": "[!! Backup copied. $1 integration credentials were left out. !!]"
+  },
+  "recovery_backup_intro": {
+    "message": "[!! A normal backup leaves out integration API keys and tokens and tells you which it left out. !!]"
+  },
+  "recovery_backup_is_encrypted": {
+    "message": "[!! This backup is encrypted. Enter its passphrase. !!]"
+  },
+  "recovery_build_version": {
+    "message": "[!! Build version !!]"
+  },
+  "recovery_cancel": {
+    "message": "[!! Cancel !!]"
+  },
+  "recovery_checking_site_access": {
+    "message": "[!! Checking site access… !!]"
+  },
+  "recovery_clipboard_unavailable": {
+    "message": "[!! Clipboard unavailable !!]"
+  },
+  "recovery_consent_recorded": {
+    "message": "[!! Consent recorded. !!]"
+  },
+  "recovery_consent_was_not_given_so_those_lookups": {
+    "message": "[!! Consent was not given, so those lookups should stay off. !!]"
+  },
+  "recovery_consent_withdrawn_turn_off_the_score_and": {
+    "message": "[!! Consent withdrawn. Turn off the score and availability lookups too. !!]"
+  },
+  "recovery_copy_backup": {
+    "message": "[!! Copy backup !!]"
+  },
+  "recovery_copy_backup_with_credentials": {
+    "message": "[!! Copy backup with credentials !!]"
+  },
+  "recovery_copy_diagnostics": {
+    "message": "[!! Copy diagnostics !!]"
+  },
+  "recovery_diagnostics_report_copied": {
+    "message": "[!! Diagnostics report copied. !!]"
+  },
+  "recovery_encrypt_and_copy": {
+    "message": "[!! Encrypt and copy !!]"
+  },
+  "recovery_encrypted_backup_note": {
+    "message": "[!! The backup is encrypted in this browser with the passphrase you choose. There is no way to recover the contents if you forget it. !!]"
+  },
+  "recovery_grant_imdb_access": {
+    "message": "[!! Grant IMDb access !!]"
+  },
+  "recovery_granted_and_the_feature_is_on": {
+    "message": "[!! Granted, and the feature is on. !!]"
+  },
+  "recovery_granted_but_the_feature_is_switched_off": {
+    "message": "[!! Granted, but the feature is switched off. !!]"
+  },
+  "recovery_granted_host_access": {
+    "message": "[!! Granted host access: !!]"
+  },
+  "recovery_heading_backup": {
+    "message": "[!! Backup !!]"
+  },
+  "recovery_heading_reset": {
+    "message": "[!! Reset !!]"
+  },
+  "recovery_heading_restore": {
+    "message": "[!! Restore !!]"
+  },
+  "recovery_heading_site_access": {
+    "message": "[!! Site access !!]"
+  },
+  "recovery_heading_status": {
+    "message": "[!! Status !!]"
+  },
+  "recovery_imdb_access_granted_open_or_reload_an": {
+    "message": "[!! IMDb access granted. Open or reload an IMDb page. !!]"
+  },
+  "recovery_imdb_access_is_granted": {
+    "message": "[!! IMDb access is granted. !!]"
+  },
+  "recovery_imdb_access_is_not_granted_so_the": {
+    "message": "[!! IMDb access is not granted, so the extension cannot run on IMDb pages. !!]"
+  },
+  "recovery_imdb_access_was_not_granted_so_the": {
+    "message": "[!! IMDb access was not granted, so the extension still cannot run there. !!]"
+  },
+  "recovery_lookup_cache": {
+    "message": "[!! Lookup cache !!]"
+  },
+  "recovery_no_host_access_is_currently_granted": {
+    "message": "[!! No host access is currently granted. !!]"
+  },
+  "recovery_not_allowed_so_those_lookups_should_stay": {
+    "message": "[!! Not allowed, so those lookups should stay off. !!]"
+  },
+  "recovery_not_granted": {
+    "message": "[!! Not granted. !!]"
+  },
+  "recovery_not_granted_so_this_feature_cannot_work": {
+    "message": "[!! Not granted, so this feature cannot work yet. !!]"
+  },
+  "recovery_open_imdb_settings": {
+    "message": "[!! Open IMDb settings !!]"
+  },
+  "recovery_page_intro": {
+    "message": "[!! Everything here works without access to IMDb, so it stays usable when the extension cannot run on the site. !!]"
+  },
+  "recovery_page_title": {
+    "message": "[!! IMDb Enhanced — settings recovery !!]"
+  },
+  "recovery_passphrase": {
+    "message": "[!! Passphrase !!]"
+  },
+  "recovery_paste_a_backup": {
+    "message": "[!! Paste a backup !!]"
+  },
+  "recovery_paste_a_backup_before_restoring": {
+    "message": "[!! Paste a backup before restoring. !!]"
+  },
+  "recovery_repeat_passphrase": {
+    "message": "[!! Repeat passphrase !!]"
+  },
+  "recovery_reset_confirm": {
+    "message": "[!! Yes, reset everything !!]"
+  },
+  "recovery_reset_done": {
+    "message": "[!! Reset $1 settings. Undo is available until you leave this page. !!]"
+  },
+  "recovery_reset_everything": {
+    "message": "[!! Reset everything !!]"
+  },
+  "recovery_reset_intro": {
+    "message": "[!! Returns every preference, site list, title mark, and integration credential to its default. You can undo it once, without leaving this page. !!]"
+  },
+  "recovery_reset_not_attempted": {
+    "message": "[!! Current settings could not be read, so reset was not attempted: $1 !!]"
+  },
+  "recovery_reset_warning": {
+    "message": "[!! This clears title marks and local integration credentials. Copy a backup first if you may need them. !!]"
+  },
+  "recovery_restore_button": {
+    "message": "[!! Restore !!]"
+  },
+  "recovery_restored": {
+    "message": "[!! Restored $1 settings. !!]"
+  },
+  "recovery_restored_some_skipped": {
+    "message": "[!! Restored $1 settings; skipped $2 unrecognized. !!]"
+  },
+  "recovery_script_version": {
+    "message": "[!! Script version !!]"
+  },
+  "recovery_section_could_not_be_read": {
+    "message": "[!! The $1 section could not be read, but the actions below still work. !!]"
+  },
+  "recovery_section_site_access": {
+    "message": "[!! site access !!]"
+  },
+  "recovery_section_status": {
+    "message": "[!! status !!]"
+  },
+  "recovery_section_storage": {
+    "message": "[!! storage !!]"
+  },
+  "recovery_sending_page_details_to_score_services": {
+    "message": "[!! Sending page details to score services !!]"
+  },
+  "recovery_site_access_could_not_be_read_in": {
+    "message": "[!! Site access could not be read in this browser. !!]"
+  },
+  "recovery_site_access_intro": {
+    "message": "[!! Features that reach a site other than IMDb ask for access to that site only, and only when you switch them on. This page is the only place a browser will let an extension request it, so grant and revoke happen here. !!]"
+  },
+  "recovery_that_is_not_valid_json_nothing_was": {
+    "message": "[!! That is not valid JSON. Nothing was changed. !!]"
+  },
+  "recovery_the_backup_could_not_be_created": {
+    "message": "[!! The backup could not be created. !!]"
+  },
+  "recovery_the_consent_could_not_be_changed": {
+    "message": "[!! The consent could not be changed. !!]"
+  },
+  "recovery_the_diagnostics_report_could_not_be_copied": {
+    "message": "[!! The diagnostics report could not be copied. Check this page’s clipboard permission. !!]"
+  },
+  "recovery_the_permission_could_not_be_changed": {
+    "message": "[!! The permission could not be changed. !!]"
+  },
+  "recovery_the_reset_failed_and_previous_settings_were": {
+    "message": "[!! The reset failed and previous settings were restored. !!]"
+  },
+  "recovery_the_restore_failed_nothing_was_changed": {
+    "message": "[!! The restore failed. Nothing was changed. !!]"
+  },
+  "recovery_the_undo_failed_nothing_was_changed": {
+    "message": "[!! The undo failed. Nothing was changed. !!]"
+  },
+  "recovery_title_marks": {
+    "message": "[!! Title marks !!]"
+  },
+  "recovery_undo_available_note": {
+    "message": "[!! Available until you leave this page. !!]"
+  },
+  "recovery_undo_done": {
+    "message": "[!! Undone. $1 settings were put back. !!]"
+  },
+  "recovery_undo_the_reset": {
+    "message": "[!! Undo the reset !!]"
+  },
+  "recovery_unknown_error": {
+    "message": "[!! unknown error !!]"
+  },
+  "recovery_withdraw_consent_for_sending_page_details_to": {
+    "message": "[!! Withdraw consent for sending page details to score services !!]"
   },
   "settings_a_backup_covers_preferences_sites_and_title": {
     "message": "[!! A backup covers preferences, sites, and title marks. Integration API keys and tokens are left out unless you choose the encrypted export. !!]"

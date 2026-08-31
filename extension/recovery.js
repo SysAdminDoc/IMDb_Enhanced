@@ -558,6 +558,17 @@
         journal_storage: 'Local storage refused a write',
         journal_timeout: 'A lookup ran out of time',
         journal_unknown: 'Unclassified',
+        permissions_access_declined_note: 'Access was not granted. IMDb Enhanced stays inactive until you allow it to run on IMDb.',
+        permissions_access_granted_note: 'Access granted. Reload any IMDb tabs that were already open.',
+        permissions_access_scope_note: 'Access covers IMDb, the score and trailer services the settings enable, and your own localhost media servers. Nothing else is requested.',
+        permissions_active_reload_note: 'IMDb Enhanced is active. Open or reload an IMDb page and use the gear icon for settings.',
+        permissions_grant_site_access: 'Grant site access',
+        permissions_needs_access_note: 'IMDb Enhanced needs access to IMDb before it can style pages, block ad shells, or look up scores.',
+        permissions_no_additional_access_required: 'No additional site access is required.',
+        permissions_open_recovery: 'Backup, restore, and reset',
+        permissions_page_title: 'IMDb Enhanced',
+        permissions_site_access_granted: 'Site access granted',
+        permissions_site_access_needed: 'Site access needed',
         provider_amazonAds_consent: 'Blocks requests to these hosts. Nothing is sent to them.',
         provider_amazonAds_label: 'the ad and tracking hosts it blocks',
         provider_justWatch_consent: 'Sends the title and year read from the page to JustWatch to find where it streams.',
@@ -571,6 +582,85 @@
         provider_tmdb_consent: 'Sends the IMDb id to TMDB to look up where the title streams. Needs your own TMDB read token.',
         provider_wikidata_consent: 'Sends the IMDb id to Wikidata to find the matching page on another site.',
         provider_youTube_consent: 'Loads the trailer from YouTube, which sees the video you opened.',
+        recovery_a_score_or_availability_lookup_sends_the: 'A score or availability lookup sends the title and year from the page you are on to the service it is looking them up in.',
+        recovery_access_granted: 'Access to $1 granted. Reload any open IMDb tabs.',
+        recovery_access_revoked: 'Access to $1 revoked.',
+        recovery_access_was_not_granted_so_that_feature: 'Access was not granted, so that feature still cannot run.',
+        recovery_allow_sending_page_details_to_score_services: 'Allow sending page details to score services',
+        recovery_backup_copied: 'Backup copied.',
+        recovery_backup_copied_omitting_one: 'Backup copied. $1 integration credential was left out.',
+        recovery_backup_copied_omitting_other: 'Backup copied. $1 integration credentials were left out.',
+        recovery_backup_intro: 'A normal backup leaves out integration API keys and tokens and tells you which it left out.',
+        recovery_backup_is_encrypted: 'This backup is encrypted. Enter its passphrase.',
+        recovery_build_version: 'Build version',
+        recovery_cancel: 'Cancel',
+        recovery_checking_site_access: 'Checking site access…',
+        recovery_clipboard_unavailable: 'Clipboard unavailable',
+        recovery_consent_recorded: 'Consent recorded.',
+        recovery_consent_was_not_given_so_those_lookups: 'Consent was not given, so those lookups should stay off.',
+        recovery_consent_withdrawn_turn_off_the_score_and: 'Consent withdrawn. Turn off the score and availability lookups too.',
+        recovery_copy_backup: 'Copy backup',
+        recovery_copy_backup_with_credentials: 'Copy backup with credentials',
+        recovery_copy_diagnostics: 'Copy diagnostics',
+        recovery_diagnostics_report_copied: 'Diagnostics report copied.',
+        recovery_encrypt_and_copy: 'Encrypt and copy',
+        recovery_encrypted_backup_note: 'The backup is encrypted in this browser with the passphrase you choose. There is no way to recover the contents if you forget it.',
+        recovery_grant_imdb_access: 'Grant IMDb access',
+        recovery_granted_and_the_feature_is_on: 'Granted, and the feature is on.',
+        recovery_granted_but_the_feature_is_switched_off: 'Granted, but the feature is switched off.',
+        recovery_granted_host_access: 'Granted host access:',
+        recovery_heading_backup: 'Backup',
+        recovery_heading_reset: 'Reset',
+        recovery_heading_restore: 'Restore',
+        recovery_heading_site_access: 'Site access',
+        recovery_heading_status: 'Status',
+        recovery_imdb_access_granted_open_or_reload_an: 'IMDb access granted. Open or reload an IMDb page.',
+        recovery_imdb_access_is_granted: 'IMDb access is granted.',
+        recovery_imdb_access_is_not_granted_so_the: 'IMDb access is not granted, so the extension cannot run on IMDb pages.',
+        recovery_imdb_access_was_not_granted_so_the: 'IMDb access was not granted, so the extension still cannot run there.',
+        recovery_lookup_cache: 'Lookup cache',
+        recovery_no_host_access_is_currently_granted: 'No host access is currently granted.',
+        recovery_not_allowed_so_those_lookups_should_stay: 'Not allowed, so those lookups should stay off.',
+        recovery_not_granted: 'Not granted.',
+        recovery_not_granted_so_this_feature_cannot_work: 'Not granted, so this feature cannot work yet.',
+        recovery_open_imdb_settings: 'Open IMDb settings',
+        recovery_page_intro: 'Everything here works without access to IMDb, so it stays usable when the extension cannot run on the site.',
+        recovery_page_title: 'IMDb Enhanced — settings recovery',
+        recovery_passphrase: 'Passphrase',
+        recovery_paste_a_backup: 'Paste a backup',
+        recovery_paste_a_backup_before_restoring: 'Paste a backup before restoring.',
+        recovery_repeat_passphrase: 'Repeat passphrase',
+        recovery_reset_confirm: 'Yes, reset everything',
+        recovery_reset_done: 'Reset $1 settings. Undo is available until you leave this page.',
+        recovery_reset_everything: 'Reset everything',
+        recovery_reset_intro: 'Returns every preference, site list, title mark, and integration credential to its default. You can undo it once, without leaving this page.',
+        recovery_reset_not_attempted: 'Current settings could not be read, so reset was not attempted: $1',
+        recovery_reset_warning: 'This clears title marks and local integration credentials. Copy a backup first if you may need them.',
+        recovery_restore_button: 'Restore',
+        recovery_restored: 'Restored $1 settings.',
+        recovery_restored_some_skipped: 'Restored $1 settings; skipped $2 unrecognized.',
+        recovery_script_version: 'Script version',
+        recovery_section_could_not_be_read: 'The $1 section could not be read, but the actions below still work.',
+        recovery_section_site_access: 'site access',
+        recovery_section_status: 'status',
+        recovery_section_storage: 'storage',
+        recovery_sending_page_details_to_score_services: 'Sending page details to score services',
+        recovery_site_access_could_not_be_read_in: 'Site access could not be read in this browser.',
+        recovery_site_access_intro: 'Features that reach a site other than IMDb ask for access to that site only, and only when you switch them on. This page is the only place a browser will let an extension request it, so grant and revoke happen here.',
+        recovery_that_is_not_valid_json_nothing_was: 'That is not valid JSON. Nothing was changed.',
+        recovery_the_backup_could_not_be_created: 'The backup could not be created.',
+        recovery_the_consent_could_not_be_changed: 'The consent could not be changed.',
+        recovery_the_diagnostics_report_could_not_be_copied: 'The diagnostics report could not be copied. Check this page’s clipboard permission.',
+        recovery_the_permission_could_not_be_changed: 'The permission could not be changed.',
+        recovery_the_reset_failed_and_previous_settings_were: 'The reset failed and previous settings were restored.',
+        recovery_the_restore_failed_nothing_was_changed: 'The restore failed. Nothing was changed.',
+        recovery_the_undo_failed_nothing_was_changed: 'The undo failed. Nothing was changed.',
+        recovery_title_marks: 'Title marks',
+        recovery_undo_available_note: 'Available until you leave this page.',
+        recovery_undo_done: 'Undone. $1 settings were put back.',
+        recovery_undo_the_reset: 'Undo the reset',
+        recovery_unknown_error: 'unknown error',
+        recovery_withdraw_consent_for_sending_page_details_to: 'Withdraw consent for sending page details to score services',
         settings_a_backup_covers_preferences_sites_and_title: 'A backup covers preferences, sites, and title marks. Integration API keys and tokens are left out unless you choose the encrypted export.',
         settings_a_key_is_saved_on_this_device: 'A key is saved on this device. It is not shown here; type a new one to replace it.',
         settings_a_readable_summary_for_bug_reports_credentials: 'A readable summary for bug reports. Credentials, marked titles, and the page query string are never included.',
@@ -15222,6 +15312,9 @@ section[data-testid="hero-parent"].enh-editorial-native-hidden { display: none !
         try {
             globalThis.__imdbEnhancedRecoveryHook({
                 VERSION,
+                // One catalog for both documents, so the page cannot drift from the panel.
+                t,
+                tCount,
                 getExportSettings,
                 createEncryptedBackup,
                 readEncryptedBackup,
@@ -15369,9 +15462,21 @@ function say(message, tone = 'info') {
 }
 
 function copyText(text) {
-    if (!navigator.clipboard?.writeText) return Promise.reject(new Error('Clipboard unavailable'));
+    if (!navigator.clipboard?.writeText) return Promise.reject(new Error(core.t('recovery_clipboard_unavailable')));
     return navigator.clipboard.writeText(text);
 }
+
+/* ---- Static page copy --------------------------------------------------------- */
+
+/* The markup carries the English so this page is still readable if the settings layer
+   never loads, which is one of the states it exists to repair. Where it does load, every
+   tagged element is refilled from the catalog, so an installed translation reaches the
+   static copy too. */
+document.querySelectorAll('[data-i18n]').forEach(element => {
+    const text = core.t(element.dataset.i18n);
+    if (text && text !== element.dataset.i18n) element.textContent = text;
+});
+document.documentElement.lang = (chrome.i18n?.getUILanguage?.() || 'en');
 
 /* ---- Version and permission state -------------------------------------------- */
 
@@ -15388,7 +15493,7 @@ function guard(label, render) {
     try { render(); }
     catch (error) {
         console.warn(`[IMDb Enhanced] recovery: ${label} failed`, error);
-        say(`The ${label} section could not be read, but the actions below still work.`, 'error');
+        say(core.t('recovery_section_could_not_be_read', [label]), 'error');
     }
 }
 
@@ -15398,7 +15503,7 @@ function renderPermissions() {
     const banner = $('imdb-access');
     if (!chrome.permissions?.getAll) {
         banner.dataset.state = 'missing';
-        $('imdb-access-text').textContent = 'Site access could not be read in this browser.';
+        $('imdb-access-text').textContent = core.t('recovery_site_access_could_not_be_read_in');
         return;
     }
     /* chrome.* is promise-based on Chromium and callback-based on Gecko; the callback
@@ -15408,16 +15513,16 @@ function renderPermissions() {
         const imdb = origins.some(origin => origin.includes('imdb.com'));
         banner.dataset.state = imdb ? 'granted' : 'missing';
         $('imdb-access-text').textContent = imdb
-            ? 'IMDb access is granted.'
-            : 'IMDb access is not granted, so the extension cannot run on IMDb pages.';
+            ? core.t('recovery_imdb_access_is_granted')
+            : core.t('recovery_imdb_access_is_not_granted_so_the');
         // The action beside the banner has to match it: opening IMDb when the extension
         // cannot run there is a dead end, so offer the repair instead.
         $('open-imdb').hidden = false;
-        $('open-imdb').textContent = imdb ? 'Open IMDb settings' : 'Grant IMDb access';
+        $('open-imdb').textContent = imdb ? core.t('recovery_open_imdb_settings') : core.t('recovery_grant_imdb_access');
         $('open-imdb').dataset.mode = imdb ? 'open' : 'grant';
         if (!origins.length) {
             const item = document.createElement('li');
-            item.textContent = 'No host access is currently granted.';
+            item.textContent = core.t('recovery_no_host_access_is_currently_granted');
             list.appendChild(item);
             return;
         }
@@ -15435,8 +15540,8 @@ $('open-imdb').addEventListener('click', async () => {
     if ($('open-imdb').dataset.mode === 'grant') {
         const granted = await permissionsFor(['https://www.imdb.com/*']).request();
         say(granted
-            ? 'IMDb access granted. Open or reload an IMDb page.'
-            : 'IMDb access was not granted, so the extension still cannot run there.', granted ? 'ok' : 'error');
+            ? core.t('recovery_imdb_access_granted_open_or_reload_an')
+            : core.t('recovery_imdb_access_was_not_granted_so_the'), granted ? 'ok' : 'error');
         renderPermissions();
         if (!granted) return;
     }
@@ -15508,10 +15613,10 @@ async function renderDataConsentRow(list) {
     const copy = document.createElement('div');
     const name = document.createElement('div');
     name.className = 'access-name';
-    name.textContent = 'Sending page details to score services';
+    name.textContent = core.t('recovery_sending_page_details_to_score_services');
     const detail = document.createElement('div');
     detail.className = 'access-detail';
-    detail.textContent = 'A score or availability lookup sends the title and year from the page you are on to the service it is looking them up in.';
+    detail.textContent = core.t('recovery_a_score_or_availability_lookup_sends_the');
     const state = document.createElement('div');
     state.className = 'access-state';
     copy.append(name, detail, state);
@@ -15524,12 +15629,12 @@ async function renderDataConsentRow(list) {
         state.dataset.state = granted ? 'granted' : 'missing';
         state.textContent = granted
             ? 'Allowed.'
-            : 'Not allowed, so those lookups should stay off.';
+            : core.t('recovery_not_allowed_so_those_lookups_should_stay');
         button.textContent = granted ? 'Withdraw' : 'Allow';
         button.className = granted ? '' : 'primary';
         button.setAttribute('aria-label', granted
-            ? 'Withdraw consent for sending page details to score services'
-            : 'Allow sending page details to score services');
+            ? core.t('recovery_withdraw_consent_for_sending_page_details_to')
+            : core.t('recovery_allow_sending_page_details_to_score_services'));
     };
 
     button.addEventListener('click', async () => {
@@ -15537,14 +15642,14 @@ async function renderDataConsentRow(list) {
         try {
             if (await api.contains()) {
                 await api.remove();
-                say('Consent withdrawn. Turn off the score and availability lookups too.', 'ok');
+                say(core.t('recovery_consent_withdrawn_turn_off_the_score_and'), 'ok');
             } else if (await api.request()) {
-                say('Consent recorded.', 'ok');
+                say(core.t('recovery_consent_recorded'), 'ok');
             } else {
-                say('Consent was not given, so those lookups should stay off.', 'error');
+                say(core.t('recovery_consent_was_not_given_so_those_lookups'), 'error');
             }
         } catch (error) {
-            say(error?.message || 'The consent could not be changed.', 'error');
+            say(error?.message || core.t('recovery_the_consent_could_not_be_changed'), 'error');
         } finally {
             button.disabled = false;
             await paint();
@@ -15594,8 +15699,8 @@ function renderAccessList() {
             const enabled = Boolean(core.getSetting(key));
             state.dataset.state = granted ? 'granted' : 'missing';
             state.textContent = granted
-                ? (enabled ? 'Granted, and the feature is on.' : 'Granted, but the feature is switched off.')
-                : (enabled ? 'Not granted, so this feature cannot work yet.' : 'Not granted.');
+                ? (enabled ? core.t('recovery_granted_and_the_feature_is_on') : core.t('recovery_granted_but_the_feature_is_switched_off'))
+                : (enabled ? core.t('recovery_not_granted_so_this_feature_cannot_work') : core.t('recovery_not_granted'));
             button.textContent = granted ? 'Revoke' : 'Grant';
             button.className = granted ? '' : 'primary';
             button.setAttribute('aria-label',
@@ -15611,14 +15716,14 @@ function renderAccessList() {
                        integrations. */
                     const releasable = core.releasableOriginsFor(key);
                     if (releasable.length) await permissionsFor(releasable).remove();
-                    say(`Access to ${core.describeFeatureOrigins(key)} revoked.`, 'ok');
+                    say(core.t('recovery_access_revoked', [core.describeFeatureOrigins(key)]), 'ok');
                 } else if (await api.request()) {
-                    say(`Access to ${core.describeFeatureOrigins(key)} granted. Reload any open IMDb tabs.`, 'ok');
+                    say(core.t('recovery_access_granted', [core.describeFeatureOrigins(key)]), 'ok');
                 } else {
-                    say('Access was not granted, so that feature still cannot run.', 'error');
+                    say(core.t('recovery_access_was_not_granted_so_that_feature'), 'error');
                 }
             } catch (error) {
-                say(error?.message || 'The permission could not be changed.', 'error');
+                say(error?.message || core.t('recovery_the_permission_could_not_be_changed'), 'error');
             } finally {
                 button.disabled = false;
                 await paint();
@@ -15650,9 +15755,9 @@ function renderSummary() {
 $('copy-diagnostics').addEventListener('click', async () => {
     try {
         await copyText(core.buildDiagnosticsReport());
-        say('Diagnostics report copied.', 'ok');
+        say(core.t('recovery_diagnostics_report_copied'), 'ok');
     } catch {
-        say('The diagnostics report could not be copied. Check this page’s clipboard permission.', 'error');
+        say(core.t('recovery_the_diagnostics_report_could_not_be_copied'), 'error');
     }
 });
 
@@ -15664,10 +15769,10 @@ $('export').addEventListener('click', async () => {
         await copyText(JSON.stringify(payload, null, 2));
         const omitted = payload[core.EXPORT_REDACTED_KEY] || [];
         say(omitted.length
-            ? `Backup copied. ${omitted.length} integration ${omitted.length === 1 ? 'credential was' : 'credentials were'} left out.`
-            : 'Backup copied.', 'ok');
+            ? core.tCount('recovery_backup_copied_omitting', omitted.length)
+            : core.t('recovery_backup_copied'), 'ok');
     } catch (error) {
-        say(error?.message || 'The backup could not be created.', 'error');
+        say(error?.message || core.t('recovery_the_backup_could_not_be_created'), 'error');
     }
 });
 
@@ -15682,7 +15787,7 @@ $('secure-export').addEventListener('click', () => {
 $('secure-apply').addEventListener('click', async () => {
     const passphrase = $('secure-passphrase').value;
     if (passphrase !== $('secure-passphrase-confirm').value) {
-        say('The two passphrases do not match.', 'error');
+        say(core.t('toast_the_two_passphrases_do_not_match'), 'error');
         return;
     }
     $('secure-apply').disabled = true;
@@ -15692,9 +15797,9 @@ $('secure-apply').addEventListener('click', async () => {
         $('secure-passphrase-confirm').value = '';
         securePanel.hidden = true;
         $('secure-export').setAttribute('aria-expanded', 'false');
-        say('Encrypted backup copied. Keep the passphrase; it cannot be recovered.', 'ok');
+        say(core.t('toast_encrypted_backup_copied_keep_the_passphrase'), 'ok');
     } catch (error) {
-        say(error?.message || 'The encrypted backup could not be created.', 'error');
+        say(error?.message || core.t('settings_the_encrypted_backup_could_not_be_created'), 'error');
     } finally { $('secure-apply').disabled = false; }
 });
 
@@ -15716,7 +15821,7 @@ restoreInput.addEventListener('input', () => {
 
 $('restore').addEventListener('click', async () => {
     const raw = restoreInput.value.trim();
-    if (!raw) { say('Paste a backup before restoring.', 'error'); return; }
+    if (!raw) { say(core.t('recovery_paste_a_backup_before_restoring'), 'error'); return; }
     $('restore').disabled = true;
     try {
         let data = JSON.parse(raw);
@@ -15729,11 +15834,13 @@ $('restore').addEventListener('click', async () => {
         $('restore-passphrase').value = '';
         restorePassphraseRow.hidden = true;
         renderSummary();
-        say(`Restored ${restored} settings${ignored ? `; skipped ${ignored} unrecognized` : ''}.`, 'ok');
+        say(ignored
+            ? core.t('recovery_restored_some_skipped', [restored, ignored])
+            : core.t('recovery_restored', [restored]), 'ok');
     } catch (error) {
         say(error instanceof SyntaxError
-            ? 'That is not valid JSON. Nothing was changed.'
-            : error?.message || 'The restore failed. Nothing was changed.', 'error');
+            ? core.t('recovery_that_is_not_valid_json_nothing_was')
+            : error?.message || core.t('recovery_the_restore_failed_nothing_was_changed'), 'error');
     } finally { $('restore').disabled = false; }
 });
 
@@ -15774,7 +15881,7 @@ $('reset-confirm').addEventListener('click', () => {
         const current = core.getExportSettings({ includeCredentials: true });
         snapshot = core.prepareSettingsImport(current).entries;
     } catch (error) {
-        say(`Current settings could not be read, so reset was not attempted: ${error?.message || 'unknown error'}`, 'error');
+        say(core.t('recovery_reset_not_attempted', [error?.message || core.t('recovery_unknown_error')]), 'error');
         return;
     }
     try {
@@ -15787,13 +15894,13 @@ $('reset-confirm').addEventListener('click', () => {
         $('reset').setAttribute('aria-expanded', 'false');
         $('undo-row').hidden = false;
         renderSummary();
-        say(`Reset ${count} settings. Undo is available until you leave this page.`, 'ok');
+        say(core.t('recovery_reset_done', [count]), 'ok');
         clearTimeout(undoTimer);
         undoTimer = setTimeout(clearUndo, 5 * 60 * 1000);
         // Focus would otherwise fall to the body when the panel it was in disappears.
         $('undo').focus();
     } catch (error) {
-        say(error?.message || 'The reset failed and previous settings were restored.', 'error');
+        say(error?.message || core.t('recovery_the_reset_failed_and_previous_settings_were'), 'error');
         $('reset').focus();
     }
 });
@@ -15805,9 +15912,9 @@ $('undo').addEventListener('click', () => {
         clearUndo();
         renderSummary();
         renderAccessList();
-        say(`Undone. ${restored} settings were put back.`, 'ok');
+        say(core.t('recovery_undo_done', [restored]), 'ok');
     } catch (error) {
-        say(error?.message || 'The undo failed. Nothing was changed.', 'error');
+        say(error?.message || core.t('recovery_the_undo_failed_nothing_was_changed'), 'error');
     }
     // The undo row is now gone, so send focus somewhere real rather than the body.
     $('reset').focus();
@@ -15815,8 +15922,8 @@ $('undo').addEventListener('click', () => {
 
 /* Rendered last, and each guarded on its own, so a section that cannot be read leaves
    every control above it working. */
-guard('status', renderPermissions);
-guard('site access', renderAccessList);
-guard('storage', renderSummary);
+guard(core.t('recovery_section_status'), renderPermissions);
+guard(core.t('recovery_section_site_access'), renderAccessList);
+guard(core.t('recovery_section_storage'), renderSummary);
 
 })();

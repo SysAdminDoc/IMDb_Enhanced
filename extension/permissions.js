@@ -8,6 +8,18 @@
    place. */
 
 const api = typeof browser !== 'undefined' ? browser : chrome;
+
+/* The markup carries the English so the page still reads if the i18n API answers with
+   nothing; every tagged element is refilled from the catalog when it does answer. */
+const t = key => {
+    try { return api.i18n?.getMessage?.(key) || key; }
+    catch { return key; }
+};
+document.querySelectorAll('[data-i18n]').forEach(element => {
+    const text = t(element.dataset.i18n);
+    if (text !== element.dataset.i18n) element.textContent = text;
+});
+document.documentElement.lang = api.i18n?.getUILanguage?.() || 'en';
 const stateEl = document.getElementById('state');
 const stateText = document.getElementById('state-text');
 const detail = document.getElementById('detail');
@@ -45,35 +57,32 @@ function show(state, message, description) {
     stateText.textContent = message;
     if (description) detail.textContent = description;
     grant.disabled = state !== 'missing';
-    grant.textContent = state === 'granted' ? 'Site access granted' : 'Grant site access';
+    grant.textContent = state === 'granted' ? t('permissions_site_access_granted') : t('permissions_grant_site_access');
 }
 
 async function refresh() {
     const origins = requiredOrigins();
     if (!origins.length) {
-        show('granted', 'Site access granted', 'No additional site access is required.');
+        show('granted', t('permissions_site_access_granted'), t('permissions_no_additional_access_required'));
         return;
     }
     const granted = await contains(origins);
     if (granted) {
-        show('granted', 'Site access granted',
-            'IMDb Enhanced is active. Open or reload an IMDb page and use the gear icon for settings.');
+        show('granted', t('permissions_site_access_granted'), t('permissions_active_reload_note'));
         return;
     }
-    show('missing', 'Site access needed',
-        'IMDb Enhanced needs access to IMDb before it can style pages, block ad shells, or look up scores.');
+    show('missing', t('permissions_site_access_needed'), t('permissions_needs_access_note'));
 }
 
 grant.addEventListener('click', async () => {
     grant.disabled = true;
     const accepted = await request(requiredOrigins());
     if (!accepted) {
-        show('missing', 'Site access needed',
-            'Access was not granted. IMDb Enhanced stays inactive until you allow it to run on IMDb.');
+        show('missing', t('permissions_site_access_needed'), t('permissions_access_declined_note'));
         return;
     }
     await refresh();
-    detail.textContent = 'Access granted. Reload any IMDb tabs that were already open.';
+    detail.textContent = t('permissions_access_granted_note');
 });
 
 refresh();
