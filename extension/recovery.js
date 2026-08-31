@@ -7494,10 +7494,18 @@ section[id*="quote" i] .ipc-list-card { padding: 4px 0 !important; margin: 2px 0
                up on it entirely. A cached entry from before this shipped has no offers,
                so the streaming list stands in for all of it. */
             if (!summary && !rent.length && !buy.length) { this._renderUnavailable('region'); return; }
-            /* TMDB hands back a JustWatch page for the title; the link is still checked
-               against the host it must belong to rather than followed on trust. */
+            /* Each adapter returns a title page on its own service. Pick the trust
+               boundary from the adapter that produced the payload; checking every URL
+               against JustWatch discarded TMDB's region-aware watch link. */
             const fromTmdb = data.source === 'tmdb';
-            const href = normalizeTrustedUrl(data.url, 'justwatch.com', getJustWatchSearchUrl());
+            const fallbackUrl = fromTmdb
+                ? `https://www.themoviedb.org/search?query=${encodeURIComponent(getTitleText())}`
+                : getJustWatchSearchUrl();
+            const href = normalizeTrustedUrl(
+                data.url,
+                fromTmdb ? 'themoviedb.org' : 'justwatch.com',
+                fallbackUrl
+            );
 
             const w = makeEl('div', { id: 'enh-jw-widget', className: 'enh-score-widget enh-score-widget--availability' },
                 makeEl('div', { className: 'enh-score-widget__label' }, 'STREAMING'),

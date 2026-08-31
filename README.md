@@ -141,7 +141,7 @@ The redesigned visual reference set covers every menu page: [Experience](design/
 
 **Media Servers**. Plex URL/token and Jellyfin/Emby URL/API key fields for local library checks. Localhost/127.0.0.1 only.
 
-**Streaming availability source**. JustWatch (read from their page) or TMDB (their documented API, with a read token of your own from themoviedb.org). TMDB resolves the title from its IMDb id rather than by matching titles, reads offers for your chosen region, and displays the credit both TMDB and JustWatch require. Pick TMDB without a token and the panel says so rather than falling back to reading a page.
+**Streaming availability source**. JustWatch (read from their page) or TMDB (their documented API, with a read token of your own from themoviedb.org). TMDB resolves the title from its IMDb id rather than by matching titles, reads offers for your chosen region, and displays the credit both TMDB and JustWatch require. Pick TMDB without a token and the panel says so rather than falling back to reading a page. The widget opens the validated title page returned by whichever source produced the result, so a TMDB result keeps its regional TMDB watch page.
 
 **URL Templates**. Use `{{TITLE}}`, `{{TITLE_DASH}}`, `{{TITLE_SLUG}}`, `{{IMDB_ID}}`, `{{IMDB_NUM}}`, `{{TRAKT_TYPE}}`, `{{YEAR}}` in custom site URLs.
 

@@ -53,6 +53,10 @@ const instrumented = userscript.replace(/\}\)\(\);\s*$/, `globalThis.__imdbEnhan
     appendScoreCorrectionAction,
     getScoreCorrection,
     setScoreCorrection,
+    renderAvailability: data => {
+        const feature = features.find(candidate => candidate.key === 'streamAvailability');
+        feature._render(data);
+    },
     cancelPendingRouteWork,
     stopAllFeatures: () => features.forEach(stopFeature),
     initFeature: key => {
@@ -233,6 +237,40 @@ await runFixture('title', async (window, hooks) => {
         'a saved no-entry choice must suppress provider retries');
     hooks.stopFeature('inlineRTScore');
     correctionWidget.remove();
+
+    hooks.renderAvailability({
+        source:'tmdb',
+        region:'US',
+        providers:['Max'],
+        offers:{ stream:['Max'], rent:[], buy:[] },
+        url:'https://www.themoviedb.org/movie/603/watch?locale=US',
+    });
+    let availabilityLink = requireSelector(window.document, '#enh-jw-widget a');
+    assert.equal(availabilityLink.href, 'https://www.themoviedb.org/movie/603/watch?locale=US',
+        'a TMDB payload must retain its validated TMDB watch link');
+    assert.match(requireSelector(window.document, '#enh-jw-widget').textContent, /TMDB.*Via TMDB.*JustWatch/s,
+        'TMDB data must keep its source label and required attribution');
+
+    hooks.renderAvailability({
+        source:'tmdb',
+        region:'US',
+        providers:['Max'],
+        offers:{ stream:['Max'], rent:[], buy:[] },
+        url:'https://www.justwatch.com/us/movie/the-matrix',
+    });
+    availabilityLink = requireSelector(window.document, '#enh-jw-widget a');
+    assert.equal(availabilityLink.href, 'https://www.themoviedb.org/search?query=The%20Matrix',
+        'a TMDB payload must reject a watch link outside the TMDB trust boundary');
+
+    hooks.renderAvailability({
+        providers:['Netflix'],
+        url:'https://www.justwatch.com/us/movie/the-matrix',
+    });
+    availabilityLink = requireSelector(window.document, '#enh-jw-widget a');
+    assert.equal(availabilityLink.href, 'https://www.justwatch.com/us/movie/the-matrix',
+        'a JustWatch payload must retain its JustWatch trust boundary');
+    assert.match(requireSelector(window.document, '#enh-jw-widget').textContent, /JW.*Via JustWatch/s);
+    requireSelector(window.document, '#enh-jw-widget').remove();
 
     const emptyStats = hooks.createLocalStatsPanel();
     window.document.body.appendChild(emptyStats);

@@ -2716,9 +2716,11 @@ test('third-party response links stay on trusted HTTPS domains', () => {
     assert.strictEqual(hooks.normalizeTrustedUrl('https://letterboxd.com.evil.test/', 'letterboxd.com', fallback), fallback);
     assert(!script.includes('href="${data.url'), 'external response URLs must not be interpolated into HTML');
     assert(!script.includes('titleAttr.replace'), 'external consensus text must not be interpolated into HTML attributes');
-    ['letterboxd.com', 'metacritic.com', 'justwatch.com'].forEach(domain => {
+    ['letterboxd.com', 'metacritic.com'].forEach(domain => {
         assert(script.includes(`normalizeTrustedUrl(data.url, '${domain}'`), `${domain} render allowlist missing`);
     });
+    assert.match(script, /fromTmdb\s*\?\s*'themoviedb\.org'\s*:\s*'justwatch\.com'/,
+        'availability render allowlist must follow the payload source');
 });
 
 test('new-tab handoffs suppress opener and referrer data', () => {
