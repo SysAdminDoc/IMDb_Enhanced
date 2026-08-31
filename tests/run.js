@@ -2888,6 +2888,36 @@ test('local request errors stay concise and text-only', () => {
     );
 });
 
+/* IE-20: decision fatigue is why long watchlists stop getting used. */
+test('the roulette picks from what is visible and never navigates', () => {
+    const feature = script.slice(script.indexOf("key: 'listRoulette'"));
+    const body = feature.slice(0, feature.indexOf("key: 'listMultiSearch'"));
+
+    // It highlights and scrolls. It must not open anything: choosing is the user's job.
+    assert(body.includes("classList.add('enh-roulette-pick')"), 'the pick must be highlighted');
+    assert(body.includes('scrollIntoView'), 'the pick must be scrolled to');
+    assert(!/window\.open|location\.href\s*=|\.click\(\)/.test(body),
+        'the roulette must never navigate or open anything on its own');
+    assert(body.includes('Nothing was opened.'), 'and it should say so');
+
+    // Only rows the page is actually showing: a filtered-out row is not a candidate,
+    // or the pick scrolls to something invisible.
+    assert(body.includes('entry.card.offsetParent !== null'), 'a hidden row must not be picked');
+    assert(body.includes('!entry.duplicate'), 'a title rendered twice must not be twice as likely');
+    assert(/this\._skipMarked\.checked && marks\[entry\.id\]\?\.state/.test(body),
+        'the option to skip already-marked titles must consult the marks');
+    // Honest empty states rather than a silent no-op.
+    assert(body.includes('Nothing left that you have not already marked.'), 'an exhausted list must say so');
+    assert(body.includes('No titles on this page to pick from.'), 'an empty list must say so');
+    // Respects the OS motion preference, like every other scripted scroll here.
+    assert(body.includes('getEnhancementScrollBehavior()'), 'scrolling must honour reduced motion');
+    // Text written into an observed subtree, guarded like the rest.
+    assert.strictEqual((body.match(/^\s*(?!\/\/)[^\n]*\.textContent\s*=/gm) || []).length, 0,
+        'result text must go through the guarded setter');
+    assert(body.includes('#enh-roulette[hidden] { display: none; }'),
+        'a display-setting rule needs its hidden companion');
+});
+
 /* IE-85: a transient provider failure turned a bounded expired value into no result at
    all, when it could have been shown honestly with its date. */
 test('an unreachable provider falls back to a labelled cached value', () => {

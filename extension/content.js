@@ -670,7 +670,7 @@
         castAges: true,
         // Utility
         quickCopyID: true, watchlistBatch: true, listMultiSearch: true, listRuntimeSummary: true,
-        markFilters: true,
+        markFilters: true, listRoulette: true,
         keyboardShortcuts: false,
         // Extension builds only: the userscript updates itself through its manager.
         updateNotice: true, updateDismissedVersion: '',
@@ -733,6 +733,7 @@
         listRuntimeSummary: 'Totals how long the titles on a watchlist, list, or chart would take to watch, and says how many had no runtime listed.',
         markFilters: 'Adds an All / Unseen / Seen / Skipped filter with counts to lists, charts, watchlists, search results, and filmographies. Needs private marks.',
         titleNotes: 'Adds a private note field to title pages, saved on this device and included in backups. Never sent anywhere.',
+        listRoulette: 'Adds a button to watchlists, lists, and charts that picks one title at random and scrolls to it. It never opens anything.',
         keyboardShortcuts: 'Optional. Enables ? for settings, c to copy, r for rating, and t for top.',
     };
 
@@ -8120,6 +8121,91 @@ section[id*="quote" i] .ipc-list-card { padding: 4px 0 !important; margin: 2px 0
         },
     });
 
+    /* Decision fatigue on a long watchlist is the whole reason those lists stop getting
+       used. This picks one and takes you to it — it never navigates, because the point is
+       to help you choose, not to choose for you. */
+    reg({
+        key: 'listRoulette', name: 'Pick something to watch', group: 'Utility',
+        init() {
+            if (!isListPage()) return;
+            if (document.getElementById('enh-roulette')) return;
+            const isCurrent = createFeatureGuard(this);
+
+            addThemedCSS(t => `
+                #enh-roulette { display: inline-flex; align-items: center; gap: 8px; margin: 6px 0 10px; flex-wrap: wrap; }
+                #enh-roulette[hidden] { display: none; }
+                .enh-roulette__btn {
+                    height: 28px; padding: 0 12px; border-radius: 7px; cursor: pointer;
+                    border: 1px solid ${t.accentBorder}; background: ${t.accentMuted}; color: ${t.accent};
+                    font: 650 11px/1 -apple-system, BlinkMacSystemFont, 'Segoe UI', sans-serif;
+                }
+                .enh-roulette__btn:hover { background: ${t.accent}; color: ${readableTextColor(t.accent)}; }
+                .enh-roulette__btn:focus-visible { outline: 2px solid ${t.accent}; outline-offset: 2px; }
+                .enh-roulette__skip { display: inline-flex; align-items: center; gap: 5px; color: ${t.tx3};
+                    font: 500 10px/1.3 -apple-system, BlinkMacSystemFont, 'Segoe UI', sans-serif; cursor: pointer; }
+                .enh-roulette__result { color: ${t.tx2}; font: 600 11px/1.3 -apple-system, BlinkMacSystemFont, 'Segoe UI', sans-serif; }
+                .enh-roulette__result:empty { display: none; }
+                .enh-roulette-pick {
+                    outline: 3px solid ${t.accent} !important; outline-offset: 3px;
+                    border-radius: 8px; scroll-margin: 120px;
+                }
+            `, 'enh-roulette-css');
+
+            const result = makeEl('div', { className:'enh-roulette__result', role:'status', 'aria-live':'polite' });
+            const skipMarked = makeEl('input', { type:'checkbox', id:'enh-roulette-skip-marked' });
+            skipMarked.checked = true;
+            const bar = makeEl('div', { id:'enh-roulette' },
+                makeEl('button', {
+                    type:'button',
+                    className:'enh-roulette__btn',
+                    onClick: () => this._pick(),
+                }, 'Pick something'),
+                makeEl('label', { className:'enh-roulette__skip', for:'enh-roulette-skip-marked' },
+                    skipMarked, 'Skip titles I have marked'),
+                result
+            );
+            this._result = result;
+            this._skipMarked = skipMarked;
+            this._isCurrent = isCurrent;
+
+            const target = document.querySelector('main') || document.body;
+            target.insertBefore(bar, target.firstElementChild?.nextSibling || null);
+        },
+        _pick() {
+            if (!this._isCurrent?.()) return;
+            const marks = getUserMarks();
+            // Only rows the page is actually showing: a filtered-out row is not a
+            // candidate, or the pick would scroll to something invisible.
+            const candidates = collectMarkFilterCards()
+                .filter(entry => !entry.duplicate)
+                .filter(entry => entry.card.offsetParent !== null)
+                .filter(entry => !(this._skipMarked.checked && marks[entry.id]?.state));
+            document.querySelectorAll('.enh-roulette-pick').forEach(node => node.classList.remove('enh-roulette-pick'));
+            if (!candidates.length) {
+                setTextIfChanged(this._result, this._skipMarked.checked
+                    ? 'Nothing left that you have not already marked.'
+                    : 'No titles on this page to pick from.');
+                return;
+            }
+            const chosen = candidates[Math.floor(Math.random() * candidates.length)];
+            chosen.card.classList.add('enh-roulette-pick');
+            chosen.card.scrollIntoView({ behavior:getEnhancementScrollBehavior(), block:'center' });
+            const title = chosen.card.querySelector('.ipc-title__text')?.textContent?.replace(/^\d+\.\s*/, '')
+                || marks[chosen.id]?.title
+                || chosen.id;
+            // Highlighted and announced, never opened: choosing is the user's to do.
+            setTextIfChanged(this._result, `Picked ${title}. Nothing was opened.`);
+        },
+        destroy() {
+            removeCSS('enh-roulette-css');
+            document.querySelectorAll('.enh-roulette-pick').forEach(node => node.classList.remove('enh-roulette-pick'));
+            document.getElementById('enh-roulette')?.remove();
+            this._result = null;
+            this._skipMarked = null;
+            this._isCurrent = null;
+        },
+    });
+
     reg({
         key: 'listMultiSearch', name: 'List multi-search', group: 'Utility',
         init() {
@@ -10877,7 +10963,8 @@ section[data-testid="hero-parent"].enh-editorial-native-hidden { display: none !
                 'tvEpisodeTools', 'tvShowEnhancements', 'subtitleLinks', 'episodeHeatmap',
             ]),
             makeFeatureCard('Lists & shortcuts', 'Batch actions and quick navigation.', 'Lists', [
-                'watchlistBatch', 'listMultiSearch', 'listRuntimeSummary', 'markFilters', 'quickCopyID', 'keyboardShortcuts',
+                'watchlistBatch', 'listMultiSearch', 'listRuntimeSummary', 'markFilters', 'listRoulette',
+                'quickCopyID', 'keyboardShortcuts',
             ]),
             makeFeatureCard('People', 'Additions to cast and crew pages.', 'Name pages', [
                 'castAges',
@@ -11377,7 +11464,7 @@ section[data-testid="hero-parent"].enh-editorial-native-hidden { display: none !
        dismissed changes what you click. */
     const COLLECTION_FEATURE_KEYS = new Set([
         ...UNIVERSAL_FEATURE_KEYS, 'watchlistBatch', 'listMultiSearch', 'listRuntimeSummary',
-        'watchedMarking', 'markFilters', 'dimLowRated',
+        'watchedMarking', 'markFilters', 'dimLowRated', 'listRoulette',
     ]);
     const SECONDARY_PAGE_FEATURE_KEYS = new Set([
         ...UNIVERSAL_FEATURE_KEYS, 'collapsibleSections', 'expandSummaries', 'quickNav',
@@ -11419,7 +11506,7 @@ section[data-testid="hero-parent"].enh-editorial-native-hidden { display: none !
         // episodeHeatmap would otherwise wait out its selector timeout on every title page.
         /* ratingGap needs the vote distribution, which IMDb stopped shipping on title
            pages — verified 2026-08-15 that no script there carries histogramData. */
-        if (surface === 'title') return !['watchlistBatch', 'listMultiSearch', 'listRuntimeSummary', 'markFilters', 'dimLowRated', 'episodeHeatmap', 'ratingGap'].includes(feature.key);
+        if (surface === 'title') return !['watchlistBatch', 'listMultiSearch', 'listRuntimeSummary', 'markFilters', 'dimLowRated', 'listRoulette', 'episodeHeatmap', 'ratingGap'].includes(feature.key);
         if (surface === 'episodes') return EPISODE_LIST_FEATURE_KEYS.has(feature.key);
         if (surface === 'ratings') return RATINGS_FEATURE_KEYS.has(feature.key);
         if (surface === 'collection') return COLLECTION_FEATURE_KEYS.has(feature.key);

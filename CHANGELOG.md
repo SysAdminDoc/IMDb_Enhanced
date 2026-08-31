@@ -34,6 +34,8 @@
 
 - Lists, charts, watchlists, search results, and filmographies get a Private marks filter: All, Unseen, Seen, Skipped, each with a count. It works on what is already on the page, so it makes no request and does not reorder anything: filtering the Top 250 to unseen leaves them in chart order. Counts and filtering update as more rows load and as you mark things, and the arrow keys move through the options. It appears only when private marks are switched on.
 
+- A "Pick something" button on watchlists, lists, and charts chooses one title at random, highlights it, and scrolls to it. It never opens anything, because the point is to help you decide rather than decide for you. By default it skips titles you have already marked Seen or Skipped, and it says so when there is nothing left to pick.
+
 - Watchlists, lists, and charts show how long everything on them would take to watch. The IMDb Top 250 comes to 548:08. The total recounts as more rows load, and when some rows have no runtime listed it says how many rather than quietly reporting a smaller number: a chart of TV series, where IMDb lists no runtime at all, says so instead of showing zero.
 
 - Data → Failure journal keeps the last 20 feature failures across reloads, so an intermittent problem is visible instead of vanishing when you refresh. Each entry says when it happened, which feature, what kind of page, and what category of failure, in plain words. It records the category rather than the error text on purpose, so a title you were looking at, a lookup address, or an API key a local service echoed back has no way to end up in it. You can copy it into a bug report or clear it.
