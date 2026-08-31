@@ -21,6 +21,29 @@
   <section data-testid="UserReviews"><h2 class="ipc-title__text">User reviews</h2></section>
   <section data-testid="MoreLikeThis"><h2 class="ipc-title__text">More like this</h2></section>
   <section data-testid="Details"><h2 class="ipc-title__text">Details</h2></section>
+  <template id="score-correction-fixtures">
+    <div data-provider="rottenTomatoes">
+      <search-page-media-row release-year="1982" tomatometer-score="84">
+        <a slot="title" href="https://www.rottentomatoes.com/m/the_thing_1982">The Thing</a>
+      </search-page-media-row>
+      <search-page-media-row release-year="2011" tomatometer-score="35">
+        <a slot="title" href="https://www.rottentomatoes.com/m/the_thing_2011">The Thing</a>
+      </search-page-media-row>
+    </div>
+    <div data-provider="letterboxd">
+      <a href="/film/the-thing-1982/" data-film-name="The Thing" data-film-release-year="1982"><img alt="The Thing (1982)"></a>
+      <a href="/film/the-thing-2011/" data-film-name="The Thing" data-film-release-year="2011"><img alt="The Thing (2011)"></a>
+    </div>
+    <div data-provider="justWatch">
+      <a class="title-list-row__column-header" href="/us/movie/the-thing-1982">
+        <span class="header-title">The Thing</span><span class="header-year">(1982)</span>
+      </a>
+      <a class="title-list-row__column-header" href="/us/movie/the-thing-2011">
+        <span class="header-title">The Thing</span><span class="header-year">(2011)</span>
+      </a>
+    </div>
+    <script type="application/json" data-provider="metacritic">{"data":{"items":[{"title":"The Thing","type":"movie","releaseDate":"1982-06-25","criticScoreSummary":{"score":59,"url":"/movie/the-thing-1982/critic-reviews/"},"userScoreSummary":{"score":8.4}},{"title":"The Thing","type":"movie","releaseDate":"2011-10-14","criticScoreSummary":{"score":49,"url":"/movie/the-thing-2011/critic-reviews/"},"userScoreSummary":{"score":6.2}}]}}</script>
+  </template>
 </main>
 </body>
 </html>

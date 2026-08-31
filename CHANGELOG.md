@@ -1,6 +1,6 @@
 # Changelog
 
-## 2.15.0 — 2026-08-31
+## 2.15.0 (2026-08-31)
 
 ### Security
 
@@ -19,6 +19,8 @@
 - The extension's privileged fetch no longer follows a redirect anywhere it likes. It checked the address it was asked for, then let the network take it wherever a redirect pointed, which mattered most for calls to Radarr, Sonarr, Plex, Jellyfin, and Emby: those carry your API key in a header, and a redirect would have carried the header along to whatever answered. A request holding a credential now refuses to redirect at all, every response is re-checked against the address it actually came from, and a hop between a local and a public address is rejected outright. Letterboxd's IMDb lookup, which is a genuine redirect within its own site, still works. A blocked redirect now says so rather than reading as a network error.
 
 ### Added
+
+- Rotten Tomatoes, Letterboxd, Metacritic, and JustWatch widgets now have a Wrong? action for a bad title match. It opens up to five year-aware candidates. The panel also accepts a trusted title URL. Marking No entry prevents later visits from retrying. The choice is stored by IMDb title and service outside the volatile score cache, and it appears in settings backups. Automatic matching can be restored at any time. The backup schema advances to 4 so an older build refuses these records instead of dropping them during import.
 
 - The Data page now calculates personal viewing statistics from private marks and imported history without sending anything away. It shows Seen and Skip totals, dated activity by year, top genres, release decades, personal ratings compared with IMDb, known runtime, and a year review once one year has 10 dated viewings. Fresh installs get an empty state, and titles without metadata are reported as unknown rather than guessed. Metadata already visible on a title or list card is retained when the title is marked, so coverage improves during normal use.
 
@@ -84,7 +86,7 @@
 
 - The extension's cache no longer keeps filling after it runs out of room. The recovery that frees space matched on a key name the extension never sends, so it could not run in the one build with a fixed 10 MB limit.
 
-- The Rotten Tomatoes widget shows the audience score again, next to the critics score. It was being looked for under a field name Rotten Tomatoes does not use, so it had never actually appeared — the widget was already built to display it. Where a title's structured data carries no critics score, that now comes from the same place rather than the widget giving up.
+- The Rotten Tomatoes widget shows the audience score again, next to the critics score. It was being looked for under a field name Rotten Tomatoes does not use, so it had never actually appeared. The widget was already built to display it. Where a title's structured data carries no critics score, that now comes from the same place rather than the widget giving up.
 
 - When a score service cannot be reached, the last score it gave is shown with the date it was cached and a Retry button, instead of the widget going blank. This only happens when the lookup could not reach the service at all: if it answered and had nothing, or answered with something that did not match the title, no old value is shown, because that would contradict what the service just said. A cached fallback is never older than the cache's own 30-day ceiling, and refreshing successfully replaces it.
 
@@ -124,7 +126,7 @@
 
 - Cineby is gone. It announced its shutdown for the end of August 2026, and its entry needed a special case no other destination did: because the site had no searchable URL, opening it stored the title locally and a second content script filled Cineby's own search box on arrival. That whole path is retired, along with the host permission, the page match, and the settings copy explaining it. A settings migration deletes the stored preference, any pending handoff, and Cineby rows in a saved site list, and strips the retired transport flag from rows that survive.
 
-## 2.14.0 — 2026-08-15
+## 2.14.0 (2026-08-15)
 
 ### Added
 
@@ -132,35 +134,35 @@
 
 - An optional "Expand truncated summaries" toggle (Tools → Layout) releases IMDb's line clamp so long biographies and summaries read in full without a per-block click. Measured on a person page: 384px of hidden biography becomes visible. Scoped to IMDb's own overflow component, so card titles keep the two-line clamp that holds their layout. Off by default.
 
-- The Ratings tab now compares IMDb's displayed rating with the unweighted mean of the raw votes and says which way the weighting leans. IMDb publishes the unweighted figure there in small type and draws no comparison; a wide gap is the clearest public signal that a title's votes were pushed. Computed from the distribution already on the page — no request. Toggle: Ratings → Score sources.
+- The Ratings tab now compares IMDb's displayed rating with the unweighted mean of the raw votes and says which way the weighting leans. IMDb publishes the unweighted figure there in small type and draws no comparison; a wide gap is the clearest public signal that a title's votes were pushed. It uses the distribution already on the page and makes no request. Toggle: Ratings → Score sources.
 
 ### Removed
 
-- The standalone vote-distribution chart is retired. It rendered on title pages, and IMDb no longer publishes the distribution there — verified on 2026-08-15 that no script on a title page carries it — so the widget had been shipping enabled while drawing nothing. IMDb draws its own chart on the Ratings tab, where the data moved, so a replacement would only have duplicated it. Its stored preference is removed automatically by a settings migration rather than left behind.
+- The standalone vote-distribution chart is retired. It rendered on title pages, and IMDb no longer publishes the distribution there. A check on 2026-08-15 found that no script on a title page carries it, so the widget had been shipping enabled while drawing nothing. IMDb draws its own chart on the Ratings tab, where the data moved, so a replacement would only have duplicated it. Its stored preference is removed automatically by a settings migration rather than left behind.
 
 ### Fixed
 
 - The rating distribution is found again on pages that publish it. IMDb's ratings payload is a ~736 KB application-data blob and the distribution sits deeper in it than the parser's traversal budget reached, so it read as absent; the one array is now sliced out by key under its own bound.
 
-- Extension builds now notice when a newer version has been published and say so, once, with a link and a Dismiss button. An unpacked extension has no way to update itself and Chrome only permits off-store hosting on Linux, so this is the only available mitigation. It reads the published version at most once a day, sends nothing about you, fails silently offline, and can be turned off under Settings → Data → Updates. The userscript build omits it entirely — it updates through its manager.
+- Extension builds now notice when a newer version has been published and say so, once, with a link and a Dismiss button. An unpacked extension has no way to update itself and Chrome only permits off-store hosting on Linux, so this is the only available mitigation. It reads the published version at most once a day, sends nothing about you, fails silently offline, and can be turned off under Settings → Data → Updates. The userscript build omits it entirely because it updates through its manager.
 
-## 2.13.0 — 2026-08-15
+## 2.13.0 (2026-08-15)
 
 ### Added
 
-- README documents the project's trust posture — no telemetry, no runtime dependencies, no remote code, unminified source, local-only storage — states exactly which cross-origin lookups happen and why, and explains how to verify that a shipped build matches its tag. A test fails if a dependency is ever added, so the claims cannot quietly go stale.
+- README documents the project's trust posture: no telemetry, no runtime dependencies, no remote code, unminified source, and local-only storage. It states exactly which cross-origin lookups happen and why, and explains how to verify that a shipped build matches its tag. A test fails if a dependency is ever added, so the claims cannot quietly go stale.
 
 - Windows High Contrast and "increase contrast" are honoured. Forced colours previously removed the focus rings entirely and left rating colours to be substituted arbitrarily; controls now keep a system-coloured outline, heatmap and rating chips stay legible with a visible border, and a request for more contrast replaces the translucent surfaces with opaque ones.
 
-- Settings now carry a schema version, with one ordered place for future migrations to live. Backups record the schema they were written against, and a backup from a newer version is refused with an explanation instead of being partially applied — previously an unrecognized shape would have been quietly replaced by its default.
+- Settings now carry a schema version, with one ordered place for future migrations to live. Backups record the schema they were written against, and a backup from a newer version is refused with an explanation instead of being partially applied. Previously, an unrecognized shape would have been quietly replaced by its default.
 
 - The Ratings tab of a TV series now colour-grades IMDb's own season-by-episode grid and adds a season-average strip and a colour key. IMDb renders the whole series in one table but leaves every cell the same colour; this needs no network request at all. Series pages gain a "Ratings Grid" quick link to it. Toggle: Tools -> TV.
 
-- The GM API contract the userscript depends on is now asserted against both implementations — the userscript manager and the generated MV3 bridge — by one shared suite (`npm test`). Four shipped defects came from the bridge quietly dropping a guarantee while every test stayed green; each of those four now fails the suite if reintroduced.
+- One shared suite (`npm test`) now checks the GM API contract against both implementations: the userscript manager and the generated MV3 bridge. Four shipped defects came from the bridge quietly dropping a guarantee while every test stayed green; each of those four now fails the suite if reintroduced.
 
 ### Added
 
-- Settings → Data can copy a diagnostics report for bug reports. It carries the version, build target, page path, active features and recent feature failures — and never carries credentials, marked titles, or the page query string. Nothing is transmitted; the report only reaches the clipboard.
+- Settings → Data can copy a diagnostics report for bug reports. It carries the version, build target, page path, active features, and recent feature failures. It never carries credentials, marked titles, or the page query string. Nothing is transmitted; the report only reaches the clipboard.
 
 ### Fixed
 
@@ -172,14 +174,14 @@
 - A feature that fails while a page loads now says so once, instead of reporting only to the browser console and leaving a silently missing feature. IMDb changes its markup without notice, so this is the expected failure rather than an exceptional one.
 - The cached-lookup count is available outside the settings panel, so the diagnostics report states it instead of reporting it as unavailable.
 
-- Title pages keep a working "Add to watchlist" action when IMDb renders in a translated language. IMDb began machine-translating page copy in 2026, and the control was located by its English label, so on languages that do not keep the English loanword — Hindi renders "वॉचलिस्ट में जोड़ें" — the button found nothing and the editorial layout, which hides IMDb's own hero and is on by default, left those users with no way to add a title. Native controls are now resolved by test id.
+- Title pages keep a working "Add to watchlist" action when IMDb renders in a translated language. IMDb began machine-translating page copy in 2026, and the control was located by its English label. Hindi, for example, renders "वॉचलिस्ट में जोड़ें". The button found nothing there, and the default editorial layout hid IMDb's own hero, leaving those users with no way to add a title. Native controls are now resolved by test id.
 
-## 2.12.0 — 2026-08-15
+## 2.12.0 (2026-08-15)
 
 ### Fixed
 
 - Toggling Spoiler blur now blurs or reveals episode synopses immediately instead of waiting for a reload.
-- A title containing a rating word — "PG: Psycho Goreman" — no longer reports a fabricated certificate. Certifications come from the element IMDb publishes them in, and are omitted when there is none.
+- A title containing a rating word, such as "PG: Psycho Goreman", no longer reports a fabricated certificate. Certifications come from the element IMDb publishes them in, and are omitted when there is none.
 - Long synopses end on a word boundary with an ellipsis rather than being cut mid-word, and an ellipsized title exposes its full text on hover.
 - The list-page search buttons, Servarr actions, "More watch options" disclosure, and saved-mark Open links use the same focus ring as every other control.
 - Feature descriptions on the Experience page are available to screen readers and as tooltips again; they were hidden outright to keep the cards dense.
@@ -206,20 +208,20 @@
 
 ### Changed
 
-- Renamed the research region from "Where to watch" to "Reviews & research", which is what it contains — the watch destinations sit beside it.
+- Renamed the research region from "Where to watch" to "Reviews & research", which is what it contains. The watch destinations sit beside it.
 - Collapsible sections only give a containing block to the sections they decorate, instead of every section on the page.
 - Media-server status pills derive their colours from the active theme instead of fixed values, and stylesheets for two replaced components were removed.
 - Dynamic ad rules are now removed across a reserved id band, so a rule dropped in a future release cannot linger on existing installs.
 - `npm version` stages the README badge it rewrites, and version sync fails loudly instead of reporting success when a string no longer matches.
 
-## 2.11.0 — 2026-08-14
+## 2.11.0 (2026-08-14)
 
 ### Added
 
 - Extended themes, cleanup, and layout options to IMDb's search, advanced-search, and homepage routes, which previously lost every enhancement mid-navigation.
 - Person pages now show a living person's current age beside their birth date, computed from data already on the page. IMDb prints the age at death itself, so those pages are left alone.
 - Added Overseerr and Jellyseerr as a request backend. Configure the instance under Integrations and title pages gain a Request button that reports whether a title is already available, processing, or requested; your instance resolves the IMDb ID, so no third-party API key is involved.
-- Radarr, Sonarr, and Overseerr buttons now read as a state machine — add, pending, requested, processing, or in library — with colour on the border and a status dot rather than the label, and accessible names that change with the state.
+- Radarr, Sonarr, and Overseerr buttons now read as a state machine with add, pending, requested, processing, and in-library states. Colour appears on the border and a status dot rather than the label, and accessible names change with the state.
 - Rotten Tomatoes and Metacritic lookups now resolve the exact page through Wikidata's published IMDb-to-service identifier mapping, skipping title search and its ranking guesswork. Titles without a mapping keep using the existing validated search path, and every result is still checked for matching title, media type, and year before it is shown.
 - Private Seen/Skip marks now decorate title cards on charts, lists, watchlists, person filmographies, episode lists, and search results instead of title pages alone.
 - Added a Firefox build (`npm run build:firefox`) with an event-page background, a stable add-on id, and a toolbar popup that requests the site access Firefox withholds until you approve it. The build passes `web-ext lint` with no errors.
@@ -230,43 +232,43 @@
 - Private mark controls and badges now step aside on cards where IMDb draws its own Watched control, so the native account action stays clickable.
 - Documented the Chromium "Allow User Scripts" toggle that Manifest V3 requires before any userscript manager can run, including the outdated "Developer mode" banner Tampermonkey still shows on Chrome 138+.
 
-## 2.10.6 — 2026-08-14
+## 2.10.6 (2026-08-14)
 
 ### Fixed
 
 - Repaired dark-theme inheritance across IMDb's native cast, user-list, poll, recommendation, and sidebar cards so dark surfaces no longer carry black text or white tiles.
 
-## 2.10.5 — 2026-08-14
+## 2.10.5 (2026-08-14)
 
 ### Fixed
 
 - Tuned dark-theme hero scrims and stopped multiplying poster artwork into the canvas, keeping OLED genuinely black without erasing the title artwork.
 
-## 2.10.4 — 2026-08-14
+## 2.10.4 (2026-08-14)
 
 ### Fixed
 
 - Raised the editorial title surface above IMDb's native backdrop layer so title content is not covered by a full-page blur.
 
-## 2.10.3 — 2026-08-14
+## 2.10.3 (2026-08-14)
 
 ### Changed
 
 - Disabled plot and episode-synopsis blur in the default experience; both remain available as explicit settings.
 
-## 2.10.2 — 2026-08-14
+## 2.10.2 (2026-08-14)
 
 ### Added
 
 - Added a gold-and-black IMDb Enhanced film-frame icon in Chromium’s standard toolbar and extension sizes.
 
-## 2.10.1 — 2026-08-14
+## 2.10.1 (2026-08-14)
 
 ### Fixed
 
 - Prevented title-surface hydration from continuously rewriting identical synopsis content and stalling IMDb pages.
 
-## 2.10.0 — 2026-08-14
+## 2.10.0 (2026-08-14)
 
 ### Fixed
 
@@ -274,7 +276,7 @@
 - Added a dedicated poster-led editorial title surface with reserved action, rating, and research regions that remains stable while IMDb hydrates the page.
 - Rehomed existing native rating data and configurable title tools into the new surface without removing the underlying IMDb actions.
 
-## 2.9.0 — 2026-08-14
+## 2.9.0 (2026-08-14)
 
 ### Changed
 
@@ -282,7 +284,7 @@
 - Replaced the equal-weight watch-site button wall with one primary Watch destination and an accessible More watch options disclosure; all configured destinations remain editable and functional.
 - Added a categorized Where to watch and research surface for reviews, availability, trailers, and research links, plus a committed visual reference for the selected editorial direction.
 
-## 2.8.0 — 2026-08-14
+## 2.8.0 (2026-08-14)
 
 ### Added
 
@@ -293,7 +295,7 @@
 - Widened and rebalanced the settings workspace with a quieter header, compact navigation markers, pill toggles, stronger grouping, and more readable spacing.
 - Reworked destination editing into a labeled table surface so visibility, purpose, URL templates, color, ordering, and removal are visible at once.
 
-## 2.7.0 — 2026-08-14
+## 2.7.0 (2026-08-14)
 
 ### Added
 
@@ -307,7 +309,7 @@
 - Reworked the Sites settings page into a single, more readable editor surface with visible-count badges and a focus-preserving curation workflow for adding, editing, hiding, moving, resetting, and removing destinations.
 - Grouped external title links by purpose so review, availability, trailer, and research actions are easier to scan without changing their privacy-preserving outbound behavior.
 
-## 2.6.0 — 2026-08-13
+## 2.6.0 (2026-08-13)
 
 ### Added
 
@@ -336,7 +338,7 @@
 - Waited for the current rating surface before rendering cached scores and kept third-party rating/availability requests lazy until that surface is near the viewport.
 - Caught both synchronous and asynchronous feature-start failures; settings-triggered failures now surface a recovery toast instead of remaining console-only.
 - Replaced third-party score-response HTML interpolation with safe DOM construction, numeric checks, bounded text attributes, and HTTPS domain allowlists for Letterboxd, Metacritic, and JustWatch links; custom site templates now reject embedded URL credentials.
-- Replaced the timer-driven list multi-search popup loop—which browsers block after the first tab—with an accessible 20-title link queue, explicit new-tab labels, one-click Open next progress, copy-all, and Cineby-aware title copying.
+- Replaced the timer-driven list multi-search popup loop, which browsers block after the first tab, with an accessible 20-title link queue, explicit new-tab labels, one-click Open next progress, copy-all, and Cineby-aware title copying.
 - Applied the operating system's reduced-motion preference to every enhancement, including quick navigation and keyboard scrolling, and removed an unsupported WCAG conformance claim from theme documentation.
 - Made settings imports transactional: all fields are normalized before persistence, invalid/unknown fields are counted, partial storage failures roll back prior values, and local-service URLs reject remote or credential-bearing origins in both imports and direct editing.
 - Made Cineby title handoffs timestamped, single-use, and bounded to ten minutes; the target page now waits for a visible search control and discards failed handoffs instead of unexpectedly filling a future visit.
@@ -354,7 +356,7 @@
 - Kept focus inside the trailer dialog even when keyboard navigation exits the cross-origin player frame, and restored plot/episode text to its original non-button semantics immediately after a one-way spoiler reveal.
 - Tightened third-party title identity matching so year-qualified IMDb titles reject score or streaming candidates with no release year, while canonical title comparison now tolerates accent variants such as `Amélie`/`Amelie`.
 - Made IMDb title-data extraction skip malformed and unrelated JSON-LD blocks, recognize explicit miniseries schema, and bounded the scan; runtime host checks now require the exact matched IMDb or Cineby hostname instead of substring trust.
-- Bounded and validated rating-histogram discovery, normalized it to a stable 1–10 distribution, waited for the live rating surface before rendering, and exposed each vote bucket to assistive technology.
+- Bounded and validated rating-histogram discovery, normalized it to a stable 1 to 10 distribution, waited for the live rating surface before rendering, and exposed each vote bucket to assistive technology.
 - Removed speculative Rotten Tomatoes slug probes in favor of one identity-bound semantic search; its canonical detail page is fetched only for richer data and must independently pass JSON-LD title/type/year, score-range, and trusted-link validation.
 - Validated Letterboxd's IMDb-ID response against movie title/year JSON-LD and canonical `/film/` links, and now rechecks Rotten Tomatoes, Letterboxd, and Metacritic score ranges when rendering cached data.
 - Versioned the lookup-cache schema so entries created before the new cross-site identity contracts are discarded and lazily refetched instead of remaining trusted for their old TTL.
@@ -441,11 +443,11 @@
 - Normalized Servarr add payload construction, limiting Sonarr lookup results to 500 object-valued seasons and refusing array-valued `addOptions` before request bodies are assembled.
 - Bounded lookup identity titles and provider-ID text before Unicode/regex normalization, and changed Plex XML extraction to iterate only the first 100 items and 32 GUIDs without full intermediate arrays.
 
-## 2.5.1 — 2026-08-12
+## 2.5.1 (2026-08-12)
 
 - Drained the active roadmap while preserving the single-file userscript and version-only npm lifecycle.
 
-## 2.5.0 — 2026-06-27
+## 2.5.0 (2026-06-27)
 
 ### Added
 - **Plex/Jellyfin/Emby library indicator**: Optional local media server checks show whether the current IMDb title already exists in configured Plex, Jellyfin, or Emby libraries.
@@ -455,7 +457,7 @@
 ### Changed
 - Settings reset and title-mark clearing now execute immediately with toast feedback instead of confirmation dialogs.
 
-## 2.4.0 — 2026-06-20
+## 2.4.0 (2026-06-20)
 
 ### Added
 - **Streaming site refresh**: Replaced 4 dead default sites (Popcorn, XPrime, Aether, Rive) with 7 verified working sites (StreamXTV, LookMovie, CineVids, CinemaOS, LivNet, Flixer, Cine.su). Retained Fmovies+.
@@ -509,7 +511,7 @@
 
 - Initial public release with theme system, rating aggregation, page cleanup, and configurable link sites.
 
-## Roadmap archive — 2026-08-10 — ROADMAP.md
+## Roadmap archive (2026-08-10, ROADMAP.md)
 
 <details>
 <summary>Original roadmap snapshot</summary>
@@ -525,7 +527,7 @@ Blocked items live in [Roadmap_Blocked.md](Roadmap_Blocked.md).
 - Live IMDb selector behavior needs manual browser validation because
   non-browser fetches can hit bot verification.
 - Keep the single-file userscript simple. The build step (`npm version`)
-  only syncs versions — no bundling or transpilation.
+  only syncs versions. It does not bundle or transpile.
 
 ## Open Work
 

@@ -334,6 +334,11 @@
     const USER_MARK_GENRES_MAX = 12;
     const USER_MARK_GENRE_TEXT_LIMIT = 40;
     const LOCAL_STATS_GROUP_LIMIT = 8;
+    const SCORE_CORRECTION_VERSION = 1;
+    const SCORE_CORRECTION_TITLE_LIMIT = 1000;
+    const SCORE_CORRECTION_SCAN_LIMIT = SCORE_CORRECTION_TITLE_LIMIT * 2;
+    const SCORE_CORRECTION_CANDIDATE_LIMIT = 5;
+    const SCORE_CORRECTION_URL_LIMIT = 512;
     /* Bounded like every other stored string, and counted against the same 5,000-record
        ceiling as the marks themselves — a note lives inside its title's mark record. */
     const USER_MARK_NOTE_LIMIT = 500;
@@ -877,7 +882,7 @@
         searchButtons: true, externalLinks: true, expandedLinkMenu: true,
         trailerPopover: true,
         watchSites: DEFAULT_WATCH_SITES, externalSites: DEFAULT_EXTERNAL_SITES,
-        watchedMarking: true, userMarks: {}, titleNotes: true,
+        watchedMarking: true, userMarks: {}, titleNotes: true, scoreCorrections: {},
         servarrIntegration: false,
         seerrUrl: 'http://localhost:5055', seerrApiKey: '',
         radarrUrl: 'http://localhost:7878', radarrApiKey: '',
@@ -1316,7 +1321,7 @@
         else GM_setValue(key, '');
     }
 
-    const SETTINGS_SCHEMA_VERSION = 3;
+    const SETTINGS_SCHEMA_VERSION = 4;
     const SETTINGS_SCHEMA_KEY = 'settingsSchemaVersion';
     /* Describes the export rather than being a setting, so import must skip it the way
        it skips the schema marker — otherwise a redacted backup reports its own manifest
@@ -1354,6 +1359,17 @@
                         return rest;
                     });
                 GM_setValue(`${PREFIX}watchSites`, kept);
+            },
+        },
+        {
+            /* v4: score identity choices are durable settings rather than cache entries.
+               Advancing the schema keeps older builds from partially importing a backup
+               whose per-title correction records they cannot preserve. */
+            to: 4,
+            run() {
+                const key = `${PREFIX}scoreCorrections`;
+                const stored = GM_getValue(key, null);
+                if (stored !== null) GM_setValue(key, normalizeScoreCorrections(stored));
             },
         },
     ];
@@ -2722,6 +2738,165 @@
         } catch { return fallback; }
     }
 
+    const SCORE_CORRECTION_PROVIDERS = Object.freeze({
+        rottenTomatoes: { label:'Rotten Tomatoes', domain:'rottentomatoes.com', path:/^\/(?:m|tv)\/[^/]+\/?$/ },
+        letterboxd: { label:'Letterboxd', domain:'letterboxd.com', path:/^\/film\/[^/]+\/?$/ },
+        metacritic: { label:'Metacritic', domain:'metacritic.com', path:/^\/(?:movie|tv)\/[^/]+\/?$/ },
+        justWatch: { label:'JustWatch', domain:'justwatch.com', path:/^\/[a-z]{2}\/(?:movie|tv-show)\/[^/]+\/?$/i },
+    });
+    const SCORE_CORRECTION_CACHE_PREFIXES = Object.freeze({
+        rottenTomatoes:'rt_', letterboxd:'lb_', metacritic:'mc_', justWatch:'jw_',
+    });
+
+    function normalizeScoreCorrectionUrl(provider, value) {
+        const config = SCORE_CORRECTION_PROVIDERS[provider];
+        const raw = String(value || '').trim().slice(0, SCORE_CORRECTION_URL_LIMIT);
+        if (!config || !raw) return '';
+        const trusted = normalizeTrustedUrl(raw, config.domain, '');
+        if (!trusted) return '';
+        try {
+            const parsed = new URL(trusted);
+            if (!config.path.test(parsed.pathname)) return '';
+            parsed.search = '';
+            parsed.hash = '';
+            return parsed.href;
+        } catch { return ''; }
+    }
+
+    function scoreCorrectionUrlsMatch(provider, left, right) {
+        const first = normalizeScoreCorrectionUrl(provider, left);
+        const second = normalizeScoreCorrectionUrl(provider, right);
+        if (!first || !second) return false;
+        const normalizePath = value => new URL(value).pathname.replace(/\/+$/, '').toLowerCase();
+        return normalizePath(first) === normalizePath(second);
+    }
+
+    function normalizeScoreCorrectionRecord(provider, record) {
+        if (!record || typeof record !== 'object' || Array.isArray(record)) return null;
+        const mode = record.mode === 'none' ? 'none' : record.mode === 'url' ? 'url' : '';
+        if (!mode) return null;
+        const timestamp = Number(record.ts);
+        const ts = Number.isFinite(timestamp) && timestamp > 0 && timestamp <= Date.now() + 60000
+            ? Math.floor(timestamp)
+            : 0;
+        if (mode === 'none') return { v:SCORE_CORRECTION_VERSION, mode, ts };
+        const url = normalizeScoreCorrectionUrl(provider, record.url);
+        if (!url) return null;
+        const title = String(record.title || '').trim().replace(/\s+/g, ' ').slice(0, USER_MARK_TITLE_LIMIT);
+        const year = normalizeUserMarkYear(record.year);
+        return {
+            v:SCORE_CORRECTION_VERSION,
+            mode,
+            url,
+            ...(title ? { title } : {}),
+            ...(year !== null ? { year } : {}),
+            ts,
+        };
+    }
+
+    function normalizeScoreCorrections(source) {
+        if (!source || typeof source !== 'object' || Array.isArray(source)) return {};
+        const entries = [];
+        let inspected = 0;
+        for (const imdbId in source) {
+            if (!Object.prototype.hasOwnProperty.call(source, imdbId)) continue;
+            if (inspected >= SCORE_CORRECTION_SCAN_LIMIT) break;
+            inspected += 1;
+            const providers = source[imdbId];
+            if (!/^tt\d{5,12}$/.test(imdbId) || !providers || typeof providers !== 'object' || Array.isArray(providers)) continue;
+            const normalizedProviders = {};
+            Object.keys(SCORE_CORRECTION_PROVIDERS).forEach(provider => {
+                const normalized = normalizeScoreCorrectionRecord(provider, providers[provider]);
+                if (normalized) normalizedProviders[provider] = normalized;
+            });
+            const values = Object.values(normalizedProviders);
+            if (!values.length) continue;
+            entries.push([imdbId, normalizedProviders, Math.max(...values.map(record => record.ts || 0))]);
+        }
+        return Object.fromEntries(entries
+            .sort((a, b) => b[2] - a[2] || a[0].localeCompare(b[0]))
+            .slice(0, SCORE_CORRECTION_TITLE_LIMIT)
+            .map(([imdbId, providers]) => [imdbId, providers]));
+    }
+
+    function getScoreCorrections() {
+        return normalizeScoreCorrections(get('scoreCorrections'));
+    }
+
+    function getScoreCorrection(imdbId, provider) {
+        if (!/^tt\d{5,12}$/.test(String(imdbId || '')) || !SCORE_CORRECTION_PROVIDERS[provider]) return null;
+        return getScoreCorrections()[imdbId]?.[provider] || null;
+    }
+
+    function clearScoreCorrectionCache(imdbId, provider) {
+        const prefix = SCORE_CORRECTION_CACHE_PREFIXES[provider];
+        if (!prefix || !/^tt\d{5,12}$/.test(String(imdbId || ''))) return;
+        try {
+            if (typeof GM_deleteValue === 'function') GM_deleteValue(`cache_${prefix}${imdbId}`);
+        } catch { /* the durable correction still wins over any cache entry */ }
+    }
+
+    function setScoreCorrection(imdbId, provider, record) {
+        if (!/^tt\d{5,12}$/.test(String(imdbId || '')) || !SCORE_CORRECTION_PROVIDERS[provider]) return false;
+        const current = getScoreCorrections();
+        const providers = { ...(current[imdbId] || {}) };
+        if (record === null) {
+            delete providers[provider];
+        } else {
+            const normalized = normalizeScoreCorrectionRecord(provider, { ...record, ts:Date.now() });
+            if (!normalized) return false;
+            providers[provider] = normalized;
+        }
+        if (Object.keys(providers).length) current[imdbId] = providers;
+        else delete current[imdbId];
+        const bounded = normalizeScoreCorrections(current);
+        if (!trySaveSetting('scoreCorrections', bounded)) return false;
+        clearScoreCorrectionCache(imdbId, provider);
+        return true;
+    }
+
+    function normalizeScoreCorrectionCandidate(provider, candidate) {
+        if (!candidate || typeof candidate !== 'object') return null;
+        const url = normalizeScoreCorrectionUrl(provider, candidate.url);
+        const title = String(candidate.title || '').trim().replace(/\s+/g, ' ').slice(0, USER_MARK_TITLE_LIMIT);
+        if (!url || !title) return null;
+        const year = normalizeUserMarkYear(candidate.year);
+        const detail = String(candidate.detail || '').trim().replace(/\s+/g, ' ').slice(0, 80);
+        return {
+            title,
+            url,
+            ...(year !== null ? { year } : {}),
+            ...(detail ? { detail } : {}),
+        };
+    }
+
+    function rankScoreCorrectionCandidates(provider, candidates, title, year) {
+        const wantedTitle = normalizeLookupTitle(title);
+        const wantedYear = normalizeUserMarkYear(year);
+        const seen = new Set();
+        return (Array.isArray(candidates) ? candidates.slice(0, EXTERNAL_RESULT_SCAN_LIMIT) : [])
+            .map((candidate, index) => {
+                const normalized = normalizeScoreCorrectionCandidate(provider, candidate);
+                if (!normalized || seen.has(normalized.url)) return null;
+                seen.add(normalized.url);
+                const candidateTitle = normalizeLookupTitle(normalized.title);
+                const exactTitle = Boolean(wantedTitle && candidateTitle === wantedTitle);
+                const relatedTitle = Boolean(wantedTitle && candidateTitle
+                    && (candidateTitle.includes(wantedTitle) || wantedTitle.includes(candidateTitle)));
+                const candidateYear = normalizeUserMarkYear(normalized.year);
+                const yearDistance = wantedYear !== null && candidateYear !== null
+                    ? Math.abs(candidateYear - wantedYear)
+                    : null;
+                const score = (exactTitle ? 100 : relatedTitle ? 30 : 0)
+                    + (yearDistance === 0 ? 20 : yearDistance === 1 ? 10 : 0);
+                return { ...normalized, _score:score, _index:index };
+            })
+            .filter(Boolean)
+            .sort((a, b) => b._score - a._score || a._index - b._index)
+            .slice(0, SCORE_CORRECTION_CANDIDATE_LIMIT)
+            .map(({ _score, _index, ...candidate }) => candidate);
+    }
+
     function normalizeSite(site, fallbackColor = '#6366f1', fallbackCategory = 'other') {
         const name = String(site?.name || '').trim().slice(0, 40);
         const url = normalizeUrlTemplate(site?.url);
@@ -2796,6 +2971,10 @@
         if (key === 'userMarks') {
             if (!value || Array.isArray(value) || typeof value !== 'object') return null;
             return { key, value:Object.fromEntries(normalizeUserMarkEntries(value)) };
+        }
+        if (key === 'scoreCorrections') {
+            if (!value || Array.isArray(value) || typeof value !== 'object') return null;
+            return { key, value:normalizeScoreCorrections(value) };
         }
         if (typeof fallback === 'boolean') {
             return typeof value === 'boolean' ? { key, value } : null;
@@ -5412,9 +5591,9 @@ section[id*="quote" i] .ipc-list-card { padding: 4px 0 !important; margin: 2px 0
         return match ? decodeHTML(match[2]) : '';
     }
 
-    function parseRTSearchResult(html, title, year, type = 'movie') {
+    function parseRTSearchCandidates(html, type = 'movie') {
         const source = toBoundedText(html, EXTERNAL_RESPONSE_TEXT_LIMIT);
-        if (!source) return null;
+        if (!source) return [];
         const candidates = [];
         const rows = source.matchAll(/<search-page-media-row\b([^>]*)>([\s\S]*?)<\/search-page-media-row>/gi);
         let inspected = 0;
@@ -5428,8 +5607,9 @@ section[id*="quote" i] .ipc-list-card { padding: 4px 0 !important; margin: 2px 0
             const path = new URL(href).pathname;
             if (type === 'tv' ? !path.startsWith('/tv/') : !path.startsWith('/m/')) continue;
             const candidateTitle = decodeHTML(titleAnchor[2].replace(/<[^>]*>/g, ' ')).replace(/\s+/g, ' ').trim();
-            const score = Number(getHTMLAttribute(row[1], 'tomatometer-score'));
-            if (!candidateTitle || !Number.isFinite(score) || score < 0 || score > 100) continue;
+            const rawScore = getHTMLAttribute(row[1], 'tomatometer-score');
+            const score = rawScore === '' ? null : Number(rawScore);
+            if (!candidateTitle || score !== null && (!Number.isFinite(score) || score < 0 || score > 100)) continue;
             const candidateYear = Number(
                 getHTMLAttribute(row[1], 'release-year') || getHTMLAttribute(row[1], 'start-year')
             ) || 0;
@@ -5440,9 +5620,14 @@ section[id*="quote" i] .ipc-list-card { padding: 4px 0 !important; margin: 2px 0
                 audience:null,
                 consensus:null,
                 url:href,
+                ...(score !== null ? { detail:`${score}%` } : {}),
             });
         }
+        return candidates;
+    }
 
+    function parseRTSearchResult(html, title, year, type = 'movie') {
+        const candidates = parseRTSearchCandidates(html, type);
         const wantedTitle = normalizeLookupTitle(title);
         const exact = candidates.filter(candidate => normalizeLookupTitle(candidate.title) === wantedTitle);
         const wantedYear = Number(year) || 0;
@@ -5578,6 +5763,43 @@ section[id*="quote" i] .ipc-list-card { padding: 4px 0 !important; margin: 2px 0
         return yearMatch || null;
     }
 
+    function getMetacriticSearchUrl(title, type = 'movie') {
+        const typeId = type === 'tv' ? '1' : '2';
+        return `https://backend.metacritic.com/finder/metacritic/search/${encodeURIComponent(title || '')}/web?componentName=search-tabs&componentDisplayName=Search+Page+Tab+Filters&componentType=FilterConfig&mcoTypeId=${typeId}&offset=0&limit=10`;
+    }
+
+    function collectMetacriticCandidates(items, type = 'movie') {
+        if (!Array.isArray(items)) return [];
+        const expectedType = type === 'tv' ? 'show' : 'movie';
+        const candidates = [];
+        for (const item of items.slice(0, EXTERNAL_RESULT_SCAN_LIMIT)) {
+            if (String(item?.type || '').toLowerCase() !== expectedType) continue;
+            const title = String(item?.title || '').trim();
+            if (!title) continue;
+            const fallbackUrl = `https://www.metacritic.com/search/${encodeURIComponent(title)}/`;
+            let candidateUrl = fallbackUrl;
+            if (item?.criticScoreSummary?.url) {
+                try {
+                    candidateUrl = new URL(
+                        String(item.criticScoreSummary.url).replace('/critic-reviews/', '/'),
+                        'https://www.metacritic.com'
+                    ).href;
+                } catch { /* retain the trusted search URL, which normalization rejects as a correction */ }
+            }
+            const url = normalizeScoreCorrectionUrl('metacritic', candidateUrl);
+            if (!url) continue;
+            const score = boundedScore(item?.criticScoreSummary?.score, 100);
+            const userScore = boundedScore(item?.userScoreSummary?.score, 10);
+            const year = Number(yearFromText(item?.releaseDate || item?.premiereDate || item?.year)) || 0;
+            const detail = [
+                score !== null ? `${score}/100` : '',
+                userScore !== null ? `user ${userScore.toFixed(1)}` : '',
+            ].filter(Boolean).join(', ');
+            candidates.push({ title, year, url, score, userScore, detail });
+        }
+        return candidates;
+    }
+
     function isMatchingTitleIdentity(candidate, title, year) {
         if (normalizeLookupTitle(candidate?.title) !== normalizeLookupTitle(title)) return false;
         const wantedYear = Number(year) || 0;
@@ -5594,7 +5816,7 @@ section[id*="quote" i] .ipc-list-card { padding: 4px 0 !important; margin: 2px 0
         return boundedScore(pattern.exec(String(source || ''))?.[1], 100);
     }
 
-    function parseRTDetailPage(html, title, year, type = 'movie', fallbackUrl = '') {
+    function parseRTDetailPage(html, title, year, type = 'movie', fallbackUrl = '', allowIdentityOverride = false) {
         const source = toBoundedText(html, EXTERNAL_RESPONSE_TEXT_LIMIT);
         if (!source) return null;
         const expectedType = type === 'tv' ? 'tv' : 'movie';
@@ -5620,10 +5842,10 @@ section[id*="quote" i] .ipc-list-card { padding: 4px 0 !important; margin: 2px 0
                     const itemType = types.includes('Movie') ? 'movie'
                         : types.some(value => ['TVSeries', 'TVShow'].includes(value)) ? 'tv'
                             : '';
-                    if (itemType === expectedType && isMatchingTitleIdentity({
+                    if (itemType === expectedType && (allowIdentityOverride || isMatchingTitleIdentity({
                         title:item.name,
                         year:Number(yearFromText(item.dateCreated || item.datePublished || item.startDate)) || 0,
-                    }, title, year)) {
+                    }, title, year))) {
                         detail = item;
                         break;
                     }
@@ -5666,7 +5888,7 @@ section[id*="quote" i] .ipc-list-card { padding: 4px 0 !important; margin: 2px 0
         return { tomatometer, audience, consensus, url };
     }
 
-    function parseLetterboxdDetailPage(html, title, year, fallbackUrl) {
+    function parseLetterboxdDetailPage(html, title, year, fallbackUrl, allowIdentityOverride = false) {
         const source = toBoundedText(html, EXTERNAL_RESPONSE_TEXT_LIMIT);
         if (!source) return null;
         let detail = null;
@@ -5688,10 +5910,10 @@ section[id*="quote" i] .ipc-list-card { padding: 4px 0 !important; margin: 2px 0
                         continue;
                     }
                     const types = getBoundedStructuredStrings(item['@type'], STRUCTURED_DATA_TYPE_LIMIT);
-                    if (types.includes('Movie') && isMatchingTitleIdentity({
+                    if (types.includes('Movie') && (allowIdentityOverride || isMatchingTitleIdentity({
                         title:item.name,
                         year:Number(yearFromText(item.dateCreated || item.datePublished)) || 0,
-                    }, title, year)) {
+                    }, title, year))) {
                         detail = item;
                         break;
                     }
@@ -5718,9 +5940,89 @@ section[id*="quote" i] .ipc-list-card { padding: 4px 0 !important; margin: 2px 0
         return { score, ratingCount, url };
     }
 
-    function parseJustWatchSearchResult(html, title, year, typePath = 'movie') {
+    function parseLetterboxdSearchCandidates(html) {
         const source = toBoundedText(html, EXTERNAL_RESPONSE_TEXT_LIMIT);
-        if (!source) return '';
+        if (!source) return [];
+        const candidates = [];
+        const anchors = source.matchAll(/<a\b([^>]*\bhref\s*=\s*["'][^"']*\/film\/[^"']+["'][^>]*)>([\s\S]*?)<\/a>/gi);
+        let inspected = 0;
+        for (const anchor of anchors) {
+            if (inspected >= EXTERNAL_RESULT_SCAN_LIMIT) break;
+            inspected += 1;
+            const rawHref = getHTMLAttribute(anchor[1], 'href');
+            let absolute = '';
+            try { absolute = new URL(rawHref, 'https://letterboxd.com').href; }
+            catch { /* reject malformed search rows */ }
+            const url = normalizeScoreCorrectionUrl('letterboxd', absolute);
+            if (!url) continue;
+            const image = anchor[2].match(/<img\b([^>]*)>/i);
+            const rawTitle = getHTMLAttribute(anchor[1], 'data-film-name')
+                || getHTMLAttribute(anchor[1], 'title')
+                || getHTMLAttribute(image?.[1] || '', 'alt')
+                || decodeHTML(anchor[2].replace(/<[^>]*>/g, ' '));
+            const year = Number(
+                getHTMLAttribute(anchor[1], 'data-film-release-year') || yearFromText(rawTitle) || yearFromText(anchor[2])
+            ) || 0;
+            const title = String(rawTitle || '')
+                .replace(/\s*\((?:19|20)\d{2}\)\s*$/, '')
+                .replace(/\s+/g, ' ')
+                .trim();
+            if (!title) continue;
+            candidates.push({ title, year, url });
+        }
+        return candidates;
+    }
+
+    function getLetterboxdSearchUrl(title) {
+        const slug = normalizeLookupTitle(title).replace(/\s+/g, '-').slice(0, 200);
+        return `https://letterboxd.com/search/films/${encodeURIComponent(slug)}/`;
+    }
+
+    function buildLetterboxdCandidateQuery(title) {
+        const cleanTitle = String(title || '')
+            .replace(/[\u0000-\u001f\u007f]/g, ' ')
+            .replace(/\s+/g, ' ')
+            .trim()
+            .slice(0, 200);
+        if (!cleanTitle) return '';
+        const literal = JSON.stringify(cleanTitle);
+        return 'SELECT ?letterboxd (MIN(YEAR(?date)) AS ?year) WHERE {'
+            + ` ?item wdt:P6127 ?letterboxd; rdfs:label ${literal}@en.`
+            + ' OPTIONAL { ?item wdt:P577 ?date. }'
+            + ` } GROUP BY ?letterboxd LIMIT ${EXTERNAL_RESULT_SCAN_LIMIT}`;
+    }
+
+    function parseLetterboxdWikidataCandidates(responseText, title) {
+        const source = toBoundedText(responseText, WIKIDATA_RESPONSE_LIMIT);
+        if (!source) return [];
+        let payload = null;
+        try { payload = JSON.parse(source); } catch { return []; }
+        const rows = Array.isArray(payload?.results?.bindings)
+            ? payload.results.bindings.slice(0, EXTERNAL_RESULT_SCAN_LIMIT)
+            : [];
+        const candidates = [];
+        const seen = new Set();
+        for (const row of rows) {
+            const slug = String(row?.letterboxd?.value || '').trim();
+            if (!/^[a-z0-9][a-z0-9-]{0,180}$/i.test(slug)) continue;
+            const url = normalizeScoreCorrectionUrl('letterboxd', `https://letterboxd.com/film/${slug}/`);
+            if (!url || seen.has(url)) continue;
+            seen.add(url);
+            const year = normalizeUserMarkYear(row?.year?.value);
+            candidates.push({
+                title:String(title || '').trim().slice(0, USER_MARK_TITLE_LIMIT),
+                ...(year !== null ? { year } : {}),
+                url,
+                detail:'Mapped by IMDb Enhanced through Wikidata',
+            });
+        }
+        return candidates;
+    }
+
+    function parseJustWatchSearchCandidates(html, typePath = 'movie', regionPath = '') {
+        const source = toBoundedText(html, EXTERNAL_RESPONSE_TEXT_LIMIT);
+        if (!source) return [];
+        const activeRegionPath = regionPath || getJustWatchRegionPath();
         const candidates = [];
         const anchors = source.matchAll(/<a\b([^>]*\bclass\s*=\s*["'][^"']*title-list-row__column-header[^"']*["'][^>]*)>([\s\S]*?)<\/a>/gi);
         let inspected = 0;
@@ -5733,7 +6035,7 @@ section[id*="quote" i] .ipc-list-card { padding: 4px 0 !important; margin: 2px 0
             const href = normalizeTrustedUrl(candidateUrl, 'justwatch.com', '');
             if (!href) continue;
             const path = new URL(href).pathname;
-            if (!path.startsWith(`/us/${typePath}/`)) continue;
+            if (!path.startsWith(`/${String(activeRegionPath || 'us').toLowerCase()}/${typePath}/`)) continue;
             const titleMatch = anchor[2].match(/<span\b[^>]*\bclass\s*=\s*["'][^"']*header-title[^"']*["'][^>]*>([\s\S]*?)<\/span>/i);
             if (!titleMatch) continue;
             const yearMatch = anchor[2].match(/<span\b[^>]*\bclass\s*=\s*["'][^"']*header-year[^"']*["'][^>]*>([\s\S]*?)<\/span>/i);
@@ -5743,6 +6045,11 @@ section[id*="quote" i] .ipc-list-card { padding: 4px 0 !important; margin: 2px 0
                 url:href,
             });
         }
+        return candidates;
+    }
+
+    function parseJustWatchSearchResult(html, title, year, typePath = 'movie', regionPath = getJustWatchRegionPath()) {
+        const candidates = parseJustWatchSearchCandidates(html, typePath, regionPath);
         const exact = candidates.filter(candidate => isMatchingTitleIdentity(candidate, title, year));
         return exact.length === 1 ? exact[0].url : '';
     }
@@ -5949,12 +6256,13 @@ section[id*="quote" i] .ipc-list-card { padding: 4px 0 !important; margin: 2px 0
         return offers || { providers:[], url:'', region };
     }
 
-    function parseJustWatchAvailability(html, url, expected) {
+    function parseJustWatchAvailability(html, url, expected, allowIdentityOverride = false) {
         if (!html) return null;
         const source = toBoundedText(html, EXTERNAL_RESPONSE_TEXT_LIMIT);
         if (!source) return null;
         const identity = parseJustWatchIdentity(source);
-        if (!identity || identity.type !== expected.typePath || !isMatchingTitleIdentity(identity, expected.title, expected.year)) {
+        if (!identity || identity.type !== expected.typePath
+            || (!allowIdentityOverride && !isMatchingTitleIdentity(identity, expected.title, expected.year))) {
             return null;
         }
         const providers = [];
@@ -6227,6 +6535,212 @@ section[id*="quote" i] .ipc-list-card { padding: 4px 0 !important; margin: 2px 0
         return parseHistogramScriptTexts(scripts.map(script => script.textContent));
     }
 
+    async function fetchScoreCorrectionCandidates(provider, title, year, mediaType = 'movie') {
+        let candidates = [];
+        if (provider === 'rottenTomatoes') {
+            const url = `https://www.rottentomatoes.com/search?search=${encodeURIComponent(title || '')}`;
+            const response = await httpGet(url, { cancelOnRouteChange:true });
+            candidates = parseRTSearchCandidates(response.responseText, mediaType);
+        } else if (provider === 'letterboxd') {
+            try {
+                const response = await httpGet(getLetterboxdSearchUrl(title), {
+                    headers:{ Accept:'text/html,application/xhtml+xml' },
+                    cancelOnRouteChange:true,
+                });
+                candidates = parseLetterboxdSearchCandidates(response.responseText);
+            } catch { /* Letterboxd may challenge anonymous search requests; use its Wikidata IDs below */ }
+            if (!candidates.length) {
+                const query = buildLetterboxdCandidateQuery(title);
+                const response = await httpGet(`${WIKIDATA_ENDPOINT}?format=json&query=${encodeURIComponent(query)}`, {
+                    headers:{ Accept:'application/sparql-results+json' },
+                    cancelOnRouteChange:true,
+                });
+                candidates = parseLetterboxdWikidataCandidates(response.responseText, title);
+            }
+        } else if (provider === 'metacritic') {
+            const response = await httpGet(getMetacriticSearchUrl(title, mediaType), { cancelOnRouteChange:true });
+            const source = toBoundedText(response.responseText, EXTERNAL_RESPONSE_TEXT_LIMIT);
+            if (!source) throw new Error('Candidate response was too large or empty');
+            const payload = JSON.parse(source);
+            candidates = collectMetacriticCandidates(payload?.data?.items || [], mediaType);
+        } else if (provider === 'justWatch') {
+            const typePath = mediaType === 'tv' ? 'tv-show' : 'movie';
+            const response = await httpGet(getJustWatchSearchUrl(title), {
+                headers:{ Accept:'text/html,application/xhtml+xml' },
+                timeout:12000,
+                cancelOnRouteChange:true,
+            });
+            candidates = parseJustWatchSearchCandidates(response.responseText, typePath, getJustWatchRegionPath());
+        }
+        return rankScoreCorrectionCandidates(provider, candidates, title, year);
+    }
+
+    function readScoreCacheForCorrection(cacheKey, correction) {
+        const cached = cacheGet(cacheKey);
+        if (!cached) return null;
+        if (correction?.mode === 'url') {
+            return cached.correctionUrl === correction.url ? cached : null;
+        }
+        return cached.correctionUrl ? null : cached;
+    }
+
+    function withScoreCorrection(data, correction) {
+        return correction?.mode === 'url' && data && typeof data === 'object'
+            ? { ...data, correctionUrl:correction.url }
+            : data;
+    }
+
+    function getScoreCorrectionLookupTitle(correction, fallbackTitle) {
+        const savedTitle = String(correction?.title || '').trim();
+        if (savedTitle) return savedTitle;
+        try {
+            const slug = new URL(correction?.url || '').pathname.split('/').filter(Boolean).pop() || '';
+            const decoded = decodeURIComponent(slug).replace(/[-_]+/g, ' ').trim();
+            return decoded || fallbackTitle;
+        } catch { return fallbackTitle; }
+    }
+
+    function getSavedScoreCorrectionUrl(provider, fallbackUrl) {
+        const correction = getScoreCorrection(getIMDbID(), provider);
+        return correction?.mode === 'url' ? correction.url : fallbackUrl;
+    }
+
+    function appendScoreCorrectionAction(widget, provider, featureKey, options = {}) {
+        const config = SCORE_CORRECTION_PROVIDERS[provider];
+        const imdbId = getIMDbID();
+        if (!widget || !config || !/^tt\d{5,12}$/.test(imdbId || '')) return null;
+        const panelId = `enh-score-correction-${provider}-${imdbId}`;
+        const trigger = makeEl('button', {
+            type:'button',
+            className:'enh-score-correction-trigger',
+            'aria-expanded':'false',
+            'aria-controls':panelId,
+            'aria-label':`Correct the ${config.label} match for this title`,
+        }, 'Wrong?');
+        const closePanel = (restoreFocus = false) => {
+            widget.querySelector?.('.enh-score-correction')?.remove();
+            trigger.setAttribute('aria-expanded', 'false');
+            if (restoreFocus && trigger.isConnected) trigger.focus();
+        };
+        const applyCorrection = record => {
+            if (!setScoreCorrection(imdbId, provider, record)) return false;
+            closePanel();
+            if (typeof options.onApplied === 'function') options.onApplied();
+            else refreshFeature(featureKey);
+            return true;
+        };
+        trigger.addEventListener('click', async () => {
+            if (widget.querySelector?.('.enh-score-correction')) {
+                closePanel();
+                return;
+            }
+            document.querySelector?.('.enh-score-correction')?.remove();
+            document.querySelectorAll?.('.enh-score-correction-trigger[aria-expanded="true"]')
+                .forEach(button => button.setAttribute('aria-expanded', 'false'));
+            trigger.setAttribute('aria-expanded', 'true');
+            const current = getScoreCorrection(imdbId, provider);
+            const status = makeEl('div', {
+                className:'enh-score-correction__status', role:'status', 'aria-live':'polite',
+            }, 'Loading candidate matches...');
+            const choices = makeEl('div', { className:'enh-score-correction__choices', role:'group', 'aria-label':'Candidate matches' });
+            const manualInput = makeEl('input', {
+                type:'url',
+                className:'enh-score-correction__input',
+                placeholder:`Paste a ${config.label} title URL`,
+                'aria-label':`${config.label} title URL`,
+                maxlength:String(SCORE_CORRECTION_URL_LIMIT),
+                value:current?.mode === 'url' ? current.url : '',
+            });
+            const panel = makeEl('div', {
+                id:panelId,
+                className:'enh-score-correction',
+                role:'dialog',
+                'aria-label':`Correct ${config.label} match`,
+            },
+                makeEl('div', { className:'enh-score-correction__header' },
+                    makeEl('strong', {}, `Correct ${config.label}`),
+                    makeEl('button', {
+                        type:'button', className:'enh-score-correction__close', 'aria-label':'Close correction panel',
+                        onClick:() => closePanel(true),
+                    }, '×')
+                ),
+                makeEl('div', { className:'enh-score-correction__current' },
+                    current?.mode === 'none'
+                        ? 'Saved choice: no entry on this source.'
+                        : current?.mode === 'url'
+                            ? `Saved match: ${current.title || current.url}`
+                            : 'Automatic matching is active.'
+                ),
+                status,
+                choices,
+                makeEl('label', { className:'enh-score-correction__label' }, 'Manual title URL', manualInput),
+                makeEl('div', { className:'enh-score-correction__actions' },
+                    makeEl('button', {
+                        type:'button', className:'enh-score-correction__button',
+                        onClick:() => {
+                            const url = normalizeScoreCorrectionUrl(provider, manualInput.value);
+                            manualInput.setAttribute('aria-invalid', String(!url));
+                            if (!url) {
+                                status.textContent = `Use a valid ${config.label} title URL.`;
+                                return;
+                            }
+                            applyCorrection({ mode:'url', url });
+                        },
+                    }, 'Save URL'),
+                    makeEl('button', {
+                        type:'button', className:'enh-score-correction__button',
+                        onClick:() => applyCorrection({ mode:'none' }),
+                    }, 'No entry'),
+                    ...(current ? [makeEl('button', {
+                        type:'button', className:'enh-score-correction__button',
+                        onClick:() => applyCorrection(null),
+                    }, 'Use automatic')] : [])
+                )
+            );
+            widget.appendChild(panel);
+            panel.addEventListener('keydown', event => {
+                if (event.key !== 'Escape') return;
+                event.preventDefault();
+                event.stopPropagation();
+                closePanel(true);
+            });
+            manualInput.addEventListener('input', () => manualInput.setAttribute('aria-invalid', 'false'));
+            const title = getTitleText();
+            const year = getTitleYear();
+            const mediaType = isTVType() ? 'tv' : 'movie';
+            try {
+                const loader = typeof options.loadCandidates === 'function'
+                    ? options.loadCandidates
+                    : fetchScoreCorrectionCandidates;
+                const candidates = await loader(provider, title, year, mediaType);
+                if (!panel.isConnected) return;
+                choices.replaceChildren();
+                if (!candidates.length) {
+                    status.textContent = 'No candidate matches were found. Paste a title URL or mark no entry.';
+                    return;
+                }
+                candidates.forEach(candidate => {
+                    const normalized = normalizeScoreCorrectionCandidate(provider, candidate);
+                    if (!normalized) return;
+                    const label = [normalized.title, normalized.year || '', normalized.detail || ''].filter(Boolean).join(' · ');
+                    choices.appendChild(makeEl('button', {
+                        type:'button',
+                        className:'enh-score-correction__choice',
+                        title:normalized.url,
+                        onClick:() => applyCorrection({
+                            mode:'url', url:normalized.url, title:normalized.title, year:normalized.year,
+                        }),
+                    }, label));
+                });
+                status.textContent = `${choices.children.length} candidate ${choices.children.length === 1 ? 'match' : 'matches'}.`;
+            } catch {
+                if (panel.isConnected) status.textContent = 'Candidate matches could not be loaded. Paste a title URL or mark no entry.';
+            }
+        });
+        widget.appendChild(trigger);
+        return trigger;
+    }
+
     /* Which widget each score source owns, so the shared fallback below can label the one
        it just rendered without every feature repeating the wiring. */
     const SCORE_WIDGET_IDS = {
@@ -6346,12 +6860,17 @@ section[id*="quote" i] .ipc-list-card { padding: 4px 0 !important; margin: 2px 0
             if (!imdbId || !title) return;
 
             const cacheKey = 'rt_' + imdbId;
+            const correction = getScoreCorrection(imdbId, 'rottenTomatoes');
             /* A build that excludes every provider behind this feature cannot answer, so
                it says which one is missing rather than sitting on a loading state. */
             if (featureExcludedByProfile(this.key)) { this._renderUnavailable('excluded'); return; }
-            const cached = cacheGet(cacheKey);
+            const cached = readScoreCacheForCorrection(cacheKey, correction);
             const bar = await waitForRatingBar(isCurrent);
             if (!bar || !isCurrent()) return;
+            if (correction?.mode === 'none') {
+                this._renderUnavailable('corrected-none');
+                return;
+            }
             if (cached) {
                 if (cached.unavailable) this._renderUnavailable();
                 else this._render(cached);
@@ -6362,6 +6881,31 @@ section[id*="quote" i] .ipc-list-card { padding: 4px 0 !important; margin: 2px 0
 
             const type = isTVType() ? 'tv' : 'movie';
             if (!isCurrent()) return;
+
+            if (correction?.mode === 'url') {
+                try {
+                    const response = await httpGet(correction.url, { cancelOnRouteChange:true });
+                    if (!isCurrent()) return;
+                    const resolvedUrl = normalizeScoreCorrectionUrl('rottenTomatoes', response.finalUrl || correction.url);
+                    const corrected = parseRTDetailPage(
+                        response.responseText,
+                        correction.title || title,
+                        correction.year || year,
+                        type,
+                        resolvedUrl || correction.url,
+                        true
+                    );
+                    if (corrected) {
+                        const data = withScoreCorrection(corrected, correction);
+                        cacheSet(cacheKey, data);
+                        this._render(data);
+                        return;
+                    }
+                } catch { /* the saved choice remains visible and editable below */ }
+                if (!isCurrent()) return;
+                this._renderUnavailable('correction-failed');
+                return;
+            }
 
             /* A Wikidata-mapped identifier names the exact Rotten Tomatoes page,
                so the search step and its ranking guesswork can be skipped. The
@@ -6440,6 +6984,7 @@ section[id*="quote" i] .ipc-list-card { padding: 4px 0 !important; margin: 2px 0
             w.append(makeEl('div', { className:'enh-score-widget__label' }, 'TOMATOMETER'), scoreLink);
             announceScore('Rotten Tomatoes', `${score}%`);
             if (hasAudience) w.appendChild(makeEl('div', { className:'enh-score-widget__sub' }, `Audience: ${audience}%`));
+            appendScoreCorrectionAction(w, 'rottenTomatoes', this.key);
             bar.appendChild(w);
         },
         _renderLoading() {
@@ -6466,7 +7011,14 @@ section[id*="quote" i] .ipc-list-card { padding: 4px 0 !important; margin: 2px 0
                     <span class="enh-score-widget__value">Open</span>
                 </a>
             `;
-            appendUnavailableNote(w, reason, reason === 'excluded' ? describeProfileExclusion(this.key) : 'Score unavailable');
+            w.querySelector('a')?.setAttribute('href', getSavedScoreCorrectionUrl(
+                'rottenTomatoes', `https://www.rottentomatoes.com/search?search=${encodeURIComponent(getTitleText())}`));
+            const note = reason === 'excluded' ? describeProfileExclusion(this.key)
+                : reason === 'corrected-none' ? 'Marked as no entry on Rotten Tomatoes'
+                : reason === 'correction-failed' ? 'Saved Rotten Tomatoes match unavailable'
+                : 'Score unavailable';
+            appendUnavailableNote(w, reason, note);
+            if (reason !== 'excluded') appendScoreCorrectionAction(w, 'rottenTomatoes', this.key);
             bar.appendChild(w);
         },
         destroy() { document.getElementById('enh-rt-widget')?.remove(); }
@@ -6481,12 +7033,17 @@ section[id*="quote" i] .ipc-list-card { padding: 4px 0 !important; margin: 2px 0
             if (!imdbId || !title) return;
 
             const cacheKey = 'lb_' + imdbId;
+            const correction = getScoreCorrection(imdbId, 'letterboxd');
             /* A build that excludes every provider behind this feature cannot answer, so
                it says which one is missing rather than sitting on a loading state. */
             if (featureExcludedByProfile(this.key)) { this._renderUnavailable('excluded'); return; }
-            const cached = cacheGet(cacheKey);
+            const cached = readScoreCacheForCorrection(cacheKey, correction);
             const bar = await waitForRatingBar(isCurrent);
             if (!bar || !isCurrent()) return;
+            if (correction?.mode === 'none') {
+                this._renderUnavailable('corrected-none');
+                return;
+            }
             if (cached) {
                 if (cached.unavailable) this._renderUnavailable();
                 else this._render(cached);
@@ -6494,6 +7051,30 @@ section[id*="quote" i] .ipc-list-card { padding: 4px 0 !important; margin: 2px 0
             }
             if (!await waitUntilVisible(bar, isCurrent) || !isCurrent()) return;
             this._renderLoading();
+
+            if (correction?.mode === 'url') {
+                try {
+                    const response = await httpGet(correction.url, { cancelOnRouteChange:true });
+                    if (!isCurrent()) return;
+                    const resolvedUrl = normalizeScoreCorrectionUrl('letterboxd', response.finalUrl || correction.url);
+                    const corrected = parseLetterboxdDetailPage(
+                        response.responseText,
+                        correction.title || title,
+                        correction.year || year,
+                        resolvedUrl || correction.url,
+                        true
+                    );
+                    if (corrected) {
+                        const data = withScoreCorrection(corrected, correction);
+                        cacheSet(cacheKey, data);
+                        this._render(data);
+                        return;
+                    }
+                } catch { /* the saved choice remains visible and editable below */ }
+                if (!isCurrent()) return;
+                this._renderUnavailable('correction-failed');
+                return;
+            }
 
             const lookupUrl = `https://letterboxd.com/imdb/${imdbId}/`;
             let lookupError = null;
@@ -6543,6 +7124,7 @@ section[id*="quote" i] .ipc-list-card { padding: 4px 0 !important; margin: 2px 0
                 ),
                 makeEl('div', { className:'enh-score-widget__sub' }, count ? `${count} ratings` : 'Average rating')
             );
+            appendScoreCorrectionAction(w, 'letterboxd', this.key);
             announceScore('Letterboxd', formatScore(score));
             bar.appendChild(w);
         },
@@ -6570,7 +7152,14 @@ section[id*="quote" i] .ipc-list-card { padding: 4px 0 !important; margin: 2px 0
                     <span class="enh-score-widget__value">Open</span>
                 </a>
             `;
-            appendUnavailableNote(w, reason, reason === 'excluded' ? describeProfileExclusion(this.key) : 'Score unavailable');
+            w.querySelector('a')?.setAttribute('href', getSavedScoreCorrectionUrl(
+                'letterboxd', `https://letterboxd.com/imdb/${getIMDbID()}/`));
+            const note = reason === 'excluded' ? describeProfileExclusion(this.key)
+                : reason === 'corrected-none' ? 'Marked as no entry on Letterboxd'
+                : reason === 'correction-failed' ? 'Saved Letterboxd match unavailable'
+                : 'Score unavailable';
+            appendUnavailableNote(w, reason, note);
+            if (reason !== 'excluded') appendScoreCorrectionAction(w, 'letterboxd', this.key);
             bar.appendChild(w);
         },
         destroy() { document.getElementById('enh-lb-widget')?.remove(); }
@@ -6584,12 +7173,17 @@ section[id*="quote" i] .ipc-list-card { padding: 4px 0 !important; margin: 2px 0
             if (!imdbId || !title) return;
 
             const cacheKey = 'mc_' + imdbId;
+            const correction = getScoreCorrection(imdbId, 'metacritic');
             /* A build that excludes every provider behind this feature cannot answer, so
                it says which one is missing rather than sitting on a loading state. */
             if (featureExcludedByProfile(this.key)) { this._renderUnavailable('excluded'); return; }
-            const cached = cacheGet(cacheKey);
+            const cached = readScoreCacheForCorrection(cacheKey, correction);
             const bar = await waitForRatingBar(isCurrent);
             if (!bar || !isCurrent()) return;
+            if (correction?.mode === 'none') {
+                this._renderUnavailable('corrected-none');
+                return;
+            }
             if (cached) {
                 if (cached.unavailable) this._renderUnavailable();
                 else this._render(cached);
@@ -6598,11 +7192,40 @@ section[id*="quote" i] .ipc-list-card { padding: 4px 0 !important; margin: 2px 0
             if (!await waitUntilVisible(bar, isCurrent) || !isCurrent()) return;
             this._renderLoading();
 
+            const mediaType = isTVType() ? 'tv' : 'movie';
+
+            if (correction?.mode === 'url') {
+                try {
+                    const query = getScoreCorrectionLookupTitle(correction, title);
+                    const response = await httpGet(getMetacriticSearchUrl(query, mediaType), { cancelOnRouteChange:true });
+                    if (!isCurrent()) return;
+                    const source = toBoundedText(response.responseText, EXTERNAL_RESPONSE_TEXT_LIMIT);
+                    if (!source) throw new Error('Response was too large or empty');
+                    const items = JSON.parse(source)?.data?.items || [];
+                    const candidate = collectMetacriticCandidates(items, mediaType)
+                        .find(item => scoreCorrectionUrlsMatch('metacritic', item.url, correction.url));
+                    if (!candidate) {
+                        this._renderUnavailable('correction-failed');
+                        return;
+                    }
+                    const data = withScoreCorrection({
+                        score:candidate.score,
+                        userScore:candidate.userScore,
+                        url:candidate.url,
+                        title:candidate.title,
+                    }, correction);
+                    cacheSet(cacheKey, data);
+                    this._render(data);
+                    return;
+                } catch {
+                    if (isCurrent()) this._renderUnavailable('correction-failed');
+                    return;
+                }
+            }
+
             const mapped = await resolveExternalIds(imdbId, isCurrent);
             if (!isCurrent()) return;
-            const mediaType = isTVType() ? 'tv' : 'movie';
-            const typeId = mediaType === 'tv' ? '1' : '2';
-            const url = `https://backend.metacritic.com/finder/metacritic/search/${encodeURIComponent(title)}/web?componentName=search-tabs&componentDisplayName=Search+Page+Tab+Filters&componentType=FilterConfig&mcoTypeId=${typeId}&offset=0&limit=10`;
+            const url = getMetacriticSearchUrl(title, mediaType);
 
             let lookupError = null;
             try {
@@ -6672,6 +7295,7 @@ section[id*="quote" i] .ipc-list-card { padding: 4px 0 !important; margin: 2px 0
             if (hasUserScore) {
                 w.appendChild(makeEl('div', { className:'enh-score-widget__sub' }, `User: ${userScore.toFixed(1)}`));
             }
+            appendScoreCorrectionAction(w, 'metacritic', this.key);
             announceScore('Metascore', hasScore ? String(score) : '');
             bar.appendChild(w);
         },
@@ -6699,7 +7323,14 @@ section[id*="quote" i] .ipc-list-card { padding: 4px 0 !important; margin: 2px 0
                     <span class="enh-score-widget__value">Open</span>
                 </a>
             `;
-            appendUnavailableNote(w, reason, reason === 'excluded' ? describeProfileExclusion(this.key) : 'Score unavailable');
+            w.querySelector('a')?.setAttribute('href', getSavedScoreCorrectionUrl(
+                'metacritic', `https://www.metacritic.com/search/${encodeURIComponent(getTitleText())}/`));
+            const note = reason === 'excluded' ? describeProfileExclusion(this.key)
+                : reason === 'corrected-none' ? 'Marked as no entry on Metacritic'
+                : reason === 'correction-failed' ? 'Saved Metacritic match unavailable'
+                : 'Score unavailable';
+            appendUnavailableNote(w, reason, note);
+            if (reason !== 'excluded') appendScoreCorrectionAction(w, 'metacritic', this.key);
             bar.appendChild(w);
         },
         destroy() { document.getElementById('enh-mc-widget')?.remove(); }
@@ -6712,13 +7343,23 @@ section[id*="quote" i] .ipc-list-card { padding: 4px 0 !important; margin: 2px 0
             const imdbId = getIMDbID(), title = getTitleText();
             if (!imdbId || !title) return;
 
-            const cacheKey = 'jw_' + imdbId;
+            const availabilitySource = getEffectiveAvailabilitySource();
+            const cacheKey = `${availabilitySource === 'tmdb' ? 'tmdb_' : 'jw_'}${imdbId}`;
+            const correction = availabilitySource === 'justwatch'
+                ? getScoreCorrection(imdbId, 'justWatch')
+                : null;
             /* A build that excludes every provider behind this feature cannot answer, so
                it says which one is missing rather than sitting on a loading state. */
             if (featureExcludedByProfile(this.key)) { this._renderUnavailable('excluded'); return; }
-            const cached = cacheGet(cacheKey);
+            const cached = availabilitySource === 'justwatch'
+                ? readScoreCacheForCorrection(cacheKey, correction)
+                : cacheGet(cacheKey);
             const bar = await waitForRatingBar(isCurrent);
             if (!bar || !isCurrent()) return;
+            if (correction?.mode === 'none') {
+                this._renderUnavailable('corrected-none');
+                return;
+            }
             if (cached) {
                 if (cached.unavailable) this._renderUnavailable();
                 else this._render(cached);
@@ -6730,7 +7371,7 @@ section[id*="quote" i] .ipc-list-card { padding: 4px 0 !important; margin: 2px 0
             /* TMDB is a separate source, not a fallback. Silently reading JustWatch's
                page when the chosen source cannot answer would defeat the reason for
                choosing it, so an unconfigured adapter says so and stops. */
-            if (getEffectiveAvailabilitySource() === 'tmdb') {
+            if (availabilitySource === 'tmdb') {
                 let tmdbError = null;
                 try {
                     const result = await fetchTmdbAvailability(imdbId, isCurrent);
@@ -6765,12 +7406,37 @@ section[id*="quote" i] .ipc-list-card { padding: 4px 0 !important; margin: 2px 0
             }
 
             const headers = { Accept: 'text/html,application/xhtml+xml' };
+            const expected = { title, year:getTitleYear(), typePath:getJustWatchTypePath() };
+            if (correction?.mode === 'url') {
+                try {
+                    const response = await httpGet(correction.url, {
+                        headers, timeout:12000, cancelOnRouteChange:true,
+                    });
+                    if (!isCurrent()) return;
+                    const resolvedUrl = normalizeScoreCorrectionUrl('justWatch', response.finalUrl || correction.url);
+                    const parsed = resolvedUrl
+                        ? this._parse(response.responseText, resolvedUrl, expected, true)
+                        : null;
+                    if (!parsed) {
+                        this._renderUnavailable('correction-failed');
+                        return;
+                    }
+                    const data = withScoreCorrection(parsed, correction);
+                    cacheSet(cacheKey, data);
+                    this._render(data);
+                    return;
+                } catch {
+                    if (isCurrent()) this._renderUnavailable('correction-failed');
+                    return;
+                }
+            }
+
             const directUrl = getJustWatchDetailUrl(title);
             try {
                 const res = await httpGet(directUrl, { headers, timeout: 12000, cancelOnRouteChange:true });
                 if (!isCurrent()) return;
                 const resolvedUrl = normalizeTrustedUrl(res.finalUrl, 'justwatch.com', directUrl);
-                const data = this._parse(res.responseText, resolvedUrl, { title, year:getTitleYear(), typePath:getJustWatchTypePath() });
+                const data = this._parse(res.responseText, resolvedUrl, expected);
                 if (data) {
                     cacheSet(cacheKey, data);
                     this._render(data);
@@ -6811,8 +7477,8 @@ section[id*="quote" i] .ipc-list-card { padding: 4px 0 !important; margin: 2px 0
             if (!isCurrent()) return;
             this._renderUnavailable(blocked ? 'access' : 'unavailable');
         },
-        _parse(html, url, expected) {
-            return parseJustWatchAvailability(html, url, expected);
+        _parse(html, url, expected, allowIdentityOverride = false) {
+            return parseJustWatchAvailability(html, url, expected, allowIdentityOverride);
         },
         _render(data) {
             document.getElementById('enh-jw-widget')?.remove();
@@ -6862,6 +7528,7 @@ section[id*="quote" i] .ipc-list-card { padding: 4px 0 !important; margin: 2px 0
                endpoint separately requires the data be credited to JustWatch. Rendered
                with the data, because that is where the terms put it. */
             if (fromTmdb) appendProviderAttribution(w, 'tmdb');
+            else appendScoreCorrectionAction(w, 'justWatch', this.key);
             bar.appendChild(w);
         },
         _renderLoading() {
@@ -6879,15 +7546,18 @@ section[id*="quote" i] .ipc-list-card { padding: 4px 0 !important; margin: 2px 0
             document.getElementById('enh-jw-widget')?.remove();
             const bar = findRatingBar();
             if (!bar) return;
+            const usingJustWatch = getEffectiveAvailabilitySource() !== 'tmdb';
             const w = makeEl('div', { id: 'enh-jw-widget', className: 'enh-score-widget enh-score-widget--muted enh-score-widget--availability' },
                 makeEl('div', { className: 'enh-score-widget__label' }, 'STREAMING'),
                 makeEl('a', {
-                    href: getJustWatchSearchUrl(),
+                    href: usingJustWatch
+                        ? getSavedScoreCorrectionUrl('justWatch', getJustWatchSearchUrl())
+                        : getJustWatchSearchUrl(),
                     target: '_blank',
                     rel: 'noopener noreferrer',
                     className: 'enh-score-widget__score enh-score-widget__score--availability',
                 },
-                    makeEl('span', { className: 'enh-score-widget__badge enh-score-widget__badge--outline' }, 'JW'),
+                    makeEl('span', { className: 'enh-score-widget__badge enh-score-widget__badge--outline' }, usingJustWatch ? 'JW' : 'TMDB'),
                     makeEl('span', { className: 'enh-score-widget__value' }, 'Open')
                 )
             );
@@ -6895,8 +7565,11 @@ section[id*="quote" i] .ipc-list-card { padding: 4px 0 !important; margin: 2px 0
                only says the extension gave up. */
             const availabilityNote = reason === 'excluded' ? describeProfileExclusion(this.key)
                 : reason === 'region' ? `Not streamable in ${getAvailabilityRegion()}`
+                : reason === 'corrected-none' ? 'Marked as no entry on JustWatch'
+                : reason === 'correction-failed' ? 'Saved JustWatch match unavailable'
                 : 'Availability unavailable';
             appendUnavailableNote(w, reason, availabilityNote);
+            if (usingJustWatch && reason !== 'excluded') appendScoreCorrectionAction(w, 'justWatch', this.key);
             bar.appendChild(w);
         },
         destroy() { document.getElementById('enh-jw-widget')?.remove(); }
@@ -10525,7 +11198,7 @@ section[data-testid="hero-parent"].enh-editorial-native-hidden { display: none !
 .enh-score-widget {
     display: inline-flex; flex-direction: column; align-items: center;
     padding: 12px 20px; min-width: 104px;
-    border-left: 1px solid ${t.bd0};
+    border-left: 1px solid ${t.bd0}; position: relative;
 }
 .enh-score-widget--availability {
     min-width: 150px; max-width: 240px;
@@ -10561,6 +11234,52 @@ section[data-testid="hero-parent"].enh-editorial-native-hidden { display: none !
     padding: 2px 7px;
 }
 .enh-score-widget__sub { font-size: 10px; color: ${t.tx3}; margin-top: 2px; }
+.enh-score-correction-trigger {
+    margin-top: 5px; padding: 1px 5px; border: 0; border-radius: 4px;
+    background: transparent; color: ${t.tx3}; cursor: pointer;
+    font: 600 9px/1.3 -apple-system, BlinkMacSystemFont, 'Segoe UI', sans-serif;
+    text-decoration: underline; text-underline-offset: 2px;
+}
+.enh-score-correction-trigger:hover { color: ${t.accent}; }
+.enh-score-correction-trigger:focus-visible,
+.enh-score-correction__close:focus-visible,
+.enh-score-correction__button:focus-visible,
+.enh-score-correction__choice:focus-visible,
+.enh-score-correction__input:focus-visible { outline: 2px solid ${t.accent}; outline-offset: 2px; }
+.enh-score-correction {
+    position: absolute; top: calc(100% + 6px); right: 0; z-index: 100020;
+    width: min(340px, calc(100vw - 28px)); padding: 12px;
+    border: 1px solid ${t.bd1}; border-radius: 10px;
+    background: ${t.sf1}; color: ${t.tx1}; box-shadow: ${t.sh3};
+    text-align: left; font: 500 11px/1.4 -apple-system, BlinkMacSystemFont, 'Segoe UI', sans-serif;
+}
+.enh-score-correction__header { display: flex; align-items: center; justify-content: space-between; gap: 10px; color: ${t.tx0}; }
+.enh-score-correction__close {
+    width: 24px; height: 24px; padding: 0; border: 1px solid ${t.bd1}; border-radius: 6px;
+    background: ${t.sf0}; color: ${t.tx2}; cursor: pointer; font: 600 17px/1 sans-serif;
+}
+.enh-score-correction__current,
+.enh-score-correction__status { margin-top: 7px; color: ${t.tx2}; }
+.enh-score-correction__choices { display: grid; gap: 5px; max-height: 170px; overflow: auto; margin-top: 8px; }
+.enh-score-correction__choice {
+    padding: 7px 8px; border: 1px solid ${t.bd0}; border-radius: 7px;
+    background: ${t.sf0}; color: ${t.tx1}; cursor: pointer; text-align: left;
+    font: 600 10px/1.35 -apple-system, BlinkMacSystemFont, 'Segoe UI', sans-serif;
+}
+.enh-score-correction__choice:hover { border-color: ${t.accentBorder}; color: ${t.accent}; }
+.enh-score-correction__label { display: grid; gap: 4px; margin-top: 10px; color: ${t.tx2}; font-weight: 650; }
+.enh-score-correction__input {
+    width: 100%; min-width: 0; padding: 7px 8px; border: 1px solid ${t.bd1}; border-radius: 7px;
+    background: ${t.sf0}; color: ${t.tx0}; font: 500 10px/1.35 ui-monospace, monospace;
+}
+.enh-score-correction__input[aria-invalid="true"] { border-color: ${t.red}; }
+.enh-score-correction__actions { display: flex; flex-wrap: wrap; gap: 6px; margin-top: 8px; }
+.enh-score-correction__button {
+    padding: 5px 8px; border: 1px solid ${t.bd1}; border-radius: 6px;
+    background: ${t.sf0}; color: ${t.tx1}; cursor: pointer;
+    font: 650 10px/1.25 -apple-system, BlinkMacSystemFont, 'Segoe UI', sans-serif;
+}
+.enh-score-correction__button:hover { border-color: ${t.accentBorder}; color: ${t.accent}; }
 /* Required credit, not decoration: TMDB's terms mandate the disclaimer and their
    watch-provider endpoint mandates the JustWatch credit. Quiet, but present and
    readable rather than hidden behind a hover or clipped to one line. */

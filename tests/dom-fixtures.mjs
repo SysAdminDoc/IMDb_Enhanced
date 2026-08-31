@@ -45,6 +45,14 @@ const instrumented = userscript.replace(/\}\)\(\);\s*$/, `globalThis.__imdbEnhan
     createLocalStatsPanel,
     destroySettingsChrome,
     summarizeLocalStats,
+    parseRTSearchCandidates,
+    parseLetterboxdSearchCandidates,
+    collectMetacriticCandidates,
+    parseJustWatchSearchCandidates,
+    rankScoreCorrectionCandidates,
+    appendScoreCorrectionAction,
+    getScoreCorrection,
+    setScoreCorrection,
     cancelPendingRouteWork,
     stopAllFeatures: () => features.forEach(stopFeature),
     initFeature: key => {
@@ -96,6 +104,7 @@ async function waitForSelector(window, selector, timeout = 500) {
 
 function installUserscriptGlobals(window) {
     const store = new Map();
+    window.__fixtureRequests = [];
     window.GM_getValue = (key, fallback) => store.has(key) ? store.get(key) : fallback;
     window.GM_setValue = (key, value) => { store.set(key, structuredClone(value)); };
     window.GM_deleteValue = key => { store.delete(key); };
@@ -103,6 +112,7 @@ function installUserscriptGlobals(window) {
     window.GM_setClipboard = () => {};
     window.GM_webRequest = () => {};
     window.GM_xmlhttpRequest = options => {
+        window.__fixtureRequests.push(options);
         window.queueMicrotask(() => options?.onerror?.({ error:'fixture network disabled' }));
         return { abort() {} };
     };
@@ -159,6 +169,70 @@ await runFixture('title', async (window, hooks) => {
     assert.equal(hooks.getMediaType(), 'movie');
     assert.equal(Number(hooks.getIMDbRating()), 8.7);
     requireSelector(window.document, '[data-testid="hero__primary-text"]');
+
+    const correctionFixture = requireSelector(window.document, '#score-correction-fixtures').content;
+    const correctionCandidates = [
+        ['rottenTomatoes', hooks.parseRTSearchCandidates(
+            requireSelector(correctionFixture, '[data-provider="rottenTomatoes"]').innerHTML, 'movie')],
+        ['letterboxd', hooks.parseLetterboxdSearchCandidates(
+            requireSelector(correctionFixture, '[data-provider="letterboxd"]').innerHTML)],
+        ['metacritic', hooks.collectMetacriticCandidates(
+            JSON.parse(requireSelector(correctionFixture, '[data-provider="metacritic"]').textContent).data.items, 'movie')],
+        ['justWatch', hooks.parseJustWatchSearchCandidates(
+            requireSelector(correctionFixture, '[data-provider="justWatch"]').innerHTML, 'movie', 'us')],
+    ];
+    correctionCandidates.forEach(([provider, candidates]) => {
+        assert.deepEqual(Array.from(candidates, candidate => candidate.year), [1982, 2011]);
+        assert.equal(hooks.rankScoreCorrectionCandidates(provider, candidates, 'The Thing', 1982)[0].year, 1982);
+    });
+
+    const correctionWidget = window.document.createElement('div');
+    correctionWidget.className = 'enh-score-widget';
+    requireSelector(window.document, '[data-testid="hero-rating-bar__aggregate-rating"]').appendChild(correctionWidget);
+    const rtCandidates = hooks.rankScoreCorrectionCandidates(
+        'rottenTomatoes', correctionCandidates[0][1], 'The Thing', 1982);
+    hooks.appendScoreCorrectionAction(correctionWidget, 'rottenTomatoes', 'inlineRTScore', {
+        loadCandidates:async () => rtCandidates,
+        onApplied:() => {},
+    });
+    const correctionTrigger = requireSelector(correctionWidget, '.enh-score-correction-trigger');
+    assert.match(correctionTrigger.getAttribute('aria-controls') || '', /rottenTomatoes-tt0133093$/);
+    correctionTrigger.click();
+    await waitForSelector(window, '.enh-score-correction__choice');
+    requireSelector(correctionWidget, '.enh-score-correction').dispatchEvent(
+        new window.KeyboardEvent('keydown', { key:'Escape', bubbles:true }));
+    assert.equal(correctionWidget.querySelector('.enh-score-correction'), null,
+        'Escape must close the inline correction dialog');
+    correctionTrigger.click();
+    await waitForSelector(window, '.enh-score-correction__choice');
+    const manualInput = requireSelector(correctionWidget, '.enh-score-correction__input');
+    manualInput.value = 'https://www.rottentomatoes.com/m/the_thing_1982';
+    Array.from(correctionWidget.querySelectorAll('button'))
+        .find(button => button.textContent === 'Save URL').click();
+    assert.equal(hooks.getScoreCorrection('tt0133093', 'rottenTomatoes').url,
+        'https://www.rottentomatoes.com/m/the_thing_1982');
+
+    correctionTrigger.click();
+    await waitForSelector(window, '.enh-score-correction__choice');
+    const candidateChoice = Array.from(correctionWidget.querySelectorAll('.enh-score-correction__choice'))
+        .find(button => /1982/.test(button.textContent));
+    assert.ok(candidateChoice, 'the correction panel must list the exact-year candidate');
+    candidateChoice.click();
+    assert.equal(hooks.getScoreCorrection('tt0133093', 'rottenTomatoes').year, 1982);
+
+    correctionTrigger.click();
+    await waitForSelector(window, '.enh-score-correction__choice');
+    Array.from(correctionWidget.querySelectorAll('button'))
+        .find(button => button.textContent === 'No entry').click();
+    assert.equal(hooks.getScoreCorrection('tt0133093', 'rottenTomatoes').mode, 'none');
+    const requestsBeforeSuppression = window.__fixtureRequests.length;
+    assert.equal(hooks.initFeature('inlineRTScore'), true);
+    const suppressedWidget = await waitForSelector(window, '#enh-rt-widget');
+    assert.match(suppressedWidget.textContent, /Marked as no entry/);
+    assert.equal(window.__fixtureRequests.length, requestsBeforeSuppression,
+        'a saved no-entry choice must suppress provider retries');
+    hooks.stopFeature('inlineRTScore');
+    correctionWidget.remove();
 
     const emptyStats = hooks.createLocalStatsPanel();
     window.document.body.appendChild(emptyStats);

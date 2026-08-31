@@ -97,14 +97,21 @@ function loadScriptTestHooks({ withoutDeleteValue = false, withheldCredentials =
         getSiteList,
         filterSitesForMediaType,
         boundedScore,
+        parseRTSearchCandidates,
         parseRTSearchResult,
         parseRTDetailPage,
         readRTScoreField,
         parseLetterboxdDetailPage,
+        parseLetterboxdSearchCandidates,
+        getLetterboxdSearchUrl,
+        buildLetterboxdCandidateQuery,
+        parseLetterboxdWikidataCandidates,
         selectMetacriticResult,
+        collectMetacriticCandidates,
         buildWikidataIdQuery,
         parseWikidataExternalIds,
         normalizeExternalId,
+        parseJustWatchSearchCandidates,
         parseJustWatchSearchResult,
         parseJustWatchIdentity,
         parseJustWatchAvailability,
@@ -159,6 +166,15 @@ function loadScriptTestHooks({ withoutDeleteValue = false, withheldCredentials =
         CACHE_TTL,
         CACHE_MAX_TTL,
         WIKIDATA_ID_TTL,
+        normalizeScoreCorrectionUrl,
+        scoreCorrectionUrlsMatch,
+        normalizeScoreCorrections,
+        getScoreCorrections,
+        getScoreCorrection,
+        setScoreCorrection,
+        rankScoreCorrectionCandidates,
+        SCORE_CORRECTION_CANDIDATE_LIMIT,
+        SCORE_CORRECTION_TITLE_LIMIT,
         computeCurrentAge,
         getUserMarks,
         setUserMarks,
@@ -659,6 +675,19 @@ test('settings carry a schema version that gates migration and import', () => {
         'a pending migration advances the stored version');
     assert(!upgrading.getStorageKeys().includes('imdb_enh_ratingHistogram'),
         'the retired preference must be removed by the migration');
+
+    const correctionUpgrade = loadScriptTestHooks();
+    correctionUpgrade.seedStoredSetting('settingsSchemaVersion', 3);
+    correctionUpgrade.seedStoredSetting('scoreCorrections', {
+        tt0084787:{ rottenTomatoes:{
+            mode:'url', url:'https://www.rottentomatoes.com/m/the_thing', title:'The Thing', year:1982, ts:1,
+        } },
+        unsafe:{ rottenTomatoes:{ mode:'url', url:'javascript:alert(1)', ts:1 } },
+    });
+    correctionUpgrade.runSettingsMigrations();
+    assert.strictEqual(correctionUpgrade.getStoredSetting('settingsSchemaVersion'), correctionUpgrade.SETTINGS_SCHEMA_VERSION);
+    assert.deepStrictEqual(Object.keys(correctionUpgrade.getStoredSetting('scoreCorrections')), ['tt0084787'],
+        'schema 4 must normalize any prerelease correction records before declaring them supported');
 
     // Its own export still round-trips, and the marker is not treated as a setting.
     const prepared = hooks.prepareSettingsImport(backup);
@@ -2858,6 +2887,143 @@ test('JustWatch direct and fallback pages preserve title identity', () => {
     assert(!script.includes('_collectProviderNames'), 'recursive provider traversal should stay removed');
 });
 
+test('score corrections persist outside cache storage and survive settings export', () => {
+    const hooks = loadScriptTestHooks();
+    const imdbId = 'tt0084787';
+    assert.strictEqual(
+        hooks.normalizeScoreCorrectionUrl('rottenTomatoes', 'https://www.rottentomatoes.com/m/the_thing'),
+        'https://www.rottentomatoes.com/m/the_thing'
+    );
+    assert.strictEqual(hooks.normalizeScoreCorrectionUrl('rottenTomatoes', 'https://www.rottentomatoes.com/search?q=thing'), '',
+        'a search page must not become a title override');
+    assert.strictEqual(hooks.normalizeScoreCorrectionUrl('letterboxd', 'http://letterboxd.com/film/the-thing/'), '',
+        'manual overrides must require HTTPS');
+    assert.strictEqual(hooks.normalizeScoreCorrectionUrl('metacritic', 'https://metacritic.com/movie/the-thing/'),
+        'https://metacritic.com/movie/the-thing/');
+    assert(hooks.scoreCorrectionUrlsMatch('metacritic',
+        'https://metacritic.com/movie/the-thing?ref=manual#scores',
+        'https://www.metacritic.com/movie/the-thing/'),
+    'provider host aliases and trailing slashes must still identify the same saved title');
+    assert.strictEqual(
+        hooks.normalizeScoreCorrectionUrl('metacritic', 'https://metacritic.com/movie/the-thing?ref=manual#scores'),
+        'https://metacritic.com/movie/the-thing',
+        'identity overrides must discard tracking queries and fragments'
+    );
+    assert.strictEqual(hooks.normalizeScoreCorrectionUrl('justWatch', 'https://www.justwatch.com/gb/movie/the-thing'),
+        'https://www.justwatch.com/gb/movie/the-thing');
+    assert.strictEqual(hooks.normalizeScoreCorrectionUrl('justWatch', 'https://justwatch.com.evil.test/us/movie/the-thing'), '');
+
+    assert(hooks.cacheSet(`rt_${imdbId}`, { tomatometer:12 }), 'the volatile score fixture must be stored');
+    assert(hooks.setScoreCorrection(imdbId, 'rottenTomatoes', {
+        mode:'url',
+        url:'https://www.rottentomatoes.com/m/the_thing',
+        title:'The Thing',
+        year:1982,
+    }));
+    assert.strictEqual(hooks.cacheGet(`rt_${imdbId}`), null, 'changing identity must invalidate the old score cache');
+    const saved = hooks.getScoreCorrection(imdbId, 'rottenTomatoes');
+    assert.strictEqual(saved.mode, 'url');
+    assert.strictEqual(saved.title, 'The Thing');
+    assert.strictEqual(saved.year, 1982);
+    assert(hooks.setScoreCorrection(imdbId, 'letterboxd', { mode:'none' }));
+    assert.strictEqual(hooks.getScoreCorrection(imdbId, 'letterboxd').mode, 'none');
+
+    hooks.cacheGC(true);
+    assert.strictEqual(hooks.getScoreCorrection(imdbId, 'rottenTomatoes').url,
+        'https://www.rottentomatoes.com/m/the_thing', 'cache collection must not touch durable identity choices');
+    const backup = hooks.getExportSettings();
+    assert.strictEqual(backup.scoreCorrections[imdbId].letterboxd.mode, 'none');
+    const restored = hooks.prepareSettingsImport(backup).entries
+        .find(entry => entry.key === 'scoreCorrections')?.value;
+    assert.strictEqual(restored[imdbId].rottenTomatoes.year, 1982,
+        'ordinary settings restore must retain the selected match');
+
+    const oversized = {};
+    for (let index = 0; index < hooks.SCORE_CORRECTION_TITLE_LIMIT + 25; index += 1) {
+        oversized[`tt${String(10000 + index)}`] = {
+            rottenTomatoes:{ mode:'none', ts:index + 1 },
+        };
+    }
+    oversized.notAnIMDbId = { rottenTomatoes:{ mode:'none', ts:Date.now() } };
+    const bounded = hooks.normalizeScoreCorrections(oversized);
+    assert.strictEqual(Object.keys(bounded).length, hooks.SCORE_CORRECTION_TITLE_LIMIT,
+        'imported correction maps must retain only the newest bounded title set');
+    assert(!Object.prototype.hasOwnProperty.call(bounded, 'notAnIMDbId'));
+    assert(hooks.setScoreCorrection(imdbId, 'rottenTomatoes', null), 'automatic matching must be restorable');
+    assert.strictEqual(hooks.getScoreCorrection(imdbId, 'rottenTomatoes'), null);
+});
+
+test('every external provider exposes bounded alternate title candidates', () => {
+    const hooks = loadScriptTestHooks();
+    const rtHtml = [1982, 2011].map(year => `
+        <search-page-media-row release-year="${year}" tomatometer-score="${year === 1982 ? 84 : 35}">
+            <a slot="title" href="https://www.rottentomatoes.com/m/the_thing_${year}">The Thing</a>
+        </search-page-media-row>`).join('');
+    const letterboxdHtml = [1982, 2011].map(year => `
+        <a href="/film/the-thing-${year}/" data-film-name="The Thing" data-film-release-year="${year}">
+            <img alt="The Thing (${year})">
+        </a>`).join('');
+    const justWatchHtml = [1982, 2011].map(year => `
+        <a class="title-list-row__column-header" href="/us/movie/the-thing-${year}">
+            <span class="header-title">The Thing</span><span class="header-year">(${year})</span>
+        </a>`).join('');
+    const metacriticItems = [1982, 2011].map(year => ({
+        title:'The Thing',
+        type:'movie',
+        releaseDate:`${year}-06-25`,
+        criticScoreSummary:{ score:year === 1982 ? 59 : 49, url:`/movie/the-thing-${year}/critic-reviews/` },
+        userScoreSummary:{ score:year === 1982 ? 8.4 : 6.2 },
+    }));
+    const providers = [
+        ['rottenTomatoes', hooks.parseRTSearchCandidates(rtHtml, 'movie')],
+        ['letterboxd', hooks.parseLetterboxdSearchCandidates(letterboxdHtml)],
+        ['metacritic', hooks.collectMetacriticCandidates(metacriticItems, 'movie')],
+        ['justWatch', hooks.parseJustWatchSearchCandidates(justWatchHtml, 'movie', 'us')],
+    ];
+    providers.forEach(([provider, candidates]) => {
+        assert.deepStrictEqual(Array.from(candidates, candidate => candidate.year), [1982, 2011],
+            `${provider} must retain both same-title years for correction`);
+        const ranked = hooks.rankScoreCorrectionCandidates(provider, candidates, 'The Thing', 1982);
+        assert.strictEqual(ranked[0].year, 1982, `${provider} should put the exact year first`);
+        assert(ranked.length <= hooks.SCORE_CORRECTION_CANDIDATE_LIMIT,
+            `${provider} candidate output must stay bounded`);
+    });
+    assert.strictEqual(hooks.getLetterboxdSearchUrl('The Thing'),
+        'https://letterboxd.com/search/films/the-thing/',
+        'Letterboxd search paths must use the slug form its site accepts');
+    const escapedQuery = hooks.buildLetterboxdCandidateQuery('A "Title" } UNION { ?x ?y ?z');
+    assert(escapedQuery.includes('A \\"Title\\" } UNION { ?x ?y ?z"@en'),
+        'Wikidata candidate titles must remain inside one escaped string literal');
+    const mappedLetterboxd = hooks.parseLetterboxdWikidataCandidates(JSON.stringify({
+        results:{ bindings:[
+            { letterboxd:{ value:'the-thing' }, year:{ value:'1982' } },
+            { letterboxd:{ value:'the-thing-2011' }, year:{ value:'2011' } },
+            { letterboxd:{ value:'https://evil.test/' }, year:{ value:'2011' } },
+        ] },
+    }), 'The Thing');
+    assert.deepStrictEqual(Array.from(mappedLetterboxd, candidate => candidate.year), [1982, 2011]);
+    const excess = Array.from({ length:hooks.SCORE_CORRECTION_CANDIDATE_LIMIT + 20 }, (_, index) => ({
+        title:'The Thing', year:1982 + index,
+        url:`https://www.rottentomatoes.com/m/the_thing_${index}`,
+    }));
+    assert.strictEqual(
+        hooks.rankScoreCorrectionCandidates('rottenTomatoes', excess, 'The Thing', 1982).length,
+        hooks.SCORE_CORRECTION_CANDIDATE_LIMIT
+    );
+
+    [
+        ['inlineRTScore', 'rottenTomatoes'],
+        ['inlineLetterboxdScore', 'letterboxd'],
+        ['inlineMetacriticScore', 'metacritic'],
+        ['streamAvailability', 'justWatch'],
+    ].forEach(([feature, provider]) => {
+        assert(new RegExp(`key: '${feature}'[\\s\\S]{0,14000}?appendScoreCorrectionAction\\(w, '${provider}'`).test(script),
+            `${feature} must render the correction action`);
+        assert(new RegExp(`key: '${feature}'[\\s\\S]{0,5000}?correction\\?\\.mode === 'none'`).test(script),
+            `${feature} must stop before lookup when no entry is saved`);
+    });
+});
+
 test('third-party search and structured-data parsers enforce finite scan budgets', () => {
     const hooks = loadScriptTestHooks();
     assert.strictEqual(hooks.toBoundedText('12345', 4), '', 'oversized text must be rejected before parsing');
@@ -2922,8 +3088,8 @@ test('third-party search and structured-data parsers enforce finite scan budgets
     assert.strictEqual(hooks.parseLetterboxdDetailPage(oversizedTypeDetail, 'The Matrix', 1999), null, 'Letterboxd type classification should stay bounded');
     assert.strictEqual(hooks.parseJustWatchIdentity(oversizedTypeDetail), null, 'JustWatch type classification should stay bounded');
     [
-        'parseYouTubeTrailerVideoId', 'parseRTSearchResult', 'parseRTDetailPage',
-        'parseLetterboxdDetailPage', 'parseJustWatchSearchResult', 'parseJustWatchIdentity',
+        'parseYouTubeTrailerVideoId', 'parseRTSearchCandidates', 'parseRTDetailPage',
+        'parseLetterboxdDetailPage', 'parseLetterboxdSearchCandidates', 'parseJustWatchSearchCandidates', 'parseJustWatchIdentity',
         'parseJustWatchAvailability',
     ].forEach(name => assert(
         new RegExp(`function ${name}\\([^)]*\\) \\{[\\s\\S]{0,300}?toBoundedText\\(`).test(script),
@@ -4667,7 +4833,8 @@ test('TMDB availability resolves an IMDb id and reads only the chosen region', (
        cannot ship JustWatch would otherwise take the JustWatch branch and fail against an
        origin it does not have. It is still a choice, not a fallback order: the preference
        only gives way when this build cannot honour it at all. */
-    assert(body.includes("if (getEffectiveAvailabilitySource() === 'tmdb')"),
+    assert(body.includes('const availabilitySource = getEffectiveAvailabilitySource()')
+        && body.includes("if (availabilitySource === 'tmdb')"),
         'the source is a choice, but a build that cannot ship one must use the other');
     assert.strictEqual(hooks.getAvailabilitySource(), hooks.getEffectiveAvailabilitySource(),
         'where both sources are shippable the preference is honoured exactly');
@@ -4822,7 +4989,7 @@ test('public documentation matches what the project actually ships', () => {
     assert(readme.includes(`badge/version-${metaVersion}-blue`), 'the README badge must match');
     assert(JSON.parse(fs.readFileSync(path.join(root, 'extension', 'manifest.json'), 'utf8')).version === metaVersion,
         'the extension manifest must match');
-    assert(fs.readFileSync(path.join(root, 'CHANGELOG.md'), 'utf8').includes(`## ${metaVersion} —`),
+    assert(fs.readFileSync(path.join(root, 'CHANGELOG.md'), 'utf8').includes(`## ${metaVersion} (`),
         'CHANGELOG.md must carry an entry for the current version');
 });
 
