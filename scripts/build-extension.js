@@ -157,8 +157,14 @@ const bridge = String.raw`
        the cache means its byte accounting counts bytes nothing is holding and it stops
        evicting when it should. The mirror is put back unless a later write to the same
        key has already replaced what we put there. */
-    const __rollbackMirror = (key, had, previous, written) => {
-        if (__state[key] !== written) return;
+    /* Identified by a per-write token rather than by the value written. __clone returns a
+       primitive unchanged, so comparing values would let a rejected write roll back a
+       later successful write of the same string or number — two identical values in
+       flight is all it takes. */
+    let __writeSequence = 0;
+    const __latestWrite = Object.create(null);
+    const __rollbackMirror = (key, had, previous, token) => {
+        if (__latestWrite[key] !== token) return;
         if (had) __state[key] = previous;
         else delete __state[key];
     };
@@ -167,9 +173,11 @@ const bridge = String.raw`
         const had = Object.prototype.hasOwnProperty.call(__state, key);
         const previous = had ? __state[key] : undefined;
         const written = __clone(value);
+        const token = ++__writeSequence;
+        __latestWrite[key] = token;
         __state[key] = written;
         __storage('set', { [key]:written }).catch(error => {
-            __rollbackMirror(key, had, previous, written);
+            __rollbackMirror(key, had, previous, token);
             __reportWriteFailure(error, key);
         });
         if (key === 'imdb_enh_removeAds') __sendAdState(value !== false);
@@ -179,9 +187,11 @@ const bridge = String.raw`
         __takeWriteFailure();
         const had = Object.prototype.hasOwnProperty.call(__state, key);
         const previous = had ? __state[key] : undefined;
+        const token = ++__writeSequence;
+        __latestWrite[key] = token;
         delete __state[key];
         __storage('remove', key).catch(error => {
-            if (had && !Object.prototype.hasOwnProperty.call(__state, key)) __state[key] = previous;
+            __rollbackMirror(key, had, previous, token);
             __reportWriteFailure(error, key);
         });
         if (key === 'imdb_enh_removeAds') __sendAdState(true);

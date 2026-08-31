@@ -279,6 +279,39 @@ async function runContract(adapter) {
             'a key whose write failed must not be listed');
     });
 
+    /* The rollback must identify the write it is undoing, not the value. Two writes of
+       the same primitive in flight, the first rejecting, would otherwise revert the
+       second — which succeeded. */
+    if (adapter.asyncWrites) {
+        await check(label, 'a rejected write does not roll back a later successful one', async () => {
+            /* An earlier check can leave both an armed rejection and an unthrown failure
+               behind. Draining takes two passes: one write to absorb the armed rejection,
+               a second to absorb the failure that rejection then records. Without this the
+               setup below throws instead of the write actually under test. */
+            const drain = async () => {
+                for (let pass = 0; pass < 3; pass += 1) {
+                    try { gm.setValue('imdb_enh_drain', String(pass)); } catch { /* that is the point */ }
+                    await adapter.settle();
+                }
+            };
+            await drain();
+
+            gm.setValue('imdb_enh_race', 'before');
+            await adapter.settle();
+
+            adapter.failNextWrite(new Error('simulated quota failure'));
+            // The same value written twice: the first rejects, the second succeeds.
+            try { gm.setValue('imdb_enh_race', 'after'); } catch { /* reported via the event */ }
+            try { gm.setValue('imdb_enh_race', 'after'); } catch { /* the earlier failure may surface here */ }
+            await adapter.settle();
+            assert.strictEqual(gm.getValue('imdb_enh_race', null), 'after',
+                'the successful write must survive the earlier rejection of an identical value');
+
+            // Leave nothing armed for the checks that follow.
+            await drain();
+        });
+    }
+
     /* Only meaningful where writes are asynchronous. A synchronous manager satisfies this
        by construction — the throw lands at the caller's own call site, so it already
        knows which key. The bridge's rejection arrives later, and its next-call throw can
