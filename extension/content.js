@@ -280,6 +280,12 @@
        clipboard failures have to name the right authority, or a user reading
        the message is sent to a manager they never installed. */
     const IS_EXTENSION_BUILD = typeof chrome !== 'undefined' && Boolean(chrome.runtime && chrome.runtime.id);
+    /* Which distribution this copy is. The build rewrites the string for a store build;
+       the userscript and the ordinary extension are 'default'. A store listing may not
+       ship a catalog of streaming destinations, nor a provider whose answers come from
+       parsing someone's page, so both are decided from this rather than at runtime. */
+    const DISTRIBUTION_PROFILE = globalThis.__IMDB_ENHANCED_PROFILE === 'store' ? 'store' : 'default';
+    const IS_STORE_BUILD = DISTRIBUTION_PROFILE === 'store';
     const STORAGE_HOST_LABEL = IS_EXTENSION_BUILD ? 'extension storage' : 'userscript storage';
     const COPY_FAILURE_MESSAGE = 'Copy failed. Check this page’s clipboard permission.';
     const VERSION = '2.15.0';
@@ -452,6 +458,11 @@
             ttl: CACHE_MAX_TTL,
             attribution: '',
             profiles: ['default', 'store'],
+            /* A resolver, not a source. It turns an IMDb id into another site's id and
+               makes three lookups faster and more certain, but every one of them works
+               without it. So losing Wikidata does not make a feature unavailable, while
+               losing the site whose score is being shown does. */
+            auxiliary: true,
         },
         amazonAds: {
             /* Phrased as what the access is for. "Amazon advertising and tracking" is an
@@ -5743,6 +5754,10 @@ section[id*="quote" i] .ipc-list-card { padding: 4px 0 !important; margin: 2px 0
     }
 
     function appendUnavailableNote(widget, reason, unavailableText = 'Score unavailable') {
+        if (reason === 'excluded') {
+            widget.appendChild(makeEl('div', { className:'enh-score-widget__sub' }, unavailableText));
+            return;
+        }
         if (reason === 'unconfigured' || reason === 'rejected') {
             widget.appendChild(makeEl('div', { className:'enh-score-widget__sub' },
                 reason === 'rejected' ? 'TMDB rejected this token' : 'Needs a TMDB read token'));
@@ -5770,6 +5785,16 @@ section[id*="quote" i] .ipc-list-card { padding: 4px 0 !important; margin: 2px 0
                 if (await openOptionsPage()) showToast('Grant site access on the page that just opened, then reload this one.', 5000);
             },
         }, 'Grant access'));
+    }
+
+    /* Named where the widget renders it, so a build that cannot ship a source says which
+       one and why instead of showing an empty or perpetually loading panel. */
+    function describeProfileExclusion(key) {
+        const names = (FEATURE_PROVIDERS[key] || [])
+            .filter(id => !PROVIDERS[id]?.auxiliary && !providerAllowedHere(id))
+            .map(id => PROVIDERS[id]?.label)
+            .filter(Boolean);
+        return names.length ? `Not available in this build (${joinNames([...new Set(names)])})` : 'Not available in this build';
     }
 
     async function renderStaleScore(feature, cacheKey, error, isCurrent = () => true) {
@@ -5811,6 +5836,9 @@ section[id*="quote" i] .ipc-list-card { padding: 4px 0 !important; margin: 2px 0
             if (!imdbId || !title) return;
 
             const cacheKey = 'rt_' + imdbId;
+            /* A build that excludes every provider behind this feature cannot answer, so
+               it says which one is missing rather than sitting on a loading state. */
+            if (featureExcludedByProfile(this.key)) { this._renderUnavailable('excluded'); return; }
             const cached = cacheGet(cacheKey);
             const bar = await waitForRatingBar(isCurrent);
             if (!bar || !isCurrent()) return;
@@ -5928,7 +5956,7 @@ section[id*="quote" i] .ipc-list-card { padding: 4px 0 !important; margin: 2px 0
                     <span class="enh-score-widget__value">Open</span>
                 </a>
             `;
-            appendUnavailableNote(w, reason);
+            appendUnavailableNote(w, reason, reason === 'excluded' ? describeProfileExclusion(this.key) : 'Score unavailable');
             bar.appendChild(w);
         },
         destroy() { document.getElementById('enh-rt-widget')?.remove(); }
@@ -5943,6 +5971,9 @@ section[id*="quote" i] .ipc-list-card { padding: 4px 0 !important; margin: 2px 0
             if (!imdbId || !title) return;
 
             const cacheKey = 'lb_' + imdbId;
+            /* A build that excludes every provider behind this feature cannot answer, so
+               it says which one is missing rather than sitting on a loading state. */
+            if (featureExcludedByProfile(this.key)) { this._renderUnavailable('excluded'); return; }
             const cached = cacheGet(cacheKey);
             const bar = await waitForRatingBar(isCurrent);
             if (!bar || !isCurrent()) return;
@@ -6029,7 +6060,7 @@ section[id*="quote" i] .ipc-list-card { padding: 4px 0 !important; margin: 2px 0
                     <span class="enh-score-widget__value">Open</span>
                 </a>
             `;
-            appendUnavailableNote(w, reason);
+            appendUnavailableNote(w, reason, reason === 'excluded' ? describeProfileExclusion(this.key) : 'Score unavailable');
             bar.appendChild(w);
         },
         destroy() { document.getElementById('enh-lb-widget')?.remove(); }
@@ -6043,6 +6074,9 @@ section[id*="quote" i] .ipc-list-card { padding: 4px 0 !important; margin: 2px 0
             if (!imdbId || !title) return;
 
             const cacheKey = 'mc_' + imdbId;
+            /* A build that excludes every provider behind this feature cannot answer, so
+               it says which one is missing rather than sitting on a loading state. */
+            if (featureExcludedByProfile(this.key)) { this._renderUnavailable('excluded'); return; }
             const cached = cacheGet(cacheKey);
             const bar = await waitForRatingBar(isCurrent);
             if (!bar || !isCurrent()) return;
@@ -6155,7 +6189,7 @@ section[id*="quote" i] .ipc-list-card { padding: 4px 0 !important; margin: 2px 0
                     <span class="enh-score-widget__value">Open</span>
                 </a>
             `;
-            appendUnavailableNote(w, reason);
+            appendUnavailableNote(w, reason, reason === 'excluded' ? describeProfileExclusion(this.key) : 'Score unavailable');
             bar.appendChild(w);
         },
         destroy() { document.getElementById('enh-mc-widget')?.remove(); }
@@ -6169,6 +6203,9 @@ section[id*="quote" i] .ipc-list-card { padding: 4px 0 !important; margin: 2px 0
             if (!imdbId || !title) return;
 
             const cacheKey = 'jw_' + imdbId;
+            /* A build that excludes every provider behind this feature cannot answer, so
+               it says which one is missing rather than sitting on a loading state. */
+            if (featureExcludedByProfile(this.key)) { this._renderUnavailable('excluded'); return; }
             const cached = cacheGet(cacheKey);
             const bar = await waitForRatingBar(isCurrent);
             if (!bar || !isCurrent()) return;
@@ -6183,7 +6220,7 @@ section[id*="quote" i] .ipc-list-card { padding: 4px 0 !important; margin: 2px 0
             /* TMDB is a separate source, not a fallback. Silently reading JustWatch's
                page when the chosen source cannot answer would defeat the reason for
                choosing it, so an unconfigured adapter says so and stops. */
-            if (getAvailabilitySource() === 'tmdb') {
+            if (getEffectiveAvailabilitySource() === 'tmdb') {
                 let tmdbError = null;
                 try {
                     const result = await fetchTmdbAvailability(imdbId, isCurrent);
@@ -6321,7 +6358,7 @@ section[id*="quote" i] .ipc-list-card { padding: 4px 0 !important; margin: 2px 0
                     makeEl('span', { className: 'enh-score-widget__value' }, 'Open')
                 )
             );
-            appendUnavailableNote(w, reason, 'Availability unavailable');
+            appendUnavailableNote(w, reason, reason === 'excluded' ? describeProfileExclusion(this.key) : 'Availability unavailable');
             bar.appendChild(w);
         },
         destroy() { document.getElementById('enh-jw-widget')?.remove(); }
@@ -10717,10 +10754,34 @@ section[data-testid="hero-parent"].enh-editorial-native-hidden { display: none !
     /* A feature can declare more providers than it uses at once. Availability can read
        from JustWatch or from TMDB, and asking for both origins when only one is ever
        contacted would be asking for access that is never used. */
+    // A provider whose declaration excludes this build is not available to it at all.
+    function providerAllowedHere(id) {
+        const profiles = PROVIDERS[id]?.profiles;
+        return Array.isArray(profiles) && profiles.includes(DISTRIBUTION_PROFILE);
+    }
+    /* Judged on the providers that actually answer the question. Losing an auxiliary
+       resolver slows a lookup down; losing the site whose score is being shown ends it.
+       Counting them alike said Rotten Tomatoes still worked because Wikidata did, and the
+       widget then blamed a missing grant for something the build had decided. */
+    function featureExcludedByProfile(key) {
+        const essential = (FEATURE_PROVIDERS[key] || []).filter(id => !PROVIDERS[id]?.auxiliary);
+        return essential.length > 0 && !essential.some(providerAllowedHere);
+    }
+    /* Which source availability really reads. The stored preference is a preference: a
+       build that cannot ship JustWatch uses the one it can rather than taking a branch
+       that has no origin behind it. */
+    function getEffectiveAvailabilitySource() {
+        const preferred = getAvailabilitySource();
+        const id = preferred === 'tmdb' ? 'tmdb' : 'justWatch';
+        if (providerAllowedHere(id)) return preferred;
+        if (providerAllowedHere('tmdb')) return 'tmdb';
+        return providerAllowedHere('justWatch') ? 'justwatch' : preferred;
+    }
     function activeProvidersFor(key) {
-        const declared = FEATURE_PROVIDERS[key] || [];
+        const declared = (FEATURE_PROVIDERS[key] || []).filter(providerAllowedHere);
         if (key !== 'streamAvailability') return declared;
-        return declared.filter(id => id === (getAvailabilitySource() === 'tmdb' ? 'tmdb' : 'justWatch'));
+        const preferred = getEffectiveAvailabilitySource() === 'tmdb' ? 'tmdb' : 'justWatch';
+        return declared.includes(preferred) ? [preferred] : declared;
     }
     function getFeatureOrigins(key) {
         const active = activeProvidersFor(key);

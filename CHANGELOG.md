@@ -20,6 +20,8 @@
 
 ### Added
 
+- There is a third build now, for a web-store listing: `npm run build:store`. It ships without the default watch destinations and without the catalog they come from, and it asks for no access to services that are read by parsing their pages. Those score panels say "Not available in this build" and name which source is missing, instead of sitting there empty. Availability there comes from TMDB with your own token. It comes off the same source through the same script, so nothing else about it differs.
+
 - Streaming availability can come from TMDB's API instead of from reading JustWatch's page. Pick the source under Ratings and paste a TMDB read token of your own, free from themoviedb.org. It resolves the title from its IMDb id rather than by matching titles, so it cannot land on the wrong film, and it reads offers for your region only. The credit TMDB and JustWatch each require is shown with the data. Choosing TMDB without a token says so and offers to take you to the setting; it never quietly reads the page instead, which would defeat the reason for choosing it. JustWatch stays the default, so nothing changes unless you switch.
 
 - Your TMDB token is stored the way the other integration keys are, so in the extension the background holds it and the IMDb page never sees it. It is the only key that leaves your machine, and it is bound to TMDB: a request to any other address cannot ask for it, and a request to TMDB cannot ask for any other key.

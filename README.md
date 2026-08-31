@@ -172,6 +172,8 @@ git status --short             # no output means the shipped build matches that 
 
 `extension/content.js`, `extension/boot.css`, and `extension/manifest.json` are committed, so any difference between what ships and a rebuild from the same commit shows up as a diff.
 
+`npm run build:store` produces a third build, in `extension-store/`, for a web-store listing. It ships no default watch destinations and no catalog of them, and it does not request access for any service whose answers come from parsing that service's pages. Those score sources say so in place, naming which one is missing, rather than sitting empty. Streaming availability there comes from TMDB's API with a token of your own. It is generated from the same source by the same script, so the only differences are the ones listed here.
+
 Every outside service the extension can reach is declared in one place, the `PROVIDERS` map near the top of `IMDb_Enhanced.user.js`. Each entry names the service, the origins it needs, what leaves your browser to reach it, how long its answers are cached, and the credit it requires. The origins in both manifests are generated from that map, so the permissions a build asks for cannot drift from the list you can read. The build refuses to run if an entry is incomplete, or if a manifest ends up asking for an origin no service accounts for.
 
 There are no git tags or GitHub releases yet, so check out a commit rather than a version tag. Packaged, checksummed release assets are planned but not published; until then the userscript at the install link above is the version of record.

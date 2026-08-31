@@ -328,4 +328,49 @@ assert(source.includes('credentialHeader'), 'requests must name the credential t
 assert(!/headers\[[^\]]*\]\s*=\s*(?:get|getSetting)\(\s*'(?:radarr|sonarr|seerr|plex|jellyfin|emby)/i.test(source),
     'no request may build a header from a credential value read in the page context');
 
+/* IE-92: the store profile. Asserted against the generated output rather than the source,
+   because what a reviewer reads is the file that ships. `npm test` builds it first. */
+const { applyStoreProfile, PROVIDER_REGISTRY: originLists } = require('../scripts/build-extension.js');
+const storeContent = applyStoreProfile(content);
+assert(storeContent.includes("const DISTRIBUTION_PROFILE = 'store';"),
+    'a store build must know which build it is, so it can say why a source is missing');
+assert(!content.includes("const DISTRIBUTION_PROFILE = 'store';"),
+    'and the ordinary build must not claim to be one');
+assert(/const DEFAULT_WATCH_SITES = \[\];/.test(storeContent),
+    'a store listing may not ship default watch destinations');
+assert(/const FMHY_WATCH_CATALOG = \[\];/.test(storeContent),
+    'nor the catalog they are chosen from');
+['rivestream', 'cinejoy.to', 'lookmovie2', 'hydrahd', 'cine.su'].forEach(host => {
+    assert(!storeContent.includes(host), `a watch destination survived the store cut: ${host}`);
+    assert(content.includes(host), `${host} should still be in the ordinary build, or this proves nothing`);
+});
+
+/* An excluded provider is a capability, not data: its origins are not requested, so the
+   build cannot reach it whatever its code says, and the feature reports itself unavailable
+   and names the missing source. Deleting the parser too would leave nothing able to render
+   that explanation. */
+const storeExcluded = Object.entries(originLists.PROVIDERS)
+    .filter(([, provider]) => !provider.profiles.includes('store'))
+    .map(([id]) => id);
+assert(storeExcluded.length >= 4, `expected the page-parsing providers to be excluded, got ${storeExcluded.join(', ') || 'none'}`);
+assert(storeExcluded.includes('rottenTomatoes') && storeExcluded.includes('justWatch'),
+    'a provider read by parsing someone else\'s page must not ship to a store');
+const storeDropped = new Set(storeExcluded.flatMap(id => originLists.PROVIDERS[id].origins));
+const storeOrigins = manifest.optional_host_permissions.filter(origin => !storeDropped.has(origin));
+assert(storeOrigins.length < manifest.optional_host_permissions.length,
+    'excluding providers must actually drop origins, or the two are out of step');
+assert(storeOrigins.includes('https://api.themoviedb.org/*'),
+    'an API-based provider must survive, or availability has no source at all in a store build');
+storeExcluded.forEach(id => {
+    originLists.PROVIDERS[id].origins.forEach(origin => {
+        assert(!storeOrigins.includes(origin), `store build still requests ${origin} for excluded ${id}`);
+    });
+});
+assert(source.includes('function featureExcludedByProfile(key)'),
+    'a feature whose providers are all excluded must be able to know it');
+assert.strictEqual((source.match(/if \(featureExcludedByProfile\(this\.key\)\) \{ this\._renderUnavailable\('excluded'\); return; \}/g) || []).length, 4,
+    'and every score lookup must check before it starts');
+assert(source.includes('function describeProfileExclusion(key)'),
+    'and say which source is missing rather than just going quiet');
+
 console.log(`Extension manifest and generated content are valid at v${pkg.version}, for both builds.`);

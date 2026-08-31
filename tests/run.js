@@ -194,6 +194,11 @@ function loadScriptTestHooks({ withoutDeleteValue = false, withheldCredentials =
         parseTmdbFind,
         parseTmdbWatchProviders,
         getAvailabilitySource,
+        getEffectiveAvailabilitySource,
+        featureExcludedByProfile,
+        providerAllowedHere,
+        PROVIDERS,
+        describeProfileExclusion,
         getTmdbRegion,
         isTmdbConfigured,
         originsHeldByOtherEnabledFeatures,
@@ -4334,8 +4339,14 @@ test('TMDB availability resolves an IMDb id and reads only the chosen region', (
         'an unconfigured adapter must report itself, not fall through');
     assert(!/unconfigured[\s\S]{0,400}getJustWatchDetailUrl/.test(body),
         'and must not reach the page-parsing path on its way out');
-    assert(body.includes("if (getAvailabilitySource() === 'tmdb')"),
-        'the source is a choice, not a fallback order');
+    /* The branch reads the effective source, not the stored preference. A build that
+       cannot ship JustWatch would otherwise take the JustWatch branch and fail against an
+       origin it does not have. It is still a choice, not a fallback order: the preference
+       only gives way when this build cannot honour it at all. */
+    assert(body.includes("if (getEffectiveAvailabilitySource() === 'tmdb')"),
+        'the source is a choice, but a build that cannot ship one must use the other');
+    assert.strictEqual(hooks.getAvailabilitySource(), hooks.getEffectiveAvailabilitySource(),
+        'where both sources are shippable the preference is honoured exactly');
     /* A token TMDB rejects is the one part of this the user can fix. Left to the generic
        path it read as "availability unavailable", which points at the wrong thing. */
     assert(body.includes("if (tmdbError?.tmdbRejected) { this._renderUnavailable('rejected'); return; }"),
@@ -4373,6 +4384,45 @@ test('TMDB availability resolves an IMDb id and reads only the chosen region', (
         'the request names the header and the stored key, never a value');
     assert(!/credentialHeader:[^}]*prefix/.test(script),
         'the scheme is the background\'s to add, since nothing here can read the value it wraps');
+});
+
+/* IE-92: a build may exclude a provider, and the features that depended on it have to say
+   so rather than blaming something else. Getting this wrong once already: counting the
+   Wikidata resolver as a reason Rotten Tomatoes still worked meant the widget reported a
+   missing host grant for something the build itself had decided. */
+test('a provider a build excludes is reported as excluded, not as something else', () => {
+    const hooks = loadScriptTestHooks();
+
+    // In this build nothing is excluded, so nothing may claim to be.
+    ['inlineRTScore', 'inlineMetacriticScore', 'inlineLetterboxdScore', 'streamAvailability'].forEach(key => {
+        assert.strictEqual(hooks.featureExcludedByProfile(key), false,
+            `${key} must not report itself excluded from the build that ships it`);
+    });
+    assert.strictEqual(hooks.providerAllowedHere('rottenTomatoes'), true);
+    assert.strictEqual(hooks.providerAllowedHere('tmdb'), true);
+
+    /* The distinction the store profile turns on. An auxiliary provider makes a lookup
+       faster; it never makes one possible, so it cannot stand in for the site whose score
+       is being shown. */
+    const registry = hooks.PROVIDERS;
+    assert.strictEqual(registry.wikidata.auxiliary, true, 'the id resolver is auxiliary');
+    ['rottenTomatoes', 'metacritic', 'letterboxd', 'justWatch', 'tmdb'].forEach(id => {
+        assert(!registry[id].auxiliary, `${id} answers the question and cannot be auxiliary`);
+    });
+    /* Which providers a store build drops, read from the declarations rather than listed
+       again: everything read by parsing someone's page, and nothing that is an API. */
+    const storeExcluded = Object.keys(registry).filter(id => !registry[id].profiles.includes('store'));
+    assert.deepStrictEqual(Array.from(storeExcluded).sort(),
+        ['justWatch', 'letterboxd', 'metacritic', 'rottenTomatoes'],
+        'a store build drops exactly the page-parsing providers');
+    assert(registry.tmdb.profiles.includes('store'),
+        'and keeps the API one, or availability has no source there at all');
+    assert(registry.wikidata.profiles.includes('store') && registry.localServices.profiles.includes('store'),
+        'a resolver and your own machine are shippable anywhere');
+
+    // The exclusion names the source that is missing, not the resolver that is not.
+    const described = hooks.describeProfileExclusion('inlineRTScore');
+    assert(!/Wikidata/.test(described), 'an auxiliary provider is not why a feature is unavailable');
 });
 
 /* IE-79: a userscript has no toolbar surface, so the manager's menu is its equivalent

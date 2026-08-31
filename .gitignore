@@ -18,3 +18,6 @@ CONTINUATION_PROMPT.md
 
 # Generated Firefox build (produced on demand by npm run build:firefox)
 extension-firefox/
+
+# Generated store profile (produced on demand by npm run build:store)
+extension-store/
