@@ -21,8 +21,9 @@ function test(name, fn) { cases.push({ name, fn }); }
    both, so every case below runs against both shapes. */
 function loadBackground({ engine = 'chromium', fetchImpl } = {}) {
     const listeners = [];
-    const calls = { fetches: [] };
+    const calls = { fetches: [], permissions: [], tabs: [], openedOptions: 0 };
     const storage = new Map();
+    const grantedOrigins = new Set(['https://www.rottentomatoes.com/*', 'https://query.wikidata.org/*']);
 
     const api = (result) => (arg, done) => {
         if (engine === 'chromium') return Promise.resolve(result(arg));
@@ -55,9 +56,23 @@ function loadBackground({ engine = 'chromium', fetchImpl } = {}) {
             return fetchImpl(...args);
         },
         chrome: {
+            permissions: {
+                contains: (arg, done) => { calls.permissions.push(['contains', arg.origins]); done(grantedOrigins.size > 0 && arg.origins.every(o => grantedOrigins.has(o))); },
+                remove: (arg, done) => { calls.permissions.push(['remove', arg.origins]); arg.origins.forEach(o => grantedOrigins.delete(o)); done(true); },
+                request: (arg, done) => { calls.permissions.push(['request', arg.origins]); done(false); },
+            },
+            tabs: { create: options => { calls.tabs.push(options); } },
             runtime: {
                 lastError: null,
-                getManifest: () => ({ version: '2.15.0' }),
+                openOptionsPage: () => { calls.openedOptions += 1; },
+                getManifest: () => ({
+                    version: '2.15.0',
+                    optional_host_permissions: [
+                        'https://www.rottentomatoes.com/*',
+                        'https://query.wikidata.org/*',
+                        'http://localhost/*',
+                    ],
+                }),
                 onInstalled: { addListener() {} },
                 onStartup: { addListener() {} },
                 onMessage: { addListener: fn => listeners.push(fn) },
@@ -94,7 +109,7 @@ function loadBackground({ engine = 'chromium', fetchImpl } = {}) {
         const handled = listeners.some(listener => listener(message, sender, sendResponse));
         if (!handled && !settled) resolve(undefined);
     });
-    return { dispatch, calls, storage };
+    return { dispatch, calls, storage, grantedOrigins };
 }
 
 const IMDB_SENDER = { url: 'https://www.imdb.com/title/tt0133093/', tab: { id: 7 } };
@@ -321,6 +336,71 @@ for (const engine of ['chromium', 'gecko']) {
             assert.strictEqual(response, undefined, 'a non-IMDb sender must not be answered');
             assert.strictEqual(calls.fetches.length, 0, 'a non-IMDb sender must not cause a request');
         }
+    });
+
+    /* chrome.permissions is not exposed to content scripts, so the settings panel cannot
+       read or change host access itself and asks the background instead. */
+    test(`[${engine}] the background answers permission state for the settings panel`, async () => {
+        const { dispatch, calls } = loadBackground({ engine, fetchImpl: makeFetch({}) });
+        const granted = await dispatch({
+            type:'imdb-enhanced:permissions-contains',
+            origins:['https://www.rottentomatoes.com/*', 'https://query.wikidata.org/*'],
+        }, IMDB_SENDER);
+        // The worker runs in its own realm, so compare fields rather than identity.
+        assert.strictEqual(granted.ok, true);
+        assert.strictEqual(granted.granted, true);
+
+        const missing = await dispatch({
+            type:'imdb-enhanced:permissions-contains',
+            origins:['http://localhost/*'],
+        }, IMDB_SENDER);
+        assert.strictEqual(missing.granted, false, 'an ungranted origin must report as missing');
+        assert.deepStrictEqual(calls.permissions.at(-1), ['contains', ['http://localhost/*']]);
+    });
+
+    test(`[${engine}] the background releases only origins this build declares optional`, async () => {
+        const { dispatch, calls, grantedOrigins } = loadBackground({ engine, fetchImpl: makeFetch({}) });
+        await dispatch({
+            type:'imdb-enhanced:permissions-remove',
+            origins:['https://www.rottentomatoes.com/*'],
+        }, IMDB_SENDER);
+        assert(!grantedOrigins.has('https://www.rottentomatoes.com/*'), 'the named origin must be released');
+        assert(grantedOrigins.has('https://query.wikidata.org/*'), 'an origin not named must be left alone');
+
+        /* Without this a content script could name any pattern and use the background to
+           probe or drop permissions the extension never declared. */
+        calls.permissions.length = 0;
+        const refused = await dispatch({
+            type:'imdb-enhanced:permissions-remove',
+            origins:['https://attacker.example/*', '<all_urls>'],
+        }, IMDB_SENDER);
+        assert.strictEqual(refused.removed, false);
+        assert.strictEqual(calls.permissions.length, 0, 'an undeclared origin must never reach the permissions API');
+    });
+
+    test(`[${engine}] permission messages from a forged sender are ignored`, async () => {
+        const { dispatch, calls } = loadBackground({ engine, fetchImpl: makeFetch({}) });
+        const response = await dispatch({
+            type:'imdb-enhanced:permissions-remove',
+            origins:['https://www.rottentomatoes.com/*'],
+        }, { url:'https://attacker.example/', tab:{ id:1 } });
+        assert.strictEqual(response, undefined, 'a non-IMDb sender must not be answered');
+        assert.strictEqual(calls.permissions.length, 0, 'a non-IMDb sender must not touch permissions');
+    });
+
+    /* The background can hand the user to the options page, which is the only surface
+       with both an extension page and a user gesture — the two things permissions.request
+       needs and neither the content script nor the worker has together. */
+    test(`[${engine}] the background can open the page where granting is possible`, async () => {
+        const { dispatch, calls } = loadBackground({ engine, fetchImpl: makeFetch({}) });
+        const response = await dispatch({ type:'imdb-enhanced:open-options' }, IMDB_SENDER);
+        assert.strictEqual(response.ok, true);
+        assert.strictEqual(calls.openedOptions, 1);
+        // Requesting is deliberately not proxied: a worker has no gesture to offer.
+        assert(!backgroundSource.includes('permissions-request'),
+            'a proxied permissions.request would fail and must not exist');
+        assert(!/chrome\.permissions\.request/.test(backgroundSource),
+            'the background must not attempt a request it cannot make');
     });
 
     test(`[${engine}] credentials are never sent to a public provider`, async () => {

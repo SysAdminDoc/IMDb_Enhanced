@@ -3185,23 +3185,62 @@ test('external access is requested per feature, not demanded at install', () => 
         'four loopback patterns should read as one plain phrase');
     assert(!/\*/.test(hooks.describeFeatureOrigins('removeAds')), 'wildcards must not reach the user');
 
-    /* The request must sit in the change handler: permissions.request only works during
-       a live user gesture, which a later async continuation no longer has. Verified
-       against a real install, where an ungestured request errors. */
+    /* THE defect this guards: chrome.permissions is not exposed to content scripts. They
+       get runtime, storage, i18n, extension, csi, dom and loadTimes and nothing else. A
+       capability probe for `chrome.permissions` therefore fails permanently in the one
+       place the settings panel runs, which silently turned every check into "granted" and
+       made the whole layer dead code — while a browser check passed, because that check
+       had injected a fake chrome.permissions of its own. */
+    const permissionRegion = script.slice(script.indexOf('OPTIONAL HOST PERMISSIONS'));
+    const permissionLayer = permissionRegion.slice(0, permissionRegion.indexOf('function refreshFeature'));
+    // Comments stripped first: this region explains the trap at length, and matching the
+    // explanation would make the guard unfixable.
+    const permissionCode = permissionLayer.replace(/\/\*[\s\S]*?\*\//g, '').replace(/\/\/[^\n]*/g, '');
+    assert(!/chrome\.permissions/.test(permissionCode),
+        'the content script must never touch chrome.permissions; it does not have it');
+    assert(!/chrome\.permissions/.test(script.replace(/\/\*[\s\S]*?\*\//g, '').replace(/\/\/[^\n]*/g, '')),
+        'nothing in the injected script may call an API content scripts are not given');
+    assert(permissionLayer.includes('Boolean(chrome.runtime?.sendMessage)'),
+        'support must be probed on an API content scripts actually have');
+    assert(permissionLayer.includes("askBackground('imdb-enhanced:permissions-contains'"),
+        'permission state must be read through the background, which has the API');
+    assert(permissionLayer.includes("askBackground('imdb-enhanced:permissions-remove'"),
+        'releasing must go through the background too');
+    /* permissions.request needs an extension page AND a gesture. A content script has the
+       gesture but not the page; the background has the page but no gesture. So no
+       request helper may exist here at all. */
+    assert(!/function requestFeatureOrigins/.test(script),
+        'a content script cannot request a permission; that belongs on the options page');
+    assert(!script.includes("'imdb-enhanced:permissions-request'"),
+        'a proxied request would fail: a service worker has no user gesture to offer');
+
     // Anchored on makeFeatureRow: the site editor also registers a change handler, and
     // slicing from the first match in the file lands on that one instead.
     const featureRow = script.slice(script.indexOf('const makeFeatureRow = feature =>'));
-    const handler = featureRow.slice(featureRow.indexOf("input.addEventListener('change'"));
-    const body = handler.slice(0, handler.indexOf('toggle.append'));
-    assert(body.includes('feature.key'), 'the sliced handler should be the feature toggle');
-    assert(/if \(enabled && !\(await requestFeatureOrigins\(feature\.key\)\)\)/.test(body),
-        'enabling must request the feature origins from the click itself');
-    assert(body.indexOf('requestFeatureOrigins') < body.indexOf('trySaveSetting'),
-        'access must be requested before the setting is persisted, or a refusal leaves it on in name only');
-    assert(/input\.checked = false;[\s\S]{0,200}?stays off/.test(body),
-        'a refused request must leave the toggle off and say why');
+    const body = featureRow.slice(0, featureRow.indexOf('const FEATURE_DEPENDENTS'));
+    assert(body.includes('await hasFeatureOrigins(feature.key)'), 'the row must report the real access state');
+    assert(body.includes('openOptionsPage()'), 'the row must offer a route to the only surface that can grant');
+    assert(body.includes('Not working yet: needs access to'),
+        'a feature that is on but cannot reach its service must say so rather than look broken');
     assert(body.includes('releaseFeatureOrigins(feature.key)'),
         'disabling a feature must hand back access nothing else needs');
+    assert(body.includes("document.addEventListener('imdb-enhanced:permissions-changed', paintAccess)"),
+        'access can change on the options page while this panel is open');
+
+    // Granting lives on the options page, which has both the page and the gesture.
+    const recoveryPage = fs.readFileSync(path.join(root, 'scripts', 'recovery-page.js'), 'utf8');
+    assert(recoveryPage.includes('chrome.permissions.request'), 'the options page must be able to grant');
+    assert(recoveryPage.includes('chrome.permissions.remove'), 'the options page must be able to revoke');
+    assert(recoveryPage.includes('renderAccessList'), 'the options page must list each feature\'s access');
+    assert(recoveryPage.includes('core.releasableOriginsFor(key)'),
+        'revoking one feature must not take an origin its siblings still need');
+
+    /* A permission gap cached as "unavailable" for 24 hours outlives the fix, so a lookup
+       that failed only for want of a grant records nothing. */
+    assert(script.includes('async function cacheUnavailableUnlessBlocked'),
+        'a blocked lookup must not poison the cache');
+    assert.strictEqual((script.match(/cacheUnavailableUnlessBlocked\(this\.key, cacheKey\)/g) || []).length, 4,
+        'every score and availability lookup must use the guarded form');
 });
 
 /* IE-79: a userscript has no toolbar surface, so the manager's menu is its equivalent

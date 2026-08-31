@@ -4,6 +4,8 @@
 
 ### Security
 
+- Site access is granted and revoked per feature from the extension's own page, reachable from the toolbar button or from the "Grant access" button beside any feature that needs it. A browser only lets an extension ask for access from one of its own pages, so the settings panel on IMDb shows the real state and sends you there rather than pretending it can ask. Each feature that is switched on but cannot reach its service now says exactly that instead of looking broken.
+
 - The extension now asks for IMDb access and nothing else when you install it. It used to demand access to Rotten Tomatoes, Metacritic, Letterboxd, JustWatch, YouTube, Wikidata, seven ad and tracking hosts, and your own localhost, whether or not you had turned any of those features on. Each one is now requested at the moment you switch the feature on, in the smallest group that feature needs, and handed back when you switch it off. Turning off one score source keeps the shared lookup service the other two still use. If you decline, the feature stays off and says so rather than turning on and failing every request. Each setting that reaches a third party now shows which sites it uses and whether access is granted. Existing installs will need to toggle affected features once to grant them.
 
 - The Firefox build no longer declares that it collects no data. That was true only with every optional feature off: an enabled score or availability lookup sends the title and year read from the page to a third-party service. That is now declared as optional website content, which is what it actually is.

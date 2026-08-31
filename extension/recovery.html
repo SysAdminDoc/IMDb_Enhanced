@@ -47,6 +47,15 @@
     #status[data-tone="ok"] { color: var(--ok); }
     #status[data-tone="error"] { color: var(--err); }
     .note { font-size: 12px; color: var(--tx3); }
+    .access-row { display: grid; grid-template-columns: 1fr max-content; gap: 10px; align-items: center;
+        padding: 10px 0; border-bottom: 1px solid var(--bd); }
+    .access-row:last-child { border-bottom: 0; }
+    .access-name { color: var(--tx); font-weight: 600; }
+    .access-detail { color: var(--tx3); font-size: 12px; overflow-wrap: anywhere; }
+    .access-state { font-size: 12px; }
+    .access-state[data-state="granted"] { color: var(--ok); }
+    .access-state[data-state="missing"] { color: var(--warn); }
+    .access-row button { margin: 0; }
 </style>
 </head>
 <body>
@@ -74,6 +83,12 @@
             <button type="button" id="open-imdb" hidden>Open IMDb settings</button>
             <button type="button" id="copy-diagnostics">Copy diagnostics</button>
         </div>
+    </section>
+
+    <section aria-labelledby="h-access">
+        <h2 id="h-access">Site access</h2>
+        <p>Features that reach a site other than IMDb ask for access to that site only, and only when you switch them on. This page is the only place a browser will let an extension request it, so grant and revoke happen here.</p>
+        <div id="access-list"></div>
     </section>
 
     <section aria-labelledby="h-backup">

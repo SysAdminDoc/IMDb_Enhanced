@@ -30,6 +30,14 @@ const SENSITIVE_HEADER_NAMES = new Set([
    reports a loop as a network failure; this is the bound that matters, because a
    chain that cannot leave its origin cannot reach anything new by being long. */
 
+/* A content script may only ask about origins this build actually declares as optional.
+   Without this it could name any pattern at all and use the background to probe or drop
+   permissions the extension never asked for. */
+function isKnownOptionalOrigin(origin) {
+    const declared = chrome.runtime.getManifest().optional_host_permissions || [];
+    return typeof origin === 'string' && declared.includes(origin);
+}
+
 function isLoopbackHost(hostname) {
     return LOOPBACK_HOSTS.has(String(hostname || '').toLowerCase());
 }
@@ -337,6 +345,38 @@ chrome.runtime.onMessage.addListener((message, sender, sendResponse) => {
     }
     if (message?.type === 'imdb-enhanced:http') {
         sendHttpRequest(message, sender, sendResponse);
+        return true;
+    }
+    /* chrome.permissions is not exposed to content scripts — they get runtime, storage,
+       i18n, extension, csi, dom and loadTimes and nothing else — so the settings panel
+       cannot read or change host access itself. It asks here instead.
+
+       Only `contains` and `remove` are proxied. `request` is deliberately absent: it
+       needs a user gesture in an extension page, and a service worker has no gesture to
+       offer, so a proxied request would fail no matter how it was called. Granting
+       happens on the options page, which has both. */
+    if (message?.type === 'imdb-enhanced:permissions-contains') {
+        const origins = Array.isArray(message.origins) ? message.origins.filter(isKnownOptionalOrigin) : [];
+        if (!origins.length) { sendResponse({ ok:true, granted:true }); return true; }
+        chrome.permissions.contains({ origins }, granted => {
+            void chrome.runtime.lastError;
+            sendResponse({ ok:true, granted:granted === true });
+        });
+        return true;
+    }
+    if (message?.type === 'imdb-enhanced:permissions-remove') {
+        const origins = Array.isArray(message.origins) ? message.origins.filter(isKnownOptionalOrigin) : [];
+        if (!origins.length) { sendResponse({ ok:true, removed:false }); return true; }
+        chrome.permissions.remove({ origins }, removed => {
+            void chrome.runtime.lastError;
+            sendResponse({ ok:true, removed:removed === true });
+        });
+        return true;
+    }
+    if (message?.type === 'imdb-enhanced:open-options') {
+        if (chrome.runtime.openOptionsPage) chrome.runtime.openOptionsPage();
+        else chrome.tabs.create({ url: chrome.runtime.getURL('recovery.html') });
+        sendResponse({ ok:true });
         return true;
     }
     return undefined;

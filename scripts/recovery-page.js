@@ -35,20 +35,42 @@ $('version').textContent = core.VERSION;
 try { $('build-version').textContent = chrome.runtime.getManifest().version; }
 catch { $('build-version').textContent = 'unknown'; }
 
+/* Every render here is wrapped, and each runs after the page's own controls are wired.
+   This page exists to be usable when everything else is broken, so a throw while drawing
+   one section must not take the buttons in the next one with it — an unguarded
+   chrome.permissions call placed ahead of the listeners left the page rendered and every
+   action dead, with nothing on screen to say why. */
+function guard(label, render) {
+    try { render(); }
+    catch (error) {
+        console.warn(`[IMDb Enhanced] recovery: ${label} failed`, error);
+        say(`The ${label} section could not be read, but the actions below still work.`, 'error');
+    }
+}
+
 function renderPermissions() {
     const list = $('permission-list');
     list.textContent = '';
+    const banner = $('imdb-access');
+    if (!chrome.permissions?.getAll) {
+        banner.dataset.state = 'missing';
+        $('imdb-access-text').textContent = 'Site access could not be read in this browser.';
+        return;
+    }
     /* chrome.* is promise-based on Chromium and callback-based on Gecko; the callback
        form is accepted by both, which is the same reason the background uses it. */
     chrome.permissions.getAll(granted => {
         const origins = (granted?.origins || []).slice().sort();
         const imdb = origins.some(origin => origin.includes('imdb.com'));
-        const banner = $('imdb-access');
         banner.dataset.state = imdb ? 'granted' : 'missing';
         $('imdb-access-text').textContent = imdb
             ? 'IMDb access is granted.'
             : 'IMDb access is not granted, so the extension cannot run on IMDb pages.';
+        // The action beside the banner has to match it: opening IMDb when the extension
+        // cannot run there is a dead end, so offer the repair instead.
         $('open-imdb').hidden = false;
+        $('open-imdb').textContent = imdb ? 'Open IMDb settings' : 'Grant IMDb access';
+        $('open-imdb').dataset.mode = imdb ? 'open' : 'grant';
         if (!origins.length) {
             const item = document.createElement('li');
             item.textContent = 'No host access is currently granted.';
@@ -62,11 +84,108 @@ function renderPermissions() {
         });
     });
 }
-renderPermissions();
 
-$('open-imdb').addEventListener('click', () => {
+$('open-imdb').addEventListener('click', async () => {
+    // With IMDb access revoked there is no injected settings panel to open, so the same
+    // control repairs the access first. This page has the gesture and the API to do it.
+    if ($('open-imdb').dataset.mode === 'grant') {
+        const granted = await permissionsFor(['https://www.imdb.com/*']).request();
+        say(granted
+            ? 'IMDb access granted. Open or reload an IMDb page.'
+            : 'IMDb access was not granted, so the extension still cannot run there.', granted ? 'ok' : 'error');
+        renderPermissions();
+        if (!granted) return;
+    }
     chrome.tabs.create({ url: 'https://www.imdb.com/' });
 });
+
+/* ---- Per-feature site access ---------------------------------------------------- */
+
+/* This is the only surface where granting can happen at all: permissions.request needs
+   both an extension page and a live user gesture. A content script has the gesture but
+   not the API — chrome.permissions is not exposed to content scripts — and the
+   background has the API but no gesture. So the settings panel on IMDb reports state
+   and sends people here. */
+const permissionsFor = origins => ({
+    contains: () => new Promise(r => chrome.permissions.contains({ origins }, v => { void chrome.runtime.lastError; r(v === true); })),
+    request: () => new Promise(r => chrome.permissions.request({ origins }, v => { void chrome.runtime.lastError; r(v === true); })),
+    remove: () => new Promise(r => chrome.permissions.remove({ origins }, v => { void chrome.runtime.lastError; r(v === true); })),
+});
+
+function featureLabel(key) {
+    const detail = core.FEATURE_DETAILS?.[key] || '';
+    const first = detail.split('. ')[0];
+    return first ? `${first.replace(/\.$/, '')}` : key;
+}
+
+function renderAccessList() {
+    const list = $('access-list');
+    list.textContent = '';
+    Object.keys(core.FEATURE_ORIGIN_GROUPS || {}).forEach(key => {
+        const origins = core.getFeatureOrigins(key);
+        if (!origins.length) return;
+
+        const row = document.createElement('div');
+        row.className = 'access-row';
+        const copy = document.createElement('div');
+        const name = document.createElement('div');
+        name.className = 'access-name';
+        name.textContent = featureLabel(key);
+        const detail = document.createElement('div');
+        detail.className = 'access-detail';
+        detail.textContent = core.describeFeatureOrigins(key);
+        const state = document.createElement('div');
+        state.className = 'access-state';
+        copy.append(name, detail, state);
+
+        const button = document.createElement('button');
+        button.type = 'button';
+        const api = permissionsFor(origins);
+
+        const paint = async () => {
+            const granted = await api.contains();
+            const enabled = Boolean(core.getSetting(key));
+            state.dataset.state = granted ? 'granted' : 'missing';
+            state.textContent = granted
+                ? (enabled ? 'Granted, and the feature is on.' : 'Granted, but the feature is switched off.')
+                : (enabled ? 'Not granted, so this feature cannot work yet.' : 'Not granted.');
+            button.textContent = granted ? 'Revoke' : 'Grant';
+            button.className = granted ? '' : 'primary';
+            button.setAttribute('aria-label',
+                `${granted ? 'Revoke' : 'Grant'} access to ${core.describeFeatureOrigins(key)}`);
+        };
+
+        button.addEventListener('click', async () => {
+            button.disabled = true;
+            try {
+                if (await api.contains()) {
+                    /* Give back only what nothing else still needs: the identity resolver
+                       is shared by three score sources and loopback by both local
+                       integrations. */
+                    const releasable = core.releasableOriginsFor(key);
+                    if (releasable.length) await permissionsFor(releasable).remove();
+                    say(`Access to ${core.describeFeatureOrigins(key)} revoked.`, 'ok');
+                } else if (await api.request()) {
+                    say(`Access to ${core.describeFeatureOrigins(key)} granted. Reload any open IMDb tabs.`, 'ok');
+                } else {
+                    say('Access was not granted, so that feature still cannot run.', 'error');
+                }
+            } catch (error) {
+                say(error?.message || 'The permission could not be changed.', 'error');
+            } finally {
+                button.disabled = false;
+                await paint();
+                renderPermissions();
+                // Focus stays where the user left it rather than falling to the body.
+                button.focus();
+            }
+        });
+
+        row.append(copy, button);
+        list.appendChild(row);
+        paint();
+    });
+}
 
 /* ---- Storage summary ---------------------------------------------------------- */
 
@@ -78,7 +197,6 @@ function renderSummary() {
     try { $('cache-summary').textContent = `${core.cacheCount()} entries · ${core.formatCacheBytes(core.cacheBytes())}`; }
     catch { $('cache-summary').textContent = 'unavailable'; }
 }
-renderSummary();
 
 /* ---- Diagnostics -------------------------------------------------------------- */
 
@@ -214,7 +332,10 @@ $('reset-confirm').addEventListener('click', () => {
     }
     try {
         const count = core.applySettingsImport(core.getDefaultSettingsEntries());
-        undoEntries = snapshot;
+        /* Keep the FIRST snapshot. A second reset before undoing would otherwise capture
+           the already-reset state, so the undo would cheerfully report putting N settings
+           back while restoring the defaults over what the user actually had. */
+        if (!undoEntries) undoEntries = snapshot;
         $('reset-panel').hidden = true;
         $('reset').setAttribute('aria-expanded', 'false');
         $('undo-row').hidden = false;
@@ -222,8 +343,11 @@ $('reset-confirm').addEventListener('click', () => {
         say(`Reset ${count} settings. Undo is available until you leave this page.`, 'ok');
         clearTimeout(undoTimer);
         undoTimer = setTimeout(clearUndo, 5 * 60 * 1000);
+        // Focus would otherwise fall to the body when the panel it was in disappears.
+        $('undo').focus();
     } catch (error) {
         say(error?.message || 'The reset failed and previous settings were restored.', 'error');
+        $('reset').focus();
     }
 });
 
@@ -233,8 +357,17 @@ $('undo').addEventListener('click', () => {
         const restored = core.applySettingsImport(undoEntries);
         clearUndo();
         renderSummary();
+        renderAccessList();
         say(`Undone. ${restored} settings were put back.`, 'ok');
     } catch (error) {
         say(error?.message || 'The undo failed. Nothing was changed.', 'error');
     }
+    // The undo row is now gone, so send focus somewhere real rather than the body.
+    $('reset').focus();
 });
+
+/* Rendered last, and each guarded on its own, so a section that cannot be read leaves
+   every control above it working. */
+guard('status', renderPermissions);
+guard('site access', renderAccessList);
+guard('storage', renderSummary);

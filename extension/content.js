@@ -855,13 +855,16 @@
        every score lookup until now. Report it once per page — scrubbed to the byte
        figures, never the key or payload — and hand them the control that fixes it. */
     function reportCacheQuotaFailure(bytes) {
+        /* Once per page, journal entry included. Sustained quota pressure rejects a write
+           on every lookup, and recording each one filled all 20 journal slots with
+           identical rows — evicting the feature failures the journal exists to keep. */
+        if (cacheQuotaFailureNotified) return;
+        cacheQuotaFailureNotified = true;
         try {
             recordFeatureFailure({ key:'cache' }, 'storage', bytes > 0
                 ? `cache write of ${bytes} bytes failed after eviction; storage quota appears full`
                 : 'a cache write was rejected by storage; quota appears full');
         } catch { /* the toast below is the part the user needs */ }
-        if (cacheQuotaFailureNotified) return;
-        cacheQuotaFailureNotified = true;
         try {
             showToast(`${STORAGE_HOST_LABEL} is full, so lookups are not being cached. Settings → Data → Clear cache frees it.`, 6000);
         } catch { /* console warning already recorded the failure */ }
@@ -1079,6 +1082,19 @@
 
     function cacheSetUnavailable(key) {
         cacheSet(key, { unavailable: true }, CACHE_UNAVAILABLE_TTL);
+    }
+    /* A lookup that failed because its host access was never granted is not evidence the
+       service had nothing for this title. Recording that as "unavailable" for 24 hours
+       turns a permission gap the user can fix in a click into a day of wrong answers that
+       survive the fix. Where access is missing, nothing is written, so the very next visit
+       retries. Always true in the userscript build, which has no optional grants. */
+    async function cacheUnavailableUnlessBlocked(featureKey, cacheKey) {
+        if (!cacheKey) return false;
+        if (await hasFeatureOrigins(featureKey)) {
+            cacheSetUnavailable(cacheKey);
+            return false;
+        }
+        return true;
     }
     /* Module scope because both the Data page and the diagnostics report need it;
        it previously lived inside the settings panel closure. */
@@ -5111,7 +5127,10 @@ section[id*="quote" i] .ipc-list-card { padding: 4px 0 !important; margin: 2px 0
                 }
             } catch { /* handled below */ }
             if (!isCurrent()) return;
-            cacheSetUnavailable(cacheKey);
+            /* Nothing is recorded when the failure was only a missing host grant, so the
+               next visit retries instead of reading back a stale "unavailable". */
+            await cacheUnavailableUnlessBlocked(this.key, cacheKey);
+            if (!isCurrent()) return;
             this._renderUnavailable();
         },
         _render(data) {
@@ -5205,7 +5224,10 @@ section[id*="quote" i] .ipc-list-card { padding: 4px 0 !important; margin: 2px 0
             } catch { /* handled below */ }
 
             if (!isCurrent()) return;
-            cacheSetUnavailable(cacheKey);
+            /* Nothing is recorded when the failure was only a missing host grant, so the
+               next visit retries instead of reading back a stale "unavailable". */
+            await cacheUnavailableUnlessBlocked(this.key, cacheKey);
+            if (!isCurrent()) return;
             this._renderUnavailable();
         },
         _render(data) {
@@ -5319,7 +5341,10 @@ section[id*="quote" i] .ipc-list-card { padding: 4px 0 !important; margin: 2px 0
                 }
             } catch { /* handled below */ }
             if (!isCurrent()) return;
-            cacheSetUnavailable(cacheKey);
+            /* Nothing is recorded when the failure was only a missing host grant, so the
+               next visit retries instead of reading back a stale "unavailable". */
+            await cacheUnavailableUnlessBlocked(this.key, cacheKey);
+            if (!isCurrent()) return;
             this._renderUnavailable();
         },
         _render(data) {
@@ -5434,7 +5459,10 @@ section[id*="quote" i] .ipc-list-card { padding: 4px 0 !important; margin: 2px 0
             } catch { /* handled below */ }
 
             if (!isCurrent()) return;
-            cacheSetUnavailable(cacheKey);
+            /* Nothing is recorded when the failure was only a missing host grant, so the
+               next visit retries instead of reading back a stale "unavailable". */
+            await cacheUnavailableUnlessBlocked(this.key, cacheKey);
+            if (!isCurrent()) return;
             this._renderUnavailable();
         },
         _parse(html, url, expected) {
@@ -8812,6 +8840,21 @@ section[data-testid="hero-parent"].enh-editorial-native-hidden { display: none !
 .enh-settings-access[data-state="granted"] { color: ${t.green}; }
 .enh-settings-access[data-state="missing"] { color: ${t.accent}; }
 .enh-settings-access:empty { display: none; }
+.enh-settings-access-btn {
+    margin-top: 5px;
+    height: 24px;
+    padding: 0 10px;
+    border-radius: 7px;
+    border: 1px solid ${t.accentBorder};
+    background: ${t.accentMuted};
+    color: ${t.accent};
+    cursor: pointer;
+    font: 650 10px/1 -apple-system, BlinkMacSystemFont, 'Segoe UI', sans-serif;
+}
+.enh-settings-access-btn:hover { background: ${t.accent}; color: ${readableTextColor(t.accent)}; }
+.enh-settings-access-btn:focus-visible { outline: 2px solid ${t.accent}; outline-offset: 2px; }
+/* Toggled with the hidden property, and this rule has to outrank the display above. */
+.enh-settings-access-btn[hidden] { display: none; }
 .enh-toggle { position: relative; width: 40px; height: 22px; flex-shrink: 0; }
 .enh-toggle input { opacity: 0; width: 0; height: 0; position: absolute; }
 .enh-toggle-track {
@@ -9274,21 +9317,25 @@ section[data-testid="hero-parent"].enh-editorial-native-hidden { display: none !
     // =========================================================================
     /* A script manager grants @connect at install and has no runtime equivalent, so all
        of this is inert there and the state readers report "granted" rather than
-       inventing a restriction the platform does not have. */
-    const supportsOptionalPermissions = () =>
-        IS_EXTENSION_BUILD && typeof chrome !== 'undefined' && Boolean(chrome.permissions);
+       inventing a restriction the platform does not have.
 
-    /* Gecko's chrome.* alias is callback-style while Chromium's returns a promise. The
-       callback form is accepted by both, which is the same reason the background uses it. */
-    function callPermissionsApi(method, argument) {
+       In the extension this runs in a content script, which does NOT get
+       chrome.permissions — content scripts are given runtime, storage, i18n, extension,
+       csi, dom and loadTimes, and nothing else. Testing for `chrome.permissions` here
+       therefore fails permanently, which silently turned every check below into "yes,
+       granted" and made the whole layer dead code. State is read through the background
+       instead, which does have the API. */
+    const supportsOptionalPermissions = () =>
+        IS_EXTENSION_BUILD && typeof chrome !== 'undefined' && Boolean(chrome.runtime?.sendMessage);
+
+    function askBackground(type, payload = {}) {
         return new Promise(resolve => {
             try {
-                const result = chrome.permissions[method](argument, value => {
+                chrome.runtime.sendMessage({ type, ...payload }, response => {
                     void chrome.runtime?.lastError;
-                    resolve(value === true);
+                    resolve(response || null);
                 });
-                if (result && typeof result.then === 'function') result.then(value => resolve(value === true), () => resolve(false));
-            } catch { resolve(false); }
+            } catch { resolve(null); }
         });
     }
 
@@ -9313,15 +9360,18 @@ section[data-testid="hero-parent"].enh-editorial-native-hidden { display: none !
     async function hasFeatureOrigins(key) {
         const origins = getFeatureOrigins(key);
         if (!origins.length || !supportsOptionalPermissions()) return true;
-        return callPermissionsApi('contains', { origins });
+        const response = await askBackground('imdb-enhanced:permissions-contains', { origins });
+        return response?.granted === true;
     }
 
-    async function requestFeatureOrigins(key) {
-        const origins = getFeatureOrigins(key);
-        if (!origins.length || !supportsOptionalPermissions()) return true;
-        // Must be called synchronously enough from the user's click that the gesture is
-        // still live; permissions.request rejects otherwise.
-        return callPermissionsApi('request', { origins });
+    /* Granting cannot happen from here. permissions.request needs a user gesture *and* an
+       extension page; a content script has the gesture but not the page, and the
+       background has neither. So the settings row reports the real state and hands the
+       user to the options page, which has both. */
+    function openOptionsPage() {
+        if (!supportsOptionalPermissions()) return false;
+        askBackground('imdb-enhanced:open-options');
+        return true;
     }
 
     /* Only give back what nothing else still needs. Wikidata is shared by three score
@@ -9344,7 +9394,8 @@ section[data-testid="hero-parent"].enh-editorial-native-hidden { display: none !
         if (!supportsOptionalPermissions()) return true;
         const origins = releasableOriginsFor(key);
         if (!origins.length) return true;
-        return callPermissionsApi('remove', { origins });
+        const response = await askBackground('imdb-enhanced:permissions-remove', { origins });
+        return response?.ok === true;
     }
 
     function refreshFeature(key) {
@@ -10143,7 +10194,12 @@ section[data-testid="hero-parent"].enh-editorial-native-hidden { display: none !
             clearTimeout(savedTimer);
             savedTimer = setTimeout(() => { saveState.textContent = 'Saved locally'; }, 1200);
         };
-        const markSaveFailed = () => {
+        const markSaveFailed = event => {
+            /* The failure event now names its key, and cache writes share it. A rejected
+               lookup-cache write is not a failed setting, and reporting it here told the
+               user their preference had not saved when it had. The cache has its own
+               handler for those. */
+            if (isCacheStorageKey(event?.detail?.key)) return;
             clearTimeout(savedTimer);
             saveState.classList.add('enh-settings-save-state--error');
             saveState.textContent = 'Save failed';
@@ -10212,37 +10268,47 @@ section[data-testid="hero-parent"].enh-editorial-native-hidden { display: none !
                a broken feature. */
             const origins = getFeatureOrigins(feature.key);
             let access = null;
+            let grantButton = null;
             if (origins.length && supportsOptionalPermissions()) {
                 access = makeEl('span', { className:'enh-settings-access', role:'status' });
-                row.querySelector('.enh-settings-row-copy').appendChild(access);
+                grantButton = makeEl('button', {
+                    type:'button',
+                    className:'enh-settings-access-btn',
+                    hidden:'hidden',
+                    onClick: () => {
+                        if (openOptionsPage()) showToast('Grant site access on the page that just opened, then return here.', 5000);
+                    },
+                }, 'Grant access');
+                const copy = row.querySelector('.enh-settings-row-copy');
+                copy.appendChild(access);
+                copy.appendChild(grantButton);
             }
             const paintAccess = async () => {
                 if (!access) return;
                 if (!get(feature.key)) {
                     access.textContent = '';
                     access.dataset.state = 'off';
+                    grantButton.hidden = true;
                     return;
                 }
                 const granted = await hasFeatureOrigins(feature.key);
                 access.dataset.state = granted ? 'granted' : 'missing';
                 access.textContent = granted
                     ? `Site access granted for ${describeFeatureOrigins(feature.key)}`
-                    : `Needs access to ${describeFeatureOrigins(feature.key)} — turn this off and on again to allow it`;
+                    : `Not working yet: needs access to ${describeFeatureOrigins(feature.key)}.`;
+                grantButton.hidden = granted;
+                grantButton.setAttribute('aria-label', `Grant ${feature.name} access to ${describeFeatureOrigins(feature.key)}`);
             };
             paintAccess();
+            /* Access can be granted or revoked on the options page while this panel is
+               open, so the row re-reads rather than trusting what it painted at build. */
+            if (access) {
+                document.addEventListener('imdb-enhanced:permissions-changed', paintAccess);
+                registerCleanup(() => document.removeEventListener('imdb-enhanced:permissions-changed', paintAccess));
+            }
 
             input.addEventListener('change', async () => {
                 const enabled = input.checked;
-                /* Ask before persisting. A feature recorded as on while its origins were
-                   refused is enabled in name only: it would run, fail every request, and
-                   look broken rather than declined. The request has to happen in this
-                   handler because it is the live user gesture. */
-                if (enabled && !(await requestFeatureOrigins(feature.key))) {
-                    input.checked = false;
-                    showToast(`${feature.name} stays off: access to ${describeFeatureOrigins(feature.key)} was not granted.`, 5000);
-                    paintAccess();
-                    return;
-                }
                 if (!trySaveSetting(feature.key, enabled)) {
                     input.checked = !enabled;
                     paintAccess();
@@ -11102,6 +11168,14 @@ section[data-testid="hero-parent"].enh-editorial-native-hidden { display: none !
                 formatCacheBytes,
                 getUserMarks,
                 EXPORT_REDACTED_KEY,
+                // The options page is the only surface that can actually grant an
+                // optional origin, so it needs to know which feature wants what.
+                FEATURE_ORIGIN_GROUPS,
+                FEATURE_DETAILS,
+                getFeatureOrigins,
+                describeFeatureOrigins,
+                releasableOriginsFor,
+                getSetting: key => get(key),
             });
         } catch (error) {
             console.warn('[IMDb Enhanced] recovery hook failed:', error);
@@ -11152,6 +11226,20 @@ section[data-testid="hero-parent"].enh-editorial-native-hidden { display: none !
                 requestAnimationFrame(() => document.getElementById('enh-import-btn')?.click());
             });
         });
+        /* Registered once, up front, rather than from inside the reset handler. Doing it
+           there added a command per reset; Violentmonkey and Tampermonkey replace by
+           caption, but a manager that does not dedupe would accumulate one every time. */
+        register('Undo the last settings reset', () => {
+            if (!pendingResetUndo) { showToast('There is no reset to undo.'); return; }
+            try {
+                const restored = applySettingsImport(pendingResetUndo);
+                pendingResetUndo = null;
+                showToast(`Undone. ${restored} settings were put back. Reloading...`);
+                setTimeout(() => location.reload(), 1000);
+            } catch (error) {
+                showToast(error?.message || 'The undo failed. Nothing was changed.', 5000);
+            }
+        });
         register('Reset all settings (with undo)', () => {
             let snapshot;
             try { snapshot = prepareSettingsImport(getExportSettings({ includeCredentials:true })).entries; }
@@ -11161,19 +11249,11 @@ section[data-testid="hero-parent"].enh-editorial-native-hidden { display: none !
             }
             try {
                 const count = applySettingsImport(getDefaultSettingsEntries());
-                pendingResetUndo = snapshot;
+                /* Keep the FIRST snapshot. A second reset before undoing would capture
+                   the already-reset state, and the undo would then report putting N
+                   settings back while writing defaults over what the user really had. */
+                if (!pendingResetUndo) pendingResetUndo = snapshot;
                 showToast(`Reset ${count} settings. Use the manager menu's Undo command to put them back.`, 8000);
-                register('Undo the last settings reset', () => {
-                    if (!pendingResetUndo) { showToast('There is no reset to undo.'); return; }
-                    try {
-                        const restored = applySettingsImport(pendingResetUndo);
-                        pendingResetUndo = null;
-                        showToast(`Undone. ${restored} settings were put back. Reloading...`);
-                        setTimeout(() => location.reload(), 1000);
-                    } catch (error) {
-                        showToast(error?.message || 'The undo failed. Nothing was changed.', 5000);
-                    }
-                });
             } catch (error) {
                 showToast(error?.message || 'The reset failed and previous settings were restored.', 5000);
             }
