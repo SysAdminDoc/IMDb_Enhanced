@@ -283,6 +283,8 @@ function loadScriptTestHooks({ withoutDeleteValue = false, withheldCredentials =
         getAvailabilityCacheKey,
         getJustWatchSearchUrl,
         isTmdbConfigured,
+        isAnimatedTitle,
+        isAnimeTitle,
         originsHeldByOtherEnabledFeatures,
         releasableOriginsFor,
         BACKUP_ENVELOPE_KEY,
@@ -2596,6 +2598,48 @@ test('every registered feature is reachable from the settings workspace', () => 
         assert(panel.includes(`'${key}'`), `${key} has no control in the settings workspace`);
         assert(hooks.FEATURE_DETAILS[key], `${key} has no description for its settings row`);
     });
+});
+
+/* IE-12: a title has to be identified as anime before anything is asked about it, from
+   what the page already carries and nothing else. The cost of a wrong yes is a request to
+   a service that has no entry for the film, fired on every animated title someone opens,
+   so the gate is tested from the direction of the false positives rather than the hits. */
+test('anime is identified from the page, and animation alone is not enough', () => {
+    const hooks = loadScriptTestHooks();
+    const linkTo = href => ({ querySelector: selector => (selector.includes(href) ? {} : null) });
+    const noLinks = { querySelector: () => null };
+    const japan = linkTo('country_of_origin=JP');
+
+    // Animated and Japanese, which is the definition people use.
+    assert.strictEqual(hooks.isAnimeTitle({ genre:['Animation', 'Action'] }, japan), true);
+    // Animated with the keyword IMDb carries, for a co-production whose country line is a list.
+    assert.strictEqual(hooks.isAnimeTitle({ genre:['Animation'], keywords:'anime, based on manga' }, noLinks), true);
+    assert.strictEqual(hooks.isAnimeTitle({ genre:['Animation'], keywords:['light novel'] }, noLinks), true);
+
+    /* The false positives, which are the whole reason this is strict. */
+    assert.strictEqual(hooks.isAnimeTitle({ genre:['Animation', 'Family'] }, noLinks), false,
+        'an animated film from anywhere else is not anime');
+    assert.strictEqual(hooks.isAnimeTitle({ genre:['Drama'] }, japan), false,
+        'a live-action Japanese film is not anime');
+    assert.strictEqual(hooks.isAnimeTitle({ genre:['Documentary'], keywords:'anime industry' }, noLinks), false,
+        'a documentary about anime is not anime');
+    assert.strictEqual(hooks.isAnimeTitle({}, japan), false, 'no genre is not a yes');
+    assert.strictEqual(hooks.isAnimeTitle(null, noLinks), false);
+
+    /* "Animation" is the whole genre, not a substring of one: IMDb has no genre that
+       contains it, but a keyword or a description might, and this reads genres only. */
+    assert.strictEqual(hooks.isAnimatedTitle({ genre:['Stop-motion animation'] }), false);
+    assert.strictEqual(hooks.isAnimatedTitle({ genre:[' Animation '] }), true, 'padding is not meaning');
+
+    /* The country comes from the href IMDb builds to its own search, never from the words
+       beside it, so the answer is the same on a translated IMDb. */
+    assert.strictEqual(hooks.isAnimeTitle({ genre:['Animation'] }, linkTo('country_of_origin=US')), false);
+    const script = fs.readFileSync(path.join(__dirname, '..', 'IMDb_Enhanced.user.js'), 'utf8');
+    assert(!/JAPAN_ORIGIN_SELECTOR[\s\S]{0,200}textContent/.test(script),
+        'the country must be read from the link, not from the label next to it');
+
+    // A page that throws on an odd selector must answer no rather than take the page down.
+    assert.strictEqual(hooks.isAnimeTitle({ genre:['Animation'] }, { querySelector() { throw new Error('bad root'); } }), false);
 });
 
 test('version strings match', () => {

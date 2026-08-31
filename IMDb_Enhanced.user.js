@@ -4146,6 +4146,41 @@
         return 'movie';
     }
 
+    /* Anime is not a genre IMDb has, so nothing already on the page says a title is one.
+       What it does say is that a title is animated and where it was made, and those two
+       together are the definition people actually use. Both are read from the page: the
+       genre list out of the structured data, and the country out of the link IMDb builds
+       to its own search — an href, never the words next to it, so a Japanese or German
+       IMDb says the same thing as an English one.
+
+       Deliberately strict. A wrong yes here is a request to a service about a film that
+       has no entry there, on every animated title someone opens. Pixar is animated and
+       American; a live-action Japanese film is Japanese and not animated; neither is
+       anime, and neither passes.
+
+       A keyword is accepted as the second half instead of the country, because IMDb
+       carries "anime" and "based on manga" as keywords on titles whose country line is a
+       co-production list. Keywords are structured data, not display text. */
+    const ANIME_KEYWORD_PATTERN = /\b(?:anime|manga|light novel)\b/i;
+    const JAPAN_ORIGIN_SELECTOR = 'a[href*="country_of_origin=JP"]';
+
+    function isAnimatedTitle(ld) {
+        return getBoundedStructuredStrings(ld?.genre, STRUCTURED_DATA_CLASSIFICATION_ITEM_LIMIT)
+            .some(genre => /^animation$/i.test(genre.trim()));
+    }
+
+    function hasJapaneseOrigin(root = document) {
+        try { return Boolean(root?.querySelector?.(JAPAN_ORIGIN_SELECTOR)); }
+        catch { return false; }
+    }
+
+    function isAnimeTitle(ld = getLDData(), root = document) {
+        if (!isAnimatedTitle(ld)) return false;
+        const keywords = getBoundedStructuredStrings(ld?.keywords, STRUCTURED_DATA_CLASSIFICATION_ITEM_LIMIT);
+        if (keywords.some(keyword => ANIME_KEYWORD_PATTERN.test(keyword))) return true;
+        return hasJapaneseOrigin(root);
+    }
+
     function getMediaType() {
         return getStructuredMediaType(getLDData());
     }
