@@ -121,7 +121,9 @@ The redesigned visual reference set covers every menu page: [Experience](design/
 
 **Integrations** - Tabbed Radarr/Sonarr and Plex/Jellyfin/Emby local-service configuration with arrow/Home/End keyboard navigation.
 
-**Data** - Local mark review, validated JSON backup/restore up to 4 MB with optional passphrase-encrypted credential export, cache status/clearing, and an explicit two-step reset with backup guidance.
+**Data** - Local mark review, validated JSON backup/restore up to 4 MB with optional passphrase-encrypted credential export, cache status/clearing, a persistent failure journal, and an explicit two-step reset with backup guidance.
+
+**Failure journal** - The last 20 feature failures, kept across reloads so intermittent breakage is visible. Entries record the time, the feature, the kind of page, and a failure category. They never record the error text, so a title, a lookup address, or a token echoed back by a local service cannot end up in one. Copy it into a bug report or clear it from the same card.
 
 **Watch Sites** - Add, remove, reorder, show/hide, categorize, and customize streaming site buttons with name, URL template, and color. The FMHY streaming catalog sits under the editor: a filterable list of every streaming destination from that wiki, grouped by its sections (stream aggregators, P-Stream forks, dedicated server, multi-server, backups, and legal free-with-ads services). Adding one creates a normal editable row, and entries already in your list read as Added. A list holds up to 250 destinations, enough for the whole catalog at once.
 

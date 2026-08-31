@@ -22,6 +22,8 @@
 
 - Userscript managers get the same escape hatch through their extension menu: open settings, copy a backup, restore one, and reset with an undo command. All of it uses the same code the settings panel does.
 
+- Data → Failure journal keeps the last 20 feature failures across reloads, so an intermittent problem is visible instead of vanishing when you refresh. Each entry says when it happened, which feature, what kind of page, and what category of failure, in plain words. It records the category rather than the error text on purpose, so a title you were looking at, a lookup address, or an API key a local service echoed back has no way to end up in it. You can copy it into a bug report or clear it.
+
 - The Sites page carries a built-in catalog of every streaming destination listed on the FMHY video wiki: 208 sites in the six groups that wiki uses, filterable by name or address, each one click to add. An added entry becomes an ordinary editable row, and anything already in your list reads as Added rather than offering a duplicate. Site lists now hold 250 destinations instead of 50, so the whole catalog fits at once if you want it.
 
 ### Changed

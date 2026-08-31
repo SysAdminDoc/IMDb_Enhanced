@@ -500,6 +500,8 @@
         keyboardShortcuts: false,
         // Extension builds only: the userscript updates itself through its manager.
         updateNotice: true, updateDismissedVersion: '',
+        // Bounded, category-only record of feature failures; see appendFailureJournal.
+        failureJournal: [],
     };
     const LOCAL_SERVICE_URL_KEYS = new Set([
         'radarrUrl', 'sonarrUrl', 'seerrUrl', 'plexUrl', 'jellyfinUrl', 'embyUrl',
@@ -1788,6 +1790,13 @@
         if (typeof fallback === 'boolean') {
             return typeof value === 'boolean' ? { key, value } : null;
         }
+        /* Before the generic array branch, which normalizes arrays as site lists: the
+           journal is not a site list, and running it through normalizeSite would drop
+           every entry and then reject the whole value for the resulting length mismatch. */
+        if (key === 'failureJournal') {
+            if (!Array.isArray(value)) return null;
+            return { key, value: value.slice(-FEATURE_FAILURE_LIMIT).map(normalizeJournalEntry).filter(Boolean) };
+        }
         if (Array.isArray(fallback)) {
             if (!Array.isArray(value)) return null;
             /* Dropped before the completeness check below, not after, or a backup taken
@@ -2777,15 +2786,118 @@
     const featureFailures = [];
     let announcedFailureRoute = -1;
 
+    /* The in-memory list above disappears on reload, so the failures worth correlating —
+       an intermittent provider, a selector that breaks only on some routes — were exactly
+       the ones a user could never report. The journal below survives.
+
+       It records a *category*, never a message. That is the whole privacy design: an
+       error string can contain the title being viewed, a full lookup URL with its query,
+       DOM text, or a token echoed back by a local service, and scrubbing free text is a
+       game you lose eventually. Storing an enum means there is nothing to scrub, and the
+       category is what actually tells you whether IMDb changed its markup or a provider
+       went down. */
+    const FAILURE_JOURNAL_ENTRY_VERSION = 1;
+    const FAILURE_CATEGORIES = [
+        'selector', 'network', 'storage', 'parse', 'permission', 'timeout', 'aborted', 'unknown',
+    ];
+    const FAILURE_CATEGORY_SET = new Set(FAILURE_CATEGORIES);
+    const FAILURE_CATEGORY_LABELS = {
+        selector: 'IMDb page structure changed',
+        network: 'A lookup could not reach its service',
+        storage: 'Local storage refused a write',
+        parse: 'A response could not be understood',
+        permission: 'Access was refused',
+        timeout: 'A lookup ran out of time',
+        aborted: 'Cancelled by navigation',
+        unknown: 'Unclassified',
+    };
+
+    /* Classification reads the error, but only ever emits one of the fixed categories
+       above — no substring of the message is retained. */
+    function classifyFailure(error) {
+        const name = String(error?.name || '');
+        if (name === 'AbortError') return 'aborted';
+        const text = String(error?.message || error || '').toLowerCase();
+        if (!text) return 'unknown';
+        if (/quota|storage|exceeded the storage|indexeddb/.test(text)) return 'storage';
+        if (/permission|denied|not allowed|blocked:/.test(text)) return 'permission';
+        if (/timed out|timeout/.test(text)) return 'timeout';
+        if (/abort/.test(text)) return 'aborted';
+        if (/failed to fetch|networkerror|network|http \d{3}|request failed|connection/.test(text)) return 'network';
+        if (/json|parse|unexpected token|malformed|invalid/.test(text)) return 'parse';
+        if (/null|undefined|not a function|selector|queryselector|cannot read/.test(text)) return 'selector';
+        return 'unknown';
+    }
+
+    function normalizeJournalEntry(entry) {
+        if (!entry || typeof entry !== 'object' || Array.isArray(entry)) return null;
+        // A stored entry from a different shape is dropped rather than half-read.
+        if (Number(entry.v) !== FAILURE_JOURNAL_ENTRY_VERSION) return null;
+        const ts = Number(entry.ts);
+        if (!Number.isFinite(ts) || ts <= 0 || ts > Date.now() + 60000) return null;
+        const category = String(entry.category || '');
+        if (!FAILURE_CATEGORY_SET.has(category)) return null;
+        const key = String(entry.key || '').slice(0, 40);
+        if (!/^[A-Za-z0-9_]+$/.test(key)) return null;
+        const route = String(entry.route || '').slice(0, 24);
+        if (!/^[a-z-]*$/.test(route)) return null;
+        const build = String(entry.build || '').slice(0, 20);
+        if (!/^[0-9a-z.\-+]*$/i.test(build)) return null;
+        return { v:FAILURE_JOURNAL_ENTRY_VERSION, ts, build, key, route, category };
+    }
+
+    function getFailureJournal() {
+        const stored = get('failureJournal');
+        if (!Array.isArray(stored)) return [];
+        return stored.slice(-FEATURE_FAILURE_LIMIT).map(normalizeJournalEntry).filter(Boolean);
+    }
+
+    function appendFailureJournal(key, category) {
+        try {
+            const entry = normalizeJournalEntry({
+                v: FAILURE_JOURNAL_ENTRY_VERSION,
+                ts: Date.now(),
+                build: VERSION,
+                key,
+                // The route class, never the path: a path carries the title id and any
+                // query string that came with it.
+                route: getPageSurface(),
+                category,
+            });
+            if (!entry) return;
+            const next = [...getFailureJournal(), entry].slice(-FEATURE_FAILURE_LIMIT);
+            GM_setValue(PREFIX + 'failureJournal', next);
+        } catch { /* a journal that cannot be written must never break the feature */ }
+    }
+
+    function clearFailureJournal() {
+        try {
+            GM_setValue(PREFIX + 'failureJournal', []);
+            return true;
+        } catch { return false; }
+    }
+
+    function formatFailureJournal() {
+        const entries = getFailureJournal();
+        if (!entries.length) return 'No failures recorded.';
+        return entries.map(entry => {
+            const when = new Date(entry.ts).toISOString().replace('T', ' ').slice(0, 19);
+            return `${when}  v${entry.build}  ${entry.route || 'unknown'}  ${entry.key}: ${FAILURE_CATEGORY_LABELS[entry.category]}`;
+        }).join('\n');
+    }
+
     function recordFeatureFailure(feature, context, error) {
+        const category = classifyFailure(error);
         featureFailures.push({
             key: feature.key,
             context,
             message: toBoundedText(error && error.message ? error.message : error, 200) || 'Unknown error',
+            category,
         });
         if (featureFailures.length > FEATURE_FAILURE_LIMIT) {
             featureFailures.splice(0, featureFailures.length - FEATURE_FAILURE_LIMIT);
         }
+        appendFailureJournal(feature.key, category);
     }
 
     function getFeatureFailures() {
@@ -2833,6 +2945,7 @@
             failures.length
                 ? `recent failures:\n${failures.map(f => `  - ${f.context} ${f.key}: ${f.message}`).join('\n')}`
                 : 'recent failures: none',
+            `failure journal:\n${formatFailureJournal().split('\n').map(line => `  ${line}`).join('\n')}`,
         ].join('\n');
     }
 
@@ -8128,6 +8241,19 @@ section[data-testid="hero-parent"].enh-editorial-native-hidden { display: none !
 }
 
 /* Toggle switch */
+.enh-journal {
+    max-height: 168px;
+    overflow: auto;
+    margin: 0;
+    padding: 10px;
+    border: 1px solid ${t.bd1};
+    border-radius: 8px;
+    background: ${t.bg};
+    color: ${t.tx2};
+    font: 400 11px/1.5 ui-monospace, SFMono-Regular, Menlo, Consolas, monospace;
+    white-space: pre;
+}
+.enh-journal:focus-visible { outline: 2px solid ${t.accent}; outline-offset: 2px; }
 .enh-settings-access {
     display: block;
     margin-top: 4px;
@@ -9877,6 +10003,16 @@ section[data-testid="hero-parent"].enh-editorial-native-hidden { display: none !
         backupCard.appendChild(importPanel);
         backupCard.appendChild(securePanel);
         backupCard.appendChild(resetPanel);
+        const journalCard = makeCard('Failure journal',
+            'The last 20 feature failures, kept across reloads so an intermittent problem can be seen. Each entry records when, which feature, which kind of page, and what category of failure — never a title, address, or message.');
+        journalCard.append(
+            makeEl('pre', { className:'enh-journal', id:'enh-journal-body', tabindex:'0', role:'group', 'aria-label':'Recorded failures' },
+                formatFailureJournal()),
+            makeEl('div', { className:'enh-data-actions', style:{ marginTop:'10px' } },
+                makeEl('button', { type:'button', className:'enh-settings-footer-btn', id:'enh-journal-copy' }, 'Copy journal'),
+                makeEl('button', { type:'button', className:'enh-settings-footer-btn', id:'enh-journal-clear' }, 'Clear journal')
+            )
+        );
         const cacheCard = makeCard('Cached lookups', 'Scores and availability lookups are cached locally for up to seven days.');
         cacheCard.append(
             makeEl('button', { type:'button', className:'enh-settings-footer-btn', id:'enh-clearcache-btn', title:'Clear cached third-party lookups' }, 'Clear cache'),
@@ -9928,7 +10064,7 @@ section[data-testid="hero-parent"].enh-editorial-native-hidden { display: none !
         );
         dataPage.appendChild(makeEl('div', { className:'enh-settings-grid' },
             createMarksPanel(registerCleanup),
-            makeEl('div', { className:'enh-settings-stack' }, backupCard, cacheCard, diagnosticsCard)
+            makeEl('div', { className:'enh-settings-stack' }, backupCard, cacheCard, journalCard, diagnosticsCard)
         ));
         dataPage.appendChild(makeEl('div', { className:'enh-settings-callout', style:{ marginTop:'12px' } },
             makeEl('strong', {}, 'Local only'),
@@ -10105,6 +10241,19 @@ section[data-testid="hero-parent"].enh-editorial-native-hidden { display: none !
                     : error.message || 'Import failed. No settings were changed.';
                 showToast(message, 5000);
             } finally { apply.disabled = false; }
+        });
+        overlay.querySelector('#enh-journal-copy').addEventListener('click', () => {
+            showToast(copyTextToClipboard(formatFailureJournal())
+                ? 'Failure journal copied'
+                : COPY_FAILURE_MESSAGE, 2500);
+        });
+        overlay.querySelector('#enh-journal-clear').addEventListener('click', () => {
+            if (!clearFailureJournal()) {
+                showToast(`The journal could not be cleared. Check ${STORAGE_HOST_LABEL}.`, 4500);
+                return;
+            }
+            overlay.querySelector('#enh-journal-body').textContent = formatFailureJournal();
+            showToast('Failure journal cleared');
         });
         overlay.querySelector('#enh-clearcache-btn').addEventListener('click', () => {
             let keys;

@@ -58,6 +58,12 @@ function loadScriptTestHooks({ withoutDeleteValue = false } = {}) {
         summarizeHeatmapSeason,
         buildDiagnosticsReport,
         getFeatureFailures,
+        recordFeatureFailure,
+        classifyFailure,
+        getFailureJournal,
+        clearFailureJournal,
+        formatFailureJournal,
+        FAILURE_CATEGORIES,
         NATIVE_WATCHLIST_SELECTORS,
         isIMDbHost,
         getPageSurface,
@@ -2850,6 +2856,84 @@ test('local request errors stay concise and text-only', () => {
         'Request failed',
         'non-numeric status values should not be coerced into UI text'
     );
+});
+
+/* IE-84: the in-memory failure list vanished on reload, so the failures worth
+   correlating — an intermittent provider, a selector that breaks on some routes — were
+   the ones a user could never report. */
+test('the failure journal survives a reload and carries no free text', () => {
+    const hooks = loadScriptTestHooks();
+    hooks.setTestPath('/title/tt0133093/');
+
+    /* The privacy guarantee is structural: entries hold a category, never a message. A
+       real error string can carry the title, the full lookup URL with its query, DOM
+       text, or a token a local service echoed back. Feed exactly those in. */
+    const leaky = [
+        new Error('Failed to fetch https://www.rottentomatoes.com/search?search=The%20Matrix&apikey=SECRET123'),
+        new Error('Cannot read properties of null reading "The Dark Knight"'),
+        new Error('Radarr said: {"apiKey":"abcdef123456","title":"Inception"}'),
+        new Error('Unexpected token < in JSON at position 0'),
+    ];
+    leaky.forEach((error, index) => hooks.recordFeatureFailure({ key:`feature${index}` }, 'init', error));
+
+    const stored = hooks.getStoredSetting('failureJournal');
+    assert(Array.isArray(stored) && stored.length === leaky.length, 'failures must persist to storage');
+    const serialized = JSON.stringify(stored);
+    ['SECRET123', 'abcdef123456', 'The Matrix', 'The Dark Knight', 'Inception', 'rottentomatoes.com', 'search?search']
+        .forEach(secret => assert(!serialized.includes(secret), `the journal leaked ${secret}`));
+    stored.forEach(entry => {
+        assert.deepStrictEqual(Object.keys(entry).sort(), ['build', 'category', 'key', 'route', 'ts', 'v'],
+            'a journal entry must carry no field beyond its fixed shape');
+        assert(hooks.FAILURE_CATEGORIES.includes(entry.category), `unknown category ${entry.category}`);
+    });
+
+    // Classification is useful, not just safe.
+    assert.strictEqual(hooks.classifyFailure(new Error('Failed to fetch')), 'network');
+    assert.strictEqual(hooks.classifyFailure(new Error('Cannot read properties of null')), 'selector');
+    assert.strictEqual(hooks.classifyFailure(new Error('Unexpected token < in JSON')), 'parse');
+    assert.strictEqual(hooks.classifyFailure(new Error('quota exceeded')), 'storage');
+    assert.strictEqual(hooks.classifyFailure({ name:'AbortError', message:'' }), 'aborted');
+    assert.strictEqual(hooks.classifyFailure(new Error('')), 'unknown');
+
+    // Bounded, and the bound keeps the newest.
+    for (let index = 0; index < 40; index += 1) {
+        hooks.recordFeatureFailure({ key:`bulk${index}` }, 'route', new Error('Failed to fetch'));
+    }
+    const bounded = hooks.getFailureJournal();
+    assert.strictEqual(bounded.length, 20, 'the journal must stay at its bound');
+    assert.strictEqual(bounded[bounded.length - 1].key, 'bulk39', 'the newest failure must survive');
+
+    // A stored entry of a different shape is dropped, not half-read.
+    hooks.seedStoredSetting('failureJournal', [
+        { v:0, ts:Date.now(), key:'legacy', category:'network' },
+        { v:1, ts:Date.now(), key:'good', category:'network', route:'title', build:'2.15.0' },
+        { v:1, ts:Date.now(), key:'bad category', category:'nonsense', route:'title', build:'2.15.0' },
+        { v:1, ts:Date.now(), key:'has space', category:'network', route:'title', build:'2.15.0' },
+        'not an object',
+    ]);
+    const survivors = hooks.getFailureJournal();
+    assert.deepStrictEqual(survivors.map(entry => entry.key), ['good'],
+        'only entries matching the current shape may be read back');
+
+    // Copyable, clearable, and cleared by a full reset.
+    assert(hooks.formatFailureJournal().includes('good'), 'the journal must render for copying');
+    assert(hooks.clearFailureJournal());
+    assert.strictEqual(hooks.getFailureJournal().length, 0);
+    assert.strictEqual(hooks.formatFailureJournal(), 'No failures recorded.');
+
+    hooks.recordFeatureFailure({ key:'later' }, 'init', new Error('Failed to fetch'));
+    hooks.applySettingsImport(hooks.getDefaultSettingsEntries());
+    assert.strictEqual(hooks.getFailureJournal().length, 0, 'a full reset must clear the journal');
+
+    // It is an array setting but not a site list, so it needs its own normalizer.
+    const roundTrip = hooks.prepareSettingsImport({
+        failureJournal:[{ v:1, ts:Date.now(), key:'kept', category:'network', route:'title', build:'2.15.0' }],
+    });
+    assert.strictEqual(roundTrip.entries[0].value.length, 1,
+        'the journal must survive import rather than being normalized as a site list');
+
+    assert(script.includes("id:'enh-journal-copy'") && script.includes("id:'enh-journal-clear'"),
+        'the journal needs copy and clear controls');
 });
 
 /* IE-75: the extension required every score, ad, video and loopback origin at install
