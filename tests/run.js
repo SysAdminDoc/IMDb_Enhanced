@@ -199,7 +199,8 @@ function loadScriptTestHooks({ withoutDeleteValue = false, withheldCredentials =
         providerAllowedHere,
         PROVIDERS,
         describeProfileExclusion,
-        getTmdbRegion,
+        getAvailabilityRegion,
+        getJustWatchSearchUrl,
         isTmdbConfigured,
         originsHeldByOtherEnabledFeatures,
         releasableOriginsFor,
@@ -4295,10 +4296,46 @@ test('TMDB availability resolves an IMDb id and reads only the chosen region', (
     assert.strictEqual(Array.from(us.providers).join(', '), 'Max, Netflix, Tubi',
         'subscription and ad-supported answer "already included"; rent and buy are a different question');
     assert.strictEqual(us.url, 'https://www.justwatch.com/us/movie/the-matrix');
+    /* IE-13: the three are different answers and the panel used to flatten them into one
+       line, so a title you could rent but not stream read as unavailable. */
+    assert.strictEqual(Array.from(us.offers.stream).join(', '), 'Max, Netflix, Tubi');
+    assert.strictEqual(Array.from(us.offers.rent).join(', '), 'Apple TV');
+    assert.strictEqual(Array.from(us.offers.buy).join(', '), 'Amazon Video');
+    // One service offering a title three ways is one service, counted once.
+    const everywhere = { results:{ US:{ link:'', flatrate:[{ provider_name:'Max' }], rent:[{ provider_name:'Max' }], buy:[{ provider_name:'Max' }] } } };
+    const once = hooks.parseTmdbWatchProviders(everywhere, 'US');
+    assert.strictEqual(Array.from(once.offers.stream).join(''), 'Max');
+    assert.strictEqual(Array.from(once.offers.rent).length, 0, 'the same service is not listed twice');
+    // A region with rent but no streaming is still an answer.
+    const rentOnly = { results:{ US:{ link:'', rent:[{ provider_name:'Apple TV' }] } } };
+    const parsedRentOnly = hooks.parseTmdbWatchProviders(rentOnly, 'US');
+    assert.strictEqual(Array.from(parsedRentOnly.offers.stream).length, 0);
+    assert.strictEqual(Array.from(parsedRentOnly.offers.rent).join(''), 'Apple TV');
     // Rendering another country's services as though they were yours is the failure here.
     assert.strictEqual(Array.from(hooks.parseTmdbWatchProviders(payload, 'FR').providers).join(', '), 'Canal+');
     assert.strictEqual(Array.from(hooks.parseTmdbWatchProviders(payload, 'DE').providers).length, 0,
         'a region TMDB knows nothing about is empty, not a fallback to another country');
+
+    /* IE-13: JustWatch keys its whole site by region, and every URL said /us whoever was
+       asking. The same stored setting drives both sources; JustWatch wants it lowercase
+       in the path, TMDB uppercase in its results. */
+    hooks.seedStoredSetting('availabilityRegion', 'GB');
+    assert(hooks.getJustWatchSearchUrl('The Matrix').startsWith('https://www.justwatch.com/gb/'),
+        'the search URL must follow the chosen region');
+    assert.strictEqual(hooks.getAvailabilityRegion(), 'GB', 'while TMDB gets it uppercase');
+    hooks.seedStoredSetting('availabilityRegion', 'US');
+    assert(hooks.getJustWatchSearchUrl('The Matrix').startsWith('https://www.justwatch.com/us/'),
+        'and the default still works');
+    // Said out loud rather than rendered as nothing, which read as broken.
+    assert(script.includes('`Not streamable in ${getAvailabilityRegion()}`'),
+        'a region with no offers must say so');
+    /* Both paths reach it: a lookup that came back with nothing for this region, and a
+       cached entry that turns out to hold nothing. Counted rather than matched once,
+       because either alone satisfies a substring check while the other has regressed. */
+    assert.strictEqual((script.match(/this\._renderUnavailable\('region'\)/g) || []).length, 2,
+        'every path that finds no offers must say so rather than reporting a generic failure');
+    assert(/\[\['Rent', rent\], \['Buy', buy\]\]/.test(script),
+        'renting and buying must be listed apart from streaming');
     assert.strictEqual(hooks.parseTmdbWatchProviders(null, 'US'), null);
     assert.strictEqual(hooks.parseTmdbWatchProviders({}, 'US'), null, 'a payload with no results is no answer');
 
@@ -4315,11 +4352,11 @@ test('TMDB availability resolves an IMDb id and reads only the chosen region', (
         'the same service listed twice is one service');
 
     // Region and source both fall back to something safe rather than to undefined.
-    assert.strictEqual(hooks.getTmdbRegion(), 'US', 'an unset region defaults rather than sending nothing');
+    assert.strictEqual(hooks.getAvailabilityRegion(), 'US', 'an unset region defaults rather than sending nothing');
     hooks.seedStoredSetting('availabilityRegion', 'gb');
-    assert.strictEqual(hooks.getTmdbRegion(), 'GB', 'a region is normalized, not passed through');
+    assert.strictEqual(hooks.getAvailabilityRegion(), 'GB', 'a region is normalized, not passed through');
     hooks.seedStoredSetting('availabilityRegion', 'not a region');
-    assert.strictEqual(hooks.getTmdbRegion(), 'US', 'nonsense falls back');
+    assert.strictEqual(hooks.getAvailabilityRegion(), 'US', 'nonsense falls back');
     assert.strictEqual(hooks.getAvailabilitySource(), 'justwatch', 'the default source is unchanged');
     hooks.seedStoredSetting('availabilitySource', 'tmdb');
     assert.strictEqual(hooks.getAvailabilitySource(), 'tmdb');
@@ -4362,7 +4399,7 @@ test('TMDB availability resolves an IMDb id and reads only the chosen region', (
     assert(script.includes("key:'availabilityRegion',"), 'and have a control that sets it');
     hooks.seedStoredSetting('availabilityRegion', 'GB');
     const gbPayload = { results:{ US:{ link:'', flatrate:[{ provider_name:'Max' }] }, GB:{ link:'', flatrate:[{ provider_name:'Now' }] } } };
-    assert.strictEqual(Array.from(hooks.parseTmdbWatchProviders(gbPayload, hooks.getTmdbRegion()).providers).join(''), 'Now',
+    assert.strictEqual(Array.from(hooks.parseTmdbWatchProviders(gbPayload, hooks.getAvailabilityRegion()).providers).join(''), 'Now',
         'a chosen region must actually be the one read');
 
     // Both attributions are required by the terms, and both are rendered with the data.

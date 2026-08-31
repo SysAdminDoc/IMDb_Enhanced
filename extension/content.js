@@ -4830,12 +4830,20 @@ section[id*="quote" i] .ipc-list-card { padding: 4px 0 !important; margin: 2px 0
     function getJustWatchTypePath() {
         return isTVType() ? 'tv-show' : 'movie';
     }
+    /* JustWatch keys its whole site by region, so /us was answering for the United States
+       whoever was asking. It uses a lowercase code in the path where TMDB uses an
+       uppercase one in its results, and the same stored setting drives both. */
+    function getJustWatchRegionPath() {
+        return getAvailabilityRegion().toLowerCase();
+    }
     function getJustWatchSearchUrl(title = getTitleText()) {
-        return `https://www.justwatch.com/us/search?q=${encodeURIComponent(title || '')}`;
+        return `https://www.justwatch.com/${getJustWatchRegionPath()}/search?q=${encodeURIComponent(title || '')}`;
     }
     function getJustWatchDetailUrl(title = getTitleText()) {
         const slug = getJustWatchSlug(title);
-        return slug ? `https://www.justwatch.com/us/${getJustWatchTypePath()}/${slug}` : getJustWatchSearchUrl(title);
+        return slug
+            ? `https://www.justwatch.com/${getJustWatchRegionPath()}/${getJustWatchTypePath()}/${slug}`
+            : getJustWatchSearchUrl(title);
     }
     function getTrailerSearchUrl(title = getTitleText(), year = getTitleYear()) {
         const query = [title, year, 'official trailer'].filter(Boolean).join(' ');
@@ -5325,16 +5333,16 @@ section[id*="quote" i] .ipc-list-card { padding: 4px 0 !important; margin: 2px 0
        /3/{type}/{id}/watch/providers answers with results keyed by country, each holding
        link plus flatrate / rent / buy / ads arrays of { provider_name }. */
     const TMDB_API_ORIGIN = 'https://api.themoviedb.org';
-    const TMDB_REGION_PATTERN = /^[A-Z]{2}$/;
+    const AVAILABILITY_REGION_PATTERN = /^[A-Z]{2}$/;
     // Matches the page-parsing path's ceiling so both sources are bounded the same way.
     const TMDB_MAX_PROVIDERS = 50;
 
     function getAvailabilitySource() {
         return get('availabilitySource') === 'tmdb' ? 'tmdb' : 'justwatch';
     }
-    function getTmdbRegion() {
+    function getAvailabilityRegion() {
         const stored = String(get('availabilityRegion') || '').trim().toUpperCase();
-        return TMDB_REGION_PATTERN.test(stored) ? stored : 'US';
+        return AVAILABILITY_REGION_PATTERN.test(stored) ? stored : 'US';
     }
     function readTmdbToken() {
         return readCredential('tmdbReadToken');
@@ -5362,6 +5370,11 @@ section[id*="quote" i] .ipc-list-card { padding: 4px 0 !important; margin: 2px 0
         return candidates[0];
     }
 
+    // Streaming, renting and buying are three different answers to "can I watch this".
+    function emptyOffers() {
+        return { stream:[], rent:[], buy:[] };
+    }
+
     /* Offers for one region only. TMDB returns every country it knows, and rendering
        another country's services as though they were yours is the failure this avoids. */
     function parseTmdbWatchProviders(payload, region) {
@@ -5369,7 +5382,7 @@ section[id*="quote" i] .ipc-list-card { padding: 4px 0 !important; margin: 2px 0
         const results = payload.results;
         if (!results || typeof results !== 'object') return null;
         const local = results[region];
-        if (!local || typeof local !== 'object') return { providers:[], url:'', region };
+        if (!local || typeof local !== 'object') return { providers:[], offers:emptyOffers(), url:'', region };
         const names = [];
         // Same bounds the page-parsing path already applies, so a large or hostile
         // response cannot reach the renderer through the newer of the two sources.
@@ -5382,23 +5395,32 @@ section[id*="quote" i] .ipc-list-card { padding: 4px 0 !important; margin: 2px 0
         /* One ceiling, counted across both buckets. Slicing each bucket as well looked
            like a second bound but enforced nothing the first did not, so removing either
            left the other holding and neither was ever really under test. */
-        ['flatrate', 'ads'].forEach(bucket => {
-            const offers = Array.isArray(local[bucket]) ? local[bucket] : [];
-            for (const offer of offers) {
+        /* Kept apart, because "included with something you may already pay for" and "costs
+           money today" are different answers and the panel used to flatten them into one
+           line. The streaming list stays first because it is the one most people want. */
+        const offers = emptyOffers();
+        [['flatrate', 'stream'], ['ads', 'stream'], ['rent', 'rent'], ['buy', 'buy']].forEach(([bucket, kind]) => {
+            const listed = Array.isArray(local[bucket]) ? local[bucket] : [];
+            for (const offer of listed) {
                 if (names.length >= TMDB_MAX_PROVIDERS) break;
+                const before = names.length;
                 add(offer?.provider_name);
+                // Recorded under its kind only when it is new overall, so one service
+                // offering a title three ways is counted once.
+                if (names.length > before) offers[kind].push(names[names.length - 1]);
             }
         });
         const url = typeof local.link === 'string' ? local.link : '';
         // No trailing slice: the ceiling is enforced as names are added, and a second one
         // here only looked like a bound while asserting nothing.
-        return { providers:names, url, region };
+        // `providers` remains the streaming list, which is what every existing caller reads.
+        return { providers:offers.stream, offers, url, region };
     }
 
     async function fetchTmdbAvailability(imdbId, isCurrent) {
         const token = readTmdbToken();
         if (!token.configured) return { unconfigured:true };
-        const region = getTmdbRegion();
+        const region = getAvailabilityRegion();
         /* Under a script manager the value is readable here and goes straight on the
            request. In an extension build it is not: only the header name and which stored
            key travel, and the worker attaches the value under the scheme its own binding
@@ -5754,7 +5776,7 @@ section[id*="quote" i] .ipc-list-card { padding: 4px 0 !important; margin: 2px 0
     }
 
     function appendUnavailableNote(widget, reason, unavailableText = 'Score unavailable') {
-        if (reason === 'excluded') {
+        if (reason === 'excluded' || reason === 'region') {
             widget.appendChild(makeEl('div', { className:'enh-score-widget__sub' }, unavailableText));
             return;
         }
@@ -6226,16 +6248,22 @@ section[id*="quote" i] .ipc-list-card { padding: 4px 0 !important; margin: 2px 0
                     const result = await fetchTmdbAvailability(imdbId, isCurrent);
                     if (!isCurrent() || result.cancelled) return;
                     if (result.unconfigured) { this._renderUnavailable('unconfigured'); return; }
-                    if (result.providers.length) {
-                        const data = { providers:result.providers, url:result.url, source:'tmdb', region:result.region };
+                    const offers = result.offers || emptyOffers();
+                    if (offers.stream.length || offers.rent.length || offers.buy.length) {
+                        const data = {
+                            providers:result.providers, offers, url:result.url,
+                            source:'tmdb', region:result.region,
+                        };
                         cacheSet(cacheKey, data);
                         this._render(data);
                         return;
                     }
-                    // A region TMDB has no offers for is an answer, not a failure.
+                    /* A region with no offers is an answer, not a failure, and saying so
+                       beats rendering nothing: "not here" is information, and without it
+                       the panel looked broken. */
                     await cacheUnavailableUnlessBlocked(this.key, cacheKey);
                     if (!isCurrent()) return;
-                    this._renderUnavailable();
+                    this._renderUnavailable('region');
                     return;
                 } catch (error) { tmdbError = error; }
                 if (!isCurrent()) return;
@@ -6302,9 +6330,16 @@ section[id*="quote" i] .ipc-list-card { padding: 4px 0 !important; margin: 2px 0
             document.getElementById('enh-jw-widget')?.remove();
             const bar = findRatingBar();
             if (!bar) return;
-            const providers = Array.isArray(data.providers) ? data.providers : [];
-            const summary = formatProviderSummary(providers);
-            if (!summary) { this._renderUnavailable(); return; }
+            const offers = data.offers && typeof data.offers === 'object' ? data.offers : null;
+            const stream = Array.isArray(offers?.stream) ? offers.stream
+                : (Array.isArray(data.providers) ? data.providers : []);
+            const rent = Array.isArray(offers?.rent) ? offers.rent : [];
+            const buy = Array.isArray(offers?.buy) ? offers.buy : [];
+            const summary = formatProviderSummary(stream);
+            /* Rentable but not streamable is still an answer, and the panel used to give
+               up on it entirely. A cached entry from before this shipped has no offers,
+               so the streaming list stands in for all of it. */
+            if (!summary && !rent.length && !buy.length) { this._renderUnavailable('region'); return; }
             /* TMDB hands back a JustWatch page for the title; the link is still checked
                against the host it must belong to rather than followed on trust. */
             const fromTmdb = data.source === 'tmdb';
@@ -6320,11 +6355,21 @@ section[id*="quote" i] .ipc-list-card { padding: 4px 0 !important; margin: 2px 0
                     style: { '--score-color': '#fbc500' },
                 },
                     makeEl('span', { className: 'enh-score-widget__badge enh-score-widget__badge--outline' }, fromTmdb ? 'TMDB' : 'JW'),
-                    makeEl('span', { className: 'enh-score-widget__value enh-score-widget__value--availability' }, `On ${summary}`)
+                    makeEl('span', { className: 'enh-score-widget__value enh-score-widget__value--availability' },
+                        summary ? `On ${summary}` : 'Not streaming')
                 ),
                 makeEl('div', { className: 'enh-score-widget__sub' },
                     fromTmdb ? `Via TMDB${data.region ? ` (${data.region})` : ''}` : 'Via JustWatch')
             );
+            /* Renting and buying are listed separately from streaming, because "included
+               with something you already pay for" and "costs money today" are different
+               answers. TMDB's watch-provider data carries no prices, so none are shown
+               rather than invented. */
+            [['Rent', rent], ['Buy', buy]].forEach(([label, list]) => {
+                if (!list.length) return;
+                w.appendChild(makeEl('div', { className: 'enh-score-widget__sub' },
+                    `${label}: ${formatProviderSummary(list)}`));
+            });
             /* TMDB's terms require the endorsement disclaimer, and their watch-provider
                endpoint separately requires the data be credited to JustWatch. Rendered
                with the data, because that is where the terms put it. */
@@ -6358,7 +6403,12 @@ section[id*="quote" i] .ipc-list-card { padding: 4px 0 !important; margin: 2px 0
                     makeEl('span', { className: 'enh-score-widget__value' }, 'Open')
                 )
             );
-            appendUnavailableNote(w, reason, reason === 'excluded' ? describeProfileExclusion(this.key) : 'Availability unavailable');
+            /* "Not streamable in GB" answers the question; "availability unavailable"
+               only says the extension gave up. */
+            const availabilityNote = reason === 'excluded' ? describeProfileExclusion(this.key)
+                : reason === 'region' ? `Not streamable in ${getAvailabilityRegion()}`
+                : 'Availability unavailable';
+            appendUnavailableNote(w, reason, availabilityNote);
             bar.appendChild(w);
         },
         destroy() { document.getElementById('enh-jw-widget')?.remove(); }

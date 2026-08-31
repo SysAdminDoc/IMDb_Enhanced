@@ -20,6 +20,8 @@
 
 ### Added
 
+- The streaming panel answers the question properly now. It tells renting and buying apart from streaming instead of running them together, so a film you can rent but not stream no longer reads as unavailable. It follows the region you set rather than always asking for the United States, on both sources. And where a title is not carried at all it says "Not streamable in GB" rather than rendering nothing, which looked like a fault.
+
 - There is a third build now, for a web-store listing: `npm run build:store`. It ships without the default watch destinations and without the catalog they come from, and it asks for no access to services that are read by parsing their pages. Those score panels say "Not available in this build" and name which source is missing, instead of sitting there empty. Availability there comes from TMDB with your own token. It comes off the same source through the same script, so nothing else about it differs.
 
 - Streaming availability can come from TMDB's API instead of from reading JustWatch's page. Pick the source under Ratings and paste a TMDB read token of your own, free from themoviedb.org. It resolves the title from its IMDb id rather than by matching titles, so it cannot land on the wrong film, and it reads offers for your region only. The credit TMDB and JustWatch each require is shown with the data. Choosing TMDB without a token says so and offers to take you to the setting; it never quietly reads the page instead, which would defeat the reason for choosing it. JustWatch stays the default, so nothing changes unless you switch.
