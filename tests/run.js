@@ -27,8 +27,13 @@ function test(name, fn) {
    a content script in an extension build, where the bridge answers whether a credential is
    set but never hands back its value. Six call sites read get() there and concluded
    "not configured", which is how an encrypted backup came to carry empty strings. */
-function loadScriptTestHooks({ withoutDeleteValue = false, withheldCredentials = false } = {}) {
-    const instrumented = script.replace(/\}\)\(\);\s*$/, `window.__enhTest = {
+/* storeProfile runs the script the store build actually ships, through the same
+   transform scripts/build-extension.js applies, rather than a second description of it. */
+const { applyStoreProfile } = require('../scripts/build-extension.js');
+
+function loadScriptTestHooks({ withoutDeleteValue = false, withheldCredentials = false, storeProfile = false } = {}) {
+    const source = storeProfile ? applyStoreProfile(script) : script;
+    const instrumented = source.replace(/\}\)\(\);\s*$/, `window.__enhTest = {
         normalizeIMDbProviderId,
         normalizeLookupTitle,
         toBoundedText,
@@ -261,7 +266,7 @@ function loadScriptTestHooks({ withoutDeleteValue = false, withheldCredentials =
         advanceRouteGeneration: () => { activeRouteGeneration += 1; }
     };
 })();`);
-    assert.notStrictEqual(instrumented, script, 'test hook injection failed');
+    assert.notStrictEqual(instrumented, source, 'test hook injection failed');
 
     const location = { hostname: 'example.test', pathname: '/', search: '' };
     let prefersReducedMotion = false;
@@ -4953,6 +4958,30 @@ test('TMDB availability resolves an IMDb id and reads only the chosen region', (
         'the scheme is the background\'s to add, since nothing here can read the value it wraps');
 });
 
+/* The store-profile exclusion message, asserted by running the transformed script rather
+   than by reading the source. The settings-row half of this lives in the happy-dom suite,
+   which skips itself wholesale on a checkout without the optional DOM package; this half
+   runs everywhere. */
+test('a store build names the source it cannot ship', () => {
+    const hooks = loadScriptTestHooks({ storeProfile:true });
+    assert.strictEqual(hooks.featureExcludedByProfile('inlineRTScore'), true,
+        'the page-parsing score sources are not in a store build');
+    assert.strictEqual(hooks.describeProfileExclusion('inlineRTScore'),
+        'Not available in this build (Rotten Tomatoes)');
+    assert.strictEqual(hooks.describeProfileExclusion('inlineLetterboxdScore'),
+        'Not available in this build (Letterboxd)');
+    assert.strictEqual(hooks.featureExcludedByProfile('streamAvailability'), false,
+        'availability still has a source there, so it is a grant question rather than an exclusion');
+    assert.deepStrictEqual(Array.from(hooks.getFeatureOrigins('streamAvailability')),
+        ['https://api.themoviedb.org/*'],
+        'and it asks only for the origin that build can use');
+
+    // The ordinary build excludes nothing, or the assertions above prove only that the
+    // transform ran.
+    const normal = loadScriptTestHooks();
+    assert.strictEqual(normal.featureExcludedByProfile('inlineRTScore'), false);
+});
+
 /* IE-101: a guard the suite could not tell was there. Availability declares two sources
    but contacts one, and the narrowing that expresses that was asserted only as source
    text. Deleting it left every check green while the build asked for consent to an origin
@@ -5058,6 +5087,11 @@ test('public documentation matches what the project actually ships', () => {
     const floor = /^>=\s*(\d+)/.exec(declared)?.[1];
     assert(floor, `package.json engines.node should be a >=MAJOR range, got ${declared}`);
     assert(Number(floor) >= 22, 'the declared Node floor must not be an end-of-life release (Node 20 ended 2026-04-30)');
+    /* npm writes the root engines block into the lockfile too, and only rewrites it on
+       the next install. Committed and disagreeing is the state nothing else notices. */
+    const lockfile = JSON.parse(fs.readFileSync(path.join(root, 'package-lock.json'), 'utf8'));
+    assert.strictEqual(lockfile.packages?.['']?.engines?.node, declared,
+        'the lockfile\'s copy of the Node floor must match package.json');
     const readmeFloor = /Install Node\.js (\d+) or newer/.exec(readme)?.[1];
     assert.strictEqual(readmeFloor, floor,
         `the README's Node floor (${readmeFloor}) must match package.json engines.node (${declared})`);

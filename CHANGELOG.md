@@ -46,6 +46,8 @@
 
 ### Fixed
 
+- The generated Firefox and web-store builds are written from an empty directory, so a file an earlier build produced and this one does not can no longer travel into a package. The freshness check runs before anything is regenerated, which is the only order in which it can catch a stale or hand-edited build.
+
 - The extension no longer keeps a second copy of every cached lookup inside the IMDb tab. The storage bridge shadowed each value so a rejected write could be undone, which roughly doubled what the page held for entries that are disposable anyway. A cache write that fails now drops the entry and the next read asks the service again. Settings and marks still roll back exactly as before.
 
 - The web-store build carries its own listing description now. It used to reuse the full build's, which advertises score widgets and a directory of watch destinations that this build deliberately leaves out. The suite also reads the built `extension-store/` directory back and compares it with the generator, so a stale or hand-edited store build fails the tests instead of reaching a reviewer.

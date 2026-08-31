@@ -552,9 +552,17 @@ function toFirefoxManifest(base) {
 
 const FIREFOX_COPIED_FILES = ['background.js', 'permissions.html', 'permissions.js', 'recovery.html'];
 
+/* Emptied first, not merged into. A file an earlier build wrote and this one no
+   longer emits — a renamed icon, a dropped page — otherwise stays on disk forever and
+   ships inside the zip, and nothing that only checks for expected names can see it. */
+function resetBuildDir(dir) {
+    fs.rmSync(dir, { recursive:true, force:true });
+    fs.mkdirSync(dir, { recursive:true });
+}
+
 function buildFirefoxBuild() {
     const firefoxManifest = toFirefoxManifest(manifest);
-    fs.mkdirSync(firefoxDir, { recursive:true });
+    resetBuildDir(firefoxDir);
     fs.writeFileSync(path.join(firefoxDir, 'manifest.json'), `${JSON.stringify(firefoxManifest, null, 2)}\n`, 'utf8');
     fs.writeFileSync(path.join(firefoxDir, 'content.js'), content, 'utf8');
     fs.writeFileSync(path.join(firefoxDir, 'boot.css'), bootCss, 'utf8');
@@ -620,6 +628,14 @@ ${bridgeFor({ trusted:false })}\n${storeBody}\n})();\n`;
     if (advertisedButAbsent.length) {
         throw new Error(`The store description names sources this build excludes: ${advertisedButAbsent.join(', ')}`);
     }
+    /* The other thing this build cuts is not a provider and so has no label to match:
+       applyStoreProfile empties the watch-destination lists. A description promising a
+       directory of streaming sites would pass the check above while advertising exactly
+       what was removed. */
+    const cutCatalogVocabulary = /destination|watch site|streaming site|catalogue|catalog|directory/i;
+    if (cutCatalogVocabulary.test(STORE_DESCRIPTION)) {
+        throw new Error('The store description advertises the watch-destination catalog, which that build omits.');
+    }
     return {
         manifest:storeManifest,
         files: {
@@ -634,7 +650,7 @@ ${bridgeFor({ trusted:false })}\n${storeBody}\n})();\n`;
 
 function buildStoreBuild() {
     const store = computeStoreBuild();
-    fs.mkdirSync(storeDir, { recursive:true });
+    resetBuildDir(storeDir);
     Object.entries(store.files).forEach(([name, body]) => {
         fs.writeFileSync(path.join(storeDir, name), body, 'utf8');
     });
@@ -653,6 +669,38 @@ function buildStoreBuild() {
         fs.copyFileSync(from, to);
     });
     return store;
+}
+
+/* Every path under a build directory, relative and sorted. Comparing the set, not
+   just looking for the names that ought to be there, is what notices a file an older
+   build wrote and this one no longer emits. */
+function listBuildFiles(dir, prefix = '') {
+    return fs.readdirSync(dir, { withFileTypes:true })
+        .flatMap(entry => (entry.isDirectory()
+            ? listBuildFiles(path.join(dir, entry.name), `${prefix}${entry.name}/`)
+            : [`${prefix}${entry.name}`]))
+        .sort();
+}
+
+function checkGeneratedProfile(dir, compute, rebuildCommand) {
+    if (!fs.existsSync(dir)) return;
+    const name = path.basename(dir);
+    const { files, copied, manifest:profileManifest } = compute();
+    const expected = [
+        ...Object.keys(files),
+        ...copied,
+        ...Object.values(profileManifest.icons || {}),
+        ...Object.values(profileManifest.action?.default_icon || {}),
+    ].filter((entry, index, all) => all.indexOf(entry) === index).sort();
+    const actual = listBuildFiles(dir);
+    if (actual.join('|') !== expected.join('|')) {
+        throw new Error(`${name}/ holds ${actual.join(', ')} but the generator emits ${expected.join(', ')}; run ${rebuildCommand}.`);
+    }
+    Object.entries(files).forEach(([entry, body]) => {
+        if (fs.readFileSync(path.join(dir, entry), 'utf8') !== body) {
+            throw new Error(`${name}/${entry} is stale; run ${rebuildCommand}.`);
+        }
+    });
 }
 
 /* Exported so the GM contract suite can instantiate the real bridge instead of a
@@ -685,6 +733,28 @@ if (require.main !== module) {
     if (fs.readFileSync(bootCssPath, 'utf8') !== bootCss) throw new Error('extension/boot.css is stale; run npm run build:extension.');
     if (fs.readFileSync(recoveryPath, 'utf8') !== recovery) throw new Error('extension/recovery.js is stale; run npm run build:extension.');
     if (currentManifest !== serializedManifest) throw new Error('extension/manifest.json is stale; run npm run build:extension.');
+    /* The two profile directories are built on demand, so a fresh clone has neither and
+       absent is not stale. One that IS on disk is checked here rather than in the test
+       suite, because the suite regenerates them first and can therefore only ever read
+       back what it just wrote. This is the check a hand-edited or left-over directory
+       actually fails, and it runs before anything rebuilds them. */
+    checkGeneratedProfile(firefoxDir, () => {
+        const firefoxManifest = toFirefoxManifest(manifest);
+        return {
+            files: {
+                'manifest.json': `${JSON.stringify(firefoxManifest, null, 2)}\n`,
+                'content.js': content,
+                'boot.css': bootCss,
+                'recovery.js': recovery,
+            },
+            copied: FIREFOX_COPIED_FILES,
+            manifest: firefoxManifest,
+        };
+    }, 'npm run build:firefox');
+    checkGeneratedProfile(storeDir, () => {
+        const store = computeStoreBuild();
+        return { files:store.files, copied:STORE_COPIED_FILES, manifest:store.manifest };
+    }, 'npm run build:store');
     console.log(`Extension build is current at v${packageJson.version}.`);
 } else {
     fs.mkdirSync(extensionDir, { recursive:true });

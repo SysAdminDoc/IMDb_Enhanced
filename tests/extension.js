@@ -257,6 +257,18 @@ assert(fs.readFileSync(path.join(root, 'extension', 'permissions.html'), 'utf8')
 assert(permissionsScript.includes('permissions.request'), 'the popup must be able to request the opt-in origins');
 assert(permissionsScript.includes('getManifest'), 'the popup must derive origins from the manifest rather than a second hard-coded list');
 
+/* What is on disk, relative to a build directory, in a stable order. Checking only that
+   the expected names are present cannot see a file an older build left behind, and that
+   file goes into the uploaded zip. The generators empty their output directory first; this
+   is what proves they did. */
+function listBuildFiles(dir, prefix = '') {
+    return fs.readdirSync(dir, { withFileTypes:true })
+        .flatMap(entry => (entry.isDirectory()
+            ? listBuildFiles(path.join(dir, entry.name), `${prefix}${entry.name}/`)
+            : [`${prefix}${entry.name}`]))
+        .sort();
+}
+
 /* The Firefox assertions above check a manifest computed in this process, which says
    nothing about the directory that actually ships. Read the built files instead — a
    stale extension-firefox/ is otherwise indistinguishable from a broken generator
@@ -275,9 +287,15 @@ assert.strictEqual(
     fs.readFileSync(path.join(firefoxDir, 'boot.css'), 'utf8'),
     bootCss,
     'the Firefox build must ship the same synchronous boot stylesheet');
-[...FIREFOX_COPIED_FILES, ...Object.values(builtFirefoxManifest.icons || {})].forEach(name => {
-    assert(fs.existsSync(path.join(firefoxDir, name)), `Firefox build is missing ${name}`);
-});
+assert.deepStrictEqual(
+    listBuildFiles(firefoxDir),
+    [
+        'boot.css', 'content.js', 'manifest.json', 'recovery.js',
+        ...FIREFOX_COPIED_FILES,
+        ...Object.values(builtFirefoxManifest.icons || {}),
+        ...Object.values(builtFirefoxManifest.action?.default_icon || {}),
+    ].filter((name, index, all) => all.indexOf(name) === index).sort(),
+    'the Firefox build directory must hold exactly what the generator emits');
 
 /* IE-89: in an extension build a secret must not reach the page's tab at all, so the
    content bundle keeps credential values out of its own storage mirror and the settings
@@ -387,10 +405,15 @@ Object.entries(store.files).forEach(([name, expected]) => {
         expected,
         `extension-store/${name} diverges from the generator; run npm run build:store`);
 });
-assert.strictEqual(store.manifest.version, pkg.version, 'the built store manifest is a release behind');
-[...STORE_COPIED_FILES, ...Object.values(store.manifest.icons || {})].forEach(name => {
-    assert(fs.existsSync(path.join(storeDir, name)), `store build is missing ${name}`);
-});
+assert.deepStrictEqual(
+    listBuildFiles(storeDir),
+    [
+        ...Object.keys(store.files),
+        ...STORE_COPIED_FILES,
+        ...Object.values(store.manifest.icons || {}),
+        ...Object.values(store.manifest.action?.default_icon || {}),
+    ].filter((name, index, all) => all.indexOf(name) === index).sort(),
+    'the store build directory must hold exactly what the generator emits');
 /* The listing text is read before the code is. Reusing the default description would
    advertise score widgets this build deliberately leaves out. */
 assert.notStrictEqual(store.manifest.description, manifest.description,
@@ -402,7 +425,9 @@ store.excluded.forEach(id => {
     assert(!store.manifest.description.toLowerCase().includes(label.toLowerCase()),
         `the store description advertises ${label}, which that build excludes`);
 });
-assert(/TMDB/.test(store.manifest.description),
-    'and it must name the source availability actually comes from there');
+/* The other capability the store build cuts has no provider behind it, so no label to
+   match: applyStoreProfile empties the watch-destination lists. */
+assert(!/destination|watch site|streaming site|catalogue|catalog|directory/i.test(store.manifest.description),
+    'the store description must not advertise the watch-destination catalog it omits');
 
 console.log(`Extension manifest and generated content are valid at v${pkg.version}, for all three builds.`);
