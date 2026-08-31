@@ -898,6 +898,29 @@
        Adding a migration: bump SETTINGS_SCHEMA_VERSION and append { to, run } here. run()
        may throw — the version is only advanced once every pending step has succeeded, so
        a failed migration is retried on the next load rather than skipped. */
+    /* A stored watchSites array is a snapshot of whatever the defaults were the first
+       time that user saved a site list, and Cineby's default row moved across four
+       registrable domains and two paths over this project's history. Matching only the
+       newest hostname left anyone who customized their list before 2026-06-20 with a dead
+       row that, with storeQuery now stripped, opens a dead homepage with no title. The
+       migration runs once, so it gets no second chance to catch them. Every domain the
+       row has ever used is matched, with or without a subdomain, and anchored so a
+       lookalike host belonging to somebody else is not swept up. */
+    const RETIRED_CINEBY_HOST = /(?:^|\.)cineby\.(?:at|sc|gd|app)$/i;
+    function isRetiredCinebyUrl(value) {
+        try { return RETIRED_CINEBY_HOST.test(new URL(String(value || '')).hostname); }
+        catch { return false; }
+    }
+
+    /* Not every manager exposes GM_deleteValue. A migration that calls it directly throws
+       a ReferenceError, and because the schema marker only advances once every pending
+       step has succeeded, that is not a skipped migration — it is the same failure on
+       every load, forever. Every migration deletes through this. */
+    function dropStoredKey(key) {
+        if (typeof GM_deleteValue === 'function') GM_deleteValue(key);
+        else GM_setValue(key, '');
+    }
+
     const SETTINGS_SCHEMA_VERSION = 3;
     const SETTINGS_SCHEMA_KEY = 'settingsSchemaVersion';
     /* Describes the export rather than being a setting, so import must skip it the way
@@ -913,7 +936,7 @@
                widget had nowhere left to be useful. Its preference is deleted rather
                than left behind as an orphan key that export would carry forever. */
             to: 2,
-            run() { GM_deleteValue(`${PREFIX}ratingHistogram`); },
+            run() { dropStoredKey(`${PREFIX}ratingHistogram`); },
         },
         {
             /* v3: Cineby shut down at the end of August 2026, taking its special-cased
@@ -923,16 +946,13 @@
                stop carrying it. */
             to: 3,
             run() {
-                GM_deleteValue(`${PREFIX}cinebyHost`);
-                GM_deleteValue(`${PREFIX}cineby_query`);
-                GM_deleteValue('movieTitle');
+                dropStoredKey(`${PREFIX}cinebyHost`);
+                dropStoredKey(`${PREFIX}cineby_query`);
+                dropStoredKey('movieTitle');
                 const stored = GM_getValue(`${PREFIX}watchSites`, null);
                 if (!Array.isArray(stored)) return;
                 const kept = stored
-                    .filter(site => {
-                        try { return new URL(String(site?.url || '')).hostname.toLowerCase() !== 'www.cineby.at'; }
-                        catch { return true; }
-                    })
+                    .filter(site => !isRetiredCinebyUrl(site?.url))
                     .map(site => {
                         if (!site || typeof site !== 'object' || !('storeQuery' in site)) return site;
                         const { storeQuery, ...rest } = site;
@@ -1838,7 +1858,11 @@
         }
         if (Array.isArray(fallback)) {
             if (!Array.isArray(value)) return null;
-            const limited = value.slice(0, SITE_LIST_LIMIT);
+            /* Dropped before the completeness check below, not after, or a backup taken
+               before v2.15 would fail whole-list validation instead of importing. The
+               schema-3 migration removes these rows from storage; without this, restoring
+               an older backup would put the dead destination back permanently. */
+            const limited = value.slice(0, SITE_LIST_LIMIT).filter(site => !isRetiredCinebyUrl(site?.url));
             const fallbackCategory = key === 'watchSites' ? 'watch' : 'other';
             const normalized = limited.map(site => normalizeSite(site, '#6366f1', fallbackCategory)).filter(Boolean);
             if (normalized.length !== limited.length) return null;

@@ -23,7 +23,7 @@ function test(name, fn) {
     }
 }
 
-function loadScriptTestHooks() {
+function loadScriptTestHooks({ withoutDeleteValue = false } = {}) {
     const instrumented = script.replace(/\}\)\(\);\s*$/, `window.__enhTest = {
         normalizeIMDbProviderId,
         normalizeLookupTitle,
@@ -249,9 +249,11 @@ function loadScriptTestHooks() {
             return { abort: () => { sandboxAbortedRequestCount += 1; } };
         },
         GM_listValues: () => [...sandboxValues.keys()],
-        GM_deleteValue: key => { sandboxValues.delete(key); },
         GM_webRequest: rules => { sandbox.webRequestRules = rules; },
     };
+    /* Not every manager exposes GM_deleteValue, and the userscript guards each call for
+       that reason. Omitting it here lets those guards be exercised rather than assumed. */
+    if (!withoutDeleteValue) sandbox.GM_deleteValue = key => { sandboxValues.delete(key); };
     vm.runInNewContext(instrumented, sandbox, { filename: scriptPath });
     sandbox.window.__enhTest.getCapturedWebRequestRules = () => sandbox.webRequestRules || [];
     sandbox.window.__enhTest.getAbortedRequestCount = () => sandboxAbortedRequestCount;
@@ -619,7 +621,8 @@ test('the unweighted mean is derived from histogram buckets', () => {
     /* The standalone chart is retired: IMDb stopped publishing the distribution on
        title pages, and draws its own chart where the data moved. */
     assert(!/key: 'ratingHistogram'/.test(script), 'the retired widget must no longer be registered');
-    assert(/to: 2,\s*run\(\) \{ GM_deleteValue\(`\$\{PREFIX\}ratingHistogram`\); \}/.test(script),
+    // Deletes go through dropStoredKey, which guards for managers lacking GM_deleteValue.
+    assert(/to: 2,\s*run\(\) \{ dropStoredKey\(`\$\{PREFIX\}ratingHistogram`\); \}/.test(script),
         'its stored preference must be migrated away, not orphaned');
     assert(/sits 0\.5 below it/.test(hooks.describeRatingGap(9.0, 8.5)), 'a negative gap reads as weighting below');
     assert(/same as the displayed rating/.test(hooks.describeRatingGap(8.0, 8.0)), 'no gap says so plainly');
@@ -2460,23 +2463,73 @@ test('Cineby stays retired outside the migration that scrubs it', () => {
 });
 
 test('schema-3 migration scrubs Cineby leftovers from storage', () => {
-    const hooks = loadScriptTestHooks();
-    hooks.seedStoredSetting('settingsSchemaVersion', 2);
-    hooks.seedStoredSetting('cinebyHost', 'https://www.cineby.at/');
-    hooks.seedStoredSetting('cineby_query', JSON.stringify({ title:'Alien', ts:Date.now() }));
-    hooks.seedRawStorage('movieTitle', 'Alien');
-    hooks.seedStoredSetting('watchSites', [
-        { name:'Cineby', url:'https://www.cineby.at/', color:'#6366f1', category:'watch', storeQuery:true },
-        { name:'Kept', url:'https://example.com/search?q={{TITLE}}', color:'#10b981', category:'watch', storeQuery:true },
+    /* A stored site list is a snapshot of the defaults at the time the user first saved
+       one, and the Cineby row's URL changed three times before it was retired. Matching
+       only the newest hostname left every earlier snapshot with a dead row, and the
+       migration runs once so it never gets a second chance. */
+    const historicalUrls = [
+        'https://www.cineby.at/',
+        'https://www.cineby.at/search',
+        'https://cineby.at/',
+        'https://www.cineby.sc/search',
+        'https://www.cineby.gd/search',
+        'https://www.cineby.app/search',
+    ];
+    historicalUrls.forEach(url => {
+        const hooks = loadScriptTestHooks();
+        hooks.seedStoredSetting('settingsSchemaVersion', 2);
+        hooks.seedStoredSetting('cinebyHost', 'https://www.cineby.at/');
+        hooks.seedStoredSetting('cineby_query', JSON.stringify({ title:'Alien', ts:Date.now() }));
+        hooks.seedRawStorage('movieTitle', 'Alien');
+        hooks.seedStoredSetting('watchSites', [
+            { name:'Cineby', url, color:'#6366f1', category:'watch', storeQuery:true },
+            { name:'Kept', url:'https://example.com/search?q={{TITLE}}', color:'#10b981', category:'watch', storeQuery:true },
+        ]);
+        assert.strictEqual(hooks.runSettingsMigrations(), hooks.SETTINGS_SCHEMA_VERSION);
+        assert.strictEqual(hooks.getStoredSetting('cinebyHost'), undefined, 'the host preference should be deleted');
+        assert.strictEqual(hooks.getStoredSetting('cineby_query'), undefined, 'a pending handoff payload should be deleted');
+        assert(!hooks.getStorageKeys().includes('movieTitle'), 'the legacy global handoff key should be deleted');
+        const migrated = hooks.getStoredSetting('watchSites');
+        assert.strictEqual(migrated.length, 1, `a stored Cineby row at ${url} survived the migration`);
+        assert.strictEqual(migrated[0].name, 'Kept');
+        assert(!('storeQuery' in migrated[0]), 'surviving rows should lose the retired transport flag');
+    });
+
+    // A lookalike domain is somebody else's site and must not be swept up.
+    const lookalike = loadScriptTestHooks();
+    lookalike.seedStoredSetting('settingsSchemaVersion', 2);
+    lookalike.seedStoredSetting('watchSites', [
+        { name:'CinebyTV', url:'https://cinebytv.com/', color:'#6366f1', category:'watch' },
+        { name:'Not Cineby', url:'https://cineby.at.example.com/', color:'#6366f1', category:'watch' },
     ]);
-    assert.strictEqual(hooks.runSettingsMigrations(), hooks.SETTINGS_SCHEMA_VERSION);
-    assert.strictEqual(hooks.getStoredSetting('cinebyHost'), undefined, 'the host preference should be deleted');
-    assert.strictEqual(hooks.getStoredSetting('cineby_query'), undefined, 'a pending handoff payload should be deleted');
-    assert(!hooks.getStorageKeys().includes('movieTitle'), 'the legacy global handoff key should be deleted');
-    const migrated = hooks.getStoredSetting('watchSites');
-    assert.strictEqual(migrated.length, 1, 'stored Cineby rows should be removed');
-    assert.strictEqual(migrated[0].name, 'Kept');
-    assert(!('storeQuery' in migrated[0]), 'surviving rows should lose the retired transport flag');
+    lookalike.runSettingsMigrations();
+    assert.strictEqual(lookalike.getStoredSetting('watchSites').length, 2,
+        'domains that merely contain the retired name must survive');
+
+    // Restoring a pre-v2.15 backup must not put the dead destination back.
+    const importing = loadScriptTestHooks();
+    const prepared = importing.prepareSettingsImport({
+        watchSites: [
+            { name:'Cineby', url:'https://www.cineby.sc/search', color:'#6366f1', category:'watch' },
+            { name:'Kept', url:'https://example.com/search?q={{TITLE}}', color:'#10b981', category:'watch' },
+        ],
+    });
+    const restored = prepared.entries.find(entry => entry.key === 'watchSites');
+    assert(restored, 'a watchSites list containing a retired row must still import, not be rejected wholesale');
+    assert.strictEqual(restored.value.length, 1, 'an old backup must not resurrect the retired destination');
+    assert.strictEqual(restored.value[0].name, 'Kept');
+});
+
+test('a manager without GM_deleteValue does not stall the migration chain', () => {
+    /* The version marker only advances once every pending step succeeds, so a throw here
+       is not a skipped migration — it is the same failure on every single load. */
+    const hooks = loadScriptTestHooks({ withoutDeleteValue: true });
+    hooks.seedStoredSetting('settingsSchemaVersion', 1);
+    hooks.seedStoredSetting('cinebyHost', 'https://www.cineby.at/');
+    assert.strictEqual(hooks.runSettingsMigrations(), hooks.SETTINGS_SCHEMA_VERSION,
+        'migrations must complete without GM_deleteValue');
+    assert.strictEqual(hooks.getStoredSetting('settingsSchemaVersion'), hooks.SETTINGS_SCHEMA_VERSION);
+    assert(!hooks.getStoredSetting('cinebyHost'), 'the retired preference must still be cleared');
 });
 
 test('the FMHY catalog offers valid, unique, addable destinations', () => {
