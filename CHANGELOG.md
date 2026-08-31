@@ -16,6 +16,8 @@
 
 ### Fixed
 
+- The trailer window can be closed from the keyboard once you are inside the video player. The player is a YouTube page embedded in the dialog, and a page cannot see key presses that happen inside another site's embed, so Escape stopped working there and Tab could strand you. Tabbing out of the player in either direction now lands on the close button, which closes the dialog and returns you to the Trailer button you came from. No second close control was added; the existing one is simply reachable now.
+
 - The lookup cache can no longer outgrow the storage it lives in. Its 120-entry by 256 KiB limits allowed roughly 30 MB of cached scores while a Chromium extension gets 10 MB for everything it stores, so a heavy browsing session could fill the quota and quietly stop saving lookups. The cache now measures itself in real encoded bytes, holds a 6 MB ceiling, and drops least-recently-read entries as it fills. Settings, private marks, and integration credentials are never eviction candidates. If storage is full anyway, you get a message pointing at Data → Clear cache instead of silence, and the Data page shows what the cache is using.
 
 ### Added

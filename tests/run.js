@@ -2875,6 +2875,43 @@ test('local request errors stay concise and text-only', () => {
     );
 });
 
+/* IE-74: the trailer modal's Escape and Tab handling are document-level, so both go dead
+   the moment focus enters the cross-origin YouTube embed. Keystrokes there are unreachable
+   by design, so this needs a focus answer rather than another handler. */
+test('the trailer modal stays closable when focus is inside the embed', () => {
+    const modal = script.slice(script.indexOf('_renderModal(message)'));
+    const body = modal.slice(0, modal.indexOf('_closeModal(restoreFocus'));
+
+    // A sentinel on each side, so Tab and Shift+Tab out of the embed both land somewhere
+    // that returns focus to the visible close control.
+    assert(body.includes("makeSentinel('before')") && body.includes("makeSentinel('after')"),
+        'focus must be catchable on both sides of the dialog');
+    assert(/const makeSentinel = position => makeEl\('div', \{[\s\S]{0,240}?tabindex:'0'/.test(body),
+        'a sentinel has to be focusable to catch anything');
+    assert(/onFocus: \(\) => \{ document\.querySelector\('#enh-trailer-dialog \.enh-trailer-close'\)\?\.focus\(\); \}/.test(body),
+        'a focused sentinel must hand focus to the close button');
+    // aria-hidden keeps them out of getFocusableElements, so the in-page Tab trap still
+    // computes the same first and last and is not silently altered by this.
+    assert(/makeSentinel[\s\S]{0,260}?'aria-hidden':'true'/.test(body),
+        'sentinels must not join the dialog focus order the trap measures');
+    assert(script.includes("'button, [href], input, select, textarea, iframe, [tabindex]:not([tabindex=\"-1\"])'"),
+        'getFocusableElements should be unchanged');
+    assert(/getFocusableElements[\s\S]{0,320}?getAttribute\('aria-hidden'\) !== 'true'/.test(script),
+        'getFocusableElements must keep excluding aria-hidden nodes for that to hold');
+
+    // No second close control: the existing visible one is what has to be reachable, so
+    // count the control itself rather than every mention of its class.
+    assert.strictEqual((script.match(/className:'enh-trailer-close'/g) || []).length, 1,
+        'the modal must keep exactly one close control, not gain a duplicate');
+    // Closing still returns focus to whatever opened it.
+    assert(script.includes('if (wasOpen && restoreFocus) this._lastFocused?.focus?.();'),
+        'closing must restore the opener focus');
+    // The sentinel must not be positioned with a negative margin; the layout guard
+    // rejects those, and the size-and-clip form is what the rest of the file uses.
+    assert(/\.enh-trailer-sentinel \{[^}]*clip-path: inset\(50%\)/.test(script),
+        'the sentinel must be hidden without a negative margin');
+});
+
 /* IE-11: fade what you would skip past, without making anything harder to read. */
 test('low-rated cards dim their artwork only, and unrated cards are left alone', () => {
     const hooks = loadScriptTestHooks();

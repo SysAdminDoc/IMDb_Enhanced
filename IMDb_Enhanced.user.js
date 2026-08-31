@@ -5848,6 +5848,12 @@ section[id*="quote" i] .ipc-list-card { padding: 4px 0 !important; margin: 2px 0
                 }
                 .enh-trailer-body iframe { width: 100%; height: 100%; border: 0; display: block; }
                 .enh-trailer-fallback { color:${t.blue}!important; }
+                /* Focusable but invisible. No negative margin: the layout guard rejects
+                   those, so the size-and-clip form is used here as elsewhere. */
+                .enh-trailer-sentinel {
+                    position: absolute; width: 1px; height: 1px; padding: 0;
+                    overflow: hidden; clip-path: inset(50%); white-space: nowrap;
+                }
             `, 'enh-trailerPopover');
 
             waitForTitleSurface().then(() => {
@@ -5937,6 +5943,13 @@ section[id*="quote" i] .ipc-list-card { padding: 4px 0 !important; margin: 2px 0
             };
             document.addEventListener('focusin', this._focusin);
 
+            const makeSentinel = position => makeEl('div', {
+                className:'enh-trailer-sentinel',
+                tabindex:'0',
+                'aria-hidden':'true',
+                dataset:{ enhTrailerSentinel:position },
+                onFocus: () => { document.querySelector('#enh-trailer-dialog .enh-trailer-close')?.focus(); },
+            });
             const overlay = makeEl('div', {
                 id:'enh-trailer-overlay',
                 role:'presentation',
@@ -5948,13 +5961,25 @@ section[id*="quote" i] .ipc-list-card { padding: 4px 0 !important; margin: 2px 0
                 'aria-labelledby':'enh-trailer-title',
                 tabindex:'-1',
             },
+                /* Once focus is inside the cross-origin YouTube embed, this page receives
+                   no key events from it at all — Escape and the Tab trap above are both
+                   unreachable by design, and no handler can change that. Tabbing past the
+                   embed's last control does return focus to the document, so a sentinel
+                   sits on each side of the dialog and sends it to the close button. That
+                   makes the visible close control keyboard-reachable from inside the
+                   embed, in both directions, without a second control existing.
+
+                   aria-hidden keeps them out of getFocusableElements, so the Tab trap
+                   used while focus is in the page still computes the same first and last. */
+                makeSentinel('before'),
                 makeEl('div', { className:'enh-trailer-header' },
                     makeEl('div', { className:'enh-trailer-title', id:'enh-trailer-title' }, `${getTitleText()} trailer`),
                     makeEl('button', { type:'button', className:'enh-trailer-close', 'aria-label':'Close trailer', onClick:close }, '×')
                 ),
                 makeEl('div', { className:'enh-trailer-body' },
                     makeEl('div', { role:'status', 'aria-live':'polite' }, message)
-                )
+                ),
+                makeSentinel('after')
             ));
             document.body.appendChild(overlay);
             setTimeout(() => overlay.querySelector('.enh-trailer-close')?.focus(), 20);
