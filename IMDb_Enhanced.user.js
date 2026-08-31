@@ -143,6 +143,18 @@
         aria_use_theme: 'Use $1 theme',
         aria_watch_movie_and_show_sites: 'Watch movie and show sites',
         aria_where_streaming_availability_comes_from: 'Where streaming availability comes from',
+        category_availability: 'Availability',
+        category_availability_detail: 'See where the title is streaming.',
+        category_info: 'Info & research',
+        category_info_detail: 'Cast, credits, facts, and reference.',
+        category_other: 'Other',
+        category_other_detail: 'A custom destination.',
+        category_reviews: 'Reviews & ratings',
+        category_reviews_detail: 'Critics, audience scores, and discussion.',
+        category_trailers: 'Trailers & video',
+        category_trailers_detail: 'Trailers, clips, and video results.',
+        category_watch: 'Watch',
+        category_watch_detail: 'Find the movie or show to watch.',
         error_backup_bad_kdf_cost: 'This encrypted backup declares an unusable key-derivation cost.',
         error_backup_malformed: 'This encrypted backup is malformed and was not imported.',
         error_backup_no_web_crypto: 'This browser does not expose Web Crypto, so an encrypted backup cannot be made.',
@@ -295,6 +307,7 @@
         journal_timeout: 'A lookup ran out of time',
         journal_unknown: 'Unclassified',
         provider_amazonAds_consent: 'Blocks requests to these hosts. Nothing is sent to them.',
+        provider_amazonAds_label: 'the ad and tracking hosts it blocks',
         provider_justWatch_consent: 'Sends the title and year read from the page to JustWatch to find where it streams.',
         provider_letterboxd_consent: 'Sends the title and year read from the page to Letterboxd to find its rating.',
         provider_localServices_consent: 'Talks to services on your own machine. Nothing leaves it.',
@@ -425,30 +438,133 @@
         settings_watch_stream_includes_a_built_in_catalog: 'Watch & stream includes a built-in catalog of every streaming destination from the FMHY video wiki. Open it below to add any of them with one click, then edit the row like any other destination.',
         settings_when_optional_keyboard_shortcuts_is_enabled: 'When “Optional keyboard shortcuts” is enabled',
         settings_where_availability_comes_from: 'Where availability comes from',
+        text_a_cache_write_was_rejected_by_storage: 'a cache write was rejected by storage; quota appears full',
+        text_add_key: 'Add key',
+        text_add_radarr: 'Add Radarr',
+        text_add_sonarr: 'Add Sonarr',
+        text_add_to_watchlist: 'Add to watchlist',
+        text_add_token: 'Add token',
+        text_added: 'Added',
+        text_adding: 'Adding...',
+        text_adding_title_through: 'Adding $1 through $2',
         text_all_opened: 'All opened',
+        text_automatic_matching_is_active: 'Automatic matching is active.',
+        text_availability_unavailable: 'Availability unavailable',
+        text_available: 'Available',
+        text_below_avg: 'Below Avg',
         text_cache_remaining: '$1 cached entries · $2',
         text_candidate_matches_could_not_be_loaded: 'Candidate matches could not be loaded. Paste a title URL or mark no entry.',
+        text_candidate_response_was_too_large_or_empty: 'Candidate response was too large or empty',
+        text_cast_crew: 'Cast & crew',
+        text_checking_server_for_title: 'Checking $1 for $2',
         text_clear_all: 'Clear all',
+        text_clear_loaded_season: 'Clear loaded season',
+        text_click_or_press_enter_to_reveal: 'Click or press Enter to reveal',
+        text_click_or_press_enter_to_reveal_episode: 'Click or press Enter to reveal episode synopsis',
+        text_click_or_press_enter_to_reveal_plot: 'Click or press Enter to reveal plot synopsis',
+        text_collapse_section: 'Collapse section',
         text_confirm_clear_marks: 'Confirm clear $1',
+        text_copy_all_links: 'Copy all links',
         text_copy_imdb_ids: 'Copy $1 IMDb IDs',
+        text_copy_subtitle_links_for_this_season: 'Copy subtitle links for this season',
         text_correction_candidate_count: '$1 candidate $2.',
+        text_count_skipped: '$1 skipped',
         text_csv_import_is_too_large_choose: 'CSV import is too large. Choose a file under 4 MB.',
+        text_ep_calendar: 'Ep Calendar',
+        text_episode_guide: 'Episode guide',
+        text_episodes_list: 'Episodes List',
+        text_expand_section: 'Expand section',
+        text_get_it: 'Get it',
+        text_imdb_weights_its_displayed_rating: 'IMDb weights its displayed rating to resist vote brigading, so a wide gap means the raw votes disagree with what the page shows.',
+        text_in_library: 'In Library',
+        text_link_group_reviews: 'Reviews',
+        text_link_group_search: 'Search',
+        text_link_group_subtitles: 'Subtitles',
+        text_link_group_tv: 'TV',
         text_list_joined: '$1 and $2',
         text_list_separator: ', ',
+        text_loading_candidate_matches: 'Loading candidate matches...',
+        text_loading_trailer: 'Loading trailer...',
+        text_local_mark_cleared: 'Local mark cleared',
+        text_mapped_by_imdb_enhanced_through_wikidata: 'Mapped by IMDb Enhanced through Wikidata',
+        text_mark_loaded_season_seen: 'Mark loaded season seen',
+        text_marked_as_no_entry_on_justwatch: 'Marked as no entry on JustWatch',
+        text_marked_as_no_entry_on_letterboxd: 'Marked as no entry on Letterboxd',
+        text_marked_as_no_entry_on_metacritic: 'Marked as no entry on Metacritic',
+        text_marked_as_no_entry_on_rotten_tomatoes: 'Marked as no entry on Rotten Tomatoes',
+        text_more_links: 'More links',
+        text_more_watch_options: 'More watch options',
+        text_movie_sites: 'Movie Sites',
+        text_needs_a_tmdb_read_token: 'Needs a TMDB read token',
+        text_needs_an_omdb_key: 'Needs an OMDb key',
         text_no_candidate_matches_were_found_paste: 'No candidate matches were found. Paste a title URL or mark no entry.',
+        text_no_entry: 'No entry',
         text_no_external_sites: 'no external sites',
+        text_no_matching_title_found: 'No matching title found',
+        text_no_titles_on_this_page_to_pick: 'No titles on this page to pick from.',
+        text_not_available_in_this_build: 'Not available in this build',
+        text_not_found: 'Not found',
+        text_not_streaming: 'Not streaming',
+        text_note_cleared: 'Note cleared',
+        text_nothing_left_that_you_have_not_already: 'Nothing left that you have not already marked.',
+        text_nothing_was_changed: 'Nothing was changed.',
+        text_omdb_rejected_this_key: 'OMDb rejected this key',
         text_open_next_of: 'Open next ($1 of $2)',
+        text_open_trailer_search_on_youtube: 'Open trailer search on YouTube',
+        text_parents_guide: 'Parents guide',
+        text_partly_available: 'Partly available',
+        text_pick_something: 'Pick something',
         text_preview_required_nothing_has_been_changed: 'Preview required. Nothing has been changed.',
+        text_processing: 'Processing',
         text_queue_opened_progress: '$1 of $2 opened',
+        text_ratings_grid: 'Ratings Grid',
+        text_replace_key: 'Replace key',
+        text_replace_token: 'Replace token',
+        text_requested: 'Requested',
+        text_requesting: 'Requesting...',
+        text_requesting_title_through: 'Requesting $1 through $2',
+        text_response_was_too_large_or_empty: 'Response was too large or empty',
+        text_save_a_private_local_seen_mark: 'Save a private local Seen mark',
+        text_save_a_private_local_skip_mark: 'Save a private local Skip mark',
         text_save_failed: 'Save failed',
+        text_save_url: 'Save URL',
+        text_saved_choice_no_entry_on_this_source: 'Saved choice: no entry on this source.',
+        text_saved_justwatch_match_is_invalid: 'Saved JustWatch match is invalid',
+        text_saved_justwatch_match_unavailable: 'Saved JustWatch match unavailable',
+        text_saved_letterboxd_match_unavailable: 'Saved Letterboxd match unavailable',
         text_saved_locally: 'Saved locally',
         text_saved_mark_count: '$1 saved',
+        text_saved_metacritic_match_unavailable: 'Saved Metacritic match unavailable',
+        text_saved_on_this_device: 'Saved on this device',
+        text_saved_rotten_tomatoes_match_unavailable: 'Saved Rotten Tomatoes match unavailable',
         text_saving: 'Saving…',
+        text_score_unavailable: 'Score unavailable',
+        text_seen_of_loaded: 'Seen $1/$2 loaded',
+        text_server_has_title: '$1: already in library',
+        text_server_lacks_title: '$1: not found',
         text_settings_saved: 'Saved',
+        text_skip_titles_i_have_marked: 'Skip titles I have marked',
+        text_summary_separator: ' · ',
+        text_the_overseerr_instance_did_not_recognize_this: 'The Overseerr instance did not recognize this IMDb title',
+        text_the_overseerr_instance_returned_an_unusable_title: 'The Overseerr instance returned an unusable title id',
         text_the_selected_file_could_not_be: 'The selected file could not be read.',
+        text_timed_out_waiting_for_page_content: 'Timed out waiting for page content',
+        text_title_added_to: '$1 added to $2',
+        text_title_has_already_been_requested: '$1 has already been requested',
+        text_title_has_been_requested_through: '$1 has been requested through $2',
+        text_title_is_already_available: '$1 is already available',
+        text_title_is_already_in_service: '$1 is already in $2',
+        text_title_is_being_processed: '$1 is being processed',
+        text_title_is_partly_available: '$1 is partly available',
+        text_title_poster: '$1 poster',
+        text_tmdb_rejected_this_token: 'TMDB rejected this token',
+        text_trailer_unavailable: 'Trailer unavailable',
         text_two_items_joined: '$1 and $2',
         text_unavailable: 'Unavailable',
         text_use_a_valid_title_url: 'Use a valid $1 title URL.',
+        text_use_automatic: 'Use automatic',
+        text_user_reviews: 'User reviews',
+        text_view_full_cast_crew: 'View full cast & crew',
         toast_a_site_list_can_contain_up: 'A site list can contain up to $1 destinations',
         toast_all_imdb_watched_on_this_page: 'All $1 IMDb Watched $2 on this page already have a local mark',
         toast_cache_could_not_be_read_or: 'Cache could not be read or cleared.',
@@ -492,6 +608,8 @@
         toast_reset_settings_reloading: 'Reset $1 settings. Reloading...',
         toast_reset_settings_use_the_manager_menu: 'Reset $1 settings. Use the manager menu\'s Undo command to put them back.',
         toast_reset_to_defaults: '$1 reset to defaults',
+        toast_saved_locally_as_seen: 'Saved locally as Seen — IMDb Watched was not changed',
+        toast_saved_locally_as_skip: 'Saved locally as Skip — IMDb Watched was not changed',
         toast_season_marks_restored: 'Season marks restored',
         toast_sent_to_your_imdb_watchlist: 'Sent to your IMDb watchlist',
         toast_service_action_failed: '$1 $2 failed: $3',
@@ -502,6 +620,8 @@
         toast_the_match_correction_was_not_saved: 'The match correction was not saved. The previous match has been restored.',
         toast_the_two_passphrases_do_not_match: 'The two passphrases do not match.',
         toast_there_is_no_reset_to_undo: 'There is no reset to undo.',
+        toast_title_requested_through: '$1 requested through $2',
+        toast_title_sent_to: '$1 sent to $2',
         toast_undone_settings_were_put_back_reloading: 'Undone. $1 settings were put back. Reloading...',
         toast_use_a_localhost_or_127_0: 'Use a localhost or 127.0.0.1 HTTP(S) URL without embedded credentials',
         toast_use_a_positive_whole_number_profile: 'Use a positive whole-number profile ID',
@@ -618,12 +738,12 @@
     const SETTINGS_IMPORT_TEXT_LIMIT = 4 * 1024 * 1024;
     const CSV_IMPORT_ROW_LIMIT = 10000;
     const SITE_CATEGORY_OPTIONS = [
-        { key:'watch', label:'Watch', description:'Find the movie or show to watch.' },
-        { key:'reviews', label:'Reviews & ratings', description:'Critics, audience scores, and discussion.' },
-        { key:'availability', label:'Availability', description:'See where the title is streaming.' },
-        { key:'trailers', label:'Trailers & video', description:'Trailers, clips, and video results.' },
-        { key:'info', label:'Info & research', description:'Cast, credits, facts, and reference.' },
-        { key:'other', label:'Other', description:'A custom destination.' },
+        { key:'watch', label:t('category_watch'), description:t('category_watch_detail') },
+        { key:'reviews', label:t('category_reviews'), description:t('category_reviews_detail') },
+        { key:'availability', label:t('category_availability'), description:t('category_availability_detail') },
+        { key:'trailers', label:t('category_trailers'), description:t('category_trailers_detail') },
+        { key:'info', label:t('category_info'), description:t('category_info_detail') },
+        { key:'other', label:t('category_other'), description:t('category_other_detail') },
     ];
     const SITE_CATEGORY_KEYS = new Set(SITE_CATEGORY_OPTIONS.map(option => option.key));
     const SITE_CATEGORY_LABELS = Object.fromEntries(SITE_CATEGORY_OPTIONS.map(option => [option.key, option.label]));
@@ -752,7 +872,7 @@
             /* Phrased as what the access is for. "Amazon advertising and tracking" is an
                accurate name for the hosts and a misleading one in the only sentence it
                appears in, which reads "needs access to ...". */
-            label: 'the ad and tracking hosts it blocks',
+            label: t('provider_amazonAds_label'),
             origins: [
                 'https://*.amazon-adsystem.com/*', 'https://advertising.amazon.dev/*',
                 'https://images-na.ssl-images-amazon.com/*', 'https://sb.scorecardresearch.com/*',
@@ -1409,7 +1529,7 @@
         try {
             recordFeatureFailure({ key:'cache' }, 'storage', bytes > 0
                 ? `cache write of ${bytes} bytes failed after eviction; storage quota appears full`
-                : 'a cache write was rejected by storage; quota appears full');
+                : t('text_a_cache_write_was_rejected_by_storage'));
         } catch { /* the toast below is the part the user needs */ }
         try {
             showToast(t('toast_is_full_so_lookups_are_not', [STORAGE_HOST_LABEL]), 6000);
@@ -2414,7 +2534,7 @@
             };
             pendingRouteWorkCancels.add(cancel);
             obs.observe(root, { childList: true, subtree: true });
-            timer = setTimeout(() => finish(reject, new Error('Timed out waiting for page content')), timeout);
+            timer = setTimeout(() => finish(reject, new Error(t('text_timed_out_waiting_for_page_content'))), timeout);
         });
     }
 
@@ -2567,16 +2687,16 @@
             subnavLeft.appendChild(makeEl('a', {
                 href:`/title/${imdbId}/episodes/`,
                 className:'enh-editorial-subnav__link',
-            }, 'Episode guide'));
+            }, t('text_episode_guide')));
         }
         const subnavRight = makeEl('nav', { className:'enh-editorial-subnav__right', 'aria-label':t('aria_title_topics') });
         [
-            ['Cast & crew', `/title/${imdbId}/fullcredits/`],
-            ['User reviews', `/title/${imdbId}/reviews/`],
+            [t('text_cast_crew'), `/title/${imdbId}/fullcredits/`],
+            [t('text_user_reviews'), `/title/${imdbId}/reviews/`],
             ['Trivia', `/title/${imdbId}/trivia/`],
             /* First-party route, stable, and the content-rating chip beside the title
                already comes from its link — this exposes the detail behind that chip. */
-            ['Parents guide', `/title/${imdbId}/parentalguide/`],
+            [t('text_parents_guide'), `/title/${imdbId}/parentalguide/`],
         ].forEach(([label, href]) => subnavRight.appendChild(makeEl('a', {
             href, className:'enh-editorial-subnav__link',
         }, label)));
@@ -2586,7 +2706,7 @@
         if (posterSource) {
             poster.appendChild(makeEl('img', {
                 src:posterSource,
-                alt:`${title} poster`,
+                alt:t('text_title_poster', [title]),
                 loading:'eager',
             }));
         }
@@ -2623,7 +2743,7 @@
         about.appendChild(makeEl('a', {
             href:`/title/${imdbId}/fullcredits/`,
             className:'enh-editorial-about-link',
-        }, 'View full cast & crew'));
+        }, t('text_view_full_cast_crew')));
 
         const watch = makeEl('section', {
             className:'enh-editorial-watch',
@@ -2651,7 +2771,7 @@
             titleNode.title = title;
             surface.setAttribute('aria-label', t('aria_title_surface', [title]));
             const poster = surface.querySelector('.enh-editorial-poster img');
-            if (poster) poster.alt = `${title} poster`;
+            if (poster) poster.alt = t('text_title_poster', [title]);
         }
 
         const posterSource = getEditorialPosterSource(nativeHero);
@@ -2708,7 +2828,7 @@
             subnavLeft.appendChild(makeEl('a', {
                 href:`/title/${getIMDbID()}/episodes/`,
                 className:'enh-editorial-subnav__link',
-            }, 'Episode guide'));
+            }, t('text_episode_guide')));
         } else if (!isTVType()) {
             episodeLink?.remove();
         }
@@ -2831,7 +2951,7 @@
                         showToast(t('toast_sent_to_your_imdb_watchlist'));
                     } else showToast(t('toast_imdb_watchlist_controls_are_unavailable_on'), 3500);
                 },
-            }, 'Add to watchlist')
+            }, t('text_add_to_watchlist'))
         );
     }
 
@@ -3850,7 +3970,7 @@
                 className:'enh-update-notice__link',
                 href:'https://github.com/SysAdminDoc/IMDb_Enhanced/releases',
                 target:'_blank', rel:'noopener noreferrer',
-            }, 'Get it'),
+            }, t('text_get_it')),
             makeEl('button', {
                 type:'button', className:'enh-update-notice__dismiss', 'aria-label':t('aria_dismiss_the_update_notice', [latest]),
                 onClick: () => {
@@ -5798,7 +5918,7 @@ section[id*="quote" i] .ipc-list-card { padding: 4px 0 !important; margin: 2px 0
             : n >= 8.0 ? ['#22c55e', 'Great']
                 : n >= 7.0 ? ['#84cc16', 'Good']
                     : n >= 6.0 ? ['#eab308', 'Average']
-                        : n >= 5.0 ? ['#f97316', 'Below Avg']
+                        : n >= 5.0 ? ['#f97316', t('text_below_avg')]
                             : ['#ef4444', 'Poor'];
         return { bg, text:readableTextColor(bg), label };
     }
@@ -6383,7 +6503,7 @@ section[id*="quote" i] .ipc-list-card { padding: 4px 0 !important; margin: 2px 0
                 title:String(title || '').trim().slice(0, USER_MARK_TITLE_LIMIT),
                 ...(year !== null ? { year } : {}),
                 url,
-                detail:'Mapped by IMDb Enhanced through Wikidata',
+                detail:t('text_mapped_by_imdb_enhanced_through_wikidata'),
             });
         }
         return candidates;
@@ -7004,7 +7124,7 @@ section[id*="quote" i] .ipc-list-card { padding: 4px 0 !important; margin: 2px 0
         } else if (provider === 'metacritic') {
             const response = await httpGet(getMetacriticSearchUrl(title, mediaType), { cancelOnRouteChange:true });
             const source = toBoundedText(response.responseText, EXTERNAL_RESPONSE_TEXT_LIMIT);
-            if (!source) throw new Error('Candidate response was too large or empty');
+            if (!source) throw new Error(t('text_candidate_response_was_too_large_or_empty'));
             const payload = JSON.parse(source);
             candidates = collectMetacriticCandidates(payload?.data?.items || [], mediaType);
         } else if (provider === 'justWatch') {
@@ -7085,7 +7205,7 @@ section[id*="quote" i] .ipc-list-card { padding: 4px 0 !important; margin: 2px 0
             const current = getScoreCorrection(imdbId, provider);
             const status = makeEl('div', {
                 className:'enh-score-correction__status', role:'status', 'aria-live':'polite',
-            }, 'Loading candidate matches...');
+            }, t('text_loading_candidate_matches'));
             const choices = makeEl('div', { className:'enh-score-correction__choices', role:'group', 'aria-label':t('aria_candidate_matches') });
             const manualInput = makeEl('input', {
                 type:'url',
@@ -7110,10 +7230,10 @@ section[id*="quote" i] .ipc-list-card { padding: 4px 0 !important; margin: 2px 0
                 ),
                 makeEl('div', { className:'enh-score-correction__current' },
                     current?.mode === 'none'
-                        ? 'Saved choice: no entry on this source.'
+                        ? t('text_saved_choice_no_entry_on_this_source')
                         : current?.mode === 'url'
                             ? `Saved match: ${current.title || current.url}`
-                            : 'Automatic matching is active.'
+                            : t('text_automatic_matching_is_active')
                 ),
                 status,
                 choices,
@@ -7130,15 +7250,15 @@ section[id*="quote" i] .ipc-list-card { padding: 4px 0 !important; margin: 2px 0
                             }
                             applyCorrection({ mode:'url', url });
                         },
-                    }, 'Save URL'),
+                    }, t('text_save_url')),
                     makeEl('button', {
                         type:'button', className:'enh-score-correction__button',
                         onClick:() => applyCorrection({ mode:'none' }),
-                    }, 'No entry'),
+                    }, t('text_no_entry')),
                     ...(current ? [makeEl('button', {
                         type:'button', className:'enh-score-correction__button',
                         onClick:() => applyCorrection(null),
-                    }, 'Use automatic')] : [])
+                    }, t('text_use_automatic'))] : [])
                 )
             );
             widget.appendChild(panel);
@@ -7227,7 +7347,7 @@ section[id*="quote" i] .ipc-list-card { padding: 4px 0 !important; margin: 2px 0
         widget.appendChild(makeEl('div', { className:'enh-score-widget__attribution' }, text));
     }
 
-    function appendUnavailableNote(widget, reason, unavailableText = 'Score unavailable') {
+    function appendUnavailableNote(widget, reason, unavailableText = t('text_score_unavailable')) {
         if (reason === 'excluded' || reason === 'region') {
             widget.appendChild(makeEl('div', { className:'enh-score-widget__sub' }, unavailableText));
             return;
@@ -7235,7 +7355,7 @@ section[id*="quote" i] .ipc-list-card { padding: 4px 0 !important; margin: 2px 0
         if (reason === 'omdb-unconfigured' || reason === 'omdb-rejected') {
             const rejected = reason === 'omdb-rejected';
             widget.appendChild(makeEl('div', { className:'enh-score-widget__sub' },
-                rejected ? 'OMDb rejected this key' : 'Needs an OMDb key'));
+                rejected ? t('text_omdb_rejected_this_key') : t('text_needs_an_omdb_key')));
             widget.appendChild(makeEl('button', {
                 type:'button',
                 className:'enh-score-stale__retry',
@@ -7243,12 +7363,12 @@ section[id*="quote" i] .ipc-list-card { padding: 4px 0 !important; margin: 2px 0
                     if (!document.getElementById('enh-settings-overlay')) createSettingsPanel();
                     if (!settingsOpen) toggleSettings();
                 },
-            }, rejected ? 'Replace key' : 'Add key'));
+            }, rejected ? t('text_replace_key') : t('text_add_key')));
             return;
         }
         if (reason === 'unconfigured' || reason === 'rejected') {
             widget.appendChild(makeEl('div', { className:'enh-score-widget__sub' },
-                reason === 'rejected' ? 'TMDB rejected this token' : 'Needs a TMDB read token'));
+                reason === 'rejected' ? t('text_tmdb_rejected_this_token') : t('text_needs_a_tmdb_read_token')));
             widget.appendChild(makeEl('button', {
                 type:'button',
                 className:'enh-score-stale__retry',
@@ -7256,7 +7376,7 @@ section[id*="quote" i] .ipc-list-card { padding: 4px 0 !important; margin: 2px 0
                     if (!document.getElementById('enh-settings-overlay')) createSettingsPanel();
                     if (!settingsOpen) toggleSettings();
                 },
-            }, reason === 'rejected' ? 'Replace token' : 'Add token'));
+            }, reason === 'rejected' ? t('text_replace_token') : t('text_add_token')));
             return;
         }
         if (reason !== 'access') {
@@ -7272,7 +7392,7 @@ section[id*="quote" i] .ipc-list-card { padding: 4px 0 !important; margin: 2px 0
             onClick: async () => {
                 if (await openOptionsPage()) showToast(t('toast_grant_then_reload'), 5000);
             },
-        }, 'Grant access'));
+        }, t('settings_grant_access')));
     }
 
     /* Named where the widget renders it, so a build that cannot ship a source says which
@@ -7282,7 +7402,7 @@ section[id*="quote" i] .ipc-list-card { padding: 4px 0 !important; margin: 2px 0
             .filter(id => !PROVIDERS[id]?.auxiliary && !providerAllowedHere(id))
             .map(id => PROVIDERS[id]?.label)
             .filter(Boolean);
-        return names.length ? `Not available in this build (${joinNames([...new Set(names)])})` : 'Not available in this build';
+        return names.length ? `Not available in this build (${joinNames([...new Set(names)])})` : t('text_not_available_in_this_build');
     }
 
     async function renderStaleScore(feature, cacheKey, error, isCurrent = () => true) {
@@ -7518,9 +7638,9 @@ section[id*="quote" i] .ipc-list-card { padding: 4px 0 !important; margin: 2px 0
             w.querySelector('a')?.setAttribute('href', getSavedScoreCorrectionUrl(
                 'rottenTomatoes', `https://www.rottentomatoes.com/search?search=${encodeURIComponent(getTitleText())}`));
             const note = reason === 'excluded' ? describeProfileExclusion(this.key)
-                : reason === 'corrected-none' ? 'Marked as no entry on Rotten Tomatoes'
-                : reason === 'correction-failed' ? 'Saved Rotten Tomatoes match unavailable'
-                : 'Score unavailable';
+                : reason === 'corrected-none' ? t('text_marked_as_no_entry_on_rotten_tomatoes')
+                : reason === 'correction-failed' ? t('text_saved_rotten_tomatoes_match_unavailable')
+                : t('text_score_unavailable');
             appendUnavailableNote(w, reason, note);
             if (reason !== 'excluded' && providerAllowedHere('rottenTomatoes')) {
                 appendScoreCorrectionAction(w, 'rottenTomatoes', this.key);
@@ -7662,9 +7782,9 @@ section[id*="quote" i] .ipc-list-card { padding: 4px 0 !important; margin: 2px 0
             w.querySelector('a')?.setAttribute('href', getSavedScoreCorrectionUrl(
                 'letterboxd', `https://letterboxd.com/imdb/${getIMDbID()}/`));
             const note = reason === 'excluded' ? describeProfileExclusion(this.key)
-                : reason === 'corrected-none' ? 'Marked as no entry on Letterboxd'
-                : reason === 'correction-failed' ? 'Saved Letterboxd match unavailable'
-                : 'Score unavailable';
+                : reason === 'corrected-none' ? t('text_marked_as_no_entry_on_letterboxd')
+                : reason === 'correction-failed' ? t('text_saved_letterboxd_match_unavailable')
+                : t('text_score_unavailable');
             appendUnavailableNote(w, reason, note);
             if (reason !== 'excluded') appendScoreCorrectionAction(w, 'letterboxd', this.key);
             bar.appendChild(w);
@@ -7716,7 +7836,7 @@ section[id*="quote" i] .ipc-list-card { padding: 4px 0 !important; margin: 2px 0
                     const response = await httpGet(getMetacriticSearchUrl(query, mediaType), { cancelOnRouteChange:true });
                     if (!isCurrent()) return;
                     const source = toBoundedText(response.responseText, EXTERNAL_RESPONSE_TEXT_LIMIT);
-                    if (!source) throw new Error('Response was too large or empty');
+                    if (!source) throw new Error(t('text_response_was_too_large_or_empty'));
                     const items = JSON.parse(source)?.data?.items || [];
                     const candidate = collectMetacriticCandidates(items, mediaType)
                         .find(item => scoreCorrectionUrlsMatch('metacritic', item.url, correction.url));
@@ -7748,7 +7868,7 @@ section[id*="quote" i] .ipc-list-card { padding: 4px 0 !important; margin: 2px 0
                 const res = await httpGet(url, { cancelOnRouteChange:true });
                 if (!isCurrent()) return;
                 const source = toBoundedText(res.responseText, EXTERNAL_RESPONSE_TEXT_LIMIT);
-                if (!source) throw new Error('Response was too large or empty');
+                if (!source) throw new Error(t('text_response_was_too_large_or_empty'));
                 const obj = JSON.parse(source);
                 const items = obj?.data?.items || [];
                 /* Where Wikidata names the Metacritic slug, prefer the result that
@@ -7852,9 +7972,9 @@ section[id*="quote" i] .ipc-list-card { padding: 4px 0 !important; margin: 2px 0
             w.querySelector('a')?.setAttribute('href', getSavedScoreCorrectionUrl(
                 'metacritic', `https://www.metacritic.com/search/${encodeURIComponent(getTitleText())}/`));
             const note = reason === 'excluded' ? describeProfileExclusion(this.key)
-                : reason === 'corrected-none' ? 'Marked as no entry on Metacritic'
-                : reason === 'correction-failed' ? 'Saved Metacritic match unavailable'
-                : 'Score unavailable';
+                : reason === 'corrected-none' ? t('text_marked_as_no_entry_on_metacritic')
+                : reason === 'correction-failed' ? t('text_saved_metacritic_match_unavailable')
+                : t('text_score_unavailable');
             appendUnavailableNote(w, reason, note);
             if (reason !== 'excluded' && providerAllowedHere('metacritic')) {
                 appendScoreCorrectionAction(w, 'metacritic', this.key);
@@ -7950,7 +8070,7 @@ section[id*="quote" i] .ipc-list-card { padding: 4px 0 !important; margin: 2px 0
             if (correction?.mode === 'url') {
                 try {
                     const requestUrl = getJustWatchCorrectionRequestUrl(correction.url, availabilityRegion);
-                    if (!requestUrl) throw new Error('Saved JustWatch match is invalid');
+                    if (!requestUrl) throw new Error(t('text_saved_justwatch_match_is_invalid'));
                     const response = await httpGet(requestUrl, {
                         headers, timeout:12000, cancelOnRouteChange:true,
                     });
@@ -8062,7 +8182,7 @@ section[id*="quote" i] .ipc-list-card { padding: 4px 0 !important; margin: 2px 0
                 },
                     makeEl('span', { className: 'enh-score-widget__badge enh-score-widget__badge--outline' }, fromTmdb ? 'TMDB' : 'JW'),
                     makeEl('span', { className: 'enh-score-widget__value enh-score-widget__value--availability' },
-                        summary ? `On ${summary}` : 'Not streaming')
+                        summary ? `On ${summary}` : t('text_not_streaming'))
                 ),
                 makeEl('div', { className: 'enh-score-widget__sub' },
                     fromTmdb ? `Via TMDB${data.region ? ` (${data.region})` : ''}` : 'Via JustWatch')
@@ -8128,9 +8248,9 @@ section[id*="quote" i] .ipc-list-card { padding: 4px 0 !important; margin: 2px 0
                only says the extension gave up. */
             const availabilityNote = reason === 'excluded' ? describeProfileExclusion(this.key)
                 : reason === 'region' ? `Not streamable in ${region}`
-                : reason === 'corrected-none' ? 'Marked as no entry on JustWatch'
-                : reason === 'correction-failed' ? 'Saved JustWatch match unavailable'
-                : 'Availability unavailable';
+                : reason === 'corrected-none' ? t('text_marked_as_no_entry_on_justwatch')
+                : reason === 'correction-failed' ? t('text_saved_justwatch_match_unavailable')
+                : t('text_availability_unavailable');
             appendUnavailableNote(w, reason, availabilityNote);
             if (usingJustWatch && reason !== 'excluded') appendScoreCorrectionAction(w, 'justWatch', this.key);
             else if (!usingJustWatch && reason === 'region') appendProviderAttribution(w, 'tmdb');
@@ -8181,7 +8301,7 @@ section[id*="quote" i] .ipc-list-card { padding: 4px 0 !important; margin: 2px 0
                         if (!setSectionCollapsed(id, now)) return;
                         sec.classList.toggle('enh-section--collapsed', now);
                         btn.textContent = now ? '+' : '-';
-                        btn.title = now ? 'Expand section' : 'Collapse section';
+                        btn.title = now ? t('text_expand_section') : t('text_collapse_section');
                         btn.setAttribute('aria-expanded', String(!now));
                         btn.setAttribute('aria-label', `${now ? 'Expand' : 'Collapse'} ${sectionLabel}`);
                     }
@@ -8238,7 +8358,7 @@ section[id*="quote" i] .ipc-list-card { padding: 4px 0 !important; margin: 2px 0
             addThemedCSS(t => `
                 .enh-blur{cursor:pointer;user-select:none;position:relative}
                 .enh-blur,.enh-blur *{color:transparent!important;text-shadow:0 0 7px ${t.tx1}}
-                .enh-blur::after{content:'Click or press Enter to reveal';position:absolute;top:50%;left:50%;
+                .enh-blur::after{content:t('text_click_or_press_enter_to_reveal');position:absolute;top:50%;left:50%;
                     transform:translate(-50%,-50%);color:${t.accent};font-weight:700;font-size:12px;text-shadow:none;
                     background:${t.sf2};border:1px solid ${t.accentBorder};box-shadow:${t.sh1};padding:4px 12px;border-radius:6px;pointer-events:none;
                     opacity:1;transition:opacity .3s ease}
@@ -8257,7 +8377,7 @@ section[id*="quote" i] .ipc-list-card { padding: 4px 0 !important; margin: 2px 0
                 plotFull.setAttribute('tabindex', '0');
                 plotFull.setAttribute('aria-pressed', 'false');
                 plotFull.setAttribute('aria-label', t('aria_reveal_plot_synopsis'));
-                plotFull.title = 'Click or press Enter to reveal plot synopsis';
+                plotFull.title = t('text_click_or_press_enter_to_reveal_plot');
                 const reveal = () => {
                     if (plotFull.classList.contains('enh-revealed')) return;
                     plotFull.classList.add('enh-revealed');
@@ -8447,7 +8567,7 @@ section[id*="quote" i] .ipc-list-card { padding: 4px 0 !important; margin: 2px 0
                 if (secondarySites.length) {
                     const options = makeEl('details', { className:'enh-watch-options' });
                     options.appendChild(makeEl('summary', { className:'enh-watch-options__summary' },
-                        makeEl('span', {}, 'More watch options'),
+                        makeEl('span', {}, t('text_more_watch_options')),
                         makeEl('span', { className:'enh-watch-options__count' }, `${secondarySites.length} sites`)
                     ));
                     const optionGroups = makeEl('div', { className:'enh-watch-options__groups' });
@@ -8640,12 +8760,12 @@ section[id*="quote" i] .ipc-list-card { padding: 4px 0 !important; margin: 2px 0
             }).catch(() => {});
         },
         async _open() {
-            const overlay = this._renderModal('Loading trailer...');
+            const overlay = this._renderModal(t('text_loading_trailer'));
             const generation = this._modalGeneration;
             const body = overlay.querySelector('.enh-trailer-body');
             try {
                 const videoId = normalizeYouTubeVideoId(await this._getVideoId());
-                if (!videoId) throw new Error('Trailer unavailable');
+                if (!videoId) throw new Error(t('text_trailer_unavailable'));
                 if (generation !== this._modalGeneration || !body.isConnected) return;
                 body.replaceChildren(makeEl('iframe', {
                     src:`https://www.youtube-nocookie.com/embed/${videoId}?autoplay=1&rel=0`,
@@ -8661,7 +8781,7 @@ section[id*="quote" i] .ipc-list-card { padding: 4px 0 !important; margin: 2px 0
                     target:'_blank',
                     rel:'noopener noreferrer',
                     className:'enh-trailer-fallback',
-                }, 'Open trailer search on YouTube'));
+                }, t('text_open_trailer_search_on_youtube')));
             }
         },
         _renderModal(message) {
@@ -8775,7 +8895,7 @@ section[id*="quote" i] .ipc-list-card { padding: 4px 0 !important; margin: 2px 0
             const cached = cacheKey ? cacheGet(cacheKey) : null;
             const cachedVideoId = normalizeYouTubeVideoId(cached?.videoId);
             if (cachedVideoId) return cachedVideoId;
-            if (cached?.unavailable) throw new Error('Trailer unavailable');
+            if (cached?.unavailable) throw new Error(t('text_trailer_unavailable'));
 
             const res = await httpGet(getTrailerSearchUrl(), {
                 timeout: 12000,
@@ -8785,7 +8905,7 @@ section[id*="quote" i] .ipc-list-card { padding: 4px 0 !important; margin: 2px 0
             const videoId = parseYouTubeTrailerVideoId(res.responseText, getTitleText(), getTitleYear());
             if (!videoId) {
                 if (cacheKey) cacheSetUnavailable(cacheKey);
-                throw new Error('Trailer unavailable');
+                throw new Error(t('text_trailer_unavailable'));
             }
             if (cacheKey) cacheSet(cacheKey, { videoId });
             return videoId;
@@ -8799,10 +8919,20 @@ section[id*="quote" i] .ipc-list-card { padding: 4px 0 !important; margin: 2px 0
     });
 
     // ===================== EXPANDED LINK MENU =====================
+    /* Keyed by the group's identity, which the render loop tests against; the heading is
+       what a person reads. Splitting them is what lets the menu be translated without the
+       TV-only rule changing meaning. */
+    const LINK_MENU_GROUP_LABELS = {
+        movies: t('text_movie_sites'),
+        reviews: t('text_link_group_reviews'),
+        search: t('text_link_group_search'),
+        subtitles: t('text_link_group_subtitles'),
+        tv: t('text_link_group_tv'),
+    };
     reg({
         key: 'expandedLinkMenu', name: t('feature_expandedLinkMenu_name'), group: 'Features',
         _DB: {
-            'Movie Sites': [
+            movies: [
                 { n:'Letterboxd', u:'https://letterboxd.com/imdb/{{ID}}/' },
                 { n:'TMDB', u:'https://www.themoviedb.org/search/movie?query={{T}}' },
                 { n:'AllMovie', u:'https://www.allmovie.com/search/movies/{{T}}' },
@@ -8810,23 +8940,23 @@ section[id*="quote" i] .ipc-list-card { padding: 4px 0 !important; margin: 2px 0
                 { n:'Criticker', u:'https://www.criticker.com/?search={{ID}}' },
                 { n:'Trakt', u:'https://app.trakt.tv/search?query={{T}}' },
             ],
-            'Reviews': [
+            reviews: [
                 { n:'Rotten Tomatoes', u:'https://www.rottentomatoes.com/search?search={{T}}' },
                 { n:'Metacritic', u:'https://www.metacritic.com/search/{{T}}/' },
             ],
-            'Search': [
+            search: [
                 { n:'Google', u:'https://www.google.com/search?q={{T}}+{{Y}}' },
                 { n:'DuckDuckGo', u:'https://duckduckgo.com/?q={{T}}+{{Y}}' },
                 { n:'YouTube', u:'https://www.youtube.com/results?search_query={{T}}%20trailer' },
                 { n:'Wikipedia', u:'https://en.wikipedia.org/w/index.php?search={{T}}' },
             ],
-            'Subtitles': [
+            subtitles: [
                 { n:'OpenSubtitles', u:'https://www.opensubtitles.org/en/search/imdbid-{{ID_NUM}}' },
                 { n:'OpenSubs.com', u:'https://www.opensubtitles.com/en/en/search-all/q-{{ID}}' },
                 { n:'SubDL', u:'https://subdl.com/search/{{T}}' },
                 { n:'YIFY-Subs', u:'https://yifysubtitles.ch/movie-imdb/{{ID}}', movieOnly:true },
             ],
-            'TV': [
+            tv: [
                 { n:'TheTVDB', u:'https://www.thetvdb.com/search?query={{ID}}' },
                 { n:'TVMaze', u:'https://www.tvmaze.com/search?q={{T}}' },
                 { n:'Ep Calendar', u:'https://episodecalendar.com/en/shows?q%5Bname_cont%5D={{T}}' },
@@ -8872,7 +9002,7 @@ section[id*="quote" i] .ipc-list-card { padding: 4px 0 !important; margin: 2px 0
                 };
                 const trigger = makeEl('button', {
                     id:'enh-link-menu-trigger', type:'button',
-                    textContent:'More links',
+                    textContent:t('text_more_links'),
                     'aria-haspopup':'menu',
                     'aria-controls':'enh-link-menu-dropdown',
                     'aria-expanded':'false',
@@ -8893,10 +9023,11 @@ section[id*="quote" i] .ipc-list-card { padding: 4px 0 !important; margin: 2px 0
                     'aria-labelledby':'enh-link-menu-trigger',
                 });
                 for (const [cat, links] of Object.entries(this._DB)) {
-                    if (cat === 'TV' && !isTVType()) continue;
-                    if (cat === 'Movie Sites' && isTVType()) continue;
-                    dropdown.appendChild(makeEl('div', { className:'enh-link-dropdown__cat' }, cat));
-                    const row = makeEl('div', { className:'enh-link-dropdown__row', role:'group', 'aria-label':cat });
+                    if (cat === 'tv' && !isTVType()) continue;
+                    if (cat === 'movies' && isTVType()) continue;
+                    const heading = LINK_MENU_GROUP_LABELS[cat];
+                    dropdown.appendChild(makeEl('div', { className:'enh-link-dropdown__cat' }, heading));
+                    const row = makeEl('div', { className:'enh-link-dropdown__row', role:'group', 'aria-label':heading });
                     links.filter(l => !(l.movieOnly && isTVType())).forEach(l => row.appendChild(makeEl('a', {
                         href: buildUrl(l.u), target:'_blank', rel:'noopener noreferrer', className:'enh-link-dropdown__item',
                         role:'menuitem', tabindex:'-1',
@@ -9022,9 +9153,11 @@ section[id*="quote" i] .ipc-list-card { padding: 4px 0 !important; margin: 2px 0
                     readCardMarkMetadata(card, imdbId)
                 )) return;
                 this._syncAll();
+                /* Two sentences rather than one with a word swapped inside it: which
+                   noun goes there is a language decision, not a string edit. */
                 showToast(state
-                    ? `Saved locally as ${state === 'watched' ? 'Seen' : 'Skip'} — IMDb Watched was not changed`
-                    : 'Local mark cleared');
+                    ? (state === 'watched' ? t('toast_saved_locally_as_seen') : t('toast_saved_locally_as_skip'))
+                    : t('text_local_mark_cleared'));
             };
             document.body.addEventListener('click', this._clickHandler, true);
 
@@ -9103,7 +9236,7 @@ section[id*="quote" i] .ipc-list-card { padding: 4px 0 !important; margin: 2px 0
                         className: 'enh-mark-btn enh-mark-btn--watched',
                         dataset: { enhMarkAction: 'watched' },
                         'aria-pressed': 'false',
-                        title: 'Save a private local Seen mark',
+                        title: t('text_save_a_private_local_seen_mark'),
                         'aria-label': t('aria_save_a_private_seen_mark_for', [title || imdbId]),
                     }, 'Seen'),
                     makeEl('button', {
@@ -9111,7 +9244,7 @@ section[id*="quote" i] .ipc-list-card { padding: 4px 0 !important; margin: 2px 0
                         className: 'enh-mark-btn enh-mark-btn--skip',
                         dataset: { enhMarkAction: 'skip' },
                         'aria-pressed': 'false',
-                        title: 'Save a private local Skip mark',
+                        title: t('text_save_a_private_local_skip_mark'),
                         'aria-label': t('aria_save_a_private_skip_mark_for', [title || imdbId]),
                     }, 'Skip'),
                     makeEl('button', {
@@ -9157,7 +9290,7 @@ section[id*="quote" i] .ipc-list-card { padding: 4px 0 !important; margin: 2px 0
             /* Guarded for the same reason as the filter counts: this runs from a
                document-wide MutationObserver and writes into the subtree that observer
                watches, so an unconditional write is a self-sustaining repaint. */
-            setTextIfChanged(badge, mark === 'watched' ? 'Local seen' : 'Local skip');
+            setTextIfChanged(badge, mark === 'watched' ? t('settings_local_seen') : t('settings_local_skip'));
             badge.classList.toggle('enh-mark-badge--skip', mark === 'skip');
         },
         _syncAll() {
@@ -9364,7 +9497,7 @@ section[id*="quote" i] .ipc-list-card { padding: 4px 0 !important; margin: 2px 0
                     const saved = setUserNote(imdbId, area.value, getTitleText());
                     status.dataset.state = saved ? 'saved' : 'error';
                     status.textContent = saved
-                        ? (normalizeUserNote(area.value) ? 'Saved on this device' : 'Note cleared')
+                        ? (normalizeUserNote(area.value) ? t('text_saved_on_this_device') : t('text_note_cleared'))
                         : `Could not save. Check ${STORAGE_HOST_LABEL}.`;
                     clearTimeout(statusTimer);
                     // Cleared so a stale "Saved" cannot be read as the result of a later edit.
@@ -9616,8 +9749,8 @@ section[id*="quote" i] .ipc-list-card { padding: 4px 0 !important; margin: 2px 0
 
                 const type = getMediaType();
                 const actions = [];
-                if (!isTVType(type) && isServarrConfigured('radarr')) actions.push({ kind:'radarr', label:'Add Radarr' });
-                if (isTVType(type) && isServarrConfigured('sonarr')) actions.push({ kind:'sonarr', label:'Add Sonarr' });
+                if (!isTVType(type) && isServarrConfigured('radarr')) actions.push({ kind:'radarr', label:t('text_add_radarr') });
+                if (isTVType(type) && isServarrConfigured('sonarr')) actions.push({ kind:'sonarr', label:t('text_add_sonarr') });
                 if (isSeerrConfigured()) actions.push({ kind:'seerr', label:'Request' });
                 if (!actions.length) return;
 
@@ -9682,21 +9815,26 @@ section[id*="quote" i] .ipc-list-card { padding: 4px 0 !important; margin: 2px 0
                             const originalLabel = btn.getAttribute('aria-label');
                             const service = action.kind === 'radarr' ? 'Radarr'
                                 : action.kind === 'sonarr' ? 'Sonarr' : 'Overseerr';
-                            const busyVerb = action.kind === 'seerr' ? 'Requesting' : 'Adding';
-                            this._setState(btn, 'pending', `${busyVerb}...`, `${busyVerb} ${title} through ${service}`, { busy:true });
+                            const requesting = action.kind === 'seerr';
+                            this._setState(btn, 'pending',
+                                requesting ? t('text_requesting') : t('text_adding'),
+                                requesting
+                                    ? t('text_requesting_title_through', [title, service])
+                                    : t('text_adding_title_through', [title, service]),
+                                { busy:true });
                             try {
                                 const done = action.kind === 'seerr'
                                     ? await this._request(imdbId, title, year, isCurrent)
                                     : await this._add(action.kind, imdbId, title, year, isCurrent);
                                 if (!done || !isCurrent()) return;
                                 showToast(action.kind === 'seerr'
-                                    ? `${title} requested through ${service}`
-                                    : `${title} sent to ${service}`);
+                                    ? t('toast_title_requested_through', [title, service])
+                                    : t('toast_title_sent_to', [title, service]));
                                 this._setState(btn, 'done',
-                                    action.kind === 'seerr' ? 'Requested' : 'Added',
+                                    action.kind === 'seerr' ? t('text_requested') : t('text_added'),
                                     action.kind === 'seerr'
-                                        ? `${title} has been requested through ${service}`
-                                        : `${title} added to ${service}`);
+                                        ? t('text_title_has_been_requested_through', [title, service])
+                                        : t('text_title_added_to', [title, service]));
                             } catch (error) {
                                 if (!isCurrent()) return;
                                 console.warn('[IMDb Enhanced] integration action failed:', error);
@@ -9736,10 +9874,10 @@ section[id*="quote" i] .ipc-list-card { padding: 4px 0 !important; margin: 2px 0
                 const state = mapSeerrMediaState(match.mediaInfo);
                 if (state === 'add') return;
                 const copy = {
-                    library:['Available', `${ctx.title} is already available`],
-                    partial:['Partly available', `${ctx.title} is partly available`],
-                    processing:['Processing', `${ctx.title} is being processed`],
-                    queued:['Requested', `${ctx.title} has already been requested`],
+                    library:[t('text_available'), t('text_title_is_already_available', [ctx.title])],
+                    partial:[t('text_partly_available'), t('text_title_is_partly_available', [ctx.title])],
+                    processing:[t('text_processing'), t('text_title_is_being_processed', [ctx.title])],
+                    queued:[t('text_requested'), t('text_title_has_already_been_requested', [ctx.title])],
                 }[state];
                 if (copy) this._setState(btn, state, copy[0], copy[1]);
             } catch { /* status is best-effort; the request button still works */ }
@@ -9751,11 +9889,11 @@ section[id*="quote" i] .ipc-list-card { padding: 4px 0 !important; margin: 2px 0
                 const response = await seerrRequest('search', { query:{ query:imdbId }, cancelOnRouteChange:true });
                 if (!isCurrent()) return false;
                 const match = selectSeerrSearchResult(parseJSONResponse(response)?.results, imdbId, mediaType);
-                if (!match) throw new Error('The Overseerr instance did not recognize this IMDb title');
+                if (!match) throw new Error(t('text_the_overseerr_instance_did_not_recognize_this'));
                 tmdbId = match.tmdbId;
             }
             const body = buildSeerrRequestBody(mediaType, tmdbId);
-            if (!body) throw new Error('The Overseerr instance returned an unusable title id');
+            if (!body) throw new Error(t('text_the_overseerr_instance_returned_an_unusable_title'));
             if (!isCurrent()) return false;
             /* httpRequest owns serialization; pre-stringifying here would encode the
                body twice and send Overseerr a JSON string where it expects an object. */
@@ -9775,7 +9913,7 @@ section[id*="quote" i] .ipc-list-card { padding: 4px 0 !important; margin: 2px 0
                 const found = selectServarrLookupResult(items, ctx, true);
                 if (found) {
                     const label = kind === 'radarr' ? 'Radarr' : 'Sonarr';
-                    this._setState(btn, 'library', 'In Library', `${ctx.title} is already in ${label}`);
+                    this._setState(btn, 'library', t('text_in_library'), t('text_title_is_already_in_service', [ctx.title, label]));
                 }
             } catch { /* library check is best-effort */ }
         },
@@ -9798,7 +9936,7 @@ section[id*="quote" i] .ipc-list-card { padding: 4px 0 !important; margin: 2px 0
                 if (item) return item;
             }
             if (!isCurrent()) return null;
-            throw new Error('No matching title found');
+            throw new Error(t('text_no_matching_title_found'));
         },
         async _add(kind, imdbId, title, year, isCurrent) {
             const item = await this._lookup(kind, { imdbId, title, year }, isCurrent);
@@ -9875,7 +10013,7 @@ section[id*="quote" i] .ipc-list-card { padding: 4px 0 !important; margin: 2px 0
                     const state = makeEl('span', { className:'enh-media-server-pill__state' }, 'Checking');
                     const pill = makeEl('span', {
                         className:'enh-media-server-pill',
-                        title:`Checking ${server.label} for ${title}`,
+                        title:t('text_checking_server_for_title', [server.label, title]),
                         role:'status',
                         'aria-live':'polite',
                         'aria-atomic':'true',
@@ -9888,8 +10026,10 @@ section[id*="quote" i] .ipc-list-card { padding: 4px 0 !important; margin: 2px 0
                     this._check(server, ctx).then(found => {
                         if (!isCurrent()) return;
                         pill.classList.add(found ? 'enh-media-server-pill--found' : 'enh-media-server-pill--missing');
-                        state.textContent = found ? 'In Library' : 'Not found';
-                        pill.title = `${server.label}: ${found ? 'already in library' : 'not found'}`;
+                        state.textContent = found ? t('text_in_library') : t('text_not_found');
+                        pill.title = found
+                            ? t('text_server_has_title', [server.label])
+                            : t('text_server_lacks_title', [server.label]);
                     }).catch(error => {
                         if (!isCurrent()) return;
                         pill.classList.add('enh-media-server-pill--error');
@@ -10109,7 +10249,7 @@ section[id*="quote" i] .ipc-list-card { padding: 4px 0 !important; margin: 2px 0
                     plot.setAttribute('tabindex', '0');
                     plot.setAttribute('aria-pressed', 'false');
                     plot.setAttribute('aria-label', t('aria_reveal_episode_synopsis'));
-                    plot.title = 'Click or press Enter to reveal episode synopsis';
+                    plot.title = t('text_click_or_press_enter_to_reveal_episode');
                 }
             });
         },
@@ -10216,7 +10356,7 @@ section[id*="quote" i] .ipc-list-card { padding: 4px 0 !important; margin: 2px 0
                 if (!gap) return;
                 root.parentElement?.insertBefore(makeEl('div', { id:'enh-rating-gap', role:'note' },
                     makeEl('strong', {}, gap),
-                    makeEl('span', {}, ' IMDb weights its displayed rating to resist vote brigading, so a wide gap means the raw votes disagree with what the page shows.')
+                    makeEl('span', {}, ` ${t('text_imdb_weights_its_displayed_rating')}`)
                 ), root.nextSibling);
             }).catch(() => { /* titles without a rating distribution */ });
         },
@@ -10320,13 +10460,13 @@ section[id*="quote" i] .ipc-list-card { padding: 4px 0 !important; margin: 2px 0
                 if (!imdbId) return;
                 const bar = makeEl('div', { id: 'enh-tv-bar' });
                 [
-                    { l:'Episodes List', u:`https://www.imdb.com/title/${imdbId}/episodes/` },
+                    { l:t('text_episodes_list'), u:`https://www.imdb.com/title/${imdbId}/episodes/` },
                     // IMDb buries its whole-series episode grid one route away.
-                    { l:'Ratings Grid', u:`https://www.imdb.com/title/${imdbId}/ratings/` },
+                    { l:t('text_ratings_grid'), u:`https://www.imdb.com/title/${imdbId}/ratings/` },
                     { l:'TheTVDB', u:`https://www.thetvdb.com/search?query=${imdbId}` },
                     { l:'TVMaze', u:`https://www.tvmaze.com/search?q=${encodeURIComponent(title)}` },
                     { l:'Trakt', u:`https://app.trakt.tv/search?query=${encodeURIComponent(title)}` },
-                    { l:'Ep Calendar', u:`https://episodecalendar.com/en/shows?q%5Bname_cont%5D=${encodeURIComponent(title)}` },
+                    { l:t('text_ep_calendar'), u:`https://episodecalendar.com/en/shows?q%5Bname_cont%5D=${encodeURIComponent(title)}` },
                 ].forEach(c => bar.appendChild(makeEl('a', { href:c.u, target:'_blank', rel:'noopener noreferrer', className:'enh-tv-chip' }, c.l)));
 
                 appendTitleStackItem(bar, TITLE_STACK_ORDER.tvShowEnhancements);
@@ -10432,7 +10572,7 @@ section[id*="quote" i] .ipc-list-card { padding: 4px 0 !important; margin: 2px 0
                         ? `Copied subtitle links for ${rows.length} loaded episodes`
                         : COPY_FAILURE_MESSAGE, 3000);
                 },
-            }, 'Copy subtitle links for this season');
+            }, t('text_copy_subtitle_links_for_this_season'));
             const target = document.querySelector('main') || document.body;
             target.insertBefore(exportBtn, target.firstElementChild?.nextSibling || null);
 
@@ -10696,9 +10836,9 @@ section[id*="quote" i] .ipc-list-card { padding: 4px 0 !important; margin: 2px 0
 
     function describeSeasonProgress(summary) {
         if (!summary.total) return '';
-        const parts = [`Seen ${summary.watched}/${summary.total} loaded`];
-        if (summary.skipped) parts.push(`${summary.skipped} skipped`);
-        return parts.join(' · ');
+        const parts = [t('text_seen_of_loaded', [summary.watched, summary.total])];
+        if (summary.skipped) parts.push(t('text_count_skipped', [summary.skipped]));
+        return parts.join(t('text_summary_separator'));
     }
 
     /* Decision fatigue on a long watchlist is the whole reason those lists stop getting
@@ -10746,11 +10886,11 @@ section[id*="quote" i] .ipc-list-card { padding: 4px 0 !important; margin: 2px 0
             const markAll = makeEl('button', {
                 type:'button', className:'enh-season__btn',
                 onClick: () => this._batch('watched'),
-            }, 'Mark loaded season seen');
+            }, t('text_mark_loaded_season_seen'));
             const clearAll = makeEl('button', {
                 type:'button', className:'enh-season__btn',
                 onClick: () => this._batch(''),
-            }, 'Clear loaded season');
+            }, t('text_clear_loaded_season'));
 
             const bar = makeEl('div', { id:'enh-season-progress', role:'region', 'aria-label':t('aria_season_progress') },
                 count, next, markAll, clearAll, undo, note);
@@ -10813,7 +10953,7 @@ section[id*="quote" i] .ipc-list-card { padding: 4px 0 !important; margin: 2px 0
                 });
                 if (!setUserMarks(marks)) {
                     // setUserMarks reports its own failure; nothing was written.
-                    setTextIfChanged(note, 'Nothing was changed.');
+                    setTextIfChanged(note, t('text_nothing_was_changed'));
                     return;
                 }
                 /* Only what this batch touched, not a copy of the whole store. Undoing
@@ -10918,9 +11058,9 @@ section[id*="quote" i] .ipc-list-card { padding: 4px 0 !important; margin: 2px 0
                     type:'button',
                     className:'enh-roulette__btn',
                     onClick: () => this._pick(),
-                }, 'Pick something'),
+                }, t('text_pick_something')),
                 makeEl('label', { className:'enh-roulette__skip', for:'enh-roulette-skip-marked' },
-                    skipMarked, 'Skip titles I have marked'),
+                    skipMarked, t('text_skip_titles_i_have_marked')),
                 result
             );
             this._result = result;
@@ -10942,8 +11082,8 @@ section[id*="quote" i] .ipc-list-card { padding: 4px 0 !important; margin: 2px 0
             document.querySelectorAll('.enh-roulette-pick').forEach(node => node.classList.remove('enh-roulette-pick'));
             if (!candidates.length) {
                 setTextIfChanged(this._result, this._skipMarked.checked
-                    ? 'Nothing left that you have not already marked.'
-                    : 'No titles on this page to pick from.');
+                    ? t('text_nothing_left_that_you_have_not_already')
+                    : t('text_no_titles_on_this_page_to_pick'));
                 return;
             }
             const chosen = candidates[Math.floor(Math.random() * candidates.length)];
@@ -11133,7 +11273,7 @@ section[id*="quote" i] .ipc-list-card { padding: 4px 0 !important; margin: 2px 0
                         showToast(t('toast_copied_search_links', [entries.length]));
                     } else showToast(t('toast_copy_failed_try_the_individual_links'), 4500);
                 },
-            }, 'Copy all links');
+            }, t('text_copy_all_links'));
             const close = makeEl('button', {
                 type:'button', className:'enh-multi-search-queue__action',
                 onClick: () => { queue.remove(); trigger.focus(); },

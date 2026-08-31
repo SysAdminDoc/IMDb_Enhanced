@@ -185,6 +185,42 @@
   "aria_where_streaming_availability_comes_from": {
     "message": "Where streaming availability comes from"
   },
+  "category_availability": {
+    "message": "Availability"
+  },
+  "category_availability_detail": {
+    "message": "See where the title is streaming."
+  },
+  "category_info": {
+    "message": "Info & research"
+  },
+  "category_info_detail": {
+    "message": "Cast, credits, facts, and reference."
+  },
+  "category_other": {
+    "message": "Other"
+  },
+  "category_other_detail": {
+    "message": "A custom destination."
+  },
+  "category_reviews": {
+    "message": "Reviews & ratings"
+  },
+  "category_reviews_detail": {
+    "message": "Critics, audience scores, and discussion."
+  },
+  "category_trailers": {
+    "message": "Trailers & video"
+  },
+  "category_trailers_detail": {
+    "message": "Trailers, clips, and video results."
+  },
+  "category_watch": {
+    "message": "Watch"
+  },
+  "category_watch_detail": {
+    "message": "Find the movie or show to watch."
+  },
   "error_backup_bad_kdf_cost": {
     "message": "This encrypted backup declares an unusable key-derivation cost."
   },
@@ -641,6 +677,9 @@
   "provider_amazonAds_consent": {
     "message": "Blocks requests to these hosts. Nothing is sent to them."
   },
+  "provider_amazonAds_label": {
+    "message": "the ad and tracking hosts it blocks"
+  },
   "provider_justWatch_consent": {
     "message": "Sends the title and year read from the page to JustWatch to find where it streams."
   },
@@ -1031,8 +1070,47 @@
   "settings_where_availability_comes_from": {
     "message": "Where availability comes from"
   },
+  "text_a_cache_write_was_rejected_by_storage": {
+    "message": "a cache write was rejected by storage; quota appears full"
+  },
+  "text_add_key": {
+    "message": "Add key"
+  },
+  "text_add_radarr": {
+    "message": "Add Radarr"
+  },
+  "text_add_sonarr": {
+    "message": "Add Sonarr"
+  },
+  "text_add_to_watchlist": {
+    "message": "Add to watchlist"
+  },
+  "text_add_token": {
+    "message": "Add token"
+  },
+  "text_added": {
+    "message": "Added"
+  },
+  "text_adding": {
+    "message": "Adding..."
+  },
+  "text_adding_title_through": {
+    "message": "Adding $1 through $2"
+  },
   "text_all_opened": {
     "message": "All opened"
+  },
+  "text_automatic_matching_is_active": {
+    "message": "Automatic matching is active."
+  },
+  "text_availability_unavailable": {
+    "message": "Availability unavailable"
+  },
+  "text_available": {
+    "message": "Available"
+  },
+  "text_below_avg": {
+    "message": "Below Avg"
   },
   "text_cache_remaining": {
     "message": "$1 cached entries · $2"
@@ -1040,20 +1118,86 @@
   "text_candidate_matches_could_not_be_loaded": {
     "message": "Candidate matches could not be loaded. Paste a title URL or mark no entry."
   },
+  "text_candidate_response_was_too_large_or_empty": {
+    "message": "Candidate response was too large or empty"
+  },
+  "text_cast_crew": {
+    "message": "Cast & crew"
+  },
+  "text_checking_server_for_title": {
+    "message": "Checking $1 for $2"
+  },
   "text_clear_all": {
     "message": "Clear all"
+  },
+  "text_clear_loaded_season": {
+    "message": "Clear loaded season"
+  },
+  "text_click_or_press_enter_to_reveal": {
+    "message": "Click or press Enter to reveal"
+  },
+  "text_click_or_press_enter_to_reveal_episode": {
+    "message": "Click or press Enter to reveal episode synopsis"
+  },
+  "text_click_or_press_enter_to_reveal_plot": {
+    "message": "Click or press Enter to reveal plot synopsis"
+  },
+  "text_collapse_section": {
+    "message": "Collapse section"
   },
   "text_confirm_clear_marks": {
     "message": "Confirm clear $1"
   },
+  "text_copy_all_links": {
+    "message": "Copy all links"
+  },
   "text_copy_imdb_ids": {
     "message": "Copy $1 IMDb IDs"
+  },
+  "text_copy_subtitle_links_for_this_season": {
+    "message": "Copy subtitle links for this season"
   },
   "text_correction_candidate_count": {
     "message": "$1 candidate $2."
   },
+  "text_count_skipped": {
+    "message": "$1 skipped"
+  },
   "text_csv_import_is_too_large_choose": {
     "message": "CSV import is too large. Choose a file under 4 MB."
+  },
+  "text_ep_calendar": {
+    "message": "Ep Calendar"
+  },
+  "text_episode_guide": {
+    "message": "Episode guide"
+  },
+  "text_episodes_list": {
+    "message": "Episodes List"
+  },
+  "text_expand_section": {
+    "message": "Expand section"
+  },
+  "text_get_it": {
+    "message": "Get it"
+  },
+  "text_imdb_weights_its_displayed_rating": {
+    "message": "IMDb weights its displayed rating to resist vote brigading, so a wide gap means the raw votes disagree with what the page shows."
+  },
+  "text_in_library": {
+    "message": "In Library"
+  },
+  "text_link_group_reviews": {
+    "message": "Reviews"
+  },
+  "text_link_group_search": {
+    "message": "Search"
+  },
+  "text_link_group_subtitles": {
+    "message": "Subtitles"
+  },
+  "text_link_group_tv": {
+    "message": "TV"
   },
   "text_list_joined": {
     "message": "$1 and $2"
@@ -1061,23 +1205,152 @@
   "text_list_separator": {
     "message": ", "
   },
+  "text_loading_candidate_matches": {
+    "message": "Loading candidate matches..."
+  },
+  "text_loading_trailer": {
+    "message": "Loading trailer..."
+  },
+  "text_local_mark_cleared": {
+    "message": "Local mark cleared"
+  },
+  "text_mapped_by_imdb_enhanced_through_wikidata": {
+    "message": "Mapped by IMDb Enhanced through Wikidata"
+  },
+  "text_mark_loaded_season_seen": {
+    "message": "Mark loaded season seen"
+  },
+  "text_marked_as_no_entry_on_justwatch": {
+    "message": "Marked as no entry on JustWatch"
+  },
+  "text_marked_as_no_entry_on_letterboxd": {
+    "message": "Marked as no entry on Letterboxd"
+  },
+  "text_marked_as_no_entry_on_metacritic": {
+    "message": "Marked as no entry on Metacritic"
+  },
+  "text_marked_as_no_entry_on_rotten_tomatoes": {
+    "message": "Marked as no entry on Rotten Tomatoes"
+  },
+  "text_more_links": {
+    "message": "More links"
+  },
+  "text_more_watch_options": {
+    "message": "More watch options"
+  },
+  "text_movie_sites": {
+    "message": "Movie Sites"
+  },
+  "text_needs_a_tmdb_read_token": {
+    "message": "Needs a TMDB read token"
+  },
+  "text_needs_an_omdb_key": {
+    "message": "Needs an OMDb key"
+  },
   "text_no_candidate_matches_were_found_paste": {
     "message": "No candidate matches were found. Paste a title URL or mark no entry."
+  },
+  "text_no_entry": {
+    "message": "No entry"
   },
   "text_no_external_sites": {
     "message": "no external sites"
   },
+  "text_no_matching_title_found": {
+    "message": "No matching title found"
+  },
+  "text_no_titles_on_this_page_to_pick": {
+    "message": "No titles on this page to pick from."
+  },
+  "text_not_available_in_this_build": {
+    "message": "Not available in this build"
+  },
+  "text_not_found": {
+    "message": "Not found"
+  },
+  "text_not_streaming": {
+    "message": "Not streaming"
+  },
+  "text_note_cleared": {
+    "message": "Note cleared"
+  },
+  "text_nothing_left_that_you_have_not_already": {
+    "message": "Nothing left that you have not already marked."
+  },
+  "text_nothing_was_changed": {
+    "message": "Nothing was changed."
+  },
+  "text_omdb_rejected_this_key": {
+    "message": "OMDb rejected this key"
+  },
   "text_open_next_of": {
     "message": "Open next ($1 of $2)"
+  },
+  "text_open_trailer_search_on_youtube": {
+    "message": "Open trailer search on YouTube"
+  },
+  "text_parents_guide": {
+    "message": "Parents guide"
+  },
+  "text_partly_available": {
+    "message": "Partly available"
+  },
+  "text_pick_something": {
+    "message": "Pick something"
   },
   "text_preview_required_nothing_has_been_changed": {
     "message": "Preview required. Nothing has been changed."
   },
+  "text_processing": {
+    "message": "Processing"
+  },
   "text_queue_opened_progress": {
     "message": "$1 of $2 opened"
   },
+  "text_ratings_grid": {
+    "message": "Ratings Grid"
+  },
+  "text_replace_key": {
+    "message": "Replace key"
+  },
+  "text_replace_token": {
+    "message": "Replace token"
+  },
+  "text_requested": {
+    "message": "Requested"
+  },
+  "text_requesting": {
+    "message": "Requesting..."
+  },
+  "text_requesting_title_through": {
+    "message": "Requesting $1 through $2"
+  },
+  "text_response_was_too_large_or_empty": {
+    "message": "Response was too large or empty"
+  },
+  "text_save_a_private_local_seen_mark": {
+    "message": "Save a private local Seen mark"
+  },
+  "text_save_a_private_local_skip_mark": {
+    "message": "Save a private local Skip mark"
+  },
   "text_save_failed": {
     "message": "Save failed"
+  },
+  "text_save_url": {
+    "message": "Save URL"
+  },
+  "text_saved_choice_no_entry_on_this_source": {
+    "message": "Saved choice: no entry on this source."
+  },
+  "text_saved_justwatch_match_is_invalid": {
+    "message": "Saved JustWatch match is invalid"
+  },
+  "text_saved_justwatch_match_unavailable": {
+    "message": "Saved JustWatch match unavailable"
+  },
+  "text_saved_letterboxd_match_unavailable": {
+    "message": "Saved Letterboxd match unavailable"
   },
   "text_saved_locally": {
     "message": "Saved locally"
@@ -1085,14 +1358,80 @@
   "text_saved_mark_count": {
     "message": "$1 saved"
   },
+  "text_saved_metacritic_match_unavailable": {
+    "message": "Saved Metacritic match unavailable"
+  },
+  "text_saved_on_this_device": {
+    "message": "Saved on this device"
+  },
+  "text_saved_rotten_tomatoes_match_unavailable": {
+    "message": "Saved Rotten Tomatoes match unavailable"
+  },
   "text_saving": {
     "message": "Saving…"
+  },
+  "text_score_unavailable": {
+    "message": "Score unavailable"
+  },
+  "text_seen_of_loaded": {
+    "message": "Seen $1/$2 loaded"
+  },
+  "text_server_has_title": {
+    "message": "$1: already in library"
+  },
+  "text_server_lacks_title": {
+    "message": "$1: not found"
   },
   "text_settings_saved": {
     "message": "Saved"
   },
+  "text_skip_titles_i_have_marked": {
+    "message": "Skip titles I have marked"
+  },
+  "text_summary_separator": {
+    "message": " · "
+  },
+  "text_the_overseerr_instance_did_not_recognize_this": {
+    "message": "The Overseerr instance did not recognize this IMDb title"
+  },
+  "text_the_overseerr_instance_returned_an_unusable_title": {
+    "message": "The Overseerr instance returned an unusable title id"
+  },
   "text_the_selected_file_could_not_be": {
     "message": "The selected file could not be read."
+  },
+  "text_timed_out_waiting_for_page_content": {
+    "message": "Timed out waiting for page content"
+  },
+  "text_title_added_to": {
+    "message": "$1 added to $2"
+  },
+  "text_title_has_already_been_requested": {
+    "message": "$1 has already been requested"
+  },
+  "text_title_has_been_requested_through": {
+    "message": "$1 has been requested through $2"
+  },
+  "text_title_is_already_available": {
+    "message": "$1 is already available"
+  },
+  "text_title_is_already_in_service": {
+    "message": "$1 is already in $2"
+  },
+  "text_title_is_being_processed": {
+    "message": "$1 is being processed"
+  },
+  "text_title_is_partly_available": {
+    "message": "$1 is partly available"
+  },
+  "text_title_poster": {
+    "message": "$1 poster"
+  },
+  "text_tmdb_rejected_this_token": {
+    "message": "TMDB rejected this token"
+  },
+  "text_trailer_unavailable": {
+    "message": "Trailer unavailable"
   },
   "text_two_items_joined": {
     "message": "$1 and $2"
@@ -1102,6 +1441,15 @@
   },
   "text_use_a_valid_title_url": {
     "message": "Use a valid $1 title URL."
+  },
+  "text_use_automatic": {
+    "message": "Use automatic"
+  },
+  "text_user_reviews": {
+    "message": "User reviews"
+  },
+  "text_view_full_cast_crew": {
+    "message": "View full cast & crew"
   },
   "toast_a_site_list_can_contain_up": {
     "message": "A site list can contain up to $1 destinations"
@@ -1232,6 +1580,12 @@
   "toast_reset_to_defaults": {
     "message": "$1 reset to defaults"
   },
+  "toast_saved_locally_as_seen": {
+    "message": "Saved locally as Seen — IMDb Watched was not changed"
+  },
+  "toast_saved_locally_as_skip": {
+    "message": "Saved locally as Skip — IMDb Watched was not changed"
+  },
   "toast_season_marks_restored": {
     "message": "Season marks restored"
   },
@@ -1261,6 +1615,12 @@
   },
   "toast_there_is_no_reset_to_undo": {
     "message": "There is no reset to undo."
+  },
+  "toast_title_requested_through": {
+    "message": "$1 requested through $2"
+  },
+  "toast_title_sent_to": {
+    "message": "$1 sent to $2"
   },
   "toast_undone_settings_were_put_back_reloading": {
     "message": "Undone. $1 settings were put back. Reloading..."

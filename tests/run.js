@@ -874,8 +874,12 @@ test('the title surface links to first-party subpages including the parents guid
     ['fullcredits', 'reviews', 'trivia', 'parentalguide'].forEach(route => {
         assert(script.includes(`/title/\${imdbId}/${route}/`), `${route} should be reachable from the title surface`);
     });
-    assert(script.includes("['Parents guide', `/title/${imdbId}/parentalguide/`]"),
-        'the parents guide needs a readable label, not a bare route');
+    /* The label is a catalog entry now, so what has to hold is that the route is paired
+       with one and that the entry carries words. */
+    const parentsGuide = /\[t\('([A-Za-z0-9_@]+)'\), `\/title\/\$\{imdbId\}\/parentalguide\/`\]/.exec(script);
+    assert(parentsGuide, 'the parents guide needs a readable label, not a bare route');
+    assert(messageCatalog[parentsGuide[1]]?.trim(),
+        'and the label it is paired with has to say something');
 });
 
 test('IMDb title data selection ignores unrelated or malformed structured data', () => {
@@ -1382,10 +1386,16 @@ test('watched marks only decorate canonical title links', () => {
     assert.strictEqual(hooks.getLinkedTitleId('/de/title/tt0133093/'), 'tt0133093');
     assert.strictEqual(hooks.getLinkedTitleId('/showtimes/title/tt0133093/2026-08-30'), '');
     assert.strictEqual(hooks.getLinkedTitleId('/title/tt0133093/releaseinfo/'), '');
-    assert(script.includes('IMDb Watched was not changed'), 'local mark feedback should distinguish itself from IMDb\'s native Watched state');
-    // Written through the guarded setter, since this runs from a document-wide observer.
-    assert(script.includes("setTextIfChanged(badge, mark === 'watched' ? 'Local seen' : 'Local skip')"),
-        'visible local badges should not impersonate native IMDb Watched');
+    assert(Object.values(messageCatalog).some(text => text.includes('IMDb Watched was not changed')),
+        'local mark feedback should distinguish itself from IMDb\'s native Watched state');
+    /* Written through the guarded setter, since this runs from a document-wide observer,
+       and the two labels it chooses between both have to say the mark is local. */
+    const badge = /setTextIfChanged\(badge, mark === 'watched' \? t\('([A-Za-z0-9_@]+)'\) : t\('([A-Za-z0-9_@]+)'\)\)/.exec(script);
+    assert(badge, 'the badge label must be written through the guarded setter');
+    [badge[1], badge[2]].forEach(key => {
+        assert(/^local /i.test(messageCatalog[key] || ''),
+            'visible local badges should not impersonate native IMDb Watched');
+    });
 });
 
 test('local marks are cached and bounded while DOM rescans stay mutation-scoped', () => {
@@ -2014,7 +2024,9 @@ test('secondary interactions expose complete keyboard and toggle semantics', () 
     ['ArrowDown', 'ArrowUp', 'Home', 'End', 'Escape', 'Tab'].forEach(key => {
         assert(script.includes(`event.key === '${key}'`) || script.includes(`'${key}'`), `expanded links missing ${key} handling`);
     });
-    assert(script.includes("role:'group', 'aria-label':cat"), 'menu categories should expose labeled groups');
+    /* The group is labelled with the heading a person reads, which is now the resolved
+       message rather than the key the group is stored under. */
+    assert(script.includes("role:'group', 'aria-label':heading"), 'menu categories should expose labeled groups');
     assert(script.includes("'aria-pressed': 'false'"), 'watched and skip controls should expose toggle state');
     assert(script.includes("getUserMark(imdbId) === action ? '' : action"), 'active watched/skip controls should toggle off');
     assert(script.includes("plotFull.addEventListener('keydown', this._revealKeyHandler)"), 'plot reveal should support keyboard activation');
@@ -2654,7 +2666,8 @@ test('custom site templates require complete HTTP or HTTPS URLs', () => {
         ['TMDB'],
         'movie-only external sites should stay off TV title pages'
     );
-    assert(script.includes("if (cat === 'Movie Sites' && isTVType()) continue"), 'expanded movie-only links should stay off TV pages');
+    // The group's identity is what the rule tests; its heading is a separate lookup.
+    assert(script.includes("if (cat === 'movies' && isTVType()) continue"), 'expanded movie-only links should stay off TV pages');
     assert(script.includes("url:'https://www.themoviedb.org/search?query={{TITLE}}'"), 'default TMDB search should cover movies and TV');
     const oversizedSites = Array.from({ length:hooks.SITE_LIST_LIMIT + 10 }, (_, index) => ({
         name:`Site ${index}`, url:`https://example.com/${index}?q={{TITLE}}`, color:'#6366f1',
@@ -3462,7 +3475,13 @@ test('media server integration is configurable and local-only', () => {
     assert(script.includes('Only localhost and 127.0.0.1 media server URLs are allowed'), 'media server local-only guard missing');
     assert(/className:'enh-media-server-pill',[\s\S]*?role:'status',[\s\S]*?'aria-live':'polite'/.test(script), 'async media-server state should be announced');
     assert(script.includes("className:'enh-media-server-pill__dot', 'aria-hidden':'true'"), 'decorative media-server dots should stay out of the accessibility tree');
-    assert(script.includes("this._setState(btn, 'library', 'In Library', `${ctx.title} is already in ${label}`)"), 'Servarr library state should replace the stale Add accessible name');
+    /* The label and the accessible name are catalog entries; what has to hold is that the
+       library state supplies both, and that the accessible name names the title. */
+    const libraryState = /_setState\(btn, 'library', t\('([A-Za-z0-9_@]+)'\), t\('([A-Za-z0-9_@]+)', \[ctx\.title, label\]\)\)/.exec(script);
+    assert(libraryState, 'Servarr library state should replace the stale Add accessible name');
+    assert(messageCatalog[libraryState[1]]?.trim(), 'the library state needs a visible label');
+    assert(/\$1/.test(messageCatalog[libraryState[2]] || ''),
+        'its accessible name has to carry the title, not just the service');
     assert(/_setState\(btn, state, text, label[\s\S]*?if \(label\) btn\.setAttribute\('aria-label', label\)/.test(script), 'every integration state change must carry its accessible name');
     assert(script.includes("btn.setAttribute('aria-busy', 'true')"), 'Servarr adds should expose their pending state');
 });
@@ -3896,9 +3915,12 @@ test('season progress counts the loaded season and batches marks in one transact
     /* Counts and copy both say "loaded", because a season list renders one page at a
        time and nothing here fetches the rest. Quietly completing the set would be doing
        something nobody asked for. */
-    assert(body.includes('Mark loaded season seen') && body.includes('Clear loaded season'),
+    const buttonText = [...body.matchAll(/\}, t\('([A-Za-z0-9_@]+)'\)\)/g)]
+        .map(match => messageCatalog[match[1]] || '');
+    assert(buttonText.filter(text => /loaded/i.test(text)).length >= 2,
         'the wording must not imply the whole season was touched');
-    assert(script.includes('`Seen ${summary.watched}/${summary.total} loaded`'), 'counts are over loaded rows');
+    assert(/loaded/i.test(messageCatalog[/parts = \[t\('([A-Za-z0-9_@]+)'/.exec(script)?.[1]] || ''),
+        'counts are over loaded rows');
     ['httpRequest', 'httpGet', 'GM_xmlhttpRequest', 'fetch('].forEach(token => {
         assert(!body.includes(token), `batch marking must not ${token}`);
     });
@@ -3917,7 +3939,8 @@ test('season progress counts the loaded season and batches marks in one transact
     assert(/const current = \{ \.\.\.getUserMarks\(true\) \};/.test(body),
         'undo must re-read the live marks rather than restoring a stale snapshot over them');
     // A failed write changes nothing and says so.
-    assert(/if \(!setUserMarks\(marks\)\) \{[\s\S]{0,160}?Nothing was changed/.test(body),
+    const rejected = /if \(!setUserMarks\(marks\)\) \{[\s\S]{0,220}?t\('([A-Za-z0-9_@]+)'\)/.exec(body);
+    assert(rejected && /nothing was changed/i.test(messageCatalog[rejected[1]] || ''),
         'a rejected batch must report that nothing changed');
     /* The 5,000-mark ceiling can silently drop the oldest, so the result is verified.
        The batch rows always carry the freshest timestamps and so are never the ones
@@ -3986,8 +4009,9 @@ test('the roulette picks from what is visible and never navigates', () => {
     assert(/this\._skipMarked\.checked && marks\[entry\.id\]\?\.state/.test(body),
         'the option to skip already-marked titles must consult the marks');
     // Honest empty states rather than a silent no-op.
-    assert(body.includes('Nothing left that you have not already marked.'), 'an exhausted list must say so');
-    assert(body.includes('No titles on this page to pick from.'), 'an empty list must say so');
+    const emptyStates = [...body.matchAll(/t\('([A-Za-z0-9_@]+)'\)/g)].map(match => messageCatalog[match[1]] || '');
+    assert(emptyStates.includes('Nothing left that you have not already marked.'), 'an exhausted list must say so');
+    assert(emptyStates.includes('No titles on this page to pick from.'), 'an empty list must say so');
     // Respects the OS motion preference, like every other scripted scroll here.
     assert(body.includes('getEnhancementScrollBehavior()'), 'scrolling must honour reduced motion');
     // Text written into an observed subtree, guarded like the rest.
@@ -4964,8 +4988,12 @@ test('TMDB availability resolves an IMDb id and reads only the chosen region', (
     assert(body.includes("if (tmdbError?.tmdbRejected) { this._renderUnavailable('rejected'); return; }"),
         'a rejected token must be reported as a rejected token');
     assert(/status === 401 \|\| status === 403/.test(script), 'and recognized from what TMDB actually answers');
-    assert(script.includes("'TMDB rejected this token'"), 'in words that say which end the problem is at');
-    assert(script.includes("reason === 'rejected' ? 'Replace token' : 'Add token'"),
+    const rejectedNote = /reason === 'rejected' \? t\('([A-Za-z0-9_@]+)'\) : t\('([A-Za-z0-9_@]+)'\)\)\);/.exec(script);
+    assert(rejectedNote && /rejected/i.test(messageCatalog[rejectedNote[1]] || ''),
+        'in words that say which end the problem is at');
+    const rejectedAction = /reason === 'rejected' \? t\('([A-Za-z0-9_@]+)'\) : t\('([A-Za-z0-9_@]+)'\)\)\);/g;
+    const actions = [...script.matchAll(rejectedAction)].map(match => [messageCatalog[match[1]], messageCatalog[match[2]]]);
+    assert(actions.some(([replace, add]) => /replace/i.test(replace || '') && /add/i.test(add || '')),
         'and offer the action that matches');
 
     /* The region was read but never declared, so "your region" was permanently US and the
@@ -5151,6 +5179,13 @@ test('every feature and provider gets its words from the catalog', () => {
         assert(declared.has(`provider_${id}_consent`), `${id} has no catalog entry for its consent line`);
         assert.notStrictEqual(provider.consent, `provider_${id}_consent`,
             `${id} shows its own catalog key where the consent sentence belongs`);
+        /* Almost every label is a brand name a translator must leave exactly as it is, so
+           only the ones that are a description of something get a catalog entry. */
+        if (declared.has(`provider_${id}_label`)) {
+            expected.add(`provider_${id}_label`);
+            assert.notStrictEqual(provider.label, `provider_${id}_label`,
+                `${id} shows its own catalog key where its name belongs`);
+        }
         /* An empty attribution means the provider asks for no credit. One that asks for
            credit has to say so in the catalog like everything else. */
         if (provider.attribution) {
