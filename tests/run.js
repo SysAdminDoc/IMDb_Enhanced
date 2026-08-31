@@ -2741,6 +2741,54 @@ test('local request errors stay concise and text-only', () => {
     );
 });
 
+/* IE-81: the README advertised a retired title-page histogram, an end-of-life Node
+   floor, and a `git checkout v<version>` rollback against a repository with no tags.
+   Documentation drifts silently, so the claims that can be checked are checked. */
+test('public documentation matches what the project actually ships', () => {
+    // Node floor is declared once, in package.json, and the README quotes it.
+    const declared = packageJson.engines?.node;
+    assert(declared, 'package.json must declare the Node floor the README quotes');
+    const floor = /^>=\s*(\d+)/.exec(declared)?.[1];
+    assert(floor, `package.json engines.node should be a >=MAJOR range, got ${declared}`);
+    assert(Number(floor) >= 20, 'the declared Node floor must not be an end-of-life release');
+    const readmeFloor = /Install Node\.js (\d+) or newer/.exec(readme)?.[1];
+    assert.strictEqual(readmeFloor, floor,
+        `the README's Node floor (${readmeFloor}) must match package.json engines.node (${declared})`);
+
+    // The vote-distribution widget was retired in v2.14.0; only the ratings-route
+    // comparison survives, and the README must not promise the widget.
+    assert(!/Rating histogram shows/.test(readme), 'the README must not advertise the retired title-page histogram');
+    assert(!/Aggregated-score, histogram,/.test(readme), 'the Ratings page description must not list a retired widget');
+    // The key survives in exactly one place: the migration that deletes stored copies.
+    assert.strictEqual((script.match(/\bratingHistogram\b/g) || []).length, 1,
+        'the retired histogram key should remain only in the migration that removes it');
+
+    // Nothing may point at a release artifact or tag that does not exist. Both are
+    // IE-27's job; until it lands, saying otherwise sends people to a 404.
+    const tags = execFileSync('git', ['tag', '--list'], { cwd:root, encoding:'utf8' }).trim();
+    if (!tags) {
+        assert(!/git checkout v<version>/.test(readme),
+            'the README documents tag-based rollback but the repository has no tags');
+        assert(/no git tags or GitHub releases yet/i.test(readme),
+            'the README should say plainly that no tags or releases exist yet');
+    }
+
+    // Every npm script the README names has to exist.
+    const scripts = Object.keys(packageJson.scripts || {});
+    [...readme.matchAll(/`?npm run ([a-z:]+)`?/g)].map(match => match[1]).forEach(name => {
+        assert(scripts.includes(name), `README references a missing npm script: ${name}`);
+    });
+
+    // Version strings agree across every surface that states one.
+    const metaVersion = /@version\s+([0-9.]+)/.exec(script)?.[1];
+    assert.strictEqual(packageJson.version, metaVersion);
+    assert(readme.includes(`badge/version-${metaVersion}-blue`), 'the README badge must match');
+    assert(JSON.parse(fs.readFileSync(path.join(root, 'extension', 'manifest.json'), 'utf8')).version === metaVersion,
+        'the extension manifest must match');
+    assert(fs.readFileSync(path.join(root, 'CHANGELOG.md'), 'utf8').includes(`## ${metaVersion} —`),
+        'CHANGELOG.md must carry an entry for the current version');
+});
+
 /* Encrypted-backup cases need real Web Crypto, which is promise-based, so they are
    collected and awaited after the synchronous suite rather than being fired off inside
    test() where a rejection would be swallowed and reported as a pass. */

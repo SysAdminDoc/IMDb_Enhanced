@@ -12,7 +12,7 @@ A desktop IMDb overhaul delivered as a single userscript and a Chromium Manifest
 
 **Theme System** - Five themes (Dark, OLED, Midnight, Light, High Contrast) with a full design system: semantic colors, 3-tier elevation, 4px grid spacing, squircle avatars, hover lifts, and smooth transitions. Auto-theme follows OS preference.
 
-**Aggregated Scores** - Inline Rotten Tomatoes (with critics consensus on hover), Letterboxd, and Metacritic scores fetched lazily near IMDb's rating and cached locally. Lookups first resolve the exact service page through Wikidata's public IMDb-to-service identifier mapping; titles it does not cover fall back to search, where matches require an exact title and media type plus a release year within one year. Navigation aborts route-owned lookups when the manager provides an abort handle, and stale responses are discarded regardless. Rating histogram shows 1-10 vote distribution at a glance.
+**Aggregated Scores** - Inline Rotten Tomatoes (with critics consensus on hover), Letterboxd, and Metacritic scores fetched lazily near IMDb's rating and cached locally. Lookups first resolve the exact service page through Wikidata's public IMDb-to-service identifier mapping; titles it does not cover fall back to search, where matches require an exact title and media type plus a release year within one year. Navigation aborts route-owned lookups when the manager provides an abort handle, and stale responses are discarded regardless. On a title's Ratings tab, the vote distribution IMDb publishes there is also used to compare its displayed weighted rating against the unweighted mean, which says which way the weighting leans.
 
 **Streaming Availability** - JustWatch integration shows which streaming services carry the title, using the same lazy, route-aware lookup lifecycle and exact title/type/year identity checks on direct and search-fallback pages.
 
@@ -72,7 +72,7 @@ instead; it needs none of these steps.
 
 The extension build is generated locally from the same userscript source and adds proper extension storage, privileged cross-origin lookups, and stronger request blocking.
 
-1. Install Node.js 18 or newer.
+1. Install Node.js 20 or newer.
 2. From the repository root, run `npm run build:extension`.
 3. Open `chrome://extensions`, enable **Developer mode**, choose **Load unpacked**, and select the repository's `extension` folder.
 4. Open or refresh an IMDb page. After source changes, run the build command again and use the extension card's reload button before refreshing IMDb.
@@ -109,7 +109,7 @@ The redesigned visual reference set covers every menu page: [Experience](design/
 
 **Experience** - Theme, cleanup, appearance, and layout controls. Theme choices include a system-following mode.
 
-**Ratings** - Aggregated-score, histogram, and streaming-availability controls with an inline preview.
+**Ratings** - Aggregated-score, rating-comparison, episode-heatmap, and streaming-availability controls with an inline preview.
 
 **Tools** - Title, TV/episode, list, private Seen/Skip, and optional keyboard-shortcut controls.
 
@@ -153,12 +153,14 @@ Integration API keys and tokens are left out of an ordinary backup, which names 
 Both extension builds are generated deterministically from the userscript, so you can confirm that a build matches the source:
 
 ```bash
-git checkout v<version>
+git checkout <commit>
 npm run build:extension        # regenerates extension/
-git status --short             # no output means the shipped build matches the tag
+git status --short             # no output means the shipped build matches that commit
 ```
 
-`extension/content.js`, `extension/boot.css`, and `extension/manifest.json` are committed, so any difference between a release artifact and a rebuild from its tag shows up as a diff.
+`extension/content.js`, `extension/boot.css`, and `extension/manifest.json` are committed, so any difference between what ships and a rebuild from the same commit shows up as a diff.
+
+There are no git tags or GitHub releases yet, so check out a commit rather than a version tag. Packaged, checksummed release assets are planned but not published; until then the userscript at the install link above is the version of record.
 
 ## Compatibility
 
