@@ -613,7 +613,11 @@
         return typeof storageKey === 'string' && storageKey.startsWith('cache_');
     }
 
-    function parseCacheEntry(raw, now = Date.now()) {
+    /* `allowExpired` keeps an entry whose TTL has run out but which is still inside the
+       envelope ceiling, marked `expired`. A provider that is briefly unreachable is the
+       one case where last week's score is worth more than nothing at all, provided it is
+       labelled as old — but only readers that ask for it ever see one. */
+    function parseCacheEntry(raw, now = Date.now(), { allowExpired = false } = {}) {
         // .length is a cheap pre-filter only: a string can never encode to fewer bytes
         // than it has code units, so this rejects nothing the byte check would keep.
         if (typeof raw !== 'string' || !raw || raw.length > CACHE_ENTRY_TEXT_LIMIT) return null;
@@ -623,15 +627,19 @@
             const ttl = Number(entry?.ttl);
             if (!entry || entry.schema !== CACHE_SCHEMA_VERSION
                 || !Number.isFinite(ts) || ts <= 0 || ts > now + 60000
-                || !Number.isFinite(ttl) || ttl <= 0 || ttl > CACHE_MAX_TTL
-                || now - ts > ttl) return null;
+                || !Number.isFinite(ttl) || ttl <= 0 || ttl > CACHE_MAX_TTL) return null;
+            const age = now - ts;
+            const expired = age > ttl;
+            // The ceiling is absolute: a fallback can never be older than the envelope
+            // itself is allowed to be, whatever its own shorter TTL was.
+            if (expired && (!allowExpired || age > CACHE_MAX_TTL)) return null;
             // Entries written before access stamping fall back to their write time,
             // which orders them correctly against anything newer.
             const rawAccess = Number(entry.at);
             const at = Number.isFinite(rawAccess) && rawAccess > 0 && rawAccess <= now + 60000
                 ? rawAccess
                 : ts;
-            return { ...entry, ts, ttl, at };
+            return { ...entry, ts, ttl, at, expired };
         } catch { return null; }
     }
 
@@ -1234,6 +1242,10 @@
             'button, [href], input, select, textarea, iframe, [tabindex]:not([tabindex="-1"])'
         )].filter(element => !element.disabled
             && element.getAttribute('aria-hidden') !== 'true'
+            // Focus sentinels exist to catch focus leaving a cross-origin embed and hand
+            // it back; they are not destinations, so the trap must not count them as the
+            // first or last focusable in a dialog.
+            && !element.classList?.contains('enh-trailer-sentinel')
             && element.offsetParent !== null);
     }
 
@@ -1736,6 +1748,18 @@
             else if (c) e.appendChild(c);
         }
         return e;
+    }
+
+    /* Assigning textContent is a replace-all: the old text node is removed and a new one
+       added even when the string is identical, and that queues a childList record. A
+       paint driven by a MutationObserver that writes text into the subtree it observes
+       therefore re-triggers itself forever — measured at ~60 repaints per second on an
+       idle page. Every such write goes through this. */
+    function setTextIfChanged(node, text) {
+        const value = String(text ?? '');
+        if (!node || node.textContent === value) return false;
+        node.textContent = value;
+        return true;
     }
 
     function normalizeColor(color, fallback = '#6366f1') {
@@ -6011,7 +6035,6 @@ section[id*="quote" i] .ipc-list-card { padding: 4px 0 !important; margin: 2px 0
             const makeSentinel = position => makeEl('div', {
                 className:'enh-trailer-sentinel',
                 tabindex:'0',
-                'aria-hidden':'true',
                 dataset:{ enhTrailerSentinel:position },
                 onFocus: () => { document.querySelector('#enh-trailer-dialog .enh-trailer-close')?.focus(); },
             });
@@ -6028,15 +6051,20 @@ section[id*="quote" i] .ipc-list-card { padding: 4px 0 !important; margin: 2px 0
             },
                 /* Once focus is inside the cross-origin YouTube embed, this page receives
                    no key events from it at all — Escape and the Tab trap above are both
-                   unreachable by design, and no handler can change that. Tabbing past the
-                   embed's last control does return focus to the document, so a sentinel
-                   sits on each side of the dialog and sends it to the close button. That
-                   makes the visible close control keyboard-reachable from inside the
-                   embed, in both directions, without a second control existing.
+                   unreachable by design, and no handler can change that. Tabbing forward
+                   past the embed's last control does return focus to the document, so a
+                   sentinel after it hands focus to the close button. That makes the
+                   visible close control keyboard-reachable from inside the embed without
+                   a second control existing.
 
-                   aria-hidden keeps them out of getFocusableElements, so the Tab trap
-                   used while focus is in the page still computes the same first and last. */
-                makeSentinel('before'),
+                   Only one sentinel, and only after the embed: the close button already
+                   precedes the iframe in DOM order, so tabbing backward out of the embed
+                   reaches it directly. A sentinel before the dialog would never receive
+                   focus, and dead code that looks like a safety net is worse than none.
+
+                   Excluded from getFocusableElements by class rather than by aria-hidden,
+                   so the Tab trap used while focus is in the page still computes the same
+                   first and last without a focusable node claiming to be hidden. */
                 makeEl('div', { className:'enh-trailer-header' },
                     makeEl('div', { className:'enh-trailer-title', id:'enh-trailer-title' }, `${getTitleText()} trailer`),
                     makeEl('button', { type:'button', className:'enh-trailer-close', 'aria-label':'Close trailer', onClick:close }, '×')
@@ -6444,7 +6472,10 @@ section[id*="quote" i] .ipc-list-card { padding: 4px 0 !important; margin: 2px 0
                 badge = makeEl('div', { className: 'enh-mark-badge' });
                 card.appendChild(badge);
             }
-            badge.textContent = mark === 'watched' ? 'Local seen' : 'Local skip';
+            /* Guarded for the same reason as the filter counts: this runs from a
+               document-wide MutationObserver and writes into the subtree that observer
+               watches, so an unconditional write is a self-sustaining repaint. */
+            setTextIfChanged(badge, mark === 'watched' ? 'Local seen' : 'Local skip');
             badge.classList.toggle('enh-mark-badge--skip', mark === 'skip');
         },
         _syncAll() {
@@ -6729,6 +6760,10 @@ section[id*="quote" i] .ipc-list-card { padding: 4px 0 !important; margin: 2px 0
                     display: flex; align-items: center; gap: 6px; flex-wrap: wrap;
                     margin: 6px 0 10px;
                 }
+                /* The display above outranks the UA [hidden] rule, so without this an
+                   empty filter bar renders on any surface with no title cards — a title
+                   subpage, for instance. Fourth instance of this trap in this file. */
+                #enh-mark-filters[hidden] { display: none; }
                 .enh-mark-filters__label {
                     font: 700 10px/1 -apple-system, BlinkMacSystemFont, 'Segoe UI', sans-serif;
                     letter-spacing: .08em; text-transform: uppercase; color: ${t.tx3};
@@ -6794,7 +6829,8 @@ section[id*="quote" i] .ipc-list-card { padding: 4px 0 !important; margin: 2px 0
                 const cards = collectMarkFilterCards();
                 const counts = countMarkFilters(cards, marks);
                 buttons.forEach(({ filter, button, count }) => {
-                    count.textContent = String(counts[filter.id]);
+                    // Guarded: this text lives inside the subtree the observer watches.
+                    setTextIfChanged(count, counts[filter.id]);
                     const checked = filter.id === this._active;
                     button.setAttribute('aria-checked', String(checked));
                     button.tabIndex = checked ? 0 : -1;
@@ -6807,9 +6843,9 @@ section[id*="quote" i] .ipc-list-card { padding: 4px 0 !important; margin: 2px 0
                     card.classList.toggle('enh-mark-filtered-out', !match);
                     if (match) shown += 1;
                 });
-                empty.textContent = cards.length && !shown
+                setTextIfChanged(empty, cards.length && !shown
                     ? `No titles on this page are ${MARK_FILTERS.find(f => f.id === this._active)?.label.toLowerCase()}.`
-                    : '';
+                    : '');
                 bar.hidden = cards.length === 0;
             };
             this._select = id => {
@@ -7798,7 +7834,10 @@ section[id*="quote" i] .ipc-list-card { padding: 4px 0 !important; margin: 2px 0
             const rowsOf = () => document.querySelectorAll('li.ipc-metadata-list-summary-item');
             const paint = () => {
                 if (!isCurrent()) return;
-                summary.textContent = describeCollectionRuntime(summarizeCollectionRuntime(rowsOf()));
+                /* Guarded: this node sits inside the subtree the observer below watches,
+                   and an unguarded textContent write would re-trigger that observer on
+                   every frame forever. */
+                setTextIfChanged(summary, describeCollectionRuntime(summarizeCollectionRuntime(rowsOf())));
             };
             paint();
             const target = document.querySelector('main') || document.body;
@@ -11113,7 +11152,16 @@ section[data-testid="hero-parent"].enh-editorial-native-hidden { display: none !
         if (surface === 'episodes') return EPISODE_LIST_FEATURE_KEYS.has(feature.key);
         if (surface === 'ratings') return RATINGS_FEATURE_KEYS.has(feature.key);
         if (surface === 'collection') return COLLECTION_FEATURE_KEYS.has(feature.key);
-        if (surface === 'name' || surface === 'title-subpage') return SECONDARY_PAGE_FEATURE_KEYS.has(feature.key);
+        /* A person page carries a filmography, which is exactly the long card list these
+           two are for. A title subpage — full credits, reviews, technical — carries one
+           title and a breadcrumb back to it, so a "Private marks" filter over a single
+           card, or a dim pass over one poster, is noise on a page that has no collection
+           to work on. */
+        if (surface === 'title-subpage') {
+            return SECONDARY_PAGE_FEATURE_KEYS.has(feature.key)
+                && !['markFilters', 'dimLowRated'].includes(feature.key);
+        }
+        if (surface === 'name') return SECONDARY_PAGE_FEATURE_KEYS.has(feature.key);
         if (surface === 'search' || surface === 'home') return BROWSE_FEATURE_KEYS.has(feature.key);
         return UNIVERSAL_FEATURE_KEYS.has(feature.key);
     }

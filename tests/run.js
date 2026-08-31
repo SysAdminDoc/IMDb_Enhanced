@@ -102,6 +102,7 @@ function loadScriptTestHooks({ withoutDeleteValue = false } = {}) {
         readCardRating,
         normalizeDimThreshold,
         DIM_THRESHOLD_OPTIONS,
+        setTextIfChanged,
         MARK_FILTERS,
         countMarkFilters,
         markMatchesFilter,
@@ -1187,7 +1188,9 @@ test('watched marks only decorate canonical title links', () => {
     assert.strictEqual(hooks.getLinkedTitleId('/showtimes/title/tt0133093/2026-08-30'), '');
     assert.strictEqual(hooks.getLinkedTitleId('/title/tt0133093/releaseinfo/'), '');
     assert(script.includes('IMDb Watched was not changed'), 'local mark feedback should distinguish itself from IMDb\'s native Watched state');
-    assert(script.includes("badge.textContent = mark === 'watched' ? 'Local seen' : 'Local skip'"), 'visible local badges should not impersonate native IMDb Watched');
+    // Written through the guarded setter, since this runs from a document-wide observer.
+    assert(script.includes("setTextIfChanged(badge, mark === 'watched' ? 'Local seen' : 'Local skip')"),
+        'visible local badges should not impersonate native IMDb Watched');
 });
 
 test('local marks are cached and bounded while DOM rescans stay mutation-scoped', () => {
@@ -3012,22 +3015,24 @@ test('the trailer modal stays closable when focus is inside the embed', () => {
     const modal = script.slice(script.indexOf('_renderModal(message)'));
     const body = modal.slice(0, modal.indexOf('_closeModal(restoreFocus'));
 
-    // A sentinel on each side, so Tab and Shift+Tab out of the embed both land somewhere
-    // that returns focus to the visible close control.
-    assert(body.includes("makeSentinel('before')") && body.includes("makeSentinel('after')"),
-        'focus must be catchable on both sides of the dialog');
+    /* One sentinel, after the embed. The close button already precedes the iframe in DOM
+       order, so tabbing backward out of the embed reaches it directly and a sentinel
+       before the dialog would never receive focus. Dead code that looks like a safety net
+       is worse than none. */
+    assert(body.includes("makeSentinel('after')"), 'focus leaving the embed forward must be caught');
+    assert(!body.includes("makeSentinel('before')"), 'a sentinel that can never receive focus must not exist');
+    assert(body.indexOf('enh-trailer-close') < body.indexOf("className:'enh-trailer-body'"),
+        'the close button must precede the embed, which is what makes one sentinel enough');
     assert(/const makeSentinel = position => makeEl\('div', \{[\s\S]{0,240}?tabindex:'0'/.test(body),
         'a sentinel has to be focusable to catch anything');
     assert(/onFocus: \(\) => \{ document\.querySelector\('#enh-trailer-dialog \.enh-trailer-close'\)\?\.focus\(\); \}/.test(body),
         'a focused sentinel must hand focus to the close button');
-    // aria-hidden keeps them out of getFocusableElements, so the in-page Tab trap still
-    // computes the same first and last and is not silently altered by this.
-    assert(/makeSentinel[\s\S]{0,260}?'aria-hidden':'true'/.test(body),
-        'sentinels must not join the dialog focus order the trap measures');
-    assert(script.includes("'button, [href], input, select, textarea, iframe, [tabindex]:not([tabindex=\"-1\"])'"),
-        'getFocusableElements should be unchanged');
-    assert(/getFocusableElements[\s\S]{0,320}?getAttribute\('aria-hidden'\) !== 'true'/.test(script),
-        'getFocusableElements must keep excluding aria-hidden nodes for that to hold');
+    /* Excluded from the focus trap by class, not by aria-hidden on a focusable element,
+       which is an accessibility violation in its own right. */
+    assert(!/makeSentinel[\s\S]{0,260}?'aria-hidden'/.test(body),
+        'a focusable sentinel must not claim to be hidden from assistive technology');
+    assert(script.includes("!element.classList?.contains('enh-trailer-sentinel')"),
+        'the trap must skip sentinels so its first and last are unchanged');
 
     // No second close control: the existing visible one is what has to be reachable, so
     // count the control itself rather than every mention of its class.
@@ -3131,8 +3136,50 @@ test('private marks can filter a collection without a request', () => {
         'row ids must come from the shared bounded title-link parser');
     assert(collectorBody.includes('COLLECTION_LINK_SCAN_LIMIT'), 'the row scan needs the collection budget');
 
+    /* Assigning textContent is a replace-all — the old text node goes, a new one arrives,
+       even for an identical string — so it queues a childList record. A paint driven by a
+       MutationObserver that writes text into the subtree it observes therefore re-triggers
+       itself: measured at ~60 repaints per second on an idle page, which also drove the
+       dim-low-rated observer watching the same root. Every such write must be guarded. */
+    assert.strictEqual(hooks.setTextIfChanged({ textContent:'5' }, '5'), false,
+        'an unchanged write must not touch the DOM at all');
+    const node = { textContent:'5' };
+    assert.strictEqual(hooks.setTextIfChanged(node, 6), true);
+    assert.strictEqual(node.textContent, '6');
+
     const feature = script.slice(script.indexOf("key: 'markFilters'"));
     const body = feature.slice(0, feature.indexOf("key: 'servarrIntegration'"));
+    // Every text write inside an observed subtree, in every observer-driven paint.
+    [
+        { name:'markFilters', region:body },
+        { name:'listRuntimeSummary', region:script.slice(script.indexOf("key: 'listRuntimeSummary'"), script.indexOf("key: 'listMultiSearch'")) },
+    ].forEach(({ name, region }) => {
+        assert(region.includes('new MutationObserver'), `${name} should be observer-driven`);
+        const unguarded = region.match(/^\s*(?!\/\/)[^\n]*\.textContent\s*=/gm) || [];
+        assert.strictEqual(unguarded.length, 0,
+            `${name} writes textContent inside the subtree it observes: ${unguarded.join(' | ')}`);
+    });
+    // The bar's own display outranks the UA [hidden] rule, so hiding it needs its own rule.
+    assert(body.includes('#enh-mark-filters[hidden] { display: none; }'),
+        'an empty filter bar must actually hide, not merely carry the attribute');
+
+    /* Surfaces: the acceptance names lists, charts, watchlists, search and person pages.
+       A title subpage carries one title plus a breadcrumb back to it, so a filter over a
+       single card is noise — and it did render there. */
+    hooks.setTestPath('/title/tt0133093/fullcredits/');
+    assert.strictEqual(hooks.getPageSurface(), 'title-subpage');
+    assert(!hooks.shouldInitFeature({ key:'markFilters', group:'Utility' }),
+        'the filter must not appear on a title subpage');
+    assert(!hooks.shouldInitFeature({ key:'dimLowRated', group:'Appearance' }),
+        'dimming has nothing to do on a title subpage');
+    hooks.setTestPath('/name/nm0000206/');
+    assert.strictEqual(hooks.getPageSurface(), 'name');
+    assert(hooks.shouldInitFeature({ key:'markFilters', group:'Utility' }),
+        'a filmography is exactly the long list this is for');
+    hooks.setTestPath('/chart/top/');
+    assert(hooks.shouldInitFeature({ key:'markFilters', group:'Utility' }));
+    hooks.setTestPath('/search/title/');
+    assert(hooks.shouldInitFeature({ key:'markFilters', group:'Utility' }));
     // Pure DOM over cards already present: no request of any kind.
     ['httpRequest', 'GM_xmlhttpRequest', 'fetch(', 'graphql'].forEach(token => {
         assert(!body.includes(token), `filtering must not ${token}`);
