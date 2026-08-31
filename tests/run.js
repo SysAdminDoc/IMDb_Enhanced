@@ -5292,6 +5292,146 @@ test('the permissions popup fills its copy from the installed locale', () => {
         'the document has to declare the language it is actually showing');
 });
 
+/* The gate. Everything above says the catalog works; this says nothing is left outside
+   it. It reads the source the way the migration did — a quoted string that reads like a
+   sentence, on a line that is not resolving DOM, styles or stored identity — and the list
+   it produces has to be empty. Adding a hard-coded sentence to a feature is what this
+   catches, months from now, when nobody remembers the rule.
+
+   The exclusions are named individually and each is a decision, not an oversight. */
+test('every sentence in the source comes from the catalog', () => {
+    const lines = script.split('\n');
+    const catalogStart = lines.findIndex(line => line.includes('const MESSAGES = Object.freeze({'));
+    const catalogEnd = lines.findIndex((line, index) => index > catalogStart && /^    \}\);$/.test(line));
+    assert(catalogStart > 0 && catalogEnd > catalogStart, 'the catalog should be locatable');
+
+    /* The watch destinations and the FMHY catalog are several hundred service names.
+       A service is called what it is called in every language. */
+    const catalogsStart = lines.findIndex(line => line.includes('const DEFAULT_WATCH_SITES = ['));
+    const catalogsEnd = lines.findIndex(line => line.includes('const CATALOG_ROW_COLORS = ['));
+    assert(catalogsStart > 0 && catalogsEnd > catalogsStart, 'the site catalogs should be locatable');
+
+    /* Named one at a time, because each is a reason rather than a rule. */
+    const DELIBERATE = new Map([
+        ['Rotten Tomatoes', 'a brand, and the name OMDb keys its Ratings array by'],
+        ['Box Office Mojo', 'a brand'],
+        ['Ep Calendar', 'a brand'],
+        ['add to watch', "IMDb's own control text, matched against the page"],
+        ['watch list', "IMDb's own control text, matched against the page"],
+        ['Route changed', 'an abort reason carried in an error, not shown as itself'],
+        ['Unknown error', 'written into a stored journal entry, which keeps its own locale'],
+        ['IMDb Enhanced diagnostics', 'a bug report, which is read by whoever receives it'],
+        ['not configured', 'part of that same report'],
+        ['accelerometer; autoplay; clipboard-write; encrypted-media; gyroscope; picture-in-picture; web-share',
+            'an iframe allow list, which is syntax'],
+        ['Bottom Sponsored Advertisement', "IMDb's own aria-label, matched as a selector"],
+        ['Sponsored Content', "IMDb's own aria-label, matched as a selector"],
+        ['IMDb Enhanced', 'the name of the thing'],
+    ]);
+
+    // A line that resolves DOM, styles or stored identity is not showing anyone a sentence.
+    const RESOLVING = /querySelector|\.closest\(|\.matches\(|classList|className|dataset|font-family|Segoe UI|createElement|getAttribute\(|setAttribute\('(?:data-|class|id)|\bid:|localeCompare|\.includes\('|startsWith\(|endsWith\(|JSON\.parse|new RegExp|storageKey|PREFIX|\.replace\(/;
+
+    const inComment = new Array(lines.length).fill(false);
+    let open = false;
+    lines.forEach((line, index) => {
+        inComment[index] = open;
+        let rest = open ? line : line.replace(/'(?:[^'\\]|\\.)*'/g, "''").replace(/"(?:[^"\\]|\\.)*"/g, '""');
+        for (;;) {
+            if (open) {
+                const close = rest.indexOf('*/');
+                if (close === -1) break;
+                rest = rest.slice(close + 2); open = false;
+            } else {
+                const start = rest.indexOf('/*');
+                if (start === -1) break;
+                rest = rest.slice(start + 2); open = true;
+            }
+        }
+    });
+
+    const readsLikeASentence = text => {
+        if (text.length < 4 || !/\s/.test(text)) return false;
+        if (/^https?:|^\/|^\.|^#|^--/.test(text)) return false;
+        if (/[{}<>[\]"]|\bpx\b|\brem\b|^\d/.test(text)) return false;
+        if (/\\n|\\t|[()|*+$\\]/.test(text)) return false;
+        return /^[A-Z“‘]/.test(text) || /\b(the|a|an|is|are|to|of|no|not|and|or|on|in)\b/i.test(text);
+    };
+
+    const stranded = [];
+    lines.forEach((line, index) => {
+        if (index >= catalogStart && index <= catalogEnd) return;
+        if (index >= catalogsStart && index <= catalogsEnd) return;
+        if (inComment[index]) return;
+        const trimmed = line.trim();
+        if (trimmed.startsWith('//') || trimmed.startsWith('*') || trimmed.startsWith('/*')) return;
+        if (RESOLVING.test(line)) return;
+        for (const match of line.matchAll(/'((?:[^'\\\n]|\\.){4,})'/g)) {
+            const text = match[1].replace(/\\'/g, "'").trim();
+            if (!readsLikeASentence(text) || DELIBERATE.has(text)) continue;
+            stranded.push(`${index + 1}: ${text}`);
+        }
+    });
+    assert.deepStrictEqual(stranded, [],
+        'these sentences are written at the call site instead of coming from the catalog');
+
+    /* Short labels are the other half of the same problem: a button reading "Retry" or a
+       tab reading "Data" is as untranslated as a sentence is, and the sentence check
+       above cannot see them because they are one or two words. Read from the positions a
+       label actually occupies. Names are excluded because a name is a name everywhere. */
+    const BRANDS = new Set([
+        'Metacritic', 'Letterboxd', 'JustWatch', 'TMDB', 'OMDb', 'YouTube', 'Wikidata',
+        'Plex', 'Jellyfin', 'Emby', 'Radarr', 'Sonarr', 'Overseerr', 'IMDb',
+        'RT', 'LB', 'TOMATOMETER', 'LETTERBOXD', 'METASCORE', 'SERVARR', 'Rotten Tomatoes',
+        'Box Office Mojo', 'Ep Calendar',
+    ]);
+    const labelPatterns = [
+        /(?:\b(?:label|title)\s*:\s*|\btextContent\s*=\s*)'([^'\n]{2,24})'/g,
+        // The element form has to end the call: `}, 'storage', …` is an argument, not text.
+        /\}, '([^'\n]{2,24})'\)/g,
+    ];
+    const strandedLabels = [];
+    lines.forEach((line, index) => {
+        if (index >= catalogStart && index <= catalogEnd) return;
+        if (index >= catalogsStart && index <= catalogsEnd) return;
+        if (inComment[index]) return;
+        const trimmed = line.trim();
+        if (trimmed.startsWith('//') || trimmed.startsWith('*') || trimmed.startsWith('/*')) return;
+        labelPatterns.forEach(pattern => {
+            for (const match of line.matchAll(pattern)) {
+                const text = match[1];
+                if (/\s{2}|[{}<>[\]"/#.]|^\$/.test(text)) continue;
+                if (!/[A-Za-z]/.test(text)) continue;
+                if (BRANDS.has(text) || DELIBERATE.has(text)) continue;
+                strandedLabels.push(`${index + 1}: ${text}`);
+            }
+        });
+    });
+    assert.deepStrictEqual(strandedLabels, [],
+        'these labels are written at the call site instead of coming from the catalog');
+
+    /* The score widgets build two of their states as markup rather than elements, which
+       put words in a third place the two checks above cannot see: an attribute value and
+       a text node inside a template literal. */
+    const markup = [
+        ...script.matchAll(/(?:aria-label|title|placeholder)="([A-Za-z][^"${}]{3,})"/g),
+        ...script.matchAll(/>([A-Za-z][^<>${}]{3,})</g),
+    ].map(match => match[1].trim())
+        .filter(text => text && !BRANDS.has(text) && !DELIBERATE.has(text));
+    assert.deepStrictEqual(markup, [],
+        'markup built as a template literal must take its words from the catalog too');
+
+    /* The other half of the same rule. Choosing a noun or a verb with a ternary produces
+       correct English and nothing else: how many forms a count has, and which words
+       change, belong to the language. tCount and a pair of keys, every time. */
+    const pluralByTernary = [...script.matchAll(/=== 1 \? '[^']+' : '[^']+'/g)]
+        .map(match => match[0])
+        // tCount's own choice of suffix is the mechanism, not a sentence.
+        .filter(found => found !== "=== 1 ? '_one' : '_other'");
+    assert.deepStrictEqual(pluralByTernary, [],
+        'a count-dependent sentence needs tCount and its _one/_other keys, not a ternary');
+});
+
 /* The one rule that keeps translation from changing behaviour: nothing decides what to do
    by matching text a person reads. */
 test('no route or selector logic matches a translated string', () => {

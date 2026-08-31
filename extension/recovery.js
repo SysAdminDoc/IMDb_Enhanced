@@ -339,6 +339,7 @@
         aria_clear_all_saved_title_marks: 'Clear all saved title marks',
         aria_clear_mark_for: 'Clear mark for $1',
         aria_close_correction_panel: 'Close correction panel',
+        aria_close_settings: 'Close settings',
         aria_close_trailer: 'Close trailer',
         aria_confirm_clearing_saved_title_marks: 'Confirm clearing $1 saved title marks',
         aria_copy_imdb_id: 'Copy IMDb ID $1',
@@ -358,6 +359,10 @@
         aria_import_imdb_watched_titles_shown_on: 'Import IMDb Watched titles shown on this page into private Seen marks',
         aria_integration_service_tabs: '$1 services',
         aria_jump_to: 'Jump to $1',
+        aria_loading_letterboxd_score: 'Loading Letterboxd score',
+        aria_loading_metacritic_score: 'Loading Metacritic score',
+        aria_loading_rotten_tomatoes_score: 'Loading Rotten Tomatoes score',
+        aria_loading_streaming_availability: 'Loading streaming availability',
         aria_look_up_again: 'Look up $1 again',
         aria_move_destination_down: 'Move destination down',
         aria_move_destination_up: 'Move destination up',
@@ -382,6 +387,7 @@
         aria_search_queue: '$1 search queue',
         aria_season_averages: 'Season averages',
         aria_season_progress: 'Season progress',
+        aria_settings_sections: 'Settings sections',
         aria_show_destination_on_imdb_pages: 'Show destination on IMDb pages',
         aria_show_on_imdb_pages: 'Show $1 on IMDb pages',
         aria_tell_me_about_new_versions: 'Tell me about new versions',
@@ -558,6 +564,69 @@
         journal_storage: 'Local storage refused a write',
         journal_timeout: 'A lookup ran out of time',
         journal_unknown: 'Unclassified',
+        label_about_this_title: 'About this title',
+        label_add: 'Add',
+        label_all: 'All',
+        label_apply_import: 'Apply import',
+        label_box_office: 'Box Office',
+        label_cast: 'Cast',
+        label_checking: 'Checking',
+        label_choose_csv_file: 'Choose CSV file',
+        label_clear: 'Clear',
+        label_clear_cache: 'Clear cache',
+        label_clear_journal: 'Clear journal',
+        label_close: 'Close',
+        label_copy_journal: 'Copy journal',
+        label_dark: 'Dark',
+        label_data: 'Data',
+        label_details: 'Details',
+        label_dismiss: 'Dismiss',
+        label_experience: 'Experience',
+        label_export_settings: 'Export settings',
+        label_high_contrast: 'High contrast',
+        label_integrations: 'Integrations',
+        label_light: 'Light',
+        label_local_stats: 'Local stats',
+        label_media_server: 'MEDIA SERVER',
+        label_midnight: 'Midnight',
+        label_oled: 'OLED',
+        label_open: 'Open',
+        label_or_paste_csv_data: 'Or paste CSV data',
+        label_overview: 'Overview',
+        label_preferences: 'Preferences',
+        label_privacy: 'Privacy',
+        label_private_marks: 'Private marks',
+        label_private_title_marks: 'Private title marks',
+        label_rate: 'Rate',
+        label_ratings: 'Ratings',
+        label_region: 'Region',
+        label_request: 'Request',
+        label_reset_every_setting: 'Reset every setting?',
+        label_retry: 'Retry',
+        label_reviews_research: 'Reviews & research',
+        label_score_cache: 'Score cache',
+        label_search_all_on: 'SEARCH ALL ON',
+        label_season_average: 'Season average',
+        label_seen: 'Seen',
+        label_similar: 'Similar',
+        label_site_access_not_granted: 'Site access not granted',
+        label_sites: 'Sites',
+        label_skip: 'Skip',
+        label_skipped: 'Skipped',
+        label_stars: 'Stars',
+        label_stored_locally: 'Stored locally',
+        label_streaming: 'STREAMING',
+        label_subtitles: 'Subtitles:',
+        label_templates: 'Templates',
+        label_token: 'Token',
+        label_tools: 'Tools',
+        label_trailer: 'Trailer',
+        label_trivia: 'Trivia',
+        label_undo: 'Undo',
+        label_unseen: 'Unseen',
+        label_url: 'URL',
+        label_via_omdb: 'via OMDb',
+        label_wrong: 'Wrong?',
         permissions_access_declined_note: 'Access was not granted. IMDb Enhanced stays inactive until you allow it to run on IMDb.',
         permissions_access_granted_note: 'Access granted. Reload any IMDb tabs that were already open.',
         permissions_access_scope_note: 'Access covers IMDb, the score and trailer services the settings enable, and your own localhost media servers. Nothing else is requested.',
@@ -574,6 +643,7 @@
         provider_justWatch_consent: 'Sends the title and year read from the page to JustWatch to find where it streams.',
         provider_letterboxd_consent: 'Sends the title and year read from the page to Letterboxd to find its rating.',
         provider_localServices_consent: 'Talks to services on your own machine. Nothing leaves it.',
+        provider_localServices_label: 'your own computer',
         provider_metacritic_consent: 'Sends the title and year read from the page to Metacritic to find its score.',
         provider_omdb_attribution: 'Ratings from the OMDb API, used under CC BY-NC 4.0.',
         provider_omdb_consent: 'Sends the IMDb id to OMDb to read its Rotten Tomatoes and Metacritic ratings. Needs your own OMDb key.',
@@ -678,6 +748,7 @@
         settings_both_sources_use_the_two_letter_region: 'Both sources use the two-letter region below. TMDB publishes its data through a documented API and asks for a token of your own, free from themoviedb.org. JustWatch is read by parsing their page. Choosing TMDB without a token says so rather than quietly reading the page instead.',
         settings_cached_lookups: 'Cached lookups',
         settings_calculated_on_this_device_from_your_private: 'Calculated on this device from your private marks and imported viewing history.',
+        settings_changes_save_automatically: 'Changes save automatically.',
         settings_check_plex_jellyfin_and_emby_libraries: 'Check Plex, Jellyfin, and Emby libraries.',
         settings_checks_match_imdb_ids_first_then_title: 'Checks match IMDb IDs first, then title and year. Credentials stay local.',
         settings_choose_a_passphrase_the_backup_is_encrypted: 'Choose a passphrase. The backup is encrypted in this browser with it, and there is no way to recover the contents if you forget it.',
@@ -735,6 +806,7 @@
         settings_nothing_is_transmitted_the_report_only_reaches: 'Nothing is transmitted — the report only reaches your clipboard.',
         settings_omdb_api_key: 'OMDb API key',
         settings_optional_scores_normally_come_from_reading_each: 'Optional. Scores normally come from reading each site\'s own page; with an OMDb key stored here, a lookup that fails falls back to their API and the score says it came from OMDb. Free for 1,000 lookups a day from omdbapi.com.',
+        settings_panel_subtitle: 'Focused controls for your IMDb workspace.',
         settings_paste_csv_data_or_choose_a_file: 'Paste CSV data or choose a file, then preview it.',
         settings_personal_ratings: 'Personal ratings',
         settings_preview_csv: 'Preview CSV',
@@ -756,13 +828,17 @@
         settings_rotten_tomatoes: 'Rotten Tomatoes',
         settings_rotten_tomatoes_and_metacritic_through_omdb: 'Rotten Tomatoes and Metacritic through OMDb',
         settings_rows_should_carry_const_or_imdbid_a: 'Rows should carry Const or imdbID. A Title and Year row can also match one unambiguous title already stored on this device. Headers are read by name, so IMDb’s Original Title column does not shift the import.',
+        settings_runtime_known_across_seen: '$1 of runtime is known across Seen titles.',
         settings_sample_source_values_not_live_title_data: 'Sample source values — not live title data.',
         settings_saved_type_to_replace: 'Saved — type to replace',
         settings_scores_and_availability_lookups_are_cached: 'Scores and availability lookups are cached locally for up to seven days.',
         settings_seen_titles: 'Seen titles',
+        settings_seen_without_viewing_date_one: '$1 Seen title has no viewing date.',
+        settings_seen_without_viewing_date_other: '$1 Seen titles have no viewing date.',
         settings_settings_copied_to_clipboard: 'Settings copied to clipboard',
         settings_show_or_hide_this_destination_on_imdb: 'Show or hide this destination on IMDb pages',
         settings_skipped_titles: 'Skipped titles',
+        settings_stored_in: 'Stored in $1.',
         settings_the_encrypted_backup_could_not_be_created: 'The encrypted backup could not be created.',
         settings_the_last_20_feature_failures_kept_across: 'The last 20 feature failures, kept across reloads so an intermittent problem can be seen. Each entry records when, which feature, which kind of page, and what category of failure — never a title, address, or message.',
         settings_these_marks_stay_on_this_device_and: 'These marks stay on this device and never change your IMDb account. Import from page copies the IMDb Watched titles visible on the page behind the settings dialog into local Seen marks; existing marks are kept, and nothing is ever sent back to IMDb.',
@@ -776,10 +852,12 @@
         settings_top_genres: 'Top genres',
         settings_tune_the_interface: 'Tune the interface',
         settings_tv_episodes: 'TV & episodes',
+        settings_version: 'Version $1',
         settings_watch_stream: 'Watch & stream',
         settings_watch_stream_includes_a_built_in_catalog: 'Watch & stream includes a built-in catalog of every streaming destination from the FMHY video wiki. Open it below to add any of them with one click, then edit the row like any other destination.',
         settings_when_optional_keyboard_shortcuts_is_enabled: 'When “Optional keyboard shortcuts” is enabled',
         settings_where_availability_comes_from: 'Where availability comes from',
+        settings_year_has_dated_viewings: '$1 has $2 dated viewings, enough for a year review.',
         text_a_cache_write_was_rejected_by_storage: 'a cache write was rejected by storage; quota appears full',
         text_add_key: 'Add key',
         text_add_radarr: 'Add Radarr',
@@ -799,6 +877,7 @@
         text_candidate_response_was_too_large_or_empty: 'Candidate response was too large or empty',
         text_cast_crew: 'Cast & crew',
         text_checking_server_for_title: 'Checking $1 for $2',
+        text_clause_separator: '; ',
         text_clear_all: 'Clear all',
         text_clear_loaded_season: 'Clear loaded season',
         text_click_or_press_enter_to_reveal: 'Click or press Enter to reveal',
@@ -809,15 +888,29 @@
         text_copy_all_links: 'Copy all links',
         text_copy_imdb_ids: 'Copy $1 IMDb IDs',
         text_copy_subtitle_links_for_this_season: 'Copy subtitle links for this season',
-        text_correction_candidate_count: '$1 candidate $2.',
+        text_correction_candidate_count_one: '$1 candidate match.',
+        text_correction_candidate_count_other: '$1 candidate matches.',
         text_count_skipped: '$1 skipped',
         text_csv_import_is_too_large_choose: 'CSV import is too large. Choose a file under 4 MB.',
+        text_csv_matched_existing: '$1 matched to titles already stored here',
+        text_csv_rows_across_titles_one: '$2: $1 row across $3 titles',
+        text_csv_rows_across_titles_other: '$2: $1 rows across $3 titles',
+        text_csv_summary_nothing_changed_yet: '$1. Nothing has been changed yet.',
+        text_csv_titles_over_limit: '$1 over the $2-title limit',
+        text_csv_viewings_over_limit_one: '$1 viewing event over the $2-per-title limit not retained',
+        text_csv_viewings_over_limit_other: '$1 viewing events over the $2-per-title limit not retained',
         text_ep_calendar: 'Ep Calendar',
         text_episode_guide: 'Episode guide',
         text_episodes_list: 'Episodes List',
         text_expand_section: 'Expand section',
+        text_failure_journal_copied: 'Failure journal copied',
+        text_filter_title_count_one: '$2: $1 title',
+        text_filter_title_count_other: '$2: $1 titles',
         text_get_it: 'Get it',
+        text_imdb_enhanced_settings: 'IMDb Enhanced settings',
         text_imdb_weights_its_displayed_rating: 'IMDb weights its displayed rating to resist vote brigading, so a wide gap means the raw votes disagree with what the page shows.',
+        text_import_failed_check_the_json_syntax_and: 'Import failed. Check the JSON syntax and try again.',
+        text_import_failed_no_settings_were_changed: 'Import failed. No settings were changed.',
         text_in_library: 'In Library',
         text_link_group_reviews: 'Reviews',
         text_link_group_search: 'Search',
@@ -839,9 +932,12 @@
         text_movie_sites: 'Movie Sites',
         text_needs_a_tmdb_read_token: 'Needs a TMDB read token',
         text_needs_an_omdb_key: 'Needs an OMDb key',
+        text_no_cached_entries: 'No cached entries.',
         text_no_candidate_matches_were_found_paste: 'No candidate matches were found. Paste a title URL or mark no entry.',
         text_no_entry: 'No entry',
         text_no_external_sites: 'no external sites',
+        text_no_importable_rows_skipped_one: 'No importable rows found. $1 row was skipped.',
+        text_no_importable_rows_skipped_other: 'No importable rows found. $1 rows were skipped.',
         text_no_matching_title_found: 'No matching title found',
         text_no_titles_on_this_page_to_pick: 'No titles on this page to pick from.',
         text_not_available_in_this_build: 'Not available in this build',
@@ -866,6 +962,11 @@
         text_requesting: 'Requesting...',
         text_requesting_title_through: 'Requesting $1 through $2',
         text_response_was_too_large_or_empty: 'Response was too large or empty',
+        text_restore_a_settings_backup: 'Restore a settings backup',
+        text_runtime_complete: '$1 · $2',
+        text_runtime_none_listed: '$1 · no runtimes listed',
+        text_runtime_partial: '$1 · $2 from $3 · $4 without a listed runtime',
+        text_runtime_total: '$1 total',
         text_save_a_private_local_seen_mark: 'Save a private local Seen mark',
         text_save_a_private_local_skip_mark: 'Save a private local Skip mark',
         text_save_failed: 'Save failed',
@@ -892,6 +993,8 @@
         text_the_selected_file_could_not_be: 'The selected file could not be read.',
         text_timed_out_waiting_for_page_content: 'Timed out waiting for page content',
         text_title_added_to: '$1 added to $2',
+        text_title_count_one: '$1 title',
+        text_title_count_other: '$1 titles',
         text_title_has_already_been_requested: '$1 has already been requested',
         text_title_has_been_requested_through: '$1 has been requested through $2',
         text_title_is_already_available: '$1 is already available',
@@ -903,12 +1006,14 @@
         text_trailer_unavailable: 'Trailer unavailable',
         text_two_items_joined: '$1 and $2',
         text_unavailable: 'Unavailable',
+        text_undo_the_last_settings_reset: 'Undo the last settings reset',
         text_use_a_valid_title_url: 'Use a valid $1 title URL.',
         text_use_automatic: 'Use automatic',
         text_user_reviews: 'User reviews',
         text_view_full_cast_crew: 'View full cast & crew',
         toast_a_site_list_can_contain_up: 'A site list can contain up to $1 destinations',
-        toast_all_imdb_watched_on_this_page: 'All $1 IMDb Watched $2 on this page already have a local mark',
+        toast_all_imdb_watched_on_this_page_one: 'All $1 IMDb Watched title on this page already has a local mark',
+        toast_all_imdb_watched_on_this_page_other: 'All $1 IMDb Watched titles on this page already have a local mark',
         toast_cache_could_not_be_read_or: 'Cache could not be read or cleared.',
         toast_cache_is_already_empty: 'Cache is already empty',
         toast_cleared_cached_entries_could_not_be: 'Cleared $1 cached entries; $2 could not be removed.',
@@ -936,8 +1041,12 @@
         toast_grant_then_return: 'Grant site access on the page that just opened, then return here.',
         toast_imdb_watchlist_controls_are_unavailable_on: 'IMDb watchlist controls are unavailable on this title surface',
         toast_import_is_too_large_use_a: 'Import is too large. Use a complete export under 4 MB.',
+        toast_imported_keeping_existing_one: 'Imported $2 as local Seen; kept $1 existing mark',
+        toast_imported_keeping_existing_other: 'Imported $2 as local Seen; kept $1 existing marks',
         toast_imported_local_titles_from_csv_rows: 'Imported $1 local titles from $2 CSV rows.$3 Reloading...',
         toast_imported_settings_reloading: 'Imported $1 settings$2. Reloading...',
+        toast_imported_watched_titles_one: 'Imported $1 IMDb Watched title as local Seen',
+        toast_imported_watched_titles_other: 'Imported $1 IMDb Watched titles as local Seen',
         toast_is_full_so_lookups_are_not: '$1 is full, so lookups are not being cached. Settings → Data → Clear cache frees it.',
         toast_no_episodes_are_loaded_to_export: 'No episodes are loaded to export',
         toast_no_imdb_title_ids_found: 'No IMDb title IDs found',
@@ -955,6 +1064,8 @@
         toast_season_marks_restored: 'Season marks restored',
         toast_sent_to_your_imdb_watchlist: 'Sent to your IMDb watchlist',
         toast_service_action_failed: '$1 $2 failed: $3',
+        toast_settings_copied_omitting_one: 'Settings copied. $1 integration credential was left out — use Export with credentials to include it.',
+        toast_settings_copied_omitting_other: 'Settings copied. $1 integration credentials were left out — use Export with credentials to include them.',
         toast_settings_could_not_be_read_for: 'Settings could not be read for export. No backup was copied.',
         toast_settings_exceed_the_4_mb_backup: 'Settings exceed the 4 MB backup limit. Remove stale title marks or oversized destinations first.',
         toast_settings_exceed_the_4_mb_backup_2: 'Settings exceed the 4 MB backup limit. Remove stale title marks first.',
@@ -1228,7 +1339,7 @@
             profiles: ['default', 'store'],
         },
         localServices: {
-            label: 'your own computer',
+            label: t('provider_localServices_label'),
             origins: LOOPBACK_ORIGINS,
             transmits: 'none',
             consent: t('provider_localServices_consent'),
@@ -2709,18 +2820,18 @@
     }
     function describeCsvMarkImport(result) {
         if (!result?.importedRows) {
-            return `No importable rows found. ${result?.skippedRows || 0} ${result?.skippedRows === 1 ? 'row was' : 'rows were'} skipped.`;
+            return tCount('text_no_importable_rows_skipped', result?.skippedRows || 0);
         }
         const parts = [
-            `${result.source}: ${result.importedRows} ${result.importedRows === 1 ? 'row' : 'rows'} across ${result.importedTitles} ${result.importedTitles === 1 ? 'title' : 'titles'}`,
+            tCount('text_csv_rows_across_titles', result.importedRows, [result.source, result.importedTitles]),
         ];
-        if (result.resolvedRows) parts.push(`${result.resolvedRows} matched to titles already stored here`);
-        if (result.skippedRows) parts.push(`${result.skippedRows} skipped`);
+        if (result.resolvedRows) parts.push(t('text_csv_matched_existing', [result.resolvedRows]));
+        if (result.skippedRows) parts.push(t('text_count_skipped', [result.skippedRows]));
         if (result.droppedViewings) {
-            parts.push(`${result.droppedViewings} viewing ${result.droppedViewings === 1 ? 'event' : 'events'} over the ${USER_MARK_VIEWINGS_MAX}-per-title limit not retained`);
+            parts.push(tCount('text_csv_viewings_over_limit', result.droppedViewings, [USER_MARK_VIEWINGS_MAX]));
         }
-        if (result.droppedTitles) parts.push(`${result.droppedTitles} over the ${USER_MARKS_MAX}-title limit`);
-        return `${parts.join('; ')}. Nothing has been changed yet.`;
+        if (result.droppedTitles) parts.push(t('text_csv_titles_over_limit', [result.droppedTitles, USER_MARKS_MAX]));
+        return t('text_csv_summary_nothing_changed_yet', [parts.join(t('text_clause_separator'))]);
     }
 
     function incrementLocalStat(map, key) {
@@ -3069,13 +3180,13 @@
         const about = makeEl('section', {
             className:'enh-editorial-about',
             'aria-labelledby':'enh-editorial-about-title',
-        }, makeEl('h2', { id:'enh-editorial-about-title' }, 'About this title'),
+        }, makeEl('h2', { id:'enh-editorial-about-title' }, t('label_about_this_title')),
             makeEl('div', { id:'enh-editorial-media-slot' }));
         const synopsis = getEditorialSynopsis();
         if (synopsis) about.appendChild(makeEl('p', { className:'enh-editorial-synopsis' }, synopsis));
         const cast = getEditorialLinkData('[data-testid="title-cast-item"] a', 3);
         if (cast.length) {
-            const row = makeEl('div', { className:'enh-editorial-detail-row' }, makeEl('strong', {}, 'Stars'));
+            const row = makeEl('div', { className:'enh-editorial-detail-row' }, makeEl('strong', {}, t('label_stars')));
             cast.forEach((person, index) => {
                 if (index) row.appendChild(makeEl('span', { className:'enh-editorial-detail-separator', 'aria-hidden':'true' }, '·'));
                 row.appendChild(makeEl('a', { href:person.href }, person.label));
@@ -3092,7 +3203,7 @@
             'aria-labelledby':'enh-editorial-watch-title',
         },
             makeEl('div', { className:'enh-editorial-watch__header' },
-                makeEl('h2', { id:'enh-editorial-watch-title' }, 'Reviews & research'),
+                makeEl('h2', { id:'enh-editorial-watch-title' }, t('label_reviews_research')),
                 makeEl('p', {}, 'Scores, availability and reference')
             ),
             makeEl('div', { id:'enh-editorial-research-slot' })
@@ -3152,7 +3263,7 @@
         if (about && cast.length) {
             const signature = cast.map(person => `${person.label}|${person.href}`).join('||');
             if (about.dataset.editorialCastSignature !== signature) {
-                const row = makeEl('div', { className:'enh-editorial-detail-row' }, makeEl('strong', {}, 'Stars'));
+                const row = makeEl('div', { className:'enh-editorial-detail-row' }, makeEl('strong', {}, t('label_stars')));
                 cast.forEach((person, index) => {
                     if (index) row.appendChild(makeEl('span', { className:'enh-editorial-detail-separator', 'aria-hidden':'true' }, '·'));
                     row.appendChild(makeEl('a', { href:person.href }, person.label));
@@ -3279,7 +3390,7 @@
                     rating?.scrollIntoView({ behavior:getEnhancementScrollBehavior(), block:'center' });
                     rating?.querySelector('button, a, [tabindex]:not([tabindex="-1"])')?.focus?.();
                 },
-            }, 'Rate'),
+            }, t('label_rate')),
             makeEl('button', {
                 type:'button',
                 className:'enh-editorial-action',
@@ -4319,7 +4430,7 @@
                     trySaveSetting('updateDismissedVersion', latest, { notify:false });
                     document.getElementById('enh-update-notice')?.remove();
                 },
-            }, 'Dismiss')
+            }, t('label_dismiss'))
         );
         document.body.appendChild(notice);
     }
@@ -7522,7 +7633,7 @@ section[id*="quote" i] .ipc-list-card { padding: 4px 0 !important; margin: 2px 0
             'aria-expanded':'false',
             'aria-controls':panelId,
             'aria-label':t('aria_correct_the_match_for_this_title', [config.label]),
-        }, 'Wrong?');
+        }, t('label_wrong'));
         const closePanel = (restoreFocus = false) => {
             widget.querySelector?.('.enh-score-correction')?.remove();
             trigger.setAttribute('aria-expanded', 'false');
@@ -7638,7 +7749,7 @@ section[id*="quote" i] .ipc-list-card { padding: 4px 0 !important; margin: 2px 0
                         }),
                     }, label));
                 });
-                status.textContent = t('text_correction_candidate_count', [choices.children.length, choices.children.length === 1 ? 'match' : 'matches']);
+                status.textContent = tCount('text_correction_candidate_count', choices.children.length);
             } catch {
                 if (panel.isConnected) status.textContent = t('text_candidate_matches_could_not_be_loaded');
             }
@@ -7725,7 +7836,7 @@ section[id*="quote" i] .ipc-list-card { padding: 4px 0 !important; margin: 2px 0
             widget.appendChild(makeEl('div', { className:'enh-score-widget__sub' }, unavailableText));
             return;
         }
-        const note = makeEl('div', { className:'enh-score-widget__sub' }, 'Site access not granted');
+        const note = makeEl('div', { className:'enh-score-widget__sub' }, t('label_site_access_not_granted'));
         widget.appendChild(note);
         if (!supportsOptionalPermissions()) return;
         widget.appendChild(makeEl('button', {
@@ -7773,7 +7884,7 @@ section[id*="quote" i] .ipc-list-card { padding: 4px 0 !important; margin: 2px 0
                 className:'enh-score-stale__retry',
                 'aria-label':t('aria_look_up_again', [feature.name]),
                 onClick: () => refreshFeature(feature.key),
-            }, 'Retry')
+            }, t('label_retry'))
         ));
         return true;
     }
@@ -7947,7 +8058,7 @@ section[id*="quote" i] .ipc-list-card { padding: 4px 0 !important; margin: 2px 0
             announceScore('Rotten Tomatoes', `${score}%`);
             if (hasAudience) w.appendChild(makeEl('div', { className:'enh-score-widget__sub' }, `Audience: ${audience}%`));
             if (data.via === 'omdb') {
-                w.appendChild(makeEl('div', { className:'enh-score-widget__sub' }, 'via OMDb'));
+                w.appendChild(makeEl('div', { className:'enh-score-widget__sub' }, t('label_via_omdb')));
                 appendProviderAttribution(w, 'omdb');
             }
             if (providerAllowedHere('rottenTomatoes')) appendScoreCorrectionAction(w, 'rottenTomatoes', this.key);
@@ -7960,7 +8071,7 @@ section[id*="quote" i] .ipc-list-card { padding: 4px 0 !important; margin: 2px 0
             const w = makeEl('div', { id: 'enh-rt-widget', className: 'enh-score-widget enh-score-widget--loading', 'aria-busy':'true' });
             w.innerHTML = `
                 <div class="enh-score-widget__label">TOMATOMETER</div>
-                <div class="enh-score-widget__skeleton" aria-label="Loading Rotten Tomatoes score"></div>
+                <div class="enh-score-widget__skeleton" aria-label="${t('aria_loading_rotten_tomatoes_score')}"></div>
             `;
             bar.appendChild(w);
         },
@@ -7974,7 +8085,7 @@ section[id*="quote" i] .ipc-list-card { padding: 4px 0 !important; margin: 2px 0
                 <a href="https://www.rottentomatoes.com/search?search=${encodeURIComponent(getTitleText())}"
                    target="_blank" rel="noopener noreferrer" class="enh-score-widget__score">
                     <span class="enh-score-widget__badge enh-score-widget__badge--outline">RT</span>
-                    <span class="enh-score-widget__value">Open</span>
+                    <span class="enh-score-widget__value">${t('label_open')}</span>
                 </a>
             `;
             w.querySelector('a')?.setAttribute('href', getSavedScoreCorrectionUrl(
@@ -8104,7 +8215,7 @@ section[id*="quote" i] .ipc-list-card { padding: 4px 0 !important; margin: 2px 0
             const w = makeEl('div', { id: 'enh-lb-widget', className: 'enh-score-widget enh-score-widget--loading', 'aria-busy':'true' });
             w.innerHTML = `
                 <div class="enh-score-widget__label">LETTERBOXD</div>
-                <div class="enh-score-widget__skeleton" aria-label="Loading Letterboxd score"></div>
+                <div class="enh-score-widget__skeleton" aria-label="${t('aria_loading_letterboxd_score')}"></div>
             `;
             bar.appendChild(w);
         },
@@ -8118,7 +8229,7 @@ section[id*="quote" i] .ipc-list-card { padding: 4px 0 !important; margin: 2px 0
                 <a href="https://letterboxd.com/imdb/${getIMDbID()}/"
                    target="_blank" rel="noopener noreferrer" class="enh-score-widget__score">
                     <span class="enh-score-widget__badge enh-score-widget__badge--outline">LB</span>
-                    <span class="enh-score-widget__value">Open</span>
+                    <span class="enh-score-widget__value">${t('label_open')}</span>
                 </a>
             `;
             w.querySelector('a')?.setAttribute('href', getSavedScoreCorrectionUrl(
@@ -8280,7 +8391,7 @@ section[id*="quote" i] .ipc-list-card { padding: 4px 0 !important; margin: 2px 0
                 w.appendChild(makeEl('div', { className:'enh-score-widget__sub' }, `User: ${userScore.toFixed(1)}`));
             }
             if (data.via === 'omdb') {
-                w.appendChild(makeEl('div', { className:'enh-score-widget__sub' }, 'via OMDb'));
+                w.appendChild(makeEl('div', { className:'enh-score-widget__sub' }, t('label_via_omdb')));
                 appendProviderAttribution(w, 'omdb');
             }
             if (providerAllowedHere('metacritic')) appendScoreCorrectionAction(w, 'metacritic', this.key);
@@ -8294,7 +8405,7 @@ section[id*="quote" i] .ipc-list-card { padding: 4px 0 !important; margin: 2px 0
             const w = makeEl('div', { id: 'enh-mc-widget', className: 'enh-score-widget enh-score-widget--loading', 'aria-busy':'true' });
             w.innerHTML = `
                 <div class="enh-score-widget__label">METASCORE</div>
-                <div class="enh-score-widget__skeleton" aria-label="Loading Metacritic score"></div>
+                <div class="enh-score-widget__skeleton" aria-label="${t('aria_loading_metacritic_score')}"></div>
             `;
             bar.appendChild(w);
         },
@@ -8308,7 +8419,7 @@ section[id*="quote" i] .ipc-list-card { padding: 4px 0 !important; margin: 2px 0
                 <a href="https://www.metacritic.com/search/${encodeURIComponent(getTitleText())}/"
                    target="_blank" rel="noopener noreferrer" class="enh-score-widget__score">
                     <span class="enh-score-widget__badge enh-score-widget__badge--outline">MC</span>
-                    <span class="enh-score-widget__value">Open</span>
+                    <span class="enh-score-widget__value">${t('label_open')}</span>
                 </a>
             `;
             w.querySelector('a')?.setAttribute('href', getSavedScoreCorrectionUrl(
@@ -8514,7 +8625,7 @@ section[id*="quote" i] .ipc-list-card { padding: 4px 0 !important; margin: 2px 0
             );
 
             const w = makeEl('div', { id: 'enh-jw-widget', className: 'enh-score-widget enh-score-widget--availability' },
-                makeEl('div', { className: 'enh-score-widget__label' }, 'STREAMING'),
+                makeEl('div', { className: 'enh-score-widget__label' }, t('label_streaming')),
                 makeEl('a', {
                     href,
                     target: '_blank',
@@ -8551,8 +8662,8 @@ section[id*="quote" i] .ipc-list-card { padding: 4px 0 !important; margin: 2px 0
             if (!bar) return;
             const w = makeEl('div', { id: 'enh-jw-widget', className: 'enh-score-widget enh-score-widget--loading enh-score-widget--availability', 'aria-busy':'true' });
             w.innerHTML = `
-                <div class="enh-score-widget__label">STREAMING</div>
-                <div class="enh-score-widget__skeleton" aria-label="Loading streaming availability"></div>
+                <div class="enh-score-widget__label">${t('label_streaming')}</div>
+                <div class="enh-score-widget__skeleton" aria-label="${t('aria_loading_streaming_availability')}"></div>
             `;
             bar.appendChild(w);
         },
@@ -8575,7 +8686,7 @@ section[id*="quote" i] .ipc-list-card { padding: 4px 0 !important; margin: 2px 0
                 ? getSavedScoreCorrectionUrl('justWatch', fallbackUrl)
                 : normalizeTrustedUrl(detail?.url, 'themoviedb.org', fallbackUrl);
             const w = makeEl('div', { id: 'enh-jw-widget', className: 'enh-score-widget enh-score-widget--muted enh-score-widget--availability' },
-                makeEl('div', { className: 'enh-score-widget__label' }, 'STREAMING'),
+                makeEl('div', { className: 'enh-score-widget__label' }, t('label_streaming')),
                 makeEl('a', {
                     href,
                     target: '_blank',
@@ -8583,7 +8694,7 @@ section[id*="quote" i] .ipc-list-card { padding: 4px 0 !important; margin: 2px 0
                     className: 'enh-score-widget__score enh-score-widget__score--availability',
                 },
                     makeEl('span', { className: 'enh-score-widget__badge enh-score-widget__badge--outline' }, usingJustWatch ? 'JW' : 'TMDB'),
-                    makeEl('span', { className: 'enh-score-widget__value' }, 'Open')
+                    makeEl('span', { className: 'enh-score-widget__value' }, t('label_open'))
                 )
             );
             /* "Not streamable in GB" answers the question; "availability unavailable"
@@ -8758,13 +8869,13 @@ section[id*="quote" i] .ipc-list-card { padding: 4px 0 !important; margin: 2px 0
     reg({
         key: 'quickNav', name: t('feature_quickNav_name'), group: 'Layout',
         _navItems: [
-            { id:'hero-parent', label:'Overview', icon:'O' },
-            { id:'title-cast', label:'Cast', icon:'C' },
-            { id:'UserReviews', label:'Reviews', icon:'R' },
-            { id:'MoreLikeThis', label:'Similar', icon:'S' },
-            { id:'Details', label:'Details', icon:'D' },
-            { id:'BoxOffice', label:'Box Office', icon:'$' },
-            { id:'DidYouKnow', label:'Trivia', icon:'?' },
+            { id:'hero-parent', label:t('label_overview'), icon:'O' },
+            { id:'title-cast', label:t('label_cast'), icon:'C' },
+            { id:'UserReviews', label:t('text_link_group_reviews'), icon:'R' },
+            { id:'MoreLikeThis', label:t('label_similar'), icon:'S' },
+            { id:'Details', label:t('label_details'), icon:'D' },
+            { id:'BoxOffice', label:t('label_box_office'), icon:'$' },
+            { id:'DidYouKnow', label:t('label_trivia'), icon:'?' },
         ],
         init() {
             addThemedCSS(t => `
@@ -8879,7 +8990,7 @@ section[id*="quote" i] .ipc-list-card { padding: 4px 0 !important; margin: 2px 0
                     const primary = className.includes('enh-search-btn--primary');
                     const contents = primary
                         ? [
-                            makeEl('span', { className:'enh-search-btn__action' }, 'Watch'),
+                            makeEl('span', { className:'enh-search-btn__action' }, t('category_watch')),
                             makeEl('span', { className:'enh-search-btn__site' }, site.name),
                             makeEl('span', { className:'enh-search-btn__arrow', 'aria-hidden':'true' }, '→'),
                         ]
@@ -8974,7 +9085,7 @@ section[id*="quote" i] .ipc-list-card { padding: 4px 0 !important; margin: 2px 0
                     'aria-label':t('aria_reviews_and_research'),
                 });
                 bar.appendChild(makeEl('div', { className:'enh-external-links__header' },
-                    makeEl('div', { className:'enh-external-links__title' }, 'Reviews & research'),
+                    makeEl('div', { className:'enh-external-links__title' }, t('label_reviews_research')),
                     makeEl('div', { className:'enh-external-links__hint' }, 'Scores, availability and reference')
                 ));
                 const externalGroups = makeEl('div', { className:'enh-external-groups' });
@@ -9093,7 +9204,7 @@ section[id*="quote" i] .ipc-list-card { padding: 4px 0 !important; margin: 2px 0
                     'aria-controls':'enh-trailer-dialog',
                     'aria-expanded':'false',
                     onClick: () => this._open(),
-                }, 'Trailer');
+                }, t('label_trailer'));
                 const editorialActions = document.getElementById('enh-editorial-actions');
                 const extBar = document.getElementById('enh-external-links');
                 if (editorialActions) editorialActions.appendChild(btn);
@@ -9580,7 +9691,7 @@ section[id*="quote" i] .ipc-list-card { padding: 4px 0 !important; margin: 2px 0
                         'aria-pressed': 'false',
                         title: t('text_save_a_private_local_seen_mark'),
                         'aria-label': t('aria_save_a_private_seen_mark_for', [title || imdbId]),
-                    }, 'Seen'),
+                    }, t('label_seen')),
                     makeEl('button', {
                         type: 'button',
                         className: 'enh-mark-btn enh-mark-btn--skip',
@@ -9588,13 +9699,13 @@ section[id*="quote" i] .ipc-list-card { padding: 4px 0 !important; margin: 2px 0
                         'aria-pressed': 'false',
                         title: t('text_save_a_private_local_skip_mark'),
                         'aria-label': t('aria_save_a_private_skip_mark_for', [title || imdbId]),
-                    }, 'Skip'),
+                    }, t('label_skip')),
                     makeEl('button', {
                         type: 'button',
                         className: 'enh-mark-btn enh-mark-btn--clear',
                         dataset: { enhMarkAction: 'clear' },
                         'aria-label': t('aria_clear_mark_for', [title || imdbId]),
-                    }, 'Clear')
+                    }, t('label_clear'))
                 );
                 card.appendChild(controls);
             }
@@ -9663,10 +9774,10 @@ section[id*="quote" i] .ipc-list-card { padding: 4px 0 !important; margin: 2px 0
        cards already on the page: no request, no IMDb GraphQL call, and no reordering, so
        a chart stays in its own ranking. */
     const MARK_FILTERS = [
-        { id:'all', label:'All' },
-        { id:'unseen', label:'Unseen' },
-        { id:'watched', label:'Seen' },
-        { id:'skip', label:'Skipped' },
+        { id:'all', label:t('label_all') },
+        { id:'unseen', label:t('label_unseen') },
+        { id:'watched', label:t('label_seen') },
+        { id:'skip', label:t('label_skipped') },
     ];
 
     /* Reads the score IMDb already renders on a collection card. The rating lives in
@@ -9863,7 +9974,7 @@ section[id*="quote" i] .ipc-list-card { padding: 4px 0 !important; margin: 2px 0
                     id:'enh-title-note', role:'region', 'aria-label':t('aria_private_note'),
                 },
                     makeEl('div', { className:'enh-title-note__head' },
-                        makeEl('span', { className:'enh-title-note__label' }, 'Private note'),
+                        makeEl('span', { className:'enh-title-note__label' }, t('aria_private_note')),
                         status
                     ),
                     area,
@@ -9976,7 +10087,7 @@ section[id*="quote" i] .ipc-list-card { padding: 4px 0 !important; margin: 2px 0
 
             const bar = makeEl('div', {
                 id:'enh-mark-filters', role:'radiogroup', 'aria-label':t('aria_filter_by_private_marks'),
-            }, makeEl('span', { className:'enh-mark-filters__label' }, 'Private marks'));
+            }, makeEl('span', { className:'enh-mark-filters__label' }, t('label_private_marks')));
             const empty = makeEl('div', { className:'enh-mark-filters__empty', role:'status', 'aria-live':'polite' });
 
             const buttons = MARK_FILTERS.map(filter => {
@@ -10023,7 +10134,7 @@ section[id*="quote" i] .ipc-list-card { padding: 4px 0 !important; margin: 2px 0
                     button.setAttribute('aria-checked', String(checked));
                     button.tabIndex = checked ? 0 : -1;
                     button.setAttribute('aria-label',
-                        `${filter.label}: ${counts[filter.id]} ${counts[filter.id] === 1 ? 'title' : 'titles'}`);
+                        tCount('text_filter_title_count', counts[filter.id], [filter.label]));
                 });
                 let shown = 0;
                 cards.forEach(({ card, id }) => {
@@ -10093,7 +10204,7 @@ section[id*="quote" i] .ipc-list-card { padding: 4px 0 !important; margin: 2px 0
                 const actions = [];
                 if (!isTVType(type) && isServarrConfigured('radarr')) actions.push({ kind:'radarr', label:t('text_add_radarr') });
                 if (isTVType(type) && isServarrConfigured('sonarr')) actions.push({ kind:'sonarr', label:t('text_add_sonarr') });
-                if (isSeerrConfigured()) actions.push({ kind:'seerr', label:'Request' });
+                if (isSeerrConfigured()) actions.push({ kind:'seerr', label:t('label_request') });
                 if (!actions.length) return;
 
                 addThemedCSS(t => `
@@ -10349,10 +10460,10 @@ section[id*="quote" i] .ipc-list-card { padding: 4px 0 !important; margin: 2px 0
 
                 const ctx = { imdbId, title, year };
                 const bar = makeEl('div', { id:'enh-media-server-status' },
-                    makeEl('div', { className:'enh-media-server-label' }, 'MEDIA SERVER')
+                    makeEl('div', { className:'enh-media-server-label' }, t('label_media_server'))
                 );
                 servers.forEach(server => {
-                    const state = makeEl('span', { className:'enh-media-server-pill__state' }, 'Checking');
+                    const state = makeEl('span', { className:'enh-media-server-pill__state' }, t('label_checking'));
                     const pill = makeEl('span', {
                         className:'enh-media-server-pill',
                         title:t('text_checking_server_for_title', [server.label, title]),
@@ -10611,7 +10722,7 @@ section[id*="quote" i] .ipc-list-card { padding: 4px 0 !important; margin: 2px 0
             if (ranked.length < 10) return;
 
             const panel = makeEl('section', { id:'enh-best-episodes', 'aria-label':t('aria_top_rated_episodes') });
-            panel.appendChild(makeEl('h3', {}, 'Top rated episodes'));
+            panel.appendChild(makeEl('h3', {}, t('aria_top_rated_episodes')));
             const list = makeEl('ol', { className:'enh-best-episodes-list' });
             ranked.forEach((ep, idx) => {
                 list.appendChild(makeEl('li', { className:'enh-best-episode' },
@@ -10754,7 +10865,7 @@ section[id*="quote" i] .ipc-list-card { padding: 4px 0 !important; margin: 2px 0
                     cell.style.setProperty('--enh-heatmap-text', colour.text);
                 }));
                 const summary = makeEl('div', { id:'enh-heatmap-summary', 'aria-label':t('aria_season_averages') });
-                summary.appendChild(makeEl('span', { className:'enh-heatmap-chip enh-heatmap-chip--label' }, 'Season average'));
+                summary.appendChild(makeEl('span', { className:'enh-heatmap-chip enh-heatmap-chip--label' }, t('label_season_average')));
                 seasons.forEach((episodes, index) => {
                     const average = summarizeHeatmapSeason(episodes);
                     if (average === null) return;
@@ -10832,7 +10943,7 @@ section[id*="quote" i] .ipc-list-card { padding: 4px 0 !important; margin: 2px 0
                 if (!isCurrent()) return;
                 if (document.getElementById('enh-sub-row')) return;
                 const row = makeEl('div', { id:'enh-sub-row' });
-                row.appendChild(makeEl('span', { className:'enh-sub-row__label' }, 'Subtitles:'));
+                row.appendChild(makeEl('span', { className:'enh-sub-row__label' }, t('label_subtitles')));
                 [
                     { n:'OpenSubtitles', u:`https://www.opensubtitles.org/en/search/imdbid-${imdbId.replace(/^tt/, '')}` },
                     { n:'OpenSubs.com', u:`https://www.opensubtitles.com/en/en/search-all/q-${imdbId}` },
@@ -10897,7 +11008,7 @@ section[id*="quote" i] .ipc-list-card { padding: 4px 0 !important; margin: 2px 0
                         rel:'noopener noreferrer',
                         className:'enh-ep-sub',
                         'aria-label':t('aria_find_subtitles_for', [row.label || row.id]),
-                    }, 'Subtitles'));
+                    }, t('text_link_group_subtitles')));
                 });
             };
             paint();
@@ -11045,14 +11156,14 @@ section[id*="quote" i] .ipc-list-card { padding: 4px 0 !important; margin: 2px 0
 
     function describeCollectionRuntime(summary) {
         if (!summary.total) return '';
-        const titles = `${summary.total} ${summary.total === 1 ? 'title' : 'titles'}`;
-        if (!summary.counted) return `${titles} · no runtimes listed`;
-        const total = `${formatRuntimeTotal(summary.minutes)} total`;
+        const titles = tCount('text_title_count', summary.total);
+        if (!summary.counted) return t('text_runtime_none_listed', [titles]);
+        const total = t('text_runtime_total', [formatRuntimeTotal(summary.minutes)]);
         // Naming the shortfall matters more than the number: a list of series would
         // otherwise report a confidently wrong total.
         return summary.missing
-            ? `${titles} · ${total} from ${summary.counted} · ${summary.missing} without a listed runtime`
-            : `${titles} · ${total}`;
+            ? t('text_runtime_partial', [titles, total, summary.counted, summary.missing])
+            : t('text_runtime_complete', [titles, total]);
     }
 
     function getListTitleIdsFromLinks(links) {
@@ -11224,7 +11335,7 @@ section[id*="quote" i] .ipc-list-card { padding: 4px 0 !important; margin: 2px 0
             const undo = makeEl('button', {
                 type:'button', className:'enh-season__btn', hidden:'hidden',
                 onClick: () => this._undo(),
-            }, 'Undo');
+            }, t('label_undo'));
             const markAll = makeEl('button', {
                 type:'button', className:'enh-season__btn',
                 onClick: () => this._batch('watched'),
@@ -11527,7 +11638,7 @@ section[id*="quote" i] .ipc-list-card { padding: 4px 0 !important; margin: 2px 0
             `, 'enh-listMultiSearch');
 
             const bar = makeEl('div', { id:'enh-multi-search' },
-                makeEl('span', { className:'enh-multi-search-label' }, 'SEARCH ALL ON')
+                makeEl('span', { className:'enh-multi-search-label' }, t('label_search_all_on'))
             );
             sites.forEach(site => {
                 const btn = makeEl('button', {
@@ -11619,7 +11730,7 @@ section[id*="quote" i] .ipc-list-card { padding: 4px 0 !important; margin: 2px 0
             const close = makeEl('button', {
                 type:'button', className:'enh-multi-search-queue__action',
                 onClick: () => { queue.remove(); trigger.focus(); },
-            }, 'Close');
+            }, t('label_close'));
 
             const limited = titles.length > entries.length ? ` First ${entries.length} of ${titles.length} visible titles are shown.` : '';
             queue.append(
@@ -13461,7 +13572,7 @@ section[data-testid="hero-parent"].enh-editorial-native-hidden { display: none !
                         showToast(t('toast_finish_or_remove_the_incomplete_site_2'));
                     }
                 },
-            }, 'Remove');
+            }, t('settings_column_remove'));
 
             const updateRowLabel = () => {
                 const destination = nameInput.value.trim() || 'new destination';
@@ -13536,7 +13647,7 @@ section[data-testid="hero-parent"].enh-editorial-native-hidden { display: none !
                 }
                 showToast(t('toast_reset_to_defaults', [title]));
             },
-        }, 'Reset');
+        }, t('recovery_heading_reset'));
 
         editor.appendChild(makeEl('div', { className:'enh-site-editor__header' },
             makeEl('div', { className:'enh-site-editor__title-wrap' },
@@ -13636,7 +13747,7 @@ section[data-testid="hero-parent"].enh-editorial-native-hidden { display: none !
                             updateCount();
                             showToast(t('toast_destination_added_to_list', [site.name, title]));
                         },
-                    }, 'Add');
+                    }, t('label_add'));
                     const row = makeEl('div', { className:'enh-site-catalog__entry' },
                         makeEl('span', { className:'enh-site-catalog__name' }, site.name),
                         makeEl('span', { className:'enh-site-catalog__host' }, host),
@@ -13818,7 +13929,7 @@ section[data-testid="hero-parent"].enh-editorial-native-hidden { display: none !
         const panel = createIntegrationTabs([
             {
                 id:'radarr', title:'Radarr', fields:[
-                    { key:'radarrUrl', label:'URL', wide:true, placeholder:t('field_http_localhost_7878') },
+                    { key:'radarrUrl', label:t('label_url'), wide:true, placeholder:t('field_http_localhost_7878') },
                     { key:'radarrApiKey', label:t('settings_api_key'), type:'password', wide:true },
                     { key:'radarrRootFolderPath', label:t('settings_root_folder'), wide:true, placeholder:t('field_radarr_root_folder_hint') },
                     { key:'radarrQualityProfileId', label:t('settings_quality_profile_id'), type:'number' },
@@ -13826,7 +13937,7 @@ section[data-testid="hero-parent"].enh-editorial-native-hidden { display: none !
             },
             {
                 id:'sonarr', title:'Sonarr', fields:[
-                    { key:'sonarrUrl', label:'URL', wide:true, placeholder:t('field_http_localhost_8989') },
+                    { key:'sonarrUrl', label:t('label_url'), wide:true, placeholder:t('field_http_localhost_8989') },
                     { key:'sonarrApiKey', label:t('settings_api_key'), type:'password', wide:true },
                     { key:'sonarrRootFolderPath', label:t('settings_root_folder'), wide:true, placeholder:t('field_sonarr_root_folder_hint') },
                     { key:'sonarrQualityProfileId', label:t('settings_quality_profile_id'), type:'number' },
@@ -13834,7 +13945,7 @@ section[data-testid="hero-parent"].enh-editorial-native-hidden { display: none !
             },
             {
                 id:'seerr', title:'Overseerr', fields:[
-                    { key:'seerrUrl', label:'URL', wide:true, placeholder:t('field_http_localhost_5055') },
+                    { key:'seerrUrl', label:t('label_url'), wide:true, placeholder:t('field_http_localhost_5055') },
                     { key:'seerrApiKey', label:t('settings_api_key'), type:'password', wide:true },
                 ],
             },
@@ -13851,19 +13962,19 @@ section[data-testid="hero-parent"].enh-editorial-native-hidden { display: none !
         const panel = createIntegrationTabs([
             {
                 id:'plex', title:'Plex', fields:[
-                    { key:'plexUrl', label:'URL', wide:true, placeholder:t('field_http_localhost_32400') },
-                    { key:'plexToken', label:'Token', type:'password', wide:true },
+                    { key:'plexUrl', label:t('label_url'), wide:true, placeholder:t('field_http_localhost_32400') },
+                    { key:'plexToken', label:t('label_token'), type:'password', wide:true },
                 ],
             },
             {
                 id:'jellyfin', title:'Jellyfin', fields:[
-                    { key:'jellyfinUrl', label:'URL', wide:true, placeholder:t('field_http_localhost_8096') },
+                    { key:'jellyfinUrl', label:t('label_url'), wide:true, placeholder:t('field_http_localhost_8096') },
                     { key:'jellyfinApiKey', label:t('settings_api_key'), type:'password', wide:true },
                 ],
             },
             {
                 id:'emby', title:'Emby', fields:[
-                    { key:'embyUrl', label:'URL', wide:true, placeholder:t('field_http_localhost_8096') },
+                    { key:'embyUrl', label:t('label_url'), wide:true, placeholder:t('field_http_localhost_8096') },
                     { key:'embyApiKey', label:t('settings_api_key'), type:'password', wide:true },
                 ],
             },
@@ -13933,7 +14044,7 @@ section[data-testid="hero-parent"].enh-editorial-native-hidden { display: none !
                     imported++;
                 });
                 if (!imported) {
-                    showToast(t('toast_all_imdb_watched_on_this_page', [kept, kept === 1 ? 'title' : 'titles']));
+                    showToast(tCount('toast_all_imdb_watched_on_this_page', kept));
                     return;
                 }
                 if (!setUserMarks(marks)) return;
@@ -13941,8 +14052,8 @@ section[data-testid="hero-parent"].enh-editorial-native-hidden { display: none !
                 render();
                 document.dispatchEvent(new CustomEvent('imdb-enhanced:marks-updated'));
                 showToast(kept
-                    ? `Imported ${imported} as local Seen; kept ${kept} existing ${kept === 1 ? 'mark' : 'marks'}`
-                    : `Imported ${imported} IMDb Watched ${imported === 1 ? 'title' : 'titles'} as local Seen`);
+                    ? tCount('toast_imported_keeping_existing', kept, [imported])
+                    : tCount('toast_imported_watched_titles', imported));
             },
         }, t('settings_import_from_page'));
 
@@ -13951,7 +14062,7 @@ section[data-testid="hero-parent"].enh-editorial-native-hidden { display: none !
             const entries = getUserMarkEntries();
             count.textContent = t('text_saved_mark_count', [entries.length]);
             const summary = document.getElementById('enh-data-marks-count');
-            if (summary) summary.textContent = `${entries.length} ${entries.length === 1 ? 'title' : 'titles'}`;
+            if (summary) summary.textContent = tCount('text_title_count', entries.length);
             clearAll.disabled = entries.length === 0;
             rows.replaceChildren();
             if (!entries.length) {
@@ -13980,7 +14091,7 @@ section[data-testid="hero-parent"].enh-editorial-native-hidden { display: none !
                     target:'_blank',
                     rel:'noopener noreferrer',
                     className:'enh-mark-row__link',
-                }, 'Open');
+                }, t('label_open'));
                 const clear = makeEl('button', {
                     type:'button',
                     className:'enh-mark-row__clear',
@@ -14002,7 +14113,7 @@ section[data-testid="hero-parent"].enh-editorial-native-hidden { display: none !
                         document.dispatchEvent(new CustomEvent('imdb-enhanced:marks-updated'));
                         showToast(note ? t('settings_mark_and_note_removed') : t('settings_mark_cleared'));
                     },
-                }, 'Remove');
+                }, t('settings_column_remove'));
                 const row = makeEl('div', { className:'enh-mark-row' }, titleEl, stateEl, open, clear);
                 // Rendered as text, never markup: a note is arbitrary user input.
                 if (note) row.appendChild(makeEl('div', { className:'enh-mark-row__note' }, note));
@@ -14011,7 +14122,7 @@ section[data-testid="hero-parent"].enh-editorial-native-hidden { display: none !
         };
 
         panel.appendChild(makeEl('div', { className:'enh-marks-panel__header' },
-            makeEl('div', { className:'enh-marks-panel__title' }, 'Private title marks'),
+            makeEl('div', { className:'enh-marks-panel__title' }, t('label_private_title_marks')),
             makeEl('div', { className:'enh-site-editor__actions' }, count, importNative, clearAll)
         ));
         panel.appendChild(makeEl('div', { className:'enh-servarr-note' },
@@ -14059,11 +14170,11 @@ section[data-testid="hero-parent"].enh-editorial-native-hidden { display: none !
             const stats = summarizeLocalStats(getUserMarks(true));
             card.replaceChildren(makeEl('div', { className:'enh-settings-card-header' },
                 makeEl('div', {},
-                    makeEl('h3', { className:'enh-settings-card-title', id:'enh-local-stats-title' }, 'Local stats'),
+                    makeEl('h3', { className:'enh-settings-card-title', id:'enh-local-stats-title' }, t('label_local_stats')),
                     makeEl('p', { className:'enh-settings-card-description' },
                         t('settings_calculated_on_this_device_from_your_private'))
                 ),
-                makeEl('span', { className:'enh-settings-route-badge' }, 'Local only')
+                makeEl('span', { className:'enh-settings-route-badge' }, t('settings_local_only'))
             ));
             if (!stats.markedTitles && !stats.viewings) {
                 card.appendChild(makeEl('div', { className:'enh-stats-empty' },
@@ -14095,10 +14206,10 @@ section[data-testid="hero-parent"].enh-editorial-native-hidden { display: none !
             } else {
                 insights.push(t('settings_rating_comparison_appears_after_a_title_has'));
             }
-            if (stats.runtimeMinutes) insights.push(`${formatRuntimeTotal(stats.runtimeMinutes)} of runtime is known across Seen titles.`);
-            if (stats.reviewYear) insights.push(`${stats.reviewYear.label} has ${stats.reviewYear.count} dated viewings, enough for a year review.`);
+            if (stats.runtimeMinutes) insights.push(t('settings_runtime_known_across_seen', [formatRuntimeTotal(stats.runtimeMinutes)]));
+            if (stats.reviewYear) insights.push(t('settings_year_has_dated_viewings', [stats.reviewYear.label, stats.reviewYear.count]));
             else insights.push(t('settings_a_year_review_appears_after_10_dated'));
-            if (stats.undatedSeen) insights.push(`${stats.undatedSeen} Seen ${stats.undatedSeen === 1 ? 'title has' : 'titles have'} no viewing date.`);
+            if (stats.undatedSeen) insights.push(tCount('settings_seen_without_viewing_date', stats.undatedSeen));
             card.appendChild(makeEl('div', { className:'enh-stats-insights' },
                 makeEl('strong', {}, t('settings_coverage_label')),
                 /* One sentence, not a lead-in plus a clause plus a verb chosen by a
@@ -14122,23 +14233,23 @@ section[data-testid="hero-parent"].enh-editorial-native-hidden { display: none !
             <div class="enh-settings-header">
                 <div>
                     <h2 id="enh-settings-title">IMDb Enhanced</h2>
-                    <p class="enh-settings-subtitle">Focused controls for your IMDb workspace.</p>
+                    <p class="enh-settings-subtitle">${t('settings_panel_subtitle')}</p>
                 </div>
                 <div class="enh-settings-header-actions">
-                    <span class="enh-settings-save-state" id="enh-settings-save-state" role="status" aria-live="polite" aria-atomic="true">Saved locally</span>
-                    <button type="button" class="enh-settings-close" title="Close settings" aria-label="Close settings">×</button>
+                    <span class="enh-settings-save-state" id="enh-settings-save-state" role="status" aria-live="polite" aria-atomic="true">${t('text_saved_locally')}</span>
+                    <button type="button" class="enh-settings-close" title="${t('aria_close_settings')}" aria-label="${t('aria_close_settings')}">×</button>
                 </div>
             </div>
             <div class="enh-settings-shell">
-                <nav class="enh-settings-nav" id="enh-settings-nav" role="tablist" aria-label="Settings sections" aria-orientation="vertical"></nav>
+                <nav class="enh-settings-nav" id="enh-settings-nav" role="tablist" aria-label="${t('aria_settings_sections')}" aria-orientation="vertical"></nav>
                 <div class="enh-settings-main">
                     <div class="enh-settings-body" id="enh-settings-body"></div>
                 </div>
             </div>
             <div class="enh-settings-footer">
-                <span>Version ${VERSION}</span>
-                <span>Changes save automatically.</span>
-                <span class="enh-settings-footer-note">Stored in ${STORAGE_HOST_LABEL}.</span>
+                <span>${t('settings_version', [VERSION])}</span>
+                <span>${t('settings_changes_save_automatically')}</span>
+                <span class="enh-settings-footer-note">${t('settings_stored_in', [STORAGE_HOST_LABEL])}</span>
             </div>
         </div>`;
 
@@ -14152,12 +14263,12 @@ section[data-testid="hero-parent"].enh-editorial-native-hidden { display: none !
         const body = overlay.querySelector('#enh-settings-body');
         const saveState = overlay.querySelector('#enh-settings-save-state');
         const pageMeta = [
-            { id:'experience', label:'Experience', title:'Experience', description:'Shape how IMDb looks and feels.' },
-            { id:'ratings', label:'Ratings', title:'Ratings', description:'Bring trusted scores into the title page.' },
-            { id:'tools', label:'Tools', title:'Tools', description:'Turn on only the shortcuts and title-page utilities you use.' },
-            { id:'sites', label:'Sites', title:'Sites', description:'Choose where title searches and research links open.' },
-            { id:'integrations', label:'Integrations', title:'Integrations', description:'Connect the local services you already run.' },
-            { id:'data', label:'Data', title:'Data', description:'Review, back up, or clear what IMDb Enhanced stores locally.' },
+            { id:'experience', label:t('label_experience'), title:t('label_experience'), description:'Shape how IMDb looks and feels.' },
+            { id:'ratings', label:t('label_ratings'), title:t('label_ratings'), description:'Bring trusted scores into the title page.' },
+            { id:'tools', label:t('label_tools'), title:t('label_tools'), description:'Turn on only the shortcuts and title-page utilities you use.' },
+            { id:'sites', label:t('label_sites'), title:t('label_sites'), description:'Choose where title searches and research links open.' },
+            { id:'integrations', label:t('label_integrations'), title:t('label_integrations'), description:'Connect the local services you already run.' },
+            { id:'data', label:t('label_data'), title:t('label_data'), description:'Review, back up, or clear what IMDb Enhanced stores locally.' },
         ];
         const pages = new Map();
         let savedTimer = null;
@@ -14377,11 +14488,11 @@ section[data-testid="hero-parent"].enh-editorial-native-hidden { display: none !
         const themeSelector = makeEl('div', { className:'enh-theme-selector' });
         const curTheme = getActiveThemeId();
         [
-            { id:'dark', color:'#101014', label:'Dark' },
-            { id:'oled', color:'#000000', label:'OLED' },
-            { id:'midnight', color:'#0a0e1c', label:'Midnight' },
-            { id:'light', color:'#f6f7f9', label:'Light' },
-            { id:'highContrast', color:'linear-gradient(135deg,#000 0 42%,#ffd400 42% 62%,#fff 62%)', label:'High contrast' },
+            { id:'dark', color:'#101014', label:t('label_dark') },
+            { id:'oled', color:'#000000', label:t('label_oled') },
+            { id:'midnight', color:'#0a0e1c', label:t('label_midnight') },
+            { id:'light', color:'#f6f7f9', label:t('label_light') },
+            { id:'highContrast', color:'linear-gradient(135deg,#000 0 42%,#ffd400 42% 62%,#fff 62%)', label:t('label_high_contrast') },
         ].forEach(theme => {
             const swatch = makeEl('button', {
                 type:'button',
@@ -14409,7 +14520,7 @@ section[data-testid="hero-parent"].enh-editorial-native-hidden { display: none !
         themeCard.appendChild(themeSelector);
         const autoThemeRow = makeEl('div', { className:'enh-settings-row enh-theme-auto-row' },
             makeEl('div', { className:'enh-settings-row-copy' },
-                makeEl('span', { className:'enh-settings-label' }, 'Follow system theme'),
+                makeEl('span', { className:'enh-settings-label' }, t('aria_follow_system_theme')),
                 makeEl('span', { className:'enh-settings-help' }, 'Uses Light for OS light mode and Dark for OS dark mode.')
             )
         );
@@ -14496,7 +14607,7 @@ section[data-testid="hero-parent"].enh-editorial-native-hidden { display: none !
                with theirs, and an unrecognized code already falls back to US. */
             const regionField = createSettingsInput({
                 key:'availabilityRegion',
-                label:'Region',
+                label:t('label_region'),
                 placeholder:t('field_two_letter_country_code_such_as'),
                 refreshKey:'streamAvailability',
             });
@@ -14540,7 +14651,7 @@ section[data-testid="hero-parent"].enh-editorial-native-hidden { display: none !
                 })
             ),
             makeEl('div', { className:'enh-settings-callout', style:{ marginTop:'12px' } },
-                makeEl('strong', {}, 'Privacy'),
+                makeEl('strong', {}, t('label_privacy')),
                 t('settings_fetched_only_on_imdb_title_pages_responses')
             )
         );
@@ -14578,7 +14689,7 @@ section[data-testid="hero-parent"].enh-editorial-native-hidden { display: none !
             createSiteEditor({ title:t('settings_research_reviews'), key:'externalSites', defaults:DEFAULT_EXTERNAL_SITES, featureKey:'externalLinks' }, registerCleanup)
         );
         sitesPage.append(sitesGrid, makeEl('div', { className:'enh-settings-callout', style:{ marginTop:'12px' } },
-            makeEl('strong', {}, 'Templates'),
+            makeEl('strong', {}, t('label_templates')),
             'URL templates support {{TITLE}}, {{IMDB_ID}}, {{YEAR}}, and the tokens documented in the README. Categories include Watch, Reviews & ratings, Availability, Trailers & video, Info & research, and Other.'
         ));
 
@@ -14604,15 +14715,15 @@ section[data-testid="hero-parent"].enh-editorial-native-hidden { display: none !
         const dataPage = pages.get('data');
         const dataSummary = makeEl('div', { className:'enh-data-summary' },
             makeEl('div', { className:'enh-data-summary-item' },
-                makeEl('div', { className:'enh-data-summary-label' }, 'Preferences'),
-                makeEl('div', { className:'enh-data-summary-value' }, 'Stored locally')
+                makeEl('div', { className:'enh-data-summary-label' }, t('label_preferences')),
+                makeEl('div', { className:'enh-data-summary-value' }, t('label_stored_locally'))
             ),
             makeEl('div', { className:'enh-data-summary-item' },
-                makeEl('div', { className:'enh-data-summary-label' }, 'Private marks'),
+                makeEl('div', { className:'enh-data-summary-label' }, t('label_private_marks')),
                 makeEl('div', { className:'enh-data-summary-value', id:'enh-data-marks-count' }, `${getUserMarkEntries().length} titles`)
             ),
             makeEl('div', { className:'enh-data-summary-item' },
-                makeEl('div', { className:'enh-data-summary-label' }, 'Score cache'),
+                makeEl('div', { className:'enh-data-summary-label' }, t('label_score_cache')),
                 makeEl('div', { className:'enh-data-summary-value', id:'enh-data-cache-count' },
                     `${cacheCount()} cached entries · ${formatCacheBytes(cacheBytes())}`)
             )
@@ -14636,8 +14747,8 @@ section[data-testid="hero-parent"].enh-editorial-native-hidden { display: none !
                 })
             ),
             makeEl('div', { className:'enh-import-actions' },
-                makeEl('button', { type:'button', className:'enh-settings-footer-btn', id:'enh-import-apply' }, 'Apply import'),
-                makeEl('button', { type:'button', className:'enh-settings-footer-btn', id:'enh-import-cancel' }, 'Cancel')
+                makeEl('button', { type:'button', className:'enh-settings-footer-btn', id:'enh-import-apply' }, t('label_apply_import')),
+                makeEl('button', { type:'button', className:'enh-settings-footer-btn', id:'enh-import-cancel' }, t('recovery_cancel'))
             )
         );
         const securePanel = makeEl('div', { className:'enh-import-panel', id:'enh-secure-export-panel', hidden:'hidden' },
@@ -14646,26 +14757,26 @@ section[data-testid="hero-parent"].enh-editorial-native-hidden { display: none !
                 t('settings_choose_a_passphrase_the_backup_is_encrypted')
             ),
             makeEl('div', { className:'enh-backup-passphrase' },
-                makeEl('label', { className:'enh-import-label', for:'enh-secure-passphrase' }, 'Passphrase'),
+                makeEl('label', { className:'enh-import-label', for:'enh-secure-passphrase' }, t('recovery_passphrase')),
                 makeEl('input', {
                     type:'password', id:'enh-secure-passphrase', className:'enh-servarr-input',
                     autocomplete:'new-password', spellcheck:'false', maxlength:'256',
                 }),
-                makeEl('label', { className:'enh-import-label', for:'enh-secure-passphrase-confirm' }, 'Repeat passphrase'),
+                makeEl('label', { className:'enh-import-label', for:'enh-secure-passphrase-confirm' }, t('recovery_repeat_passphrase')),
                 makeEl('input', {
                     type:'password', id:'enh-secure-passphrase-confirm', className:'enh-servarr-input',
                     autocomplete:'new-password', spellcheck:'false', maxlength:'256',
                 })
             ),
             makeEl('div', { className:'enh-import-actions' },
-                makeEl('button', { type:'button', className:'enh-settings-footer-btn', id:'enh-secure-export-apply' }, 'Encrypt and copy'),
-                makeEl('button', { type:'button', className:'enh-settings-footer-btn', id:'enh-secure-export-cancel' }, 'Cancel')
+                makeEl('button', { type:'button', className:'enh-settings-footer-btn', id:'enh-secure-export-apply' }, t('recovery_encrypt_and_copy')),
+                makeEl('button', { type:'button', className:'enh-settings-footer-btn', id:'enh-secure-export-cancel' }, t('recovery_cancel'))
             )
         );
         const resetPanel = makeEl('div', {
             className:'enh-import-panel', id:'enh-reset-panel', hidden:'hidden', role:'alert',
         },
-            makeEl('div', { className:'enh-import-label' }, 'Reset every setting?'),
+            makeEl('div', { className:'enh-import-label' }, t('label_reset_every_setting')),
             makeEl('div', { className:'enh-settings-card-description' },
                 t('settings_this_clears_title_marks_and_local_integration')
             ),
@@ -14673,7 +14784,7 @@ section[data-testid="hero-parent"].enh-editorial-native-hidden { display: none !
                 makeEl('button', {
                     type:'button', className:'enh-settings-footer-btn enh-settings-footer-btn--danger', id:'enh-reset-apply',
                 }, t('settings_reset_everything')),
-                makeEl('button', { type:'button', className:'enh-settings-footer-btn', id:'enh-reset-cancel' }, 'Cancel')
+                makeEl('button', { type:'button', className:'enh-settings-footer-btn', id:'enh-reset-cancel' }, t('recovery_cancel'))
             )
         );
         let pendingCsvImport = null;
@@ -14751,16 +14862,16 @@ section[data-testid="hero-parent"].enh-editorial-native-hidden { display: none !
         csvImportCard.append(
             makeEl('div', { className:'enh-settings-card-description' },
                 t('settings_rows_should_carry_const_or_imdbid_a')),
-            makeEl('label', { className:'enh-import-label', for:'enh-csv-file', style:{ marginTop:'10px' } }, 'Choose CSV file'),
+            makeEl('label', { className:'enh-import-label', for:'enh-csv-file', style:{ marginTop:'10px' } }, t('label_choose_csv_file')),
             csvFile,
-            makeEl('label', { className:'enh-import-label', for:'enh-csv-textarea', style:{ marginTop:'10px' } }, 'Or paste CSV data'),
+            makeEl('label', { className:'enh-import-label', for:'enh-csv-textarea', style:{ marginTop:'10px' } }, t('label_or_paste_csv_data')),
             csvTextarea,
             csvPreview,
             makeEl('div', { className:'enh-import-actions' }, csvPreviewButton, csvApply)
         );
         const backupCard = makeCard(t('settings_backup_restore'), t('settings_a_backup_covers_preferences_sites_and_title'));
         backupCard.appendChild(makeEl('div', { className:'enh-data-actions' },
-            makeEl('button', { type:'button', className:'enh-settings-footer-btn', id:'enh-export-btn', title:'Copy settings to the clipboard without integration credentials' }, 'Export settings'),
+            makeEl('button', { type:'button', className:'enh-settings-footer-btn', id:'enh-export-btn', title:'Copy settings to the clipboard without integration credentials' }, t('label_export_settings')),
             makeEl('button', {
                 type:'button', className:'enh-settings-footer-btn', id:'enh-secure-export-btn',
                 title:t('settings_copy_a_passphrase_encrypted_backup_that'),
@@ -14785,13 +14896,13 @@ section[data-testid="hero-parent"].enh-editorial-native-hidden { display: none !
             makeEl('pre', { className:'enh-journal', id:'enh-journal-body', tabindex:'0', role:'group', 'aria-label':t('aria_recorded_failures') },
                 formatFailureJournal()),
             makeEl('div', { className:'enh-data-actions', style:{ marginTop:'10px' } },
-                makeEl('button', { type:'button', className:'enh-settings-footer-btn', id:'enh-journal-copy' }, 'Copy journal'),
-                makeEl('button', { type:'button', className:'enh-settings-footer-btn', id:'enh-journal-clear' }, 'Clear journal')
+                makeEl('button', { type:'button', className:'enh-settings-footer-btn', id:'enh-journal-copy' }, t('label_copy_journal')),
+                makeEl('button', { type:'button', className:'enh-settings-footer-btn', id:'enh-journal-clear' }, t('label_clear_journal'))
             )
         );
         const cacheCard = makeCard(t('settings_cached_lookups'), t('settings_scores_and_availability_lookups_are_cached'));
         cacheCard.append(
-            makeEl('button', { type:'button', className:'enh-settings-footer-btn', id:'enh-clearcache-btn', title:'Clear cached third-party lookups' }, 'Clear cache'),
+            makeEl('button', { type:'button', className:'enh-settings-footer-btn', id:'enh-clearcache-btn', title:'Clear cached third-party lookups' }, t('label_clear_cache')),
             makeEl('div', { className:'enh-settings-card-description', id:'enh-cache-status', style:{ marginTop:'8px' } },
                 `${cacheCount()} entries currently cached, using ${formatCacheBytes(cacheBytes())} of ${formatCacheBytes(CACHE_TOTAL_BYTE_BUDGET)}. The oldest are dropped automatically as that fills.`)
         );
@@ -14910,7 +15021,7 @@ section[data-testid="hero-parent"].enh-editorial-native-hidden { display: none !
                 // restores a backup and then wonders why Radarr stopped working.
                 const omitted = payload[EXPORT_REDACTED_KEY] || [];
                 showToast(omitted.length
-                    ? `Settings copied. ${omitted.length} integration ${omitted.length === 1 ? 'credential was' : 'credentials were'} left out — use Export with credentials to include ${omitted.length === 1 ? 'it' : 'them'}.`
+                    ? tCount('toast_settings_copied_omitting', omitted.length)
                     : t('settings_settings_copied_to_clipboard'), omitted.length ? 6000 : 2500);
             } catch (error) {
                 console.warn('[IMDb Enhanced] settings export failed:', error);
@@ -15021,14 +15132,14 @@ section[data-testid="hero-parent"].enh-editorial-native-hidden { display: none !
                 setTimeout(() => location.reload(), 1000);
             } catch (error) {
                 const message = error instanceof SyntaxError
-                    ? 'Import failed. Check the JSON syntax and try again.'
-                    : error.message || 'Import failed. No settings were changed.';
+                    ? t('text_import_failed_check_the_json_syntax_and')
+                    : error.message || t('text_import_failed_no_settings_were_changed');
                 showToast(message, 5000);
             } finally { apply.disabled = false; }
         });
         overlay.querySelector('#enh-journal-copy').addEventListener('click', () => {
             showToast(copyTextToClipboard(formatFailureJournal())
-                ? 'Failure journal copied'
+                ? t('text_failure_journal_copied')
                 : COPY_FAILURE_MESSAGE, 2500);
         });
         overlay.querySelector('#enh-journal-clear').addEventListener('click', () => {
@@ -15061,7 +15172,7 @@ section[data-testid="hero-parent"].enh-editorial-native-hidden { display: none !
                 t('text_cache_remaining', [remaining, formatCacheBytes(remainingBytes)]);
             overlay.querySelector('#enh-cache-status').textContent = remaining
                 ? `${remaining} entries remain, using ${formatCacheBytes(remainingBytes)} of ${formatCacheBytes(CACHE_TOTAL_BYTE_BUDGET)}.`
-                : 'No cached entries.';
+                : t('text_no_cached_entries');
             if (!keys.length) showToast(t('toast_cache_is_already_empty'));
             else if (failed) showToast(t('toast_cleared_cached_entries_could_not_be', [cleared, failed]), 4500);
             else showToast(t('toast_cleared_cached_entries_reload_to_re', [cleared]));
@@ -15079,7 +15190,7 @@ section[data-testid="hero-parent"].enh-editorial-native-hidden { display: none !
         if (document.getElementById('enh-settings-fab')) return;
         const fab = makeEl('button', {
             id:'enh-settings-fab', type:'button',
-            title:'IMDb Enhanced settings', 'aria-label':t('aria_open_imdb_enhanced_settings'),
+            title:t('text_imdb_enhanced_settings'), 'aria-label':t('aria_open_imdb_enhanced_settings'),
             'aria-haspopup':'dialog', 'aria-expanded':'false',
             innerHTML: `<svg width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><circle cx="12" cy="12" r="3"/><path d="M19.4 15a1.65 1.65 0 0 0 .33 1.82l.06.06a2 2 0 0 1-2.83 2.83l-.06-.06a1.65 1.65 0 0 0-1.82-.33 1.65 1.65 0 0 0-1 1.51V21a2 2 0 0 1-4 0v-.09A1.65 1.65 0 0 0 9 19.4a1.65 1.65 0 0 0-1.82.33l-.06.06a2 2 0 0 1-2.83-2.83l.06-.06A1.65 1.65 0 0 0 4.68 15a1.65 1.65 0 0 0-1.51-1H3a2 2 0 0 1 0-4h.09A1.65 1.65 0 0 0 4.6 9a1.65 1.65 0 0 0-.33-1.82l-.06-.06a2 2 0 0 1 2.83-2.83l.06.06A1.65 1.65 0 0 0 9 4.68a1.65 1.65 0 0 0 1-1.51V3a2 2 0 0 1 4 0v.09a1.65 1.65 0 0 0 1 1.51 1.65 1.65 0 0 0 1.82-.33l.06-.06a2 2 0 0 1 2.83 2.83l-.06.06A1.65 1.65 0 0 0 19.4 9a1.65 1.65 0 0 0 1.51 1H21a2 2 0 0 1 0 4h-.09a1.65 1.65 0 0 0-1.51 1z"/></svg>`,
             onClick: toggleSettings,
@@ -15358,7 +15469,7 @@ section[data-testid="hero-parent"].enh-editorial-native-hidden { display: none !
             try { GM_registerMenuCommand(label, handler); }
             catch (error) { console.warn(`[IMDb Enhanced] menu command "${label}" unavailable:`, error); }
         };
-        register('Open IMDb Enhanced settings', () => {
+        register(t('aria_open_imdb_enhanced_settings'), () => {
             if (!document.getElementById('enh-settings-overlay')) createSettingsPanel();
             if (!settingsOpen) toggleSettings();
         });
@@ -15371,13 +15482,13 @@ section[data-testid="hero-parent"].enh-editorial-native-hidden { display: none !
                     return;
                 }
                 showToast(omitted.length
-                    ? `Backup copied. ${omitted.length} integration ${omitted.length === 1 ? 'credential was' : 'credentials were'} left out.`
-                    : 'Backup copied.', omitted.length ? 5000 : 2500);
+                    ? tCount('recovery_backup_copied_omitting', omitted.length)
+                    : t('recovery_backup_copied'), omitted.length ? 5000 : 2500);
             } catch (error) {
-                showToast(error?.message || 'The backup could not be created.', 4500);
+                showToast(error?.message || t('recovery_the_backup_could_not_be_created'), 4500);
             }
         });
-        register('Restore a settings backup', () => {
+        register(t('text_restore_a_settings_backup'), () => {
             if (!document.getElementById('enh-settings-overlay')) createSettingsPanel();
             if (!settingsOpen) toggleSettings();
             // Land on Data with the restore panel already open, so the command finishes
@@ -15390,7 +15501,7 @@ section[data-testid="hero-parent"].enh-editorial-native-hidden { display: none !
         /* Registered once, up front, rather than from inside the reset handler. Doing it
            there added a command per reset; Violentmonkey and Tampermonkey replace by
            caption, but a manager that does not dedupe would accumulate one every time. */
-        register('Undo the last settings reset', () => {
+        register(t('text_undo_the_last_settings_reset'), () => {
             if (!pendingResetUndo) { showToast(t('toast_there_is_no_reset_to_undo')); return; }
             try {
                 const restored = applySettingsImport(pendingResetUndo);
@@ -15398,7 +15509,7 @@ section[data-testid="hero-parent"].enh-editorial-native-hidden { display: none !
                 showToast(t('toast_undone_settings_were_put_back_reloading', [restored]));
                 setTimeout(() => location.reload(), 1000);
             } catch (error) {
-                showToast(error?.message || 'The undo failed. Nothing was changed.', 5000);
+                showToast(error?.message || t('recovery_the_undo_failed_nothing_was_changed'), 5000);
             }
         });
         register('Reset all settings (with undo)', () => {
@@ -15416,7 +15527,7 @@ section[data-testid="hero-parent"].enh-editorial-native-hidden { display: none !
                 if (!pendingResetUndo) pendingResetUndo = snapshot;
                 showToast(t('toast_reset_settings_use_the_manager_menu', [count]), 8000);
             } catch (error) {
-                showToast(error?.message || 'The reset failed and previous settings were restored.', 5000);
+                showToast(error?.message || t('recovery_the_reset_failed_and_previous_settings_were'), 5000);
             }
         });
     }
