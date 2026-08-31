@@ -7,6 +7,9 @@
     setTimeout(__clearBoot, 1500);
 
 
+    const __TRUSTED_CONTEXT = false;
+    const __CREDENTIAL_KEY_LIST = ["imdb_enh_radarrApiKey","imdb_enh_sonarrApiKey","imdb_enh_seerrApiKey","imdb_enh_plexToken","imdb_enh_jellyfinApiKey","imdb_enh_embyApiKey"];
+
     /* Chromium MV3 returns promises from chrome.* while Gecko's chrome.* alias is
        callback-style, so calling .catch() on the return value is not portable —
        permissions.js in this same build already guards for both. The callback form is
@@ -39,7 +42,13 @@
     const __pendingChanges = [];
     const __applyChanges = changes => {
         Object.entries(changes || {}).forEach(([key, change]) => {
-            if (change && Object.prototype.hasOwnProperty.call(change, 'newValue')) __state[key] = change.newValue;
+            const has = change && Object.prototype.hasOwnProperty.call(change, 'newValue');
+            // A credential changed in another tab updates only whether it is set.
+            if (!__TRUSTED_CONTEXT && __isCredentialKey(key)) {
+                __recordCredential(key, has ? change.newValue : '');
+                return;
+            }
+            if (has) __state[key] = change.newValue;
             else delete __state[key];
         });
     };
@@ -48,10 +57,33 @@
         if (!__stateReady) { __pendingChanges.push(changes); return; }
         __applyChanges(changes);
     });
+    /* Integration credentials never enter the content script's mirror. They are only ever
+       needed by a request to a loopback service, and the background makes that request
+       and can read storage itself — so there is no reason for the page's own world to
+       hold a Radarr, Sonarr, Overseerr, Plex, Jellyfin or Emby key at all. What the
+       content script gets instead is whether each one is set, which is all the settings
+       UI needs to say "configured".
+
+       The options page is different: it is an extension page, it is where the encrypted
+       backup is produced, and a backup that silently omitted the credentials it promises
+       to carry would be worse than no backup. The build stamps __TRUSTED_CONTEXT there
+       and nowhere else. */
+    const __CREDENTIAL_KEYS = new Set(__CREDENTIAL_KEY_LIST);
+    const __isCredentialKey = key => __CREDENTIAL_KEYS.has(key);
+    const __configuredCredentials = Object.create(null);
+    const __recordCredential = (key, value) => {
+        __configuredCredentials[key] = typeof value === 'string' && value.trim() !== '';
+    };
     const __extensionState = await __storage('get', null).catch(() => ({}));
-    Object.entries(__extensionState || {}).forEach(([key, value]) => { __state[key] = value; });
+    Object.entries(__extensionState || {}).forEach(([key, value]) => {
+        if (!__TRUSTED_CONTEXT && __isCredentialKey(key)) { __recordCredential(key, value); return; }
+        __state[key] = value;
+    });
     __stateReady = true;
     __pendingChanges.splice(0).forEach(__applyChanges);
+    /* Asked by the settings UI so it can show a credential as configured without ever
+       holding it. Returns only a boolean. */
+    globalThis.__imdbEnhancedCredentialConfigured = key => Boolean(__configuredCredentials[key]);
     const __sendAdState = enabled => {
         try { chrome.runtime.sendMessage({ type:'imdb-enhanced:set-ad-blocking', enabled:enabled !== false }); }
         catch { /* the service worker may be asleep during teardown */ }
@@ -159,6 +191,10 @@
                 url:String(options.url || ''),
                 method:String(options.method || 'GET'),
                 headers:options.headers,
+                /* A name and a storage key, never a value: the content script has no
+                   credential to send. The background looks the key up and injects it only
+                   into a request it has already validated as loopback. */
+                credentialHeader:options.credentialHeader || null,
                 body:options.data,
                 timeout:options.timeout,
             }, response => {
@@ -2785,20 +2821,38 @@
         const parsed = Number(value);
         return Number.isSafeInteger(parsed) && parsed > 0 ? parsed : fallback;
     }
+    /* In the extension the credential is not readable here at all: the bridge keeps it
+       out of the content script's world, and the background substitutes it into the
+       request. What comes back is a reference — the setting key — plus whether it is set.
+       Under a script manager there is no second context to hold it, so the value is read
+       directly and the reference is unused. */
+    function readCredential(key) {
+        if (IS_EXTENSION_BUILD && typeof globalThis.__imdbEnhancedCredentialConfigured === 'function') {
+            return { value:'', ref:key, configured: globalThis.__imdbEnhancedCredentialConfigured(PREFIX + key) };
+        }
+        const value = normalizeCredentialValue(get(key));
+        return { value, ref:key, configured: Boolean(value) };
+    }
+
     function getServarrConfig(kind) {
         const prefix = kind === 'sonarr' ? 'sonarr' : 'radarr';
         const baseUrl = normalizeLocalServiceUrl(get(`${prefix}Url`));
+        const credential = readCredential(`${prefix}ApiKey`);
         return {
             kind: prefix,
             baseUrl,
-            apiKey: normalizeCredentialValue(get(`${prefix}ApiKey`)),
+            apiKey: credential.value,
+            apiKeyRef: credential.ref,
+            hasApiKey: credential.configured,
             rootFolderPath: String(get(`${prefix}RootFolderPath`) || '').trim().slice(0, SETTING_TEXT_LIMIT),
             qualityProfileId: toPositiveInteger(get(`${prefix}QualityProfileId`), 0),
         };
     }
     function isServarrConfigured(kind) {
         const cfg = getServarrConfig(kind);
-        return Boolean(cfg.baseUrl && cfg.apiKey && cfg.rootFolderPath && cfg.qualityProfileId);
+        // hasApiKey, not apiKey: in the extension the value is deliberately unreadable
+        // here, and testing the value would report every configured install as unset.
+        return Boolean(cfg.baseUrl && cfg.hasApiKey && cfg.rootFolderPath && cfg.qualityProfileId);
     }
     function getServarrAddOptions(item) {
         return item?.addOptions && typeof item.addOptions === 'object' && !Array.isArray(item.addOptions)
@@ -2846,14 +2900,17 @@
     const SEERR_SEASON_LIMIT = 100;
 
     function getSeerrConfig() {
+        const credential = readCredential('seerrApiKey');
         return {
             baseUrl: normalizeLocalServiceUrl(get('seerrUrl')),
-            apiKey: normalizeCredentialValue(get('seerrApiKey')),
+            apiKey: credential.value,
+            apiKeyRef: credential.ref,
+            hasApiKey: credential.configured,
         };
     }
     function isSeerrConfigured() {
         const cfg = getSeerrConfig();
-        return Boolean(cfg.baseUrl && cfg.apiKey);
+        return Boolean(cfg.baseUrl && cfg.hasApiKey);
     }
     function mapSeerrMediaState(mediaInfo) {
         const status = Number(mediaInfo?.status) || 0;
@@ -2897,9 +2954,12 @@
             body: opts.body,
             timeout: opts.timeout || 15000,
             cancelOnRouteChange: Boolean(opts.cancelOnRouteChange),
+            /* Extension build: the value is not readable here, so the background is
+               told which stored key to inject and does it only for a loopback target. */
+            credentialHeader: cfg.apiKeyRef ? { name:'X-Api-Key', ref:cfg.apiKeyRef } : null,
             headers: {
                 Accept: 'application/json',
-                'X-Api-Key': cfg.apiKey,
+                ...(cfg.apiKey ? { 'X-Api-Key': cfg.apiKey } : {}),
                 ...(opts.body ? { 'Content-Type':'application/json' } : {}),
                 ...(opts.headers || {}),
             },
@@ -2923,9 +2983,12 @@
             body: opts.body,
             timeout: opts.timeout || 15000,
             cancelOnRouteChange: Boolean(opts.cancelOnRouteChange),
+            /* Extension build: the value is not readable here, so the background is
+               told which stored key to inject and does it only for a loopback target. */
+            credentialHeader: cfg.apiKeyRef ? { name:'X-Api-Key', ref:cfg.apiKeyRef } : null,
             headers: {
                 Accept: 'application/json',
-                'X-Api-Key': cfg.apiKey,
+                ...(cfg.apiKey ? { 'X-Api-Key': cfg.apiKey } : {}),
                 ...(opts.headers || {}),
             },
         });
@@ -2945,17 +3008,21 @@
         };
         const def = defs[kind];
         if (!def) return null;
+        const credential = readCredential(def.tokenKey);
         return {
             kind,
             label: def.label,
             baseUrl: normalizeLocalServiceUrl(get(def.urlKey)),
-            token: normalizeCredentialValue(get(def.tokenKey)),
+            token: credential.value,
+            tokenRef: credential.ref,
+            hasToken: credential.configured,
         };
     }
     function getConfiguredMediaServers() {
         return ['plex', 'jellyfin', 'emby']
             .map(getMediaServerConfig)
-            .filter(cfg => cfg?.baseUrl && cfg.token);
+            // hasToken, not token: the extension deliberately cannot read the value here.
+            .filter(cfg => cfg?.baseUrl && cfg.hasToken);
     }
     function normalizeIMDbProviderId(value) {
         const source = toBoundedText(value, PROVIDER_ID_TEXT_LIMIT);
@@ -3053,14 +3120,19 @@
             throw new Error('Only localhost and 127.0.0.1 media server URLs are allowed by this build.');
         }
         const query = { ...(opts.query || {}) };
+        const headerName = cfg.kind === 'plex' ? 'X-Plex-Token' : 'X-Emby-Token';
         const headers = cfg.kind === 'plex'
-            ? { Accept:'application/xml', 'X-Plex-Token':cfg.token, ...(opts.headers || {}) }
-            : { Accept:'application/json', 'X-Emby-Token': cfg.token, ...(opts.headers || {}) };
+            ? { Accept:'application/xml', ...(opts.headers || {}) }
+            : { Accept:'application/json', ...(opts.headers || {}) };
+        if (cfg.token) headers[headerName] = cfg.token;
         return httpRequest(buildLocalServiceUrl(cfg.baseUrl, path, query), {
             method: opts.method || 'GET',
             timeout: opts.timeout || 12000,
             cancelOnRouteChange: Boolean(opts.cancelOnRouteChange),
             headers,
+            // Extension build: the value is not readable here, so the background is told
+            // which stored key to inject and does it only for a loopback destination.
+            credentialHeader: cfg.tokenRef ? { name:headerName, ref:cfg.tokenRef } : null,
         });
     }
 
@@ -10590,19 +10662,28 @@ section[data-testid="hero-parent"].enh-editorial-native-hidden { display: none !
 
     function createSettingsInput({ key, label, type = 'text', wide = false, placeholder = '', refreshKey = 'servarrIntegration' }) {
         const id = `enh-setting-${key}`;
+        /* In the extension a credential is write-only here: the bridge keeps the value out
+           of this world entirely, so the field cannot be pre-filled and must say whether
+           one is stored instead of rendering an empty box that reads as "not set". */
+        const isCredential = CREDENTIAL_SETTING_KEYS.has(key);
+        const credential = isCredential ? readCredential(key) : null;
+        const writeOnly = isCredential && !credential.value && credential.configured;
         const input = makeEl('input', {
             id,
             name:key,
             type,
             className:'enh-servarr-input',
-            placeholder,
+            placeholder: writeOnly ? 'Saved — type to replace' : placeholder,
             autocomplete: type === 'password' ? 'new-password' : 'off',
             spellcheck:'false',
+            ...(writeOnly ? { 'aria-describedby':`${id}-state` } : {}),
             ...(type === 'number'
                 ? { min:'1', step:'1' }
                 : { maxlength:String(SETTING_TEXT_LIMIT) }),
         });
-        input.value = String(get(key) || '').slice(0, SETTING_TEXT_LIMIT);
+        input.value = isCredential
+            ? String(credential.value || '').slice(0, SETTING_TEXT_LIMIT)
+            : String(get(key) || '').slice(0, SETTING_TEXT_LIMIT);
         const persist = (notifyFailure = false) => {
             const raw = input.value.trim();
             if (LOCAL_SERVICE_URL_KEYS.has(key)) {
@@ -10655,7 +10736,13 @@ section[data-testid="hero-parent"].enh-editorial-native-hidden { display: none !
         });
         return makeEl('div', { className:'enh-servarr-field' + (wide ? ' enh-servarr-field--wide' : '') },
             makeEl('label', { for:id }, label),
-            input
+            input,
+            // Says a credential is stored without showing it, so an empty field is not
+            // mistaken for an unconfigured integration.
+            writeOnly
+                ? makeEl('span', { className:'enh-servarr-note enh-servarr-note--saved', id:`${id}-state` },
+                    'A key is saved on this device. It is not shown here; type a new one to replace it.')
+                : null
         );
     }
 

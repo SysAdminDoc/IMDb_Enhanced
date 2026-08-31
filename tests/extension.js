@@ -225,4 +225,36 @@ assert.strictEqual(
     assert(fs.existsSync(path.join(firefoxDir, name)), `Firefox build is missing ${name}`);
 });
 
+/* IE-89: in an extension build a secret must not reach the page's tab at all, so the
+   content bundle keeps credential values out of its own storage mirror and the settings
+   field cannot be pre-filled from one. The two lists that make that work are written in
+   different files and would drift apart silently, so tie them together here. */
+const credentialKeys = (source.match(/const CREDENTIAL_SETTING_KEYS = new Set\(\[([\s\S]*?)\]\);/) || [])[1];
+assert(credentialKeys, 'the userscript must declare which settings are credentials');
+const credentialNames = [...credentialKeys.matchAll(/'([^']+)'/g)].map(m => m[1]).sort();
+assert(credentialNames.length >= 6, 'every integration secret must be listed as a credential');
+const backgroundAllowlist = (background.match(/const CREDENTIAL_STORAGE_KEYS = new Set\(\[([\s\S]*?)\]\);/) || [])[1];
+assert(backgroundAllowlist, 'the background worker must allowlist the keys it will inject');
+assert.deepStrictEqual(
+    [...backgroundAllowlist.matchAll(/'([^']+)'/g)].map(m => m[1]).sort(),
+    credentialNames.map(name => `imdb_enh_${name}`).sort(),
+    'the background injection allowlist and the credential settings must name the same keys');
+
+assert(content.includes('__TRUSTED_CONTEXT = false'), 'the content bundle must run as an untrusted context');
+assert(recovery.includes('__TRUSTED_CONTEXT = true'),
+    'the options page owns backup and restore, so it keeps full storage access');
+/* The redaction has to happen where the mirror is filled, not where it is read: a value
+   that reaches __state at all is readable by anything running in that world. */
+assert(/__TRUSTED_CONTEXT[\s\S]{0,400}CREDENTIAL_KEYS/.test(content),
+    'the untrusted mirror must drop credential values as it is populated');
+assert(content.includes('__imdbEnhancedCredentialConfigured'),
+    'an untrusted context needs a way to learn a credential exists without reading it');
+/* Guards against the settings field going back to reading the value to decide what to
+   show, which is what made the redaction pointless before. */
+assert(/const writeOnly = isCredential && !credential\.value && credential\.configured/.test(source),
+    'a stored credential must render as write-only rather than as an empty, unconfigured field');
+assert(source.includes('credentialHeader'), 'requests must name the credential they need, not carry it');
+assert(!/headers\[[^\]]*\]\s*=\s*(?:get|getSetting)\(\s*'(?:radarr|sonarr|seerr|plex|jellyfin|emby)/i.test(source),
+    'no request may build a header from a credential value read in the page context');
+
 console.log(`Extension manifest and generated content are valid at v${pkg.version}, for both builds.`);

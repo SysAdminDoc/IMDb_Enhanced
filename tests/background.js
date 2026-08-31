@@ -403,6 +403,64 @@ for (const engine of ['chromium', 'gecko']) {
             'the background must not attempt a request it cannot make');
     });
 
+    /* IE-89: the content script cannot read an integration credential at all, so it names
+       the header and the stored key and the value is substituted here. */
+    test(`[${engine}] the background injects a credential only into a loopback request`, async () => {
+        const { dispatch, calls, storage } = loadBackground({ engine, fetchImpl: makeFetch({}) });
+        storage.set('imdb_enh_radarrApiKey', 'radarr-secret');
+
+        const ok = await dispatch(request('http://localhost:7878/api/v3/movie', {
+            headers: { Accept:'application/json' },
+            credentialHeader: { name:'X-Api-Key', ref:'radarrApiKey' },
+        }), IMDB_SENDER);
+        assert.strictEqual(ok.ok, true);
+        assert.strictEqual(calls.fetches[0][1].headers['X-Api-Key'], 'radarr-secret',
+            'the local service must still receive its key');
+        assert.strictEqual(calls.fetches[0][1].redirect, 'manual',
+            'an injected credential must still forbid redirects');
+    });
+
+    test(`[${engine}] a credential is never injected into a public request`, async () => {
+        const { dispatch, calls, storage } = loadBackground({ engine, fetchImpl: makeFetch({}) });
+        storage.set('imdb_enh_radarrApiKey', 'radarr-secret');
+        // Same reference, public destination: the value must not travel.
+        await dispatch(request('https://www.rottentomatoes.com/m/x', {
+            credentialHeader: { name:'X-Api-Key', ref:'radarrApiKey' },
+        }), IMDB_SENDER);
+        const sent = calls.fetches[0][1];
+        assert.strictEqual(sent.headers['X-Api-Key'], undefined,
+            'a public host must never receive a local integration key');
+        assert(!JSON.stringify(sent.headers).includes('radarr-secret'), 'and not under any other name');
+    });
+
+    /* Without this the injection path would be a way to read any stored value into an
+       outbound request just by naming its key. */
+    test(`[${engine}] only known credential keys can be injected`, async () => {
+        const { dispatch, calls, storage } = loadBackground({ engine, fetchImpl: makeFetch({}) });
+        storage.set('imdb_enh_userMarks', 'private-marks-payload');
+        storage.set('imdb_enh_failureJournal', 'journal-payload');
+        for (const ref of ['userMarks', 'failureJournal', 'themeVariant', '../../etc']) {
+            calls.fetches.length = 0;
+            await dispatch(request('http://localhost:7878/api/v3/movie', {
+                credentialHeader: { name:'X-Api-Key', ref },
+            }), IMDB_SENDER);
+            const sent = calls.fetches[0][1];
+            assert.strictEqual(sent.headers['X-Api-Key'], undefined, `${ref} must not be injectable`);
+            assert(!JSON.stringify(sent.headers).includes('payload'), `${ref} must not leak its value`);
+        }
+    });
+
+    test(`[${engine}] an injected credential cannot smuggle a header break`, async () => {
+        const { dispatch, calls, storage } = loadBackground({ engine, fetchImpl: makeFetch({}) });
+        storage.set('imdb_enh_plexToken', 'secret\r\nX-Injected: yes');
+        await dispatch(request('http://127.0.0.1:32400/library/sections', {
+            credentialHeader: { name:'X-Plex-Token', ref:'plexToken' },
+        }), IMDB_SENDER);
+        const sent = calls.fetches[0][1];
+        assert.strictEqual(sent.headers['X-Plex-Token'], undefined,
+            'a credential carrying control characters must be refused, not sent');
+    });
+
     test(`[${engine}] credentials are never sent to a public provider`, async () => {
         const { dispatch, calls } = loadBackground({ engine, fetchImpl: makeFetch({}) });
         await dispatch(request('https://query.wikidata.org/sparql?query=x', {

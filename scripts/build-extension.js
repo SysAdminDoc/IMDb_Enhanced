@@ -76,7 +76,22 @@ const prelude = String.raw`
     setTimeout(__clearBoot, ${BOOT_TIMEOUT_MS});
 `;
 
-const bridge = String.raw`
+/* Read from the userscript so the bridge and the exporter agree on what counts as a
+   credential. A second hand-written list here is how one of them quietly stops covering
+   a key the other still redacts. */
+function readCredentialKeys() {
+    const block = source.match(/const CREDENTIAL_SETTING_KEYS = new Set\(\[([\s\S]*?)\]\);/);
+    if (!block) throw new Error('CREDENTIAL_SETTING_KEYS could not be read from the userscript.');
+    const keys = [...block[1].matchAll(/'([A-Za-z0-9_]+)'/g)].map(match => match[1]);
+    if (!keys.length) throw new Error('CREDENTIAL_SETTING_KEYS appears to be empty.');
+    return keys;
+}
+const CREDENTIAL_KEYS = readCredentialKeys();
+
+const bridgeFor = ({ trusted }) => String.raw`
+    const __TRUSTED_CONTEXT = ${trusted ? 'true' : 'false'};
+    const __CREDENTIAL_KEY_LIST = ${JSON.stringify(CREDENTIAL_KEYS.map(key => `imdb_enh_${key}`))};
+` + String.raw`
     /* Chromium MV3 returns promises from chrome.* while Gecko's chrome.* alias is
        callback-style, so calling .catch() on the return value is not portable —
        permissions.js in this same build already guards for both. The callback form is
@@ -109,7 +124,13 @@ const bridge = String.raw`
     const __pendingChanges = [];
     const __applyChanges = changes => {
         Object.entries(changes || {}).forEach(([key, change]) => {
-            if (change && Object.prototype.hasOwnProperty.call(change, 'newValue')) __state[key] = change.newValue;
+            const has = change && Object.prototype.hasOwnProperty.call(change, 'newValue');
+            // A credential changed in another tab updates only whether it is set.
+            if (!__TRUSTED_CONTEXT && __isCredentialKey(key)) {
+                __recordCredential(key, has ? change.newValue : '');
+                return;
+            }
+            if (has) __state[key] = change.newValue;
             else delete __state[key];
         });
     };
@@ -118,10 +139,33 @@ const bridge = String.raw`
         if (!__stateReady) { __pendingChanges.push(changes); return; }
         __applyChanges(changes);
     });
+    /* Integration credentials never enter the content script's mirror. They are only ever
+       needed by a request to a loopback service, and the background makes that request
+       and can read storage itself — so there is no reason for the page's own world to
+       hold a Radarr, Sonarr, Overseerr, Plex, Jellyfin or Emby key at all. What the
+       content script gets instead is whether each one is set, which is all the settings
+       UI needs to say "configured".
+
+       The options page is different: it is an extension page, it is where the encrypted
+       backup is produced, and a backup that silently omitted the credentials it promises
+       to carry would be worse than no backup. The build stamps __TRUSTED_CONTEXT there
+       and nowhere else. */
+    const __CREDENTIAL_KEYS = new Set(__CREDENTIAL_KEY_LIST);
+    const __isCredentialKey = key => __CREDENTIAL_KEYS.has(key);
+    const __configuredCredentials = Object.create(null);
+    const __recordCredential = (key, value) => {
+        __configuredCredentials[key] = typeof value === 'string' && value.trim() !== '';
+    };
     const __extensionState = await __storage('get', null).catch(() => ({}));
-    Object.entries(__extensionState || {}).forEach(([key, value]) => { __state[key] = value; });
+    Object.entries(__extensionState || {}).forEach(([key, value]) => {
+        if (!__TRUSTED_CONTEXT && __isCredentialKey(key)) { __recordCredential(key, value); return; }
+        __state[key] = value;
+    });
     __stateReady = true;
     __pendingChanges.splice(0).forEach(__applyChanges);
+    /* Asked by the settings UI so it can show a credential as configured without ever
+       holding it. Returns only a boolean. */
+    globalThis.__imdbEnhancedCredentialConfigured = key => Boolean(__configuredCredentials[key]);
     const __sendAdState = enabled => {
         try { chrome.runtime.sendMessage({ type:'imdb-enhanced:set-ad-blocking', enabled:enabled !== false }); }
         catch { /* the service worker may be asleep during teardown */ }
@@ -229,6 +273,10 @@ const bridge = String.raw`
                 url:String(options.url || ''),
                 method:String(options.method || 'GET'),
                 headers:options.headers,
+                /* A name and a storage key, never a value: the content script has no
+                   credential to send. The background looks the key up and injects it only
+                   into a request it has already validated as loopback. */
+                credentialHeader:options.credentialHeader || null,
                 body:options.data,
                 timeout:options.timeout,
             }, response => {
@@ -276,7 +324,7 @@ const bridge = String.raw`
 `;
 
 const content = `/* Generated by scripts/build-extension.js. Edit IMDb_Enhanced.user.js instead. */\n(async function imdbEnhancedExtensionBootstrap() {\n${prelude}
-${bridge}\n${sourceBody}\n})();\n`;
+${bridgeFor({ trusted:false })}\n${sourceBody}\n})();\n`;
 
 /* The recovery page is a separate document, so it cannot reach into the userscript's
    closure. Rather than reimplement backup, restore, reset and diagnostics — a second
@@ -291,7 +339,7 @@ const recovery = `/* Generated by scripts/build-extension.js from IMDb_Enhanced.
    scripts/recovery-page.js. Edit those instead. */
 (async function imdbEnhancedRecoveryBootstrap() {
 ${prelude}
-${bridge}
+${bridgeFor({ trusted:true })}
     let core = null;
     globalThis.__imdbEnhancedRecoveryHook = api => { core = api; };
 ${sourceBody}
@@ -374,7 +422,7 @@ function buildFirefoxBuild() {
 /* Exported so the GM contract suite can instantiate the real bridge instead of a
    paraphrase of it. The two fragments are inseparable: the bridge closes by calling
    __clearBoot(), which the prelude defines. */
-const EXTENSION_BRIDGE_SOURCE = `${prelude}\n${bridge}`;
+const EXTENSION_BRIDGE_SOURCE = `${prelude}\n${bridgeFor({ trusted:false })}`;
 
 module.exports = {
     toFirefoxManifest,

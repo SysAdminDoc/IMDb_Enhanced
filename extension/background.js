@@ -15,6 +15,17 @@ const ALLOWED_REQUEST_HOSTS = new Set([
     '127.0.0.1',
 ]);
 const LOOPBACK_HOSTS = new Set(['localhost', '127.0.0.1']);
+/* The only storage keys this worker will read on a content script's say-so. Anything else
+   named in a credentialHeader is ignored, so the injection path cannot be turned into a
+   general way to read extension storage out into an outbound request. */
+const CREDENTIAL_STORAGE_KEYS = new Set([
+    'imdb_enh_radarrApiKey',
+    'imdb_enh_sonarrApiKey',
+    'imdb_enh_seerrApiKey',
+    'imdb_enh_plexToken',
+    'imdb_enh_jellyfinApiKey',
+    'imdb_enh_embyApiKey',
+]);
 /* Credentials the userscript attaches to local-service calls. fetch strips
    Authorization across an origin change but carries arbitrary custom headers with
    it, so these are exactly the ones a redirect could hand to a third party. Compared
@@ -149,7 +160,7 @@ function getRequestKey(message, sender) {
     return `${Number(sender?.tab?.id) || 0}:${String(message?.id || '')}`;
 }
 
-function sendHttpRequest(message, sender, sendResponse) {
+async function sendHttpRequest(message, sender, sendResponse) {
     const requestId = String(message.id || '');
     const requestKey = getRequestKey(message, sender);
     const url = String(message.url || '');
@@ -168,6 +179,25 @@ function sendHttpRequest(message, sender, sendResponse) {
 
     const method = String(message.method || 'GET').toUpperCase().slice(0, 16);
     const headers = normalizeHeaders(message.headers);
+    /* The content script cannot read integration credentials — the bridge keeps them out
+       of its world entirely — so it names the header and the stored key it wants and the
+       value is fetched here. Two conditions, both required: the key must be one of the
+       known credential settings, and the destination must already have been validated as
+       loopback. That is what stops this from becoming a way to read storage into an
+       arbitrary request. */
+    const credentialRef = message.credentialHeader;
+    if (credentialRef && target.loopback
+        && CREDENTIAL_STORAGE_KEYS.has(`${STORAGE_PREFIX}${credentialRef.ref}`)
+        && typeof credentialRef.name === 'string') {
+        const stored = await callApi(chrome.storage.local, 'get', `${STORAGE_PREFIX}${credentialRef.ref}`)
+            .catch(() => null);
+        const value = stored?.[`${STORAGE_PREFIX}${credentialRef.ref}`];
+        // Rejected the same way normalizeHeaders rejects one: a control character here
+        // would be a header-injection vector.
+        if (typeof value === 'string' && value.trim() && !/[\u0000-\u001f\u007f]/.test(value)) {
+            headers[credentialRef.name.slice(0, 120)] = value.slice(0, 4096);
+        }
+    }
     const body = message.body === undefined || message.body === null
         ? undefined
         : String(message.body).slice(0, MAX_RESPONSE_TEXT);
