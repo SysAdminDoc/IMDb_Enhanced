@@ -38,6 +38,8 @@
 
 - TMDB identity lookup now rejects an ambiguous response before discarding malformed candidates. Two results remain ambiguous even if only one carries a valid numeric ID.
 
+- Two holes in the credential boundary are closed. A failed save could put a just-typed key back into the IMDb tab, because the rollback remembered the value it was supposed to keep out; it now remembers only that one is stored. And the encrypted backup had become impossible from everywhere, including the extension page that exists to make it; that page can read your keys again. A key that leaves your machine now travels only over https, and a request carrying one refuses redirects no matter what its header is called.
+
 - When storage is full, the page no longer keeps showing a mark that was never saved. Two marks made in quick succession would both fail to save, you would be told twice that nothing was saved, and one of them would stay on screen looking Seen until you reloaded. The extension now puts the page back to what storage actually holds rather than to whatever it last tried to write.
 
 - "Grant access" no longer claims a page has opened when it has not.
