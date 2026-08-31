@@ -142,6 +142,11 @@ function loadScriptTestHooks({ withoutDeleteValue = false } = {}) {
         computeCurrentAge,
         getUserMarks,
         setUserMark,
+        getUserMark,
+        getUserNote,
+        setUserNote,
+        normalizeUserNote,
+        USER_MARK_NOTE_LIMIT,
         readPersonBirthDate,
         isPersonDeceased,
         EPISODE_CODE_PATTERN,
@@ -2873,6 +2878,74 @@ test('local request errors stay concise and text-only', () => {
         'Request failed',
         'non-numeric status values should not be coerced into UI text'
     );
+});
+
+/* IE-70: notes are paywalled by every tracker that offers them and absent from IMDb, and
+   they fit the existing marks store exactly — same bound, same normalizer, same backup. */
+test('a title can carry a private note that survives backup and never leaks', () => {
+    const hooks = loadScriptTestHooks();
+
+    // A note can exist without a Seen/Skip state; requiring one would discard it.
+    assert(hooks.setUserNote('tt0133093', 'the one with the twist', 'The Matrix'));
+    assert.strictEqual(hooks.getUserNote('tt0133093'), 'the one with the twist');
+    assert.strictEqual(hooks.getUserMark('tt0133093'), '', 'a note must not invent a Seen mark');
+
+    // Marking, then clearing the mark, must not take the note with it.
+    assert(hooks.setUserMark('tt0133093', 'watched', 'The Matrix'));
+    assert.strictEqual(hooks.getUserNote('tt0133093'), 'the one with the twist', 'marking must preserve the note');
+    assert(hooks.setUserMark('tt0133093', ''));
+    assert.strictEqual(hooks.getUserNote('tt0133093'), 'the one with the twist', 'unmarking must preserve the note');
+    assert.strictEqual(hooks.getUserMark('tt0133093'), '');
+
+    // Clearing the last of both removes the record rather than leaving an empty one to
+    // be counted, exported, and pushed against the storage bound forever.
+    assert(hooks.setUserNote('tt0133093', ''));
+    assert(!Object.prototype.hasOwnProperty.call(hooks.getUserMarks(true), 'tt0133093'),
+        'a record with neither a mark nor a note must not persist');
+
+    // Bounded and sanitized like every other stored string.
+    const long = 'x'.repeat(hooks.USER_MARK_NOTE_LIMIT + 200);
+    hooks.setUserNote('tt0111161', long, 'Shawshank');
+    assert.strictEqual(hooks.getUserNote('tt0111161').length, hooks.USER_MARK_NOTE_LIMIT, 'notes must be bounded');
+    hooks.setUserNote('tt0111161', 'line one\r\nline two\n\n\n\nline three  ');
+    assert.strictEqual(hooks.getUserNote('tt0111161'), 'lineone\nline two\n\nline three',
+        'control characters are stripped, newlines normalized, runs collapsed');
+    assert.strictEqual(hooks.normalizeUserNote(12345), '', 'a non-string note is not a note');
+
+    // Records are versioned so a later field is a migration, not a rewrite.
+    const record = hooks.getUserMarks(true).tt0111161;
+    assert.strictEqual(record.v, 1, 'mark records must carry their version');
+
+    // Round-trips through backup and restore with everything else.
+    const backup = hooks.getExportSettings();
+    assert.strictEqual(backup.userMarks.tt0111161.note, hooks.getUserNote('tt0111161'),
+        'a note must be included in a backup');
+    const restored = hooks.prepareSettingsImport(backup).entries.find(e => e.key === 'userMarks');
+    assert.strictEqual(restored.value.tt0111161.note, hooks.getUserNote('tt0111161'),
+        'a note must survive import unchanged');
+
+    // A legacy record with no note still normalizes, and a note-only import is accepted.
+    const legacy = hooks.prepareSettingsImport({
+        userMarks:{ tt0068646:'watched', tt0071562:{ note:'sequel', title:'Part II' } },
+    }).entries[0].value;
+    assert.strictEqual(legacy.tt0068646.state, 'watched');
+    assert.strictEqual(legacy.tt0068646.note, undefined, 'a record without a note gains no empty one');
+    assert.strictEqual(legacy.tt0071562.note, 'sequel', 'a note-only record must import');
+    assert.strictEqual(legacy.tt0071562.state, '', 'a note-only record has no state');
+
+    /* Notes never leave the browser. The diagnostics report is the one thing a user is
+       invited to paste in public, and it already reduces marks to a count. */
+    hooks.setUserNote('tt0133093', 'SECRET-NOTE-TEXT', 'The Matrix');
+    const report = hooks.buildDiagnosticsReport();
+    assert(!report.includes('SECRET-NOTE-TEXT'), 'a note must never reach the diagnostics report');
+    assert(!hooks.formatFailureJournal().includes('SECRET-NOTE-TEXT'), 'a note must never reach the journal');
+
+    // Rendered as text rather than markup, since a note is arbitrary user input.
+    assert(script.includes("className:'enh-mark-row__note'"), 'the marks panel must show notes');
+    assert(!/enh-mark-row__note[\s\S]{0,200}?innerHTML/.test(script), 'a note must never be set as HTML');
+    // The editor lives on title pages and is bounded at the input too.
+    assert(script.includes("maxlength:String(USER_MARK_NOTE_LIMIT)"), 'the note field must enforce the stored bound');
+    assert(script.includes("id:'enh-title-note'"), 'title pages need a note editor');
 });
 
 /* IE-74: the trailer modal's Escape and Tab handling are document-level, so both go dead

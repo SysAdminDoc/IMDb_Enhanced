@@ -30,7 +30,9 @@ Third-party lookups omit destination cookies. Responses are rendered as text, ou
 
 **Media Server Indicator** - Optional Plex, Jellyfin, and Emby checks show whether the current title already exists in your local media library. Localhost-only for security; access tokens are sent in request headers, not URLs.
 
-**Private Title Marks** - Local Seen/Skip toggle controls on title posters and on every IMDb title card (charts, lists, watchlists, person filmographies, episode lists, and search results) with exposed pressed state and a newest-first 5,000-title storage bound. Those same surfaces get an All/Unseen/Seen/Skipped filter with counts, which works entirely on the rows already loaded, makes no request, and leaves the page's own ordering alone. They require no login and deliberately do not change or sync IMDb's account-based Watched status.
+**Private Title Marks** - Local Seen/Skip toggle controls on title posters and on every IMDb title card (charts, lists, watchlists, person filmographies, episode lists, and search results) with exposed pressed state and a newest-first 5,000-title storage bound. Those same surfaces get an All/Unseen/Seen/Skipped filter with counts, which works entirely on the rows already loaded, makes no request, and leaves the page's own ordering alone.
+
+**Private Notes** - A note field on title pages, up to 500 characters, saved on that device as you type and listed with your marks. A note can exist without marking the title, marking or unmarking never disturbs it, and notes travel in backups. They are excluded from the diagnostics report on purpose. They require no login and deliberately do not change or sync IMDb's account-based Watched status.
 
 **TV Tools** - Highest-rated episode highlighting and TV-specific lookup shortcuts. Synopsis blur is opt-in and off by default.
 

@@ -244,6 +244,9 @@
     const USER_MARKS_MAX = 5000;
     const USER_MARKS_SCAN_LIMIT = USER_MARKS_MAX * 2;
     const USER_MARK_TITLE_LIMIT = 160;
+    /* Bounded like every other stored string, and counted against the same 5,000-record
+       ceiling as the marks themselves — a note lives inside its title's mark record. */
+    const USER_MARK_NOTE_LIMIT = 500;
     const LOCAL_LOOKUP_RESULT_LIMIT = 100;
     const LOCAL_PROVIDER_ID_LIMIT = 32;
     const LOOKUP_TITLE_TEXT_LIMIT = 500;
@@ -356,6 +359,7 @@
         trailerPopover: 32,
         servarrIntegration: 35,
         mediaServerIntegration: 36,
+        titleNotes: 37,
         tvShowEnhancements: 40,
     };
     /* Defaults are FMHY-starred destinations whose exact search route answered a live
@@ -645,7 +649,7 @@
         searchButtons: true, externalLinks: true, expandedLinkMenu: true,
         trailerPopover: true,
         watchSites: DEFAULT_WATCH_SITES, externalSites: DEFAULT_EXTERNAL_SITES,
-        watchedMarking: true, userMarks: {},
+        watchedMarking: true, userMarks: {}, titleNotes: true,
         servarrIntegration: false,
         seerrUrl: 'http://localhost:5055', seerrApiKey: '',
         radarrUrl: 'http://localhost:7878', radarrApiKey: '',
@@ -724,6 +728,7 @@
         listMultiSearch: 'Builds a popup-safe queue of up to 20 title links on watchlist, list, and chart pages.',
         listRuntimeSummary: 'Totals how long the titles on a watchlist, list, or chart would take to watch, and says how many had no runtime listed.',
         markFilters: 'Adds an All / Unseen / Seen / Skipped filter with counts to lists, charts, watchlists, search results, and filmographies. Needs private marks.',
+        titleNotes: 'Adds a private note field to title pages, saved on this device and included in backups. Never sent anywhere.',
         keyboardShortcuts: 'Optional. Enables ? for settings, c to copy, r for rating, and t for top.',
     };
 
@@ -1186,17 +1191,41 @@
         return found;
     }
 
+    /* A record is kept when it carries a Seen/Skip state OR a note. A note without a
+       state is a real thing to want — "the one with the twist ending" against a title you
+       have not watched — and requiring a state to hold one would silently discard it.
+
+       Versioned so a later field (IE-18/IE-19 want viewing events) arrives as a migration
+       rather than a rewrite of every reader. No such field is invented here: there is
+       nothing to store in it yet. */
+    const USER_MARK_RECORD_VERSION = 1;
     function normalizeUserMark(record) {
-        if (record === 'watched' || record === 'skip') return { state: record, title: '', ts: 0 };
+        if (record === 'watched' || record === 'skip') {
+            return { v: USER_MARK_RECORD_VERSION, state: record, title: '', ts: 0 };
+        }
         if (!record || typeof record !== 'object') return null;
         const state = record.state === 'watched' || record.state === 'skip' ? record.state : '';
-        if (!state) return null;
+        const note = normalizeUserNote(record.note);
+        if (!state && !note) return null;
         const timestamp = Number(record.ts);
         return {
+            v: USER_MARK_RECORD_VERSION,
             state,
             title: String(record.title || '').trim().slice(0, USER_MARK_TITLE_LIMIT),
             ts:Number.isFinite(timestamp) && timestamp >= 0 && timestamp <= Date.now() + 60000 ? timestamp : 0,
+            ...(note ? { note } : {}),
         };
+    }
+    /* Control characters are stripped rather than escaped: a note is rendered as text
+       everywhere, and a stray newline run is the only formatting worth keeping. */
+    function normalizeUserNote(value) {
+        if (typeof value !== 'string') return '';
+        return value
+            .replace(/[\u0000-\u0008\u000b\u000c\u000e-\u001f\u007f]/g, '')
+            .replace(/\r\n?/g, '\n')
+            .replace(/\n{3,}/g, '\n\n')
+            .trim()
+            .slice(0, USER_MARK_NOTE_LIMIT);
     }
     function normalizeUserMarkEntries(source) {
         const entries = [];
@@ -1237,11 +1266,43 @@
     function setUserMark(imdbId, state, title = '', notifyFailure = true) {
         if (!/^tt\d+$/.test(imdbId || '')) return false;
         const marks = { ...getUserMarks(true) };
+        const existingNote = normalizeUserNote(marks[imdbId]?.note);
         if (state === 'watched' || state === 'skip') {
-            marks[imdbId] = { state, title: String(title || '').trim().slice(0, USER_MARK_TITLE_LIMIT), ts: Date.now() };
+            marks[imdbId] = {
+                state,
+                title: String(title || '').trim().slice(0, USER_MARK_TITLE_LIMIT),
+                ts: Date.now(),
+                // Clearing a Seen/Skip mark must not silently discard a note written
+                // against the same title.
+                ...(existingNote ? { note:existingNote } : {}),
+            };
+        } else if (existingNote) {
+            marks[imdbId] = { ...marks[imdbId], state:'', ts: Date.now(), note:existingNote };
         } else {
             delete marks[imdbId];
         }
+        return setUserMarks(marks, notifyFailure);
+    }
+    function getUserNote(imdbId) {
+        return normalizeUserNote(getUserMarks()[imdbId]?.note);
+    }
+    /* A note can exist without a Seen/Skip state; clearing the last of both removes the
+       record entirely rather than leaving an empty one to be counted and exported. */
+    function setUserNote(imdbId, note, title = '', notifyFailure = true) {
+        if (!/^tt\d+$/.test(imdbId || '')) return false;
+        const marks = { ...getUserMarks(true) };
+        const normalized = normalizeUserNote(note);
+        const existing = marks[imdbId];
+        if (!normalized && !existing?.state) {
+            delete marks[imdbId];
+            return setUserMarks(marks, notifyFailure);
+        }
+        marks[imdbId] = {
+            state: existing?.state || '',
+            title: String(title || existing?.title || '').trim().slice(0, USER_MARK_TITLE_LIMIT),
+            ts: Date.now(),
+            ...(normalized ? { note:normalized } : {}),
+        };
         return setUserMarks(marks, notifyFailure);
     }
     function getUserMarkEntries() {
@@ -6654,6 +6715,111 @@ section[id*="quote" i] .ipc-list-card { padding: 4px 0 !important; margin: 2px 0
         return state === filter;
     }
 
+    /* Notes are paywalled by every tracker that offers them and absent from IMDb, yet they
+       are trivially local: a note lives inside its title's existing mark record, so it
+       inherits the same 5,000-record bound, the same normalizer, and the same backup and
+       restore path without a second store. */
+    reg({
+        key: 'titleNotes', name: 'Private title notes', group: 'Features',
+        init() {
+            if (!isIMDbHost()) return;
+            const imdbId = getIMDbID();
+            if (!imdbId) return;
+            if (document.getElementById('enh-title-note')) return;
+            const isCurrent = createFeatureGuard(this);
+
+            addThemedCSS(t => `
+                #enh-title-note { display: flex; flex-direction: column; gap: 6px; }
+                .enh-title-note__head { display: flex; align-items: baseline; justify-content: space-between; gap: 10px; }
+                .enh-title-note__label {
+                    font: 700 10px/1 -apple-system, BlinkMacSystemFont, 'Segoe UI', sans-serif;
+                    letter-spacing: .08em; text-transform: uppercase; color: ${t.tx3};
+                }
+                .enh-title-note__status { font: 500 10px/1.3 -apple-system, BlinkMacSystemFont, 'Segoe UI', sans-serif; color: ${t.tx3}; }
+                .enh-title-note__status[data-state="saved"] { color: ${t.green}; }
+                .enh-title-note__status[data-state="error"] { color: ${t.red}; }
+                #enh-title-note textarea {
+                    width: 100%; min-height: 68px; resize: vertical; box-sizing: border-box;
+                    border: 1px solid ${t.bd1}; border-radius: 8px; background: ${t.bg}; color: ${t.tx1};
+                    padding: 8px 10px; font: 400 13px/1.5 -apple-system, BlinkMacSystemFont, 'Segoe UI', sans-serif;
+                }
+                #enh-title-note textarea:focus { outline: none; border-color: ${t.accentBorder}; box-shadow: 0 0 0 2px ${t.accentMuted}; }
+                .enh-title-note__count { font: 500 10px/1.3 -apple-system, BlinkMacSystemFont, 'Segoe UI', sans-serif; color: ${t.tx3}; align-self: flex-end; }
+            `, 'enh-title-note-css');
+
+            waitForTitleSurface().then(() => {
+                if (!isCurrent()) return;
+                if (document.getElementById('enh-title-note')) return;
+
+                const status = makeEl('span', {
+                    className:'enh-title-note__status', role:'status', 'aria-live':'polite',
+                });
+                const count = makeEl('div', { className:'enh-title-note__count' });
+                const area = makeEl('textarea', {
+                    id:'enh-title-note-input',
+                    maxlength:String(USER_MARK_NOTE_LIMIT),
+                    spellcheck:'true',
+                    placeholder:'A private note about this title. Stored on this device only.',
+                    'aria-label':`Private note about ${getTitleText() || 'this title'}`,
+                    'aria-describedby':'enh-title-note-count',
+                });
+                count.id = 'enh-title-note-count';
+                area.value = getUserNote(imdbId);
+
+                const paintCount = () => {
+                    count.textContent = `${area.value.length} / ${USER_MARK_NOTE_LIMIT}`;
+                };
+                paintCount();
+
+                let saveTimer = null;
+                let statusTimer = null;
+                const commit = () => {
+                    if (!isCurrent()) return;
+                    const saved = setUserNote(imdbId, area.value, getTitleText());
+                    status.dataset.state = saved ? 'saved' : 'error';
+                    status.textContent = saved
+                        ? (normalizeUserNote(area.value) ? 'Saved on this device' : 'Note cleared')
+                        : `Could not save. Check ${STORAGE_HOST_LABEL}.`;
+                    clearTimeout(statusTimer);
+                    // Cleared so a stale "Saved" cannot be read as the result of a later edit.
+                    if (saved) statusTimer = setTimeout(() => { status.textContent = ''; }, 4000);
+                };
+                area.addEventListener('input', () => {
+                    paintCount();
+                    status.dataset.state = '';
+                    status.textContent = 'Saving…';
+                    clearTimeout(saveTimer);
+                    saveTimer = setTimeout(commit, 600);
+                });
+                // Leaving the field commits immediately rather than waiting out the debounce.
+                area.addEventListener('blur', () => {
+                    clearTimeout(saveTimer);
+                    commit();
+                });
+                this._cleanup = () => { clearTimeout(saveTimer); clearTimeout(statusTimer); };
+
+                const wrap = makeEl('section', {
+                    id:'enh-title-note', role:'region', 'aria-label':'Private note',
+                },
+                    makeEl('div', { className:'enh-title-note__head' },
+                        makeEl('span', { className:'enh-title-note__label' }, 'Private note'),
+                        status
+                    ),
+                    area,
+                    count
+                );
+                appendTitleStackItem(wrap, TITLE_STACK_ORDER.titleNotes);
+            }).catch(() => {});
+        },
+        destroy() {
+            this._cleanup?.();
+            this._cleanup = null;
+            removeCSS('enh-title-note-css');
+            document.getElementById('enh-title-note')?.remove();
+            pruneTitleStack();
+        },
+    });
+
     reg({
         key: 'dimLowRated', name: 'Dim low-rated titles', group: 'Appearance',
         init() {
@@ -9224,6 +9390,17 @@ section[data-testid="hero-parent"].enh-editorial-native-hidden { display: none !
     cursor: pointer; font: 650 10px/1 -apple-system, BlinkMacSystemFont, 'Segoe UI', sans-serif;
 }
 .enh-mark-row__clear:hover { border-color: ${t.red}; color: ${t.red}; }
+.enh-mark-row__state--note { background: ${t.blueMuted}; color: ${t.blue}; }
+/* Sits inside the row and spans every column, so it reads as part of that entry without
+   a negative margin — the layout guard rejects those, and rightly. */
+.enh-mark-row__note {
+    grid-column: 1 / -1;
+    margin: 2px 0 0; padding: 6px 9px;
+    border: 1px solid ${t.bd0}; border-radius: 6px;
+    background: ${t.bg}; color: ${t.tx2};
+    font: 400 11px/1.5 -apple-system, BlinkMacSystemFont, 'Segoe UI', sans-serif;
+    white-space: pre-wrap; overflow-wrap: anywhere;
+}
 .enh-marks-empty { color: ${t.tx3}; font: 500 11px/1.4 -apple-system, BlinkMacSystemFont, 'Segoe UI', sans-serif; }
 
 /* ════ Servarr Settings ════ */
@@ -10125,13 +10302,20 @@ section[data-testid="hero-parent"].enh-editorial-native-hidden { display: none !
             }
             entries.forEach(([id, record]) => {
                 const title = record.title || id;
-                const state = record.state === 'watched' ? 'Local seen' : 'Local skip';
+                /* A record can now exist for a note alone, with no Seen or Skip, so the
+                   badge has to describe that rather than mislabel it as one of the two. */
+                const note = normalizeUserNote(record.note);
+                const state = record.state === 'watched' ? 'Local seen'
+                    : record.state === 'skip' ? 'Local skip'
+                    : 'Note only';
                 const titleEl = makeEl('div', { className:'enh-mark-row__title', title },
                     title,
                     record.title ? makeEl('span', { className:'enh-mark-row__id' }, id) : ''
                 );
                 const stateEl = makeEl('div', {
-                    className:'enh-mark-row__state' + (record.state === 'skip' ? ' enh-mark-row__state--skip' : ''),
+                    className:'enh-mark-row__state'
+                        + (record.state === 'skip' ? ' enh-mark-row__state--skip' : '')
+                        + (record.state ? '' : ' enh-mark-row__state--note'),
                 }, state);
                 const open = makeEl('a', {
                     href:`https://www.imdb.com/title/${id}/`,
@@ -10145,13 +10329,20 @@ section[data-testid="hero-parent"].enh-editorial-native-hidden { display: none !
                     title:`Clear ${title}`,
                     'aria-label':`Clear mark for ${title}`,
                     onClick: () => {
-                        if (!setUserMark(id, '')) return;
+                        /* Clearing from here removes the record outright, note included,
+                           because this is the list's Remove action rather than a way to
+                           unset only the Seen/Skip half. */
+                        if (!setUserNote(id, '') || !setUserMark(id, '')) return;
                         refreshFeature('watchedMarking');
+                        refreshFeature('titleNotes');
                         render();
-                        showToast('Mark cleared');
+                        showToast(note ? 'Mark and note removed' : 'Mark cleared');
                     },
                 }, 'Remove');
-                rows.appendChild(makeEl('div', { className:'enh-mark-row' }, titleEl, stateEl, open, clear));
+                const row = makeEl('div', { className:'enh-mark-row' }, titleEl, stateEl, open, clear);
+                // Rendered as text, never markup: a note is arbitrary user input.
+                if (note) row.appendChild(makeEl('div', { className:'enh-mark-row__note' }, note));
+                rows.appendChild(row);
             });
         };
 
@@ -10528,7 +10719,7 @@ section[data-testid="hero-parent"].enh-editorial-native-hidden { display: none !
         const toolsPage = pages.get('tools');
         toolsPage.appendChild(makeEl('div', { className:'enh-settings-grid enh-settings-grid--three' },
             makeFeatureCard('Title tools', 'Actions placed near a movie or show title.', 'Title pages', [
-                'searchButtons', 'externalLinks', 'trailerPopover', 'expandedLinkMenu', 'watchedMarking',
+                'searchButtons', 'externalLinks', 'trailerPopover', 'expandedLinkMenu', 'watchedMarking', 'titleNotes',
             ]),
             makeFeatureCard('TV & episodes', 'Focused tools for series and episode lists.', 'TV', [
                 'tvEpisodeTools', 'tvShowEnhancements', 'subtitleLinks', 'episodeHeatmap',

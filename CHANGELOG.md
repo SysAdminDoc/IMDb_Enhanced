@@ -26,6 +26,8 @@
 
 - Userscript managers get the same escape hatch through their extension menu: open settings, copy a backup, restore one, and reset with an undo command. All of it uses the same code the settings panel does.
 
+- Title pages get a private note field. Type and it saves itself on that device, up to 500 characters, and the note shows in Data → Private title marks alongside whatever Seen or Skip mark the title has. A note can stand on its own without marking anything, marking or unmarking a title leaves its note alone, and clearing both removes the entry entirely. Notes go into a backup and come back from one. They are never sent anywhere, and they are deliberately kept out of the diagnostics report, which is the one thing you are invited to paste in public.
+
 - An optional setting fades the artwork of titles rated below a threshold you pick, on lists, charts, and search results. Only the picture fades: titles, scores, and controls stay at full contrast, hovering or tabbing to a card restores it, and forced-colours mode is left alone. Titles with no rating yet are never faded, since they are unrated rather than poorly rated. Off by default.
 
 - Lists, charts, watchlists, search results, and filmographies get a Private marks filter: All, Unseen, Seen, Skipped, each with a count. It works on what is already on the page, so it makes no request and does not reorder anything: filtering the Top 250 to unseen leaves them in chart order. Counts and filtering update as more rows load and as you mark things, and the arrow keys move through the options. It appears only when private marks are switched on.
