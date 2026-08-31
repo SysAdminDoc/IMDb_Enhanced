@@ -261,7 +261,15 @@ const bridgeFor = ({ trusted }) => String.raw`
     /* The last value storage confirmed for each key. Declared before the seed below,
        which is its first writer. */
     const __confirmed = Object.create(null);
-    const __confirm = (key, present, value) => { __confirmed[key] = { present, value }; };
+    /* Presence only for a credential. GM_setValue deliberately keeps its value out of
+       this world, so recording it here and restoring it on the next rejected write put
+       back exactly what was being kept out. The redacted flag says the value is not ours
+       to restore, which is different from there being no value. No backticks in this
+       comment: it lives inside the bridge template literal. */
+    const __confirm = (key, present, value) => {
+        if (!__TRUSTED_CONTEXT && __isCredentialKey(key)) { __confirmed[key] = { present, redacted:true }; return; }
+        __confirmed[key] = { present, value };
+    };
     const __extensionState = await __storage('get', null).catch(() => ({}));
     Object.entries(__extensionState || {}).forEach(([key, value]) => {
         if (!__TRUSTED_CONTEXT && __isCredentialKey(key)) { __recordCredential(key, value); return; }
@@ -272,7 +280,13 @@ const bridgeFor = ({ trusted }) => String.raw`
     __pendingChanges.splice(0).forEach(__applyChanges);
     /* Asked by the settings UI so it can show a credential as configured without ever
        holding it. Returns only a boolean. */
-    globalThis.__imdbEnhancedCredentialConfigured = key => Boolean(__configuredCredentials[key]);
+    /* Only where values are actually withheld. Defining it on the options page too made
+       canReadCredentials() false there, so the one surface that can read credentials
+       refused to produce the encrypted backup and sent the user to the page they were
+       already on. */
+    if (!__TRUSTED_CONTEXT) {
+        globalThis.__imdbEnhancedCredentialConfigured = key => Boolean(__configuredCredentials[key]);
+    }
     const __sendAdState = enabled => {
         try { chrome.runtime.sendMessage({ type:'imdb-enhanced:set-ad-blocking', enabled:enabled !== false }); }
         catch { /* the service worker may be asleep during teardown */ }
@@ -323,13 +337,13 @@ const bridgeFor = ({ trusted }) => String.raw`
     const __rollbackMirror = (key, token) => {
         if (__latestWrite[key] !== token) return;
         const known = __confirmed[key];
-        if (known && known.present) __state[key] = known.value;
+        // A redacted entry means storage holds one but this world may not: leaving the
+        // mirror without it is the correct restoration, not a lossy one.
+        if (known && known.present && !known.redacted) __state[key] = known.value;
         else delete __state[key];
     };
     globalThis.GM_setValue = (key, value) => {
         __takeWriteFailure();
-        const had = Object.prototype.hasOwnProperty.call(__state, key);
-        const previous = had ? __state[key] : undefined;
         const written = __clone(value);
         const token = ++__writeSequence;
         __latestWrite[key] = token;
@@ -353,8 +367,6 @@ const bridgeFor = ({ trusted }) => String.raw`
     globalThis.GM_listValues = () => Object.keys(__state);
     globalThis.GM_deleteValue = key => {
         __takeWriteFailure();
-        const had = Object.prototype.hasOwnProperty.call(__state, key);
-        const previous = had ? __state[key] : undefined;
         const token = ++__writeSequence;
         __latestWrite[key] = token;
         delete __state[key];

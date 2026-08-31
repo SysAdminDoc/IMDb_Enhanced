@@ -30,6 +30,14 @@
 
 ### Fixed
 
+- A TMDB token is no longer attached to a plain HTTP request. Public service credentials now require HTTPS, while local Radarr, Sonarr, and media-server connections can still use HTTP on loopback.
+
+- Credentialed requests refuse redirects based on the fact that the worker attached a secret, not on the header name supplied by the caller. Renaming a header can no longer turn redirect following back on.
+
+- Extension credentials stay out of IMDb tabs even when a storage write fails and rolls back. The extension-owned recovery page still reads them for encrypted backups, and no longer mistakes its own trusted access for redaction.
+
+- TMDB identity lookup now rejects an ambiguous response before discarding malformed candidates. Two results remain ambiguous even if only one carries a valid numeric ID.
+
 - When storage is full, the page no longer keeps showing a mark that was never saved. Two marks made in quick succession would both fail to save, you would be told twice that nothing was saved, and one of them would stay on screen looking Seen until you reloaded. The extension now puts the page back to what storage actually holds rather than to whatever it last tried to write.
 
 - "Grant access" no longer claims a page has opened when it has not.

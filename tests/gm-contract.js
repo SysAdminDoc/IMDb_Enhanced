@@ -84,7 +84,7 @@ function createManagerAdapter() {
  * ------------------------------------------------------------------------- */
 let pendingResponseUrl = 'https://example.test/final';
 
-async function createBridgeAdapter({ seed = {} } = {}) {
+async function createBridgeAdapter({ seed = {}, trusted = false } = {}) {
     const store = Object.create(null);
     Object.assign(store, seed);
     const changeListeners = [];
@@ -170,7 +170,15 @@ async function createBridgeAdapter({ seed = {} } = {}) {
     };
     context.globalThis = context;
     vm.createContext(context);
-    await vm.runInContext(`(async () => {\n${EXTENSION_BRIDGE_SOURCE}\n})()`, context);
+    /* The options page runs this same bridge with the trusted flag set, so the suite
+       instantiates it that way rather than paraphrasing it. */
+    const bridgeSource = trusted
+        ? EXTENSION_BRIDGE_SOURCE.replace('__TRUSTED_CONTEXT = false', '__TRUSTED_CONTEXT = true')
+        : EXTENSION_BRIDGE_SOURCE;
+    if (trusted && bridgeSource === EXTENSION_BRIDGE_SOURCE) {
+        throw new Error('The trusted-context flag could not be found in the bridge source.');
+    }
+    await vm.runInContext(`(async () => {\n${bridgeSource}\n})()`, context);
 
     const guard = fn => (...args) => {
         try { return fn(...args); }
@@ -200,7 +208,8 @@ async function createBridgeAdapter({ seed = {} } = {}) {
         settle,
         // Only the bridge has a credential boundary; the manager has nothing to redact.
         credentials: {
-            isConfigured: key => context.__imdbEnhancedCredentialConfigured(key),
+            isConfigured: key => Boolean(context.__imdbEnhancedCredentialConfigured?.(key)),
+            hookDefined: () => typeof context.__imdbEnhancedCredentialConfigured === 'function',
             backingStore: () => ({ ...store }),
         },
     };
@@ -431,6 +440,40 @@ async function runCredentialBoundary() {
             'a value that really was stored must survive a later failure');
     });
 
+    /* Found by adversarial review. The confirmed-value shadow recorded every successful
+       write, including a credential's, and the next rejected write to that key restored it
+       into the mirror. So a key typed into the settings panel stayed out of this world only
+       until the next write failed, which under quota pressure is immediately. */
+    await check(label, 'a rejected write never restores a credential into the content world', async () => {
+        const bridge = await createBridgeAdapter();
+        bridge.gm.setValue('imdb_enh_plexToken', 'SUPER-SECRET-PLEX-TOKEN');
+        await bridge.settle();
+        assert.strictEqual(bridge.gm.getValue('imdb_enh_plexToken', ''), '', 'not readable after a successful write');
+
+        bridge.failNextWrite(new Error('simulated quota failure'));
+        try { bridge.gm.setValue('imdb_enh_plexToken', 'REPLACEMENT'); } catch { /* reported below */ }
+        await bridge.settle();
+        assert.strictEqual(bridge.gm.getValue('imdb_enh_plexToken', ''), '',
+            'and still not readable after a rejected one, which is when the rollback runs');
+        assert(!bridge.gm.listValues().includes('imdb_enh_plexToken'),
+            'nor listed as something this world holds');
+        assert.strictEqual(bridge.credentials.isConfigured('imdb_enh_plexToken'), true,
+            'while the field still knows one is stored');
+        assert.strictEqual(bridge.credentials.backingStore().imdb_enh_plexToken, 'SUPER-SECRET-PLEX-TOKEN',
+            'and storage still holds the one that did land');
+    });
+
+    await check(label, 'repeated failures never make a credential readable', async () => {
+        const bridge = await createBridgeAdapter({ seed: { imdb_enh_embyApiKey: 'SEEDED-SECRET' } });
+        for (let attempt = 0; attempt < 3; attempt += 1) {
+            bridge.failNextWrite(new Error('simulated quota failure'));
+            try { bridge.gm.setValue('imdb_enh_embyApiKey', `attempt-${attempt}`); } catch { /* reported below */ }
+            await bridge.settle();
+            assert.strictEqual(bridge.gm.getValue('imdb_enh_embyApiKey', ''), '',
+                `readable after failure ${attempt + 1}`);
+        }
+    });
+
     await check(label, 'a credential changed in another tab updates only whether it is set', async () => {
         const bridge = await createBridgeAdapter({ seed: { imdb_enh_embyApiKey: pre } });
         bridge.externalChange('imdb_enh_embyApiKey', 'ROTATED-SECRET');
@@ -443,10 +486,42 @@ async function runCredentialBoundary() {
     });
 }
 
+/* The options page runs the same bridge with __TRUSTED_CONTEXT true, and it is the one
+   surface that can produce an encrypted backup. It must therefore read credentials, and
+   must not advertise the hook that tells the rest of the code they are being withheld:
+   doing so made it conclude it could not read the keys it was holding, and the encrypted
+   export refused, telling the user to go to the page they were already on. */
+async function runTrustedContext() {
+    const label = 'MV3 bridge (options page)';
+    const trustedSource = EXTENSION_BRIDGE_SOURCE.replace('__TRUSTED_CONTEXT = false', '__TRUSTED_CONTEXT = true');
+    assert.notStrictEqual(trustedSource, EXTENSION_BRIDGE_SOURCE, 'the trusted flag must be findable');
+
+    await check(label, 'reads credentials and does not claim they are withheld', async () => {
+        const bridge = await createBridgeAdapter({ seed: { imdb_enh_radarrApiKey: 'REAL-KEY' }, trusted: true });
+        assert.strictEqual(bridge.gm.getValue('imdb_enh_radarrApiKey', ''), 'REAL-KEY',
+            'the page that makes the encrypted backup must be able to read what goes in it');
+        assert(bridge.gm.listValues().includes('imdb_enh_radarrApiKey'), 'and see that it is there');
+        assert.strictEqual(bridge.credentials.hookDefined(), false,
+            'and must not define the withheld-value hook, which is what makes callers give up');
+    });
+
+    await check(label, 'a rejected write still rolls back to the confirmed value', async () => {
+        const bridge = await createBridgeAdapter({ trusted: true });
+        bridge.gm.setValue('imdb_enh_radarrApiKey', 'FIRST');
+        await bridge.settle();
+        bridge.failNextWrite(new Error('simulated quota failure'));
+        try { bridge.gm.setValue('imdb_enh_radarrApiKey', 'SECOND'); } catch { /* reported below */ }
+        await bridge.settle();
+        assert.strictEqual(bridge.gm.getValue('imdb_enh_radarrApiKey', ''), 'FIRST',
+            'where values are held, the rollback restores the one that was really stored');
+    });
+}
+
 (async () => {
     await runContract(createManagerAdapter());
     await runContract(await createBridgeAdapter());
     await runCredentialBoundary();
+    await runTrustedContext();
     if (failures) {
         console.error(`\n${failures} GM contract check(s) failed.`);
         process.exit(1);

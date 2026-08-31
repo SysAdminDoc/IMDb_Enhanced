@@ -540,6 +540,46 @@ for (const engine of ['chromium', 'gecko']) {
         }
     });
 
+    /* Found by adversarial review. The scheme in a binding is the header scheme, and
+       describeRequestUrl accepts http as well as https for the sake of loopback services,
+       so plain http://api.themoviedb.org carried the token in clear text. */
+    test(`[${engine}] a host-bound credential is refused over plain http`, async () => {
+        const { dispatch, calls, storage } = loadBackground({ engine, fetchImpl: makeFetch({}) });
+        storage.set('imdb_enh_tmdbReadToken', 'TMDB-TOKEN-VALUE');
+        await dispatch(request('http://api.themoviedb.org/3/find/tt0133093?external_source=imdb_id', {
+            credentialHeader: { name:'Authorization', ref:'tmdbReadToken' },
+        }), IMDB_SENDER);
+        assert.strictEqual(calls.fetches[0][1].headers.Authorization, undefined,
+            'a credential that leaves the machine must not travel in clear text');
+    });
+
+    test(`[${engine}] a loopback credential is still allowed over plain http`, async () => {
+        const { dispatch, calls, storage } = loadBackground({ engine, fetchImpl: makeFetch({}) });
+        storage.set('imdb_enh_radarrApiKey', 'RADARR-KEY');
+        await dispatch(request('http://localhost:7878/api/v3/movie', {
+            credentialHeader: { name:'X-Api-Key', ref:'radarrApiKey' },
+        }), IMDB_SENDER);
+        assert.strictEqual(calls.fetches[0][1].headers['X-Api-Key'], 'RADARR-KEY',
+            'a local service on your own machine is normally plain http and must keep working');
+    });
+
+    /* Whether a request carries a credential was decided by sniffing the header name, and
+       the caller chooses that name. Calling it something outside the sensitive list got
+       the token attached AND redirect:'follow', which is what carries a custom header
+       across an origin change. */
+    test(`[${engine}] a credential-bearing request refuses redirects whatever its header is called`, async () => {
+        const { dispatch, calls, storage } = loadBackground({ engine, fetchImpl: makeFetch({}) });
+        storage.set('imdb_enh_tmdbReadToken', 'TMDB-TOKEN-VALUE');
+        await dispatch(request('https://api.themoviedb.org/3/find/tt0133093?external_source=imdb_id', {
+            credentialHeader: { name:'X-Not-On-The-Sensitive-List', ref:'tmdbReadToken' },
+        }), IMDB_SENDER);
+        const sent = calls.fetches[0][1];
+        assert.strictEqual(sent.headers['X-Not-On-The-Sensitive-List'], 'Bearer TMDB-TOKEN-VALUE',
+            'the binding still decides what is attached');
+        assert.strictEqual(sent.redirect, 'manual',
+            'and the worker knows it attached one, whatever the caller called the header');
+    });
+
     test(`[${engine}] a loopback credential is refused to TMDB`, async () => {
         const { dispatch, calls, storage } = loadBackground({ engine, fetchImpl: makeFetch({}) });
         storage.set('imdb_enh_radarrApiKey', 'RADARR-KEY');

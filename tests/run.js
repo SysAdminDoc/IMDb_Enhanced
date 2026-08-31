@@ -4276,6 +4276,13 @@ test('TMDB availability resolves an IMDb id and reads only the chosen region', (
     assert.strictEqual(hooks.parseTmdbFind({ movie_results:[{ id:'603' }] }), null, 'an id must already be a number');
     assert.strictEqual(hooks.parseTmdbFind({ movie_results:[{ id:true }] }), null, 'and true is not 1');
     assert.strictEqual(hooks.parseTmdbFind({ movie_results:[{ id:6.5 }] }), null, 'nor a fraction an id');
+    /* Ambiguity is judged before anything is discarded. Filtering first let a malformed
+       sibling be dropped rather than counted, so two answers became one and whichever id
+       happened to parse was used. */
+    assert.strictEqual(hooks.parseTmdbFind({ movie_results:[{ id:603 }, { id:'x' }] }), null,
+        'two results are two results, even when one of them is malformed');
+    assert.strictEqual(hooks.parseTmdbFind({ movie_results:[{ id:603 }], tv_results:[{ id:null }] }), null,
+        'across the two arrays as well');
     assert.strictEqual(hooks.parseTmdbFind(null), null);
     assert.strictEqual(hooks.parseTmdbFind('not an object'), null);
 

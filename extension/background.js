@@ -210,8 +210,14 @@ async function sendHttpRequest(message, sender, sendResponse) {
        must already have been validated as a URL it will fetch, and the destination must be
        the one that key is bound to. Nothing else earns a credential. A loopback key goes
        only to your own machine; a host-bound key goes only to that host. */
+    /* A host-bound credential goes over TLS or not at all. `scheme` in the binding is the
+       header scheme, not the URL's, and describeRequestUrl accepts http as well as https
+       for the sake of loopback services, so plain http://api.themoviedb.org would
+       otherwise have carried the token in clear text. */
     const destinationOwnsCredential = Boolean(binding)
-        && (binding.loopback ? target.loopback : target.hostname === binding.host);
+        && (binding.loopback
+            ? target.loopback
+            : target.hostname === binding.host && target.url.protocol === 'https:');
     if (destinationOwnsCredential && typeof credentialRef.name === 'string') {
         const stored = await callApi(chrome.storage.local, 'get', credentialKey).catch(() => null);
         const value = stored?.[credentialKey];
@@ -240,7 +246,11 @@ async function sendHttpRequest(message, sender, sendResponse) {
        'manual' returns an opaque-redirect response instead — the second request is
        never made, so the credential still goes nowhere — and a genuinely dead host
        still throws, so the two stay apart. */
-    const carriesCredentials = hasSensitiveHeader(headers);
+    /* Decided by what this worker attached, not by the header name the caller chose. Name
+       the credential header something outside the sensitive list and the old predicate said
+       no, which let a token-bearing request follow a redirect off its origin. The name check
+       stays for headers the caller supplied itself. */
+    const carriesCredentials = destinationOwnsCredential || hasSensitiveHeader(headers);
 
     fetch(url, {
         method,

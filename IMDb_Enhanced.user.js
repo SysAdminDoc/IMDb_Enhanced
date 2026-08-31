@@ -5138,9 +5138,14 @@ section[id*="quote" i] .ipc-list-card { padding: 4px 0 !important; margin: 2px 0
         const candidates = [
             ...movies.map(entry => ({ type:'movie', id:entry?.id })),
             ...shows.map(entry => ({ type:'tv', id:entry?.id })),
-        ].filter(entry => typeof entry.id === 'number' && Number.isInteger(entry.id) && entry.id > 0);
+        ];
+        /* Ambiguity is judged before anything is discarded. Filtering first let a malformed
+           sibling be dropped rather than counted, so two answers became one and the id that
+           happened to parse was used. Two results are two results. */
         if (candidates.length !== 1) return null;
-        return candidates[0];
+        const [only] = candidates;
+        if (typeof only.id !== 'number' || !Number.isInteger(only.id) || only.id <= 0) return null;
+        return only;
     }
 
     // Streaming, renting and buying are three different answers to "can I watch this".
