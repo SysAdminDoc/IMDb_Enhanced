@@ -46,6 +46,8 @@
 
 ### Fixed
 
+- The extension no longer keeps a second copy of every cached lookup inside the IMDb tab. The storage bridge shadowed each value so a rejected write could be undone, which roughly doubled what the page held for entries that are disposable anyway. A cache write that fails now drops the entry and the next read asks the service again. Settings and marks still roll back exactly as before.
+
 - The web-store build carries its own listing description now. It used to reuse the full build's, which advertises score widgets and a directory of watch destinations that this build deliberately leaves out. The suite also reads the built `extension-store/` directory back and compares it with the generator, so a stale or hand-edited store build fails the tests instead of reaching a reviewer.
 
 - In a web-store build, a feature whose source that build does not ship now says "Not available in this build" and names the missing service, instead of reporting a missing site permission and offering a Grant button that could never have worked. The other builds are unchanged.

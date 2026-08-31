@@ -185,9 +185,20 @@ function readCredentialKeys() {
 }
 const CREDENTIAL_KEYS = readCredentialKeys();
 
+/* Same reason as the credential list: the bridge treats cache entries differently from
+   settings, and a hand-written prefix here is how it quietly stops matching the one
+   cacheSet actually writes under. */
+function readCachePrefix() {
+    const match = source.match(/const storageKey = '([a-z_]+)' \+ key;/);
+    if (!match) throw new Error('The cache storage-key prefix could not be read from the userscript.');
+    return match[1];
+}
+const CACHE_KEY_PREFIX = readCachePrefix();
+
 const bridgeFor = ({ trusted }) => String.raw`
     const __TRUSTED_CONTEXT = ${trusted ? 'true' : 'false'};
     const __CREDENTIAL_KEY_LIST = ${JSON.stringify(CREDENTIAL_KEYS.map(key => `imdb_enh_${key}`))};
+    const __CACHE_KEY_PREFIX = ${JSON.stringify(CACHE_KEY_PREFIX)};
 ` + String.raw`
     /* Chromium MV3 returns promises from chrome.* while Gecko's chrome.* alias is
        callback-style, so calling .catch() on the return value is not portable —
@@ -266,8 +277,15 @@ const bridgeFor = ({ trusted }) => String.raw`
        back exactly what was being kept out. The redacted flag says the value is not ours
        to restore, which is different from there being no value. No backticks in this
        comment: it lives inside the bridge template literal. */
+    /* A cache entry is disposable by construction: a reader that finds nothing asks the
+       provider again. Shadowing its value here kept a second copy of every cached lookup
+       in this world for the life of the page, and left a permanent record behind for
+       every cache key that was ever deleted. Dropping the entry is the correct rollback
+       for one, and it is what the reader is already built to handle. */
+    const __isCacheKey = key => typeof key === 'string' && key.indexOf(__CACHE_KEY_PREFIX) === 0;
     const __confirm = (key, present, value) => {
         if (!__TRUSTED_CONTEXT && __isCredentialKey(key)) { __confirmed[key] = { present, redacted:true }; return; }
+        if (__isCacheKey(key)) { delete __confirmed[key]; return; }
         __confirmed[key] = { present, value };
     };
     const __extensionState = await __storage('get', null).catch(() => ({}));

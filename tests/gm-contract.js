@@ -339,6 +339,51 @@ async function runContract(adapter) {
         });
     }
 
+    /* IE-100: the shadow store existed so a rejected write could put back what storage
+       last confirmed. For a cache entry there is nothing to put back that is worth
+       keeping: the reader treats a miss as "ask the provider again", and holding a copy
+       of every cached lookup doubled what this world keeps in memory for no gain. The
+       proof is that the value is not reachable through the rollback afterwards. */
+    if (adapter.asyncWrites) {
+        await check(label, 'a rejected cache write drops the entry rather than restoring a shadowed copy', async () => {
+            const drain = async () => {
+                for (let pass = 0; pass < 3; pass += 1) {
+                    try { gm.setValue('imdb_enh_drain', String(pass)); } catch { /* that is the point */ }
+                    await adapter.settle();
+                }
+            };
+            await drain();
+
+            // The size the item is actually about: one entry may reach 256 KiB.
+            const bulky = 'x'.repeat(200 * 1024);
+            gm.setValue('cache_rt_tt0133093', bulky);
+            await adapter.settle();
+            assert.strictEqual(gm.getValue('cache_rt_tt0133093', null), bulky,
+                'a stored cache entry must be readable, or the rollback below proves nothing');
+
+            adapter.failNextWrite(new Error('simulated quota failure'));
+            try { gm.setValue('cache_rt_tt0133093', 'a smaller entry'); } catch { /* reported via the event */ }
+            await adapter.settle();
+            assert.strictEqual(gm.getValue('cache_rt_tt0133093', null), null,
+                'the earlier cache value must not come back from a shadow copy');
+            assert(!gm.listValues().includes('cache_rt_tt0133093'),
+                'and nothing may be left for the cache to size itself from');
+
+            // A setting is not disposable, and its rollback is unchanged. Drain first:
+            // the rejection armed above surfaces on whatever write comes next.
+            await drain();
+            gm.setValue('imdb_enh_theme', 'oled');
+            await adapter.settle();
+            adapter.failNextWrite(new Error('simulated quota failure'));
+            try { gm.setValue('imdb_enh_theme', 'light'); } catch { /* reported via the event */ }
+            await adapter.settle();
+            assert.strictEqual(gm.getValue('imdb_enh_theme', null), 'oled',
+                'an ordinary setting still rolls back to what storage confirmed');
+
+            await drain();
+        });
+    }
+
     /* IE-101: the same defect one step later. The rollback above identifies the write it
        is undoing; the confirm has to as well. Storage settles in its own order, so an
        earlier write can land after a later one, and a confirm that does not check whether
