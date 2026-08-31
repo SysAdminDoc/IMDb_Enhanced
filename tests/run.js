@@ -182,6 +182,11 @@ function loadScriptTestHooks({ withoutDeleteValue = false } = {}) {
         describeFeatureOrigins,
         describeFeatureConsent,
         describeOriginHosts,
+        parseTmdbFind,
+        parseTmdbWatchProviders,
+        getAvailabilitySource,
+        getTmdbRegion,
+        isTmdbConfigured,
         originsHeldByOtherEnabledFeatures,
         releasableOriginsFor,
         BACKUP_ENVELOPE_KEY,
@@ -4011,8 +4016,136 @@ test('external access is requested per feature, not demanded at install', () => 
        that failed only for want of a grant records nothing. */
     assert(script.includes('async function cacheUnavailableUnlessBlocked'),
         'a blocked lookup must not poison the cache');
-    assert.strictEqual((script.match(/cacheUnavailableUnlessBlocked\(this\.key, cacheKey\)/g) || []).length, 4,
+    /* Six: the three score sources, and availability three times over because its TMDB
+       branch has to record an empty region separately from a failed lookup. The count is
+       only a tripwire for a new lookup that forgot the guard, so the structural check
+       below is the one that carries the meaning. */
+    assert.strictEqual((script.match(/cacheUnavailableUnlessBlocked\(this\.key, cacheKey\)/g) || []).length, 6,
         'every score and availability lookup must use the guarded form');
+    /* The unguarded form. Recording "unavailable" for 24 hours when the only problem was a
+       missing grant outlives the fix, so no lookup may reach for it directly. */
+    const lookupRegion = script.slice(script.indexOf("key: 'inlineRTScore'"), script.indexOf("key: 'trailerPopover'"));
+    assert(lookupRegion.length > 1000, 'the lookup region should span the score features');
+    assert(!/[^s]cacheSetUnavailable\(/.test(lookupRegion),
+        'a lookup must go through the guard rather than record unavailability itself');
+});
+
+/* IE-91: availability from TMDB's documented API instead of by parsing JustWatch's page.
+   The shapes below are the ones TMDB's published reference describes, checked on
+   2026-08-31: /3/find/{id}?external_source=imdb_id answers with five result arrays, and
+   /3/{type}/{id}/watch/providers answers with results keyed by country. */
+test('TMDB availability resolves an IMDb id and reads only the chosen region', () => {
+    const hooks = loadScriptTestHooks();
+
+    // An IMDb id identifies one thing. Anything else is treated as no answer rather than
+    // guessed at, because showing another title's streaming services is worse than none.
+    const movie = hooks.parseTmdbFind({
+        movie_results:[{ id:603, title:'The Matrix' }],
+        person_results:[], tv_results:[], tv_episode_results:[], tv_season_results:[],
+    });
+    assert.strictEqual(movie.type, 'movie');
+    assert.strictEqual(movie.id, 603);
+    assert.strictEqual(hooks.parseTmdbFind({ movie_results:[], tv_results:[{ id:1396 }] }).type, 'tv',
+        'a series resolves as a series, which is a different endpoint');
+    assert.strictEqual(hooks.parseTmdbFind({ movie_results:[{ id:1 }], tv_results:[{ id:2 }] }), null,
+        'an ambiguous answer is no answer');
+    assert.strictEqual(hooks.parseTmdbFind({ movie_results:[], tv_results:[] }), null,
+        'nothing found is not an answer either');
+    /* An episode id resolves to its series, which is a different title with different
+       offers, so it is deliberately not followed. */
+    assert.strictEqual(hooks.parseTmdbFind({ movie_results:[], tv_results:[], tv_episode_results:[{ id:62085 }] }), null,
+        'an episode must not silently become its series');
+    /* Coercion here would be a way to address the wrong title: Number(true) is 1, and
+       /3/movie/1/watch/providers is a real record for a real film. */
+    assert.strictEqual(hooks.parseTmdbFind({ movie_results:[{ id:'603' }] }), null, 'an id must already be a number');
+    assert.strictEqual(hooks.parseTmdbFind({ movie_results:[{ id:true }] }), null, 'and true is not 1');
+    assert.strictEqual(hooks.parseTmdbFind({ movie_results:[{ id:6.5 }] }), null, 'nor a fraction an id');
+    assert.strictEqual(hooks.parseTmdbFind(null), null);
+    assert.strictEqual(hooks.parseTmdbFind('not an object'), null);
+
+    const payload = {
+        id: 603,
+        results: {
+            US: {
+                link:'https://www.justwatch.com/us/movie/the-matrix',
+                flatrate:[{ provider_name:'Max' }, { provider_name:'Netflix' }],
+                ads:[{ provider_name:'Tubi' }],
+                rent:[{ provider_name:'Apple TV' }],
+                buy:[{ provider_name:'Amazon Video' }],
+            },
+            FR: { link:'https://www.justwatch.com/fr/film/matrix', flatrate:[{ provider_name:'Canal+' }] },
+        },
+    };
+    const us = hooks.parseTmdbWatchProviders(payload, 'US');
+    assert.strictEqual(Array.from(us.providers).join(', '), 'Max, Netflix, Tubi',
+        'subscription and ad-supported answer "already included"; rent and buy are a different question');
+    assert.strictEqual(us.url, 'https://www.justwatch.com/us/movie/the-matrix');
+    // Rendering another country's services as though they were yours is the failure here.
+    assert.strictEqual(Array.from(hooks.parseTmdbWatchProviders(payload, 'FR').providers).join(', '), 'Canal+');
+    assert.strictEqual(Array.from(hooks.parseTmdbWatchProviders(payload, 'DE').providers).length, 0,
+        'a region TMDB knows nothing about is empty, not a fallback to another country');
+    assert.strictEqual(hooks.parseTmdbWatchProviders(null, 'US'), null);
+    assert.strictEqual(hooks.parseTmdbWatchProviders({}, 'US'), null, 'a payload with no results is no answer');
+
+    // The same bounds the page-parsing path applies, so the newer source cannot be the
+    // one that lets an oversized response through to the renderer.
+    const flood = { results:{ US:{ link:'', flatrate:Array.from({ length:400 }, (_, i) => ({ provider_name:`Service ${i}` })) } } };
+    assert.strictEqual(Array.from(hooks.parseTmdbWatchProviders(flood, 'US').providers).length, 50,
+        'the provider list is bounded');
+    const longName = { results:{ US:{ link:'', flatrate:[{ provider_name:'x'.repeat(500) }] } } };
+    assert.strictEqual(Array.from(hooks.parseTmdbWatchProviders(longName, 'US').providers)[0].length, 120,
+        'a single name is bounded too');
+    const dupes = { results:{ US:{ link:'', flatrate:[{ provider_name:'Max' }], ads:[{ provider_name:'MAX' }] } } };
+    assert.strictEqual(Array.from(hooks.parseTmdbWatchProviders(dupes, 'US').providers).length, 1,
+        'the same service listed twice is one service');
+
+    // Region and source both fall back to something safe rather than to undefined.
+    assert.strictEqual(hooks.getTmdbRegion(), 'US', 'an unset region defaults rather than sending nothing');
+    hooks.seedStoredSetting('availabilityRegion', 'gb');
+    assert.strictEqual(hooks.getTmdbRegion(), 'GB', 'a region is normalized, not passed through');
+    hooks.seedStoredSetting('availabilityRegion', 'not a region');
+    assert.strictEqual(hooks.getTmdbRegion(), 'US', 'nonsense falls back');
+    assert.strictEqual(hooks.getAvailabilitySource(), 'justwatch', 'the default source is unchanged');
+    hooks.seedStoredSetting('availabilitySource', 'tmdb');
+    assert.strictEqual(hooks.getAvailabilitySource(), 'tmdb');
+    hooks.seedStoredSetting('availabilitySource', 'something else');
+    assert.strictEqual(hooks.getAvailabilitySource(), 'justwatch', 'an unknown source is not honoured');
+
+    /* Choosing TMDB without a token must say so. Quietly reading JustWatch's page instead
+       would defeat the only reason to choose TMDB. */
+    /* Sliced forward from the feature, not to the script's first _renderLoading: that one
+       belongs to an earlier score source, which made this region empty and every
+       assertion over it vacuous. */
+    const featureStart = script.indexOf("key: 'streamAvailability'");
+    assert(featureStart > 0, 'the availability feature must be findable');
+    const body = script.slice(featureStart, script.indexOf('_render(data) {', featureStart));
+    assert(body.length > 500, 'the availability init region should not be empty');
+    assert(/if \(result\.unconfigured\) \{ this\._renderUnavailable\('unconfigured'\); return; \}/.test(body),
+        'an unconfigured adapter must report itself, not fall through');
+    assert(!/unconfigured[\s\S]{0,400}getJustWatchDetailUrl/.test(body),
+        'and must not reach the page-parsing path on its way out');
+    assert(body.includes("if (getAvailabilitySource() === 'tmdb')"),
+        'the source is a choice, not a fallback order');
+
+    // Both attributions are required by the terms, and both are rendered with the data.
+    const attribution = script.match(/attribution: 'This extension uses TMDB[^']*'/);
+    assert(attribution, 'the TMDB provider must declare its attribution');
+    assert(/not endorsed, certified, or otherwise approved by TMDB/.test(attribution[0]),
+        "TMDB's API terms mandate that disclaimer verbatim");
+    assert(/JustWatch/.test(attribution[0]),
+        'the watch-provider endpoint separately requires the data be credited to JustWatch');
+    assert(script.includes("appendProviderAttribution(w, 'tmdb')"),
+        'the credit must render wherever the data does');
+    assert(script.includes('const text = PROVIDERS[providerId]?.attribution;'),
+        'and come from the provider declaration rather than being written out beside the widget');
+
+    // The token is a credential, so the extension build never lets the page read it.
+    assert(hooks.CREDENTIAL_SETTING_KEYS.has('tmdbReadToken'),
+        'the TMDB token must be handled as a credential');
+    assert(/credentialHeader: \{ name:'Authorization', ref:token\.ref \}/.test(script),
+        'the request names the header and the stored key, never a value');
+    assert(!/credentialHeader:[^}]*prefix/.test(script),
+        'the scheme is the background\'s to add, since nothing here can read the value it wraps');
 });
 
 /* IE-79: a userscript has no toolbar surface, so the manager's menu is its equivalent

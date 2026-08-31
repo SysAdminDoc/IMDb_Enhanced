@@ -4,28 +4,42 @@ const STORAGE_PREFIX = 'imdb_enh_';
 const MAX_RESPONSE_TEXT = 8 * 1024 * 1024;
 const REQUEST_TIMEOUT = 30_000;
 const ALLOWED_CONTENT_HOSTS = new Set(['www.imdb.com']);
-const ALLOWED_REQUEST_HOSTS = new Set([
-    'www.rottentomatoes.com',
-    'backend.metacritic.com',
-    'letterboxd.com',
-    'www.justwatch.com',
-    'www.youtube.com',
-    'query.wikidata.org',
-    'localhost',
-    '127.0.0.1',
-]);
+/* The hosts this worker will fetch, taken from the origins the manifest declares rather
+   than listed again here. Kept as defence in depth behind the permission check: a second
+   copy of the same list only ever drifts, and the copy that drifted was this one, which
+   silently refused every request to a newly declared provider. */
+let allowedRequestHosts = null;
+function getAllowedRequestHosts() {
+    if (allowedRequestHosts) return allowedRequestHosts;
+    const manifest = chrome.runtime.getManifest();
+    const patterns = [
+        ...(manifest.host_permissions || []),
+        ...(manifest.optional_host_permissions || []),
+    ];
+    allowedRequestHosts = new Set(patterns.map(pattern => {
+        try { return new URL(pattern.replace('*.', '')).hostname.toLowerCase(); }
+        catch { return ''; }
+    }).filter(Boolean));
+    return allowedRequestHosts;
+}
 const LOOPBACK_HOSTS = new Set(['localhost', '127.0.0.1']);
-/* The only storage keys this worker will read on a content script's say-so. Anything else
-   named in a credentialHeader is ignored, so the injection path cannot be turned into a
-   general way to read extension storage out into an outbound request. */
-const CREDENTIAL_STORAGE_KEYS = new Set([
-    'imdb_enh_radarrApiKey',
-    'imdb_enh_sonarrApiKey',
-    'imdb_enh_seerrApiKey',
-    'imdb_enh_plexToken',
-    'imdb_enh_jellyfinApiKey',
-    'imdb_enh_embyApiKey',
+/* Each credential is bound to the destination it may be attached to and, where the
+   protocol needs one, the scheme it is sent under. Binding it here rather than trusting
+   the request is the point: a caller naming a key it is not entitled to, or naming a
+   destination that does not own it, gets nothing. The scheme is declared here too so the
+   page cannot influence any part of the header it is unable to read. */
+const CREDENTIAL_DESTINATIONS = new Map([
+    ['imdb_enh_radarrApiKey', { loopback: true }],
+    ['imdb_enh_sonarrApiKey', { loopback: true }],
+    ['imdb_enh_seerrApiKey', { loopback: true }],
+    ['imdb_enh_plexToken', { loopback: true }],
+    ['imdb_enh_jellyfinApiKey', { loopback: true }],
+    ['imdb_enh_embyApiKey', { loopback: true }],
+    // The one credential that goes anywhere but your own machine, and it goes to exactly
+    // one host over TLS.
+    ['imdb_enh_tmdbReadToken', { host: 'api.themoviedb.org', scheme: 'Bearer ' }],
 ]);
+const CREDENTIAL_STORAGE_KEYS = new Set(CREDENTIAL_DESTINATIONS.keys());
 /* Credentials the userscript attaches to local-service calls. fetch strips
    Authorization across an origin change but carries arbitrary custom headers with
    it, so these are exactly the ones a redirect could hand to a third party. Compared
@@ -60,7 +74,7 @@ function describeRequestUrl(value) {
         if (!/^https?:$/.test(url.protocol)) return null;
         if (url.username || url.password) return null;
         const hostname = url.hostname.toLowerCase();
-        if (!ALLOWED_REQUEST_HOSTS.has(hostname)) return null;
+        if (!getAllowedRequestHosts().has(hostname)) return null;
         return { url, hostname, origin:url.origin, loopback:isLoopbackHost(hostname) };
     } catch {
         return null;
@@ -190,16 +204,23 @@ async function sendHttpRequest(message, sender, sendResponse) {
        loopback. That is what stops this from becoming a way to read storage into an
        arbitrary request. */
     const credentialRef = message.credentialHeader;
-    if (credentialRef && target.loopback
-        && CREDENTIAL_STORAGE_KEYS.has(`${STORAGE_PREFIX}${credentialRef.ref}`)
-        && typeof credentialRef.name === 'string') {
-        const stored = await callApi(chrome.storage.local, 'get', `${STORAGE_PREFIX}${credentialRef.ref}`)
-            .catch(() => null);
-        const value = stored?.[`${STORAGE_PREFIX}${credentialRef.ref}`];
+    const credentialKey = credentialRef ? `${STORAGE_PREFIX}${credentialRef.ref}` : '';
+    const binding = CREDENTIAL_DESTINATIONS.get(credentialKey);
+    /* Three conditions, all required: the key must be one this worker knows, the request
+       must already have been validated as a URL it will fetch, and the destination must be
+       the one that key is bound to. Nothing else earns a credential. A loopback key goes
+       only to your own machine; a host-bound key goes only to that host. */
+    const destinationOwnsCredential = Boolean(binding)
+        && (binding.loopback ? target.loopback : target.hostname === binding.host);
+    if (destinationOwnsCredential && typeof credentialRef.name === 'string') {
+        const stored = await callApi(chrome.storage.local, 'get', credentialKey).catch(() => null);
+        const value = stored?.[credentialKey];
         // Rejected the same way normalizeHeaders rejects one: a control character here
         // would be a header-injection vector.
         if (typeof value === 'string' && value.trim() && !/[\u0000-\u001f\u007f]/.test(value)) {
-            headers[credentialRef.name.slice(0, 120)] = value.slice(0, 4096);
+            // The scheme comes from the binding, never from the message: a caller that
+            // cannot read the value has no business shaping the header around it.
+            headers[credentialRef.name.slice(0, 120)] = `${binding.scheme || ''}${value.slice(0, 4096)}`;
         }
     }
     const body = message.body === undefined || message.body === null

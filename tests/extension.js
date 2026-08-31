@@ -287,12 +287,29 @@ const credentialKeys = (source.match(/const CREDENTIAL_SETTING_KEYS = new Set\(\
 assert(credentialKeys, 'the userscript must declare which settings are credentials');
 const credentialNames = [...credentialKeys.matchAll(/'([^']+)'/g)].map(m => m[1]).sort();
 assert(credentialNames.length >= 6, 'every integration secret must be listed as a credential');
-const backgroundAllowlist = (background.match(/const CREDENTIAL_STORAGE_KEYS = new Set\(\[([\s\S]*?)\]\);/) || [])[1];
-assert(backgroundAllowlist, 'the background worker must allowlist the keys it will inject');
+/* Each credential is now bound to the destination it may reach, so the allowlist is the
+   keys of that map. A key with no binding cannot be injected anywhere. */
+const bindingBlock = (background.match(/const CREDENTIAL_DESTINATIONS = new Map\(\[([\s\S]*?)\]\);/) || [])[1];
+assert(bindingBlock, 'the background worker must bind each credential to a destination');
 assert.deepStrictEqual(
-    [...backgroundAllowlist.matchAll(/'([^']+)'/g)].map(m => m[1]).sort(),
+    [...bindingBlock.matchAll(/\['(imdb_enh_[^']+)'/g)].map(m => m[1]).sort(),
     credentialNames.map(name => `imdb_enh_${name}`).sort(),
-    'the background injection allowlist and the credential settings must name the same keys');
+    'the background bindings and the credential settings must name the same keys');
+assert(background.includes('const CREDENTIAL_STORAGE_KEYS = new Set(CREDENTIAL_DESTINATIONS.keys());'),
+    'the injectable keys must be exactly the bound ones, not a second list');
+/* The only credential that leaves the machine goes to exactly one host over TLS. Every
+   other one is bound to loopback, so no request to a public host can ask for it. */
+assert(/\['imdb_enh_tmdbReadToken', \{ host: 'api\.themoviedb\.org', scheme: 'Bearer ' \}\]/.test(background),
+    'the TMDB token must be bound to TMDB and to the scheme it is sent under');
+const offMachine = [...bindingBlock.matchAll(/\['(imdb_enh_[^']+)', \{ host:/g)].map(m => m[1]);
+assert.deepStrictEqual(offMachine, ['imdb_enh_tmdbReadToken'],
+    'no other credential may be bound to an off-machine destination without being noticed here');
+/* The worker used to keep its own copy of the hosts it would fetch, which meant a newly
+   declared provider was silently refused by the one component that has to reach it. */
+assert(!background.includes('const ALLOWED_REQUEST_HOSTS = new Set(['),
+    'the request hosts must come from the manifest, not a second hand-kept list');
+assert(background.includes('function getAllowedRequestHosts()'),
+    'the worker must derive the hosts it will fetch from the origins the manifest declares');
 
 assert(content.includes('__TRUSTED_CONTEXT = false'), 'the content bundle must run as an untrusted context');
 assert(recovery.includes('__TRUSTED_CONTEXT = true'),

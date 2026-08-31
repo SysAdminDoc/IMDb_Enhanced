@@ -10,6 +10,10 @@ const vm = require('vm');
 const root = path.resolve(__dirname, '..');
 const backgroundPath = path.join(root, 'extension', 'background.js');
 const backgroundSource = fs.readFileSync(backgroundPath, 'utf8');
+/* The worker derives the hosts it will fetch from the manifest, so the stub has to serve
+   the real one. A hand-written manifest here would decide for itself which providers are
+   reachable and pass while the shipped build refused them. */
+const shippedManifest = JSON.parse(fs.readFileSync(path.join(root, 'extension', 'manifest.json'), 'utf8'));
 
 /* Every case here is async. Registering them and awaiting in order keeps a rejected
    assertion from being swallowed as an unhandled rejection and reported as a pass. */
@@ -68,12 +72,9 @@ function loadBackground({ engine = 'chromium', fetchImpl, fastTimers = false } =
                 lastError: null,
                 openOptionsPage: () => { calls.openedOptions += 1; },
                 getManifest: () => ({
-                    version: '2.15.0',
-                    optional_host_permissions: [
-                        'https://www.rottentomatoes.com/*',
-                        'https://query.wikidata.org/*',
-                        'http://localhost/*',
-                    ],
+                    version: shippedManifest.version,
+                    host_permissions: shippedManifest.host_permissions,
+                    optional_host_permissions: shippedManifest.optional_host_permissions,
                 }),
                 onInstalled: { addListener() {} },
                 onStartup: { addListener() {} },
@@ -475,6 +476,77 @@ for (const engine of ['chromium', 'gecko']) {
                 `public request carried a credential header: ${name}`);
         });
         assert.strictEqual(sent.redirect, 'follow', 'an uncredentialed public request may still follow same-origin hops');
+    });
+
+    /* IE-91: the TMDB token is the only credential that leaves the machine, so it is bound
+       to one host. The binding, not the caller, decides where a key may go and under which
+       scheme, because the caller cannot read the value and has no business shaping the
+       header around it. */
+    test(`[${engine}] the TMDB token is sent to TMDB, under the scheme the binding declares`, async () => {
+        const { dispatch, calls, storage } = loadBackground({ engine, fetchImpl: makeFetch({}) });
+        storage.set('imdb_enh_tmdbReadToken', 'TMDB-TOKEN-VALUE');
+        await dispatch(request('https://api.themoviedb.org/3/find/tt0133093?external_source=imdb_id', {
+            credentialHeader: { name:'Authorization', ref:'tmdbReadToken' },
+        }), IMDB_SENDER);
+        const sent = calls.fetches[0][1];
+        assert.strictEqual(sent.headers.Authorization, 'Bearer TMDB-TOKEN-VALUE',
+            'the worker attaches the token with the scheme its binding declares');
+        assert.strictEqual(sent.redirect, 'manual',
+            'a request carrying a credential must still refuse to redirect');
+    });
+
+    test(`[${engine}] the TMDB token is refused to every other destination`, async () => {
+        for (const url of [
+            'https://www.justwatch.com/us/movie/the-matrix',
+            'http://localhost:7878/api/v3/movie',
+            'https://query.wikidata.org/sparql?query=x',
+        ]) {
+            const { dispatch, calls, storage } = loadBackground({ engine, fetchImpl: makeFetch({}) });
+            storage.set('imdb_enh_tmdbReadToken', 'TMDB-TOKEN-VALUE');
+            await dispatch(request(url, { credentialHeader: { name:'Authorization', ref:'tmdbReadToken' } }), IMDB_SENDER);
+            const sent = calls.fetches[0][1];
+            assert.strictEqual(sent.headers.Authorization, undefined,
+                `the TMDB token must not be attached to ${url}`);
+        }
+    });
+
+    test(`[${engine}] a loopback credential is refused to TMDB`, async () => {
+        const { dispatch, calls, storage } = loadBackground({ engine, fetchImpl: makeFetch({}) });
+        storage.set('imdb_enh_radarrApiKey', 'RADARR-KEY');
+        await dispatch(request('https://api.themoviedb.org/3/find/tt0133093?external_source=imdb_id', {
+            credentialHeader: { name:'X-Api-Key', ref:'radarrApiKey' },
+        }), IMDB_SENDER);
+        const sent = calls.fetches[0][1];
+        assert.strictEqual(sent.headers['X-Api-Key'], undefined,
+            'a key bound to your own machine must not follow a request to a public host');
+    });
+
+    test(`[${engine}] a caller cannot choose the scheme a credential is sent under`, async () => {
+        const { dispatch, calls, storage } = loadBackground({ engine, fetchImpl: makeFetch({}) });
+        storage.set('imdb_enh_tmdbReadToken', 'TMDB-TOKEN-VALUE');
+        await dispatch(request('https://api.themoviedb.org/3/find/tt0133093?external_source=imdb_id', {
+            credentialHeader: { name:'Authorization', ref:'tmdbReadToken', prefix:'Basic ', scheme:'Basic ' },
+        }), IMDB_SENDER);
+        assert.strictEqual(calls.fetches[0][1].headers.Authorization, 'Bearer TMDB-TOKEN-VALUE',
+            'a scheme named in the message must be ignored');
+    });
+
+    /* The worker used to keep its own copy of the hosts it would fetch, which meant a
+       provider added to the manifest was silently refused by the one component that has
+       to reach it. */
+    test(`[${engine}] every origin the manifest declares is reachable`, async () => {
+        const { dispatch, calls } = loadBackground({ engine, fetchImpl: makeFetch({}) });
+        const hosts = [...new Set([
+            ...(shippedManifest.host_permissions || []),
+            ...(shippedManifest.optional_host_permissions || []),
+        ].map(pattern => { try { return new URL(pattern.replace('*.', '')).hostname; } catch { return ''; } }).filter(Boolean))];
+        assert(hosts.includes('api.themoviedb.org'), 'TMDB must be among the declared origins');
+        for (const host of hosts) {
+            calls.fetches.length = 0;
+            const answer = await dispatch(request(`https://${host}/probe`), IMDB_SENDER);
+            assert.notStrictEqual(answer.errorType, 'invalid_url',
+                `the worker refuses ${host}, which the manifest says it may reach`);
+        }
     });
 
     /* A request that ran out of time and one the page cancelled on navigation both reject

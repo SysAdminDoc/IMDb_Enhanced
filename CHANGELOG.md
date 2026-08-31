@@ -18,6 +18,12 @@
 
 - The extension's privileged fetch no longer follows a redirect anywhere it likes. It checked the address it was asked for, then let the network take it wherever a redirect pointed, which mattered most for calls to Radarr, Sonarr, Plex, Jellyfin, and Emby: those carry your API key in a header, and a redirect would have carried the header along to whatever answered. A request holding a credential now refuses to redirect at all, every response is re-checked against the address it actually came from, and a hop between a local and a public address is rejected outright. Letterboxd's IMDb lookup, which is a genuine redirect within its own site, still works. A blocked redirect now says so rather than reading as a network error.
 
+### Added
+
+- Streaming availability can come from TMDB's API instead of from reading JustWatch's page. Pick the source under Ratings and paste a TMDB read token of your own, free from themoviedb.org. It resolves the title from its IMDb id rather than by matching titles, so it cannot land on the wrong film, and it reads offers for your region only. The credit TMDB and JustWatch each require is shown with the data. Choosing TMDB without a token says so and offers to take you to the setting; it never quietly reads the page instead, which would defeat the reason for choosing it. JustWatch stays the default, so nothing changes unless you switch.
+
+- Your TMDB token is stored the way the other integration keys are, so in the extension the background holds it and the IMDb page never sees it. It is the only key that leaves your machine, and it is bound to TMDB: a request to any other address cannot ask for it, and a request to TMDB cannot ask for any other key.
+
 ### Fixed
 
 - Settings now names the service a feature contacts instead of the address it calls. It used to say a feature needed access to "backend.metacritic.com and query.wikidata.org", which reads like a fault report; it says Metacritic and Wikidata. Ad blocking asked for access to a list of Amazon tracking hosts, which sounded like the opposite of what it does, and now says it needs the ad and tracking hosts it blocks. The extension's own page, where access is actually granted, adds a plain sentence per service saying what gets sent: the title and year for a score lookup, the IMDb id for the identity lookup, and nothing at all for the hosts that are only blocked.

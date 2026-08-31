@@ -191,6 +191,21 @@
             attribution: '',
             profiles: ['default'],
         },
+        tmdb: {
+            label: 'TMDB',
+            origins: ['https://api.themoviedb.org/*'],
+            // Only the IMDb id of the page you are on, not the title text.
+            transmits: 'websiteContent',
+            consent: 'Sends the IMDb id to TMDB to look up where the title streams. Needs your own TMDB read token.',
+            ttl: CACHE_TTL,
+            /* Both are required and both are theirs, not a courtesy. TMDB's API terms
+               mandate the endorsement disclaimer verbatim, and the watch-provider
+               endpoint separately requires the data be attributed to JustWatch, on pain
+               of access being revoked. Rendered wherever this data is shown. */
+            attribution: 'This extension uses TMDB and the TMDB APIs but is not endorsed, certified, or otherwise approved by TMDB. Streaming data provided by JustWatch.',
+            // An API with a key, rather than page parsing, so a store listing can ship it.
+            profiles: ['default', 'store'],
+        },
         youTube: {
             label: 'YouTube',
             origins: ['https://www.youtube.com/*'],
@@ -242,7 +257,9 @@
         inlineRTScore: ['rottenTomatoes', 'wikidata'],
         inlineMetacriticScore: ['metacritic', 'wikidata'],
         inlineLetterboxdScore: ['letterboxd', 'wikidata'],
-        streamAvailability: ['justWatch'],
+        /* Both are declared so either can be granted, but only the chosen source is ever
+           contacted; activeProvidersFor narrows this to what is actually in play. */
+        streamAvailability: ['justWatch', 'tmdb'],
         trailerPopover: ['youTube'],
         removeAds: ['amazonAds'],
         servarrIntegration: ['localServices'],
@@ -589,6 +606,10 @@
         // Scores
         inlineRTScore: true, inlineLetterboxdScore: true, inlineMetacriticScore: true,
         streamAvailability: true,
+        /* Which service answers "where can I watch this". JustWatch is read by parsing
+           their page; TMDB is a documented API but needs a read token of your own. The
+           default stays where it was so nothing changes for an existing install. */
+        availabilitySource: 'justwatch', tmdbReadToken: '',
         // Links
         searchButtons: true, externalLinks: true, expandedLinkMenu: true,
         trailerPopover: true,
@@ -625,6 +646,7 @@
     ]);
     const CREDENTIAL_SETTING_KEYS = new Set([
         'radarrApiKey', 'sonarrApiKey', 'seerrApiKey', 'plexToken', 'jellyfinApiKey', 'embyApiKey',
+        'tmdbReadToken',
     ]);
     const COLLAPSIBLE_SECTION_IDS = [
         'title-cast', 'UserReviews', 'MoreLikeThis', 'Details', 'BoxOffice',
@@ -4990,6 +5012,118 @@ section[id*="quote" i] .ipc-list-card { padding: 4px 0 !important; margin: 2px 0
         return providers.slice(0, maxProviders);
     }
 
+    /* TMDB's watch-provider data, read through their documented API rather than by
+       parsing anyone's page. Two calls: /find resolves the IMDb id the page already
+       carries into a TMDB id, then /watch/providers returns offers grouped by country.
+       The IMDb id is the only thing sent, so unlike the page-parsing sources there is no
+       title matching to get wrong. Verified against the published API reference on
+       2026-08-31: auth is a bearer token, /3/find/{external_id}?external_source=imdb_id
+       answers with movie_results / tv_results / tv_episode_results, and
+       /3/{type}/{id}/watch/providers answers with results keyed by country, each holding
+       link plus flatrate / rent / buy / ads arrays of { provider_name }. */
+    const TMDB_API_ORIGIN = 'https://api.themoviedb.org';
+    const TMDB_REGION_PATTERN = /^[A-Z]{2}$/;
+    // Matches the page-parsing path's ceiling so both sources are bounded the same way.
+    const TMDB_MAX_PROVIDERS = 50;
+
+    function getAvailabilitySource() {
+        return get('availabilitySource') === 'tmdb' ? 'tmdb' : 'justwatch';
+    }
+    function getTmdbRegion() {
+        const stored = String(get('availabilityRegion') || '').trim().toUpperCase();
+        return TMDB_REGION_PATTERN.test(stored) ? stored : 'US';
+    }
+    function readTmdbToken() {
+        return readCredential('tmdbReadToken');
+    }
+    function isTmdbConfigured() {
+        return readTmdbToken().configured;
+    }
+
+    /* Picks the TMDB record for the IMDb id. An id resolves to exactly one thing, so
+       anything other than a single unambiguous hit is treated as no answer rather than
+       guessed at: showing the wrong title's streaming services is worse than showing
+       none. tv_episode_results is deliberately ignored — an episode has no offers of its
+       own and TMDB answers for the series instead, which would be a different title. */
+    function parseTmdbFind(payload) {
+        if (!payload || typeof payload !== 'object') return null;
+        const movies = Array.isArray(payload.movie_results) ? payload.movie_results : [];
+        const shows = Array.isArray(payload.tv_results) ? payload.tv_results : [];
+        /* The id has to already be a number. Coercing meant `true` became 1 and `"12"`
+           became 12, either of which would have addressed a real but different title. */
+        const candidates = [
+            ...movies.map(entry => ({ type:'movie', id:entry?.id })),
+            ...shows.map(entry => ({ type:'tv', id:entry?.id })),
+        ].filter(entry => typeof entry.id === 'number' && Number.isInteger(entry.id) && entry.id > 0);
+        if (candidates.length !== 1) return null;
+        return candidates[0];
+    }
+
+    /* Offers for one region only. TMDB returns every country it knows, and rendering
+       another country's services as though they were yours is the failure this avoids. */
+    function parseTmdbWatchProviders(payload, region) {
+        if (!payload || typeof payload !== 'object') return null;
+        const results = payload.results;
+        if (!results || typeof results !== 'object') return null;
+        const local = results[region];
+        if (!local || typeof local !== 'object') return { providers:[], url:'', region };
+        const names = [];
+        // Same bounds the page-parsing path already applies, so a large or hostile
+        // response cannot reach the renderer through the newer of the two sources.
+        const add = value => {
+            const name = String(value || '').trim().replace(/\s+/g, ' ').slice(0, 120);
+            if (name && !names.some(existing => existing.toLowerCase() === name.toLowerCase())) names.push(name);
+        };
+        // Subscription first, then ad-supported: both are "already included", which is
+        // what the summary line answers. Rent and buy are a different question.
+        /* One ceiling, counted across both buckets. Slicing each bucket as well looked
+           like a second bound but enforced nothing the first did not, so removing either
+           left the other holding and neither was ever really under test. */
+        ['flatrate', 'ads'].forEach(bucket => {
+            const offers = Array.isArray(local[bucket]) ? local[bucket] : [];
+            for (const offer of offers) {
+                if (names.length >= TMDB_MAX_PROVIDERS) break;
+                add(offer?.provider_name);
+            }
+        });
+        const url = typeof local.link === 'string' ? local.link : '';
+        // No trailing slice: the ceiling is enforced as names are added, and a second one
+        // here only looked like a bound while asserting nothing.
+        return { providers:names, url, region };
+    }
+
+    async function fetchTmdbAvailability(imdbId, isCurrent) {
+        const token = readTmdbToken();
+        if (!token.configured) return { unconfigured:true };
+        const region = getTmdbRegion();
+        /* Under a script manager the value is readable here and goes straight on the
+           request. In an extension build it is not: only the header name and which stored
+           key travel, and the worker attaches the value under the scheme its own binding
+           declares. The same two shapes the local-service calls already use. */
+        const headers = {
+            Accept: 'application/json',
+            ...(token.value ? { Authorization: `Bearer ${token.value}` } : {}),
+        };
+        const request = path => httpGet(`${TMDB_API_ORIGIN}${path}`, {
+            headers,
+            credentialHeader: { name:'Authorization', ref:token.ref },
+            timeout: 12000,
+            cancelOnRouteChange: true,
+        });
+
+        const found = parseTmdbFind(parseJSONResponse(
+            await request(`/3/find/${encodeURIComponent(imdbId)}?external_source=imdb_id`),
+            EXTERNAL_RESPONSE_TEXT_LIMIT));
+        if (!isCurrent()) return { cancelled:true };
+        if (!found) return { providers:[], url:'', region };
+
+        const offers = parseTmdbWatchProviders(parseJSONResponse(
+            await request(`/3/${found.type}/${found.id}/watch/providers`),
+            EXTERNAL_RESPONSE_TEXT_LIMIT), region);
+        if (!isCurrent()) return { cancelled:true };
+        return offers || { providers:[], url:'', region };
+    }
+
     function parseJustWatchAvailability(html, url, expected) {
         if (!html) return null;
         const source = toBoundedText(html, EXTERNAL_RESPONSE_TEXT_LIMIT);
@@ -5296,7 +5430,27 @@ section[id*="quote" i] .ipc-list-card { padding: 4px 0 !important; margin: 2px 0
        The second is the user's to fix, so it says so and offers the page that can fix it.
        A browser only lets an extension request access from one of its own pages, which is
        why this opens that page rather than prompting here. */
+    /* A provider that requires credit gets it wherever its data is rendered, taken from
+       the provider's own declaration rather than written out beside each widget. */
+    function appendProviderAttribution(widget, providerId) {
+        const text = PROVIDERS[providerId]?.attribution;
+        if (!text) return;
+        widget.appendChild(makeEl('div', { className:'enh-score-widget__attribution' }, text));
+    }
+
     function appendUnavailableNote(widget, reason, unavailableText = 'Score unavailable') {
+        if (reason === 'unconfigured') {
+            widget.appendChild(makeEl('div', { className:'enh-score-widget__sub' }, 'Needs a TMDB read token'));
+            widget.appendChild(makeEl('button', {
+                type:'button',
+                className:'enh-score-stale__retry',
+                onClick: () => {
+                    if (!document.getElementById('enh-settings-overlay')) createSettingsPanel();
+                    if (!settingsOpen) toggleSettings();
+                },
+            }, 'Add token'));
+            return;
+        }
         if (reason !== 'access') {
             widget.appendChild(makeEl('div', { className:'enh-score-widget__sub' }, unavailableText));
             return;
@@ -5721,6 +5875,35 @@ section[id*="quote" i] .ipc-list-card { padding: 4px 0 !important; margin: 2px 0
             if (!await waitUntilVisible(bar, isCurrent) || !isCurrent()) return;
             this._renderLoading();
 
+            /* TMDB is a separate source, not a fallback. Silently reading JustWatch's
+               page when the chosen source cannot answer would defeat the reason for
+               choosing it, so an unconfigured adapter says so and stops. */
+            if (getAvailabilitySource() === 'tmdb') {
+                let tmdbError = null;
+                try {
+                    const result = await fetchTmdbAvailability(imdbId, isCurrent);
+                    if (!isCurrent() || result.cancelled) return;
+                    if (result.unconfigured) { this._renderUnavailable('unconfigured'); return; }
+                    if (result.providers.length) {
+                        const data = { providers:result.providers, url:result.url, source:'tmdb', region:result.region };
+                        cacheSet(cacheKey, data);
+                        this._render(data);
+                        return;
+                    }
+                    // A region TMDB has no offers for is an answer, not a failure.
+                    await cacheUnavailableUnlessBlocked(this.key, cacheKey);
+                    if (!isCurrent()) return;
+                    this._renderUnavailable();
+                    return;
+                } catch (error) { tmdbError = error; }
+                if (!isCurrent()) return;
+                if (await renderStaleScore(this, cacheKey, tmdbError, isCurrent)) return;
+                const tmdbBlocked = await cacheUnavailableUnlessBlocked(this.key, cacheKey);
+                if (!isCurrent()) return;
+                this._renderUnavailable(tmdbBlocked ? 'access' : 'unavailable');
+                return;
+            }
+
             const headers = { Accept: 'text/html,application/xhtml+xml' };
             const directUrl = getJustWatchDetailUrl(title);
             try {
@@ -5778,6 +5961,9 @@ section[id*="quote" i] .ipc-list-card { padding: 4px 0 !important; margin: 2px 0
             const providers = Array.isArray(data.providers) ? data.providers : [];
             const summary = formatProviderSummary(providers);
             if (!summary) { this._renderUnavailable(); return; }
+            /* TMDB hands back a JustWatch page for the title; the link is still checked
+               against the host it must belong to rather than followed on trust. */
+            const fromTmdb = data.source === 'tmdb';
             const href = normalizeTrustedUrl(data.url, 'justwatch.com', getJustWatchSearchUrl());
 
             const w = makeEl('div', { id: 'enh-jw-widget', className: 'enh-score-widget enh-score-widget--availability' },
@@ -5789,11 +5975,16 @@ section[id*="quote" i] .ipc-list-card { padding: 4px 0 !important; margin: 2px 0
                     className: 'enh-score-widget__score enh-score-widget__score--availability',
                     style: { '--score-color': '#fbc500' },
                 },
-                    makeEl('span', { className: 'enh-score-widget__badge enh-score-widget__badge--outline' }, 'JW'),
+                    makeEl('span', { className: 'enh-score-widget__badge enh-score-widget__badge--outline' }, fromTmdb ? 'TMDB' : 'JW'),
                     makeEl('span', { className: 'enh-score-widget__value enh-score-widget__value--availability' }, `On ${summary}`)
                 ),
-                makeEl('div', { className: 'enh-score-widget__sub' }, 'Via JustWatch')
+                makeEl('div', { className: 'enh-score-widget__sub' },
+                    fromTmdb ? `Via TMDB${data.region ? ` (${data.region})` : ''}` : 'Via JustWatch')
             );
+            /* TMDB's terms require the endorsement disclaimer, and their watch-provider
+               endpoint separately requires the data be credited to JustWatch. Rendered
+               with the data, because that is where the terms put it. */
+            if (fromTmdb) appendProviderAttribution(w, 'tmdb');
             bar.appendChild(w);
         },
         _renderLoading() {
@@ -9459,6 +9650,10 @@ section[data-testid="hero-parent"].enh-editorial-native-hidden { display: none !
     padding: 2px 7px;
 }
 .enh-score-widget__sub { font-size: 10px; color: ${t.tx3}; margin-top: 2px; }
+/* Required credit, not decoration: TMDB's terms mandate the disclaimer and their
+   watch-provider endpoint mandates the JustWatch credit. Quiet, but present and
+   readable rather than hidden behind a hover or clipped to one line. */
+.enh-score-widget__attribution { font-size: 9px; line-height: 1.35; color: ${t.tx3}; margin-top: 4px; max-width: 260px; }
 .enh-score-widget--muted { --score-color: ${t.tx2}; }
 /* A value shown because its provider was unreachable says so and offers a retry, rather
    than presenting week-old data as current. */
@@ -10095,6 +10290,9 @@ section[data-testid="hero-parent"].enh-editorial-native-hidden { display: none !
 .enh-servarr-title { color: ${t.tx1}; font: 700 12px/1.3 -apple-system, BlinkMacSystemFont, 'Segoe UI', sans-serif; margin-bottom: 8px; }
 .enh-servarr-grid { display: grid; grid-template-columns: repeat(2, minmax(0, 1fr)); gap: 8px; }
 .enh-servarr-field { display: flex; flex-direction: column; gap: 4px; min-width: 0; }
+/* The rule above outranks the user agent's [hidden] rule, so hiding one of these needs
+   saying explicitly. Without it the TMDB token field shows whichever source is chosen. */
+.enh-servarr-field[hidden] { display: none; }
 .enh-servarr-field--wide { grid-column: 1 / -1; }
 .enh-servarr-field label { color: ${t.tx2}; font: 700 10px/1.2 -apple-system, BlinkMacSystemFont, 'Segoe UI', sans-serif; text-transform: uppercase; letter-spacing: .04em; }
 .enh-servarr-input {
@@ -10209,8 +10407,18 @@ section[data-testid="hero-parent"].enh-editorial-native-hidden { display: none !
         });
     }
 
+    /* A feature can declare more providers than it uses at once. Availability can read
+       from JustWatch or from TMDB, and asking for both origins when only one is ever
+       contacted would be asking for access that is never used. */
+    function activeProvidersFor(key) {
+        const declared = FEATURE_PROVIDERS[key] || [];
+        if (key !== 'streamAvailability') return declared;
+        return declared.filter(id => id === (getAvailabilitySource() === 'tmdb' ? 'tmdb' : 'justWatch'));
+    }
     function getFeatureOrigins(key) {
-        return FEATURE_ORIGIN_GROUPS[key] || [];
+        const active = activeProvidersFor(key);
+        if (!active.length) return FEATURE_ORIGIN_GROUPS[key] || [];
+        return [...new Set(active.flatMap(id => PROVIDERS[id]?.origins || []))];
     }
 
     /* Origin patterns are not something to put in front of a user. Loopback collapses to
@@ -10238,14 +10446,14 @@ section[data-testid="hero-parent"].enh-editorial-native-hidden { display: none !
        provider still falls back to the hostnames, so a new group reads truthfully before
        it is declared rather than silently naming nothing. */
     function describeFeatureOrigins(key) {
-        const labels = (FEATURE_PROVIDERS[key] || []).map(id => PROVIDERS[id]?.label).filter(Boolean);
+        const labels = activeProvidersFor(key).map(id => PROVIDERS[id]?.label).filter(Boolean);
         return joinNames(labels.length ? [...new Set(labels)] : describeOriginHosts(getFeatureOrigins(key)));
     }
 
     /* Shown where access is actually requested. Naming the service says who is contacted;
        these sentences say what is sent, which is the part someone deciding needs. */
     function describeFeatureConsent(key) {
-        return (FEATURE_PROVIDERS[key] || [])
+        return activeProvidersFor(key)
             .map(id => PROVIDERS[id]?.consent)
             .filter(Boolean)
             .filter((sentence, index, all) => all.indexOf(sentence) === index);
@@ -11402,6 +11610,45 @@ section[data-testid="hero-parent"].enh-editorial-native-hidden { display: none !
                 'Applies when “Dim low-rated titles” is on. Unrated titles are never dimmed.')
         ));
 
+        /* The two availability sources answer the same question by different means, so
+           the choice belongs beside the toggle rather than buried with the integrations.
+           The token is a credential like any other, which is what keeps it out of the
+           page's reach in an extension build. */
+        function createAvailabilitySourceControl() {
+            const select = makeEl('select', {
+                className:'enh-servarr-input',
+                id:'enh-availability-source',
+                'aria-label':'Where streaming availability comes from',
+                onChange: event => {
+                    const value = event.target.value === 'tmdb' ? 'tmdb' : 'justwatch';
+                    event.target.value = value;
+                    if (!trySaveSetting('availabilitySource', value)) return;
+                    tokenField.hidden = value !== 'tmdb';
+                    refreshFeature('streamAvailability');
+                    markSaved();
+                },
+            },
+                makeEl('option', { value:'justwatch' }, 'JustWatch (reads their page)'),
+                makeEl('option', { value:'tmdb' }, 'TMDB (their API, needs your token)')
+            );
+            select.value = getAvailabilitySource();
+            const tokenField = createSettingsInput({
+                key:'tmdbReadToken',
+                label:'TMDB read access token',
+                placeholder:'Paste your v4 read access token',
+                refreshKey:'streamAvailability',
+                wide:true,
+            });
+            tokenField.hidden = getAvailabilitySource() !== 'tmdb';
+            return makeEl('div', { className:'enh-settings-callout', style:{ marginTop:'12px' } },
+                makeEl('strong', {}, 'Where availability comes from'),
+                select,
+                makeEl('span', { className:'enh-settings-card-description' },
+                    'TMDB publishes this data through a documented API and asks for a token of your own, free from themoviedb.org. JustWatch is read by parsing their page. Choosing TMDB without a token says so rather than quietly reading the page instead.'),
+                tokenField
+            );
+        }
+
         const ratingsPage = pages.get('ratings');
         const previewCard = makeCard('Preview', 'Sample source values — not live title data.');
         const preview = makeEl('div', { className:'enh-score-preview' });
@@ -11416,6 +11663,7 @@ section[data-testid="hero-parent"].enh-editorial-native-hidden { display: none !
             makeEl('div', { style:{ marginTop:'12px' } }, makeFeatureCard('Score sources', 'Choose which ratings and availability information to show. The vote-distribution controls apply to a title’s Ratings tab.', 'Title pages', [
                 'ratingGap', 'inlineRTScore', 'inlineLetterboxdScore', 'inlineMetacriticScore', 'streamAvailability',
             ])),
+            createAvailabilitySourceControl(),
             makeEl('div', { className:'enh-settings-callout', style:{ marginTop:'12px' } },
                 makeEl('strong', {}, 'Privacy'),
                 'Fetched only on IMDb title pages. Responses are cached locally.'
