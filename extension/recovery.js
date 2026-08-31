@@ -4715,6 +4715,15 @@ section[id*="quote" i] .ipc-list-card { padding: 4px 0 !important; margin: 2px 0
         return !wantedYear || Boolean(candidateYear) && Math.abs(candidateYear - wantedYear) <= 1;
     }
 
+    /* Pulls one numeric field out of a named object in Rotten Tomatoes' embedded score
+       payload. The character class excludes braces and the length is bounded, so the
+       match cannot wander into a neighbouring object or backtrack catastrophically on a
+       200 KB page. */
+    function readRTScoreField(source, objectKey, field) {
+        const pattern = new RegExp(`"${objectKey}"\\s*:\\s*\\{[^{}]{0,800}?"${field}"\\s*:\\s*"?(\\d{1,3})"?`, 'i');
+        return boundedScore(pattern.exec(String(source || ''))?.[1], 100);
+    }
+
     function parseRTDetailPage(html, title, year, type = 'movie', fallbackUrl = '') {
         const source = toBoundedText(html, EXTERNAL_RESPONSE_TEXT_LIMIT);
         if (!source) return null;
@@ -4762,10 +4771,19 @@ section[id*="quote" i] .ipc-list-card { padding: 4px 0 !important; margin: 2px 0
             const value = boundedScore(scoreMatch[1], 100);
             if (value !== null) tomatometer = value;
         }
-        if (tomatometer === null) return null;
+        /* Read from the score payload Rotten Tomatoes actually ships. Measured against
+           the live page on 2026-08-31, the shape is
 
-        const audienceMatch = source.match(/audienceScore[^}]*?"value"\s*:\s*(\d+)/i);
-        const audience = boundedScore(audienceMatch?.[1], 100);
+             "audienceScore":{"averageRating":"3.6",…,"score":"85","sentiment":"POSITIVE"}
+             "criticsScore":{"certified":true,"score":"83","sentiment":…}
+
+           so the field is `score`, not `value`. The previous pattern looked for "value"
+           and therefore never matched: the audience half of this widget has been quietly
+           absent rather than merely unavailable for some titles. */
+        const audience = readRTScoreField(source, 'audienceScore', 'score');
+        // Critics from the same payload as a fallback where JSON-LD carried no rating.
+        if (tomatometer === null) tomatometer = readRTScoreField(source, 'criticsScore', 'score');
+        if (tomatometer === null) return null;
         const consensusMatch = source.match(/critics-consensus[^>]*>([^<]+)</i)
             || source.match(/"criticsConsensus"\s*:\s*"([^"\\]*(?:\\.[^"\\]*)*)"/i);
         const consensus = consensusMatch

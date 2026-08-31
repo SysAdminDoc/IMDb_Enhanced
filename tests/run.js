@@ -89,6 +89,7 @@ function loadScriptTestHooks({ withoutDeleteValue = false } = {}) {
         boundedScore,
         parseRTSearchResult,
         parseRTDetailPage,
+        readRTScoreField,
         parseLetterboxdDetailPage,
         selectMetacriticResult,
         buildWikidataIdQuery,
@@ -2893,6 +2894,48 @@ test('local request errors stay concise and text-only', () => {
         'Request failed',
         'non-numeric status values should not be coerced into UI text'
     );
+});
+
+/* IE-13 (critic + audience half): the audience score was read with a pattern that looks
+   for "value", but Rotten Tomatoes ships "score". It therefore never matched, and the
+   audience half of the widget has been quietly absent rather than merely unavailable. */
+test('Rotten Tomatoes critic and audience scores are read from the payload it ships', () => {
+    const hooks = loadScriptTestHooks();
+
+    /* Copied from the live page on 2026-08-31, including the field order and the quoted
+       numerals, because the exact shape is the thing that was wrong. */
+    const payload = '"audienceScore":{"averageRating":"3.6","bandedRatingCount":"250,000+ Ratings",'
+        + '"likedCount":142778,"notLikedCount":24632,"reviewCount":1307885,"score":"85","scoreType":"ALL"},'
+        + '"criticsScore":{"certified":true,"score":"83","sentiment":"POSITIVE"}';
+
+    assert.strictEqual(hooks.readRTScoreField(payload, 'audienceScore', 'score'), 85);
+    assert.strictEqual(hooks.readRTScoreField(payload, 'criticsScore', 'score'), 83);
+    // averageRating is a 0-5 figure, not a percentage, so it must not be read as a score.
+    assert.strictEqual(hooks.readRTScoreField(payload, 'audienceScore', 'nonexistent'), null);
+    assert.strictEqual(hooks.readRTScoreField(payload, 'missingObject', 'score'), null);
+    // The match must not wander out of its object into the next one's field.
+    assert.strictEqual(hooks.readRTScoreField('"emptyObject":{},"criticsScore":{"score":"83"}', 'emptyObject', 'score'), null,
+        'an object without the field must not borrow a neighbour\'s');
+
+    const full = `<html><head>
+        <script type="application/ld+json">${JSON.stringify({
+            '@type':'Movie', name:'The Matrix', datePublished:'1999-03-31',
+            url:'/m/the_matrix',
+        })}</script>
+        </head><body><script>{${payload}}</script></body></html>`;
+    const parsed = hooks.parseRTDetailPage(full, 'The Matrix', 1999, 'movie', 'https://www.rottentomatoes.com/m/the_matrix');
+    assert(parsed, 'the identity-matched detail page should parse');
+    assert.strictEqual(parsed.audience, 85, 'the audience score must reach the widget');
+    assert.strictEqual(parsed.tomatometer, 83, 'the critics score is the fallback when JSON-LD carries none');
+
+    // A page whose identity does not match is still rejected outright.
+    assert.strictEqual(
+        hooks.parseRTDetailPage(full, 'Some Other Film', 2011, 'movie', 'https://www.rottentomatoes.com/m/x'),
+        null, 'identity checking must not be weakened by the new fields');
+
+    // The widget already renders both; the data is what was missing.
+    assert(script.includes('const hasAudience = audience !== null;'), 'the widget distinguishes having an audience score');
+    assert(!/audienceScore\[\^\}\]\*\?"value"/.test(script), 'the pattern that never matched must be gone');
 });
 
 /* IE-15: every episode has its own IMDb id and both subtitle services index by it, so a

@@ -18,6 +18,8 @@
 
 ### Fixed
 
+- The Rotten Tomatoes widget shows the audience score again, next to the critics score. It was being looked for under a field name Rotten Tomatoes does not use, so it had never actually appeared — the widget was already built to display it. Where a title's structured data carries no critics score, that now comes from the same place rather than the widget giving up.
+
 - When a score service cannot be reached, the last score it gave is shown with the date it was cached and a Retry button, instead of the widget going blank. This only happens when the lookup could not reach the service at all: if it answered and had nothing, or answered with something that did not match the title, no old value is shown, because that would contradict what the service just said. A cached fallback is never older than the cache's own 30-day ceiling, and refreshing successfully replaces it.
 
 - The trailer window can be closed from the keyboard once you are inside the video player. The player is a YouTube page embedded in the dialog, and a page cannot see key presses that happen inside another site's embed, so Escape stopped working there and Tab could strand you. Tabbing out of the player in either direction now lands on the close button, which closes the dialog and returns you to the Trailer button you came from. No second close control was added; the existing one is simply reachable now.
