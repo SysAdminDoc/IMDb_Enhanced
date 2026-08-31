@@ -150,6 +150,7 @@ function loadScriptTestHooks({ withoutDeleteValue = false } = {}) {
         WIKIDATA_ID_TTL,
         computeCurrentAge,
         getUserMarks,
+        setUserMarks,
         setUserMark,
         getUserMark,
         getUserNote,
@@ -211,6 +212,43 @@ function loadScriptTestHooks({ withoutDeleteValue = false } = {}) {
     let sandboxFailWriteAt = null;
     let sandboxFailAllWrites = false;
     const sandboxDocumentListeners = [];
+    const sandboxDispatchedEvents = [];
+    const sandboxToasts = [];
+    /* Just enough element for the code that reports a problem to the user to run all the
+       way through. It is not a DOM: nothing here is asserted on for layout, only for the
+       text a failure puts in front of someone. */
+    const makeSandboxElement = tag => {
+        const children = [];
+        const attributes = new Map();
+        const classes = new Set();
+        const element = {
+            tagName: String(tag || 'div').toUpperCase(),
+            children,
+            dataset: {},
+            style: { setProperty() {} },
+            className: '',
+            innerHTML: '',
+            textContent: '',
+            classList: {
+                add: name => classes.add(name),
+                remove: name => classes.delete(name),
+                contains: name => classes.has(name),
+            },
+            setAttribute: (name, value) => { attributes.set(name, String(value)); },
+            getAttribute: name => (attributes.has(name) ? attributes.get(name) : null),
+            removeAttribute: name => { attributes.delete(name); },
+            addEventListener() {},
+            removeEventListener() {},
+            appendChild: node => {
+                children.push(node);
+                if (node && node.nodeType === 3) element.textContent += node.textContent;
+                return node;
+            },
+            removeChild: node => node,
+            remove() {},
+        };
+        return element;
+    };
     let sandboxClipboardFailure = false;
     let sandboxMediaListenerCount = 0;
     const sandboxValues = new Map();
@@ -221,6 +259,10 @@ function loadScriptTestHooks({ withoutDeleteValue = false } = {}) {
         URL,
         setTimeout: () => 0,
         clearTimeout: () => {},
+        // Never invoked: these tests assert what a failure puts on screen, not how it
+        // animates, and running the callbacks would only tear the element down again.
+        requestAnimationFrame: () => 0,
+        cancelAnimationFrame: () => {},
         window: {
             location,
             addEventListener: () => {},
@@ -233,8 +275,21 @@ function loadScriptTestHooks({ withoutDeleteValue = false } = {}) {
         navigator: { userAgent: 'Mozilla/5.0 (Windows NT 10.0; Win64; x64) TestRunner/1.0' },
         document: {
             readyState: 'loading',
-            body: {},
+            // Enough of a body for the toast path to run to completion. Without it any
+            // code that reports a failure to the user threw inside the harness, so tests
+            // had to opt out of notification and stopped exercising the real call shape.
+            body: {
+                appendChild: node => {
+                    if (node && typeof node.getAttribute === 'function' && node.getAttribute('id') === 'enh-toast') {
+                        sandboxToasts.push(String(node.textContent || ''));
+                    }
+                    return node;
+                },
+                removeChild: node => node,
+                contains: () => false,
+            },
             documentElement: {},
+            getElementById: () => null,
             querySelector: () => null,
             querySelectorAll: () => [],
             // Recorded rather than discarded: the cache's quota-recovery path is a
@@ -244,9 +299,12 @@ function loadScriptTestHooks({ withoutDeleteValue = false } = {}) {
                 const index = sandboxDocumentListeners.findIndex(e => e.type === type && e.listener === listener);
                 if (index >= 0) sandboxDocumentListeners.splice(index, 1);
             },
-            dispatchEvent: () => true,
+            // Recorded, not discarded: several recovery paths signal a repaint by
+            // dispatching, and a stub that swallows them makes the signal untestable.
+            dispatchEvent: event => { sandboxDispatchedEvents.push(event?.type || String(event)); return true; },
+            createTextNode: text => ({ nodeType: 3, textContent: String(text) }),
             createElement: tag => {
-                if (tag !== 'textarea') return {};
+                if (tag !== 'textarea') return makeSandboxElement(tag);
                 let value = '';
                 return {
                     set innerHTML(html) {
@@ -313,6 +371,8 @@ function loadScriptTestHooks({ withoutDeleteValue = false } = {}) {
     sandbox.window.__enhTest.setClipboardFailure = value => { sandboxClipboardFailure = Boolean(value); };
     sandbox.window.__enhTest.getStorageKeys = () => [...sandboxValues.keys()];
     sandbox.window.__enhTest.getRawStorage = key => sandboxValues.get(key);
+    sandbox.window.__enhTest.getDispatchedEvents = () => [...sandboxDispatchedEvents];
+    sandbox.window.__enhTest.getToasts = () => [...sandboxToasts];
     // The MV3 bridge reports a rejected write through this event, naming the key. The
     // sandbox is a synchronous manager, so this is how that path gets exercised.
     sandbox.window.__enhTest.dispatchStorageFailure = key => {
@@ -1354,7 +1414,11 @@ test('an asynchronously reported cache write failure still evicts and reports', 
     const before = hooks.readCacheUsage();
     assert(before.entries.length > 6, 'the cache needs entries for the eviction to be observable');
 
-    hooks.dispatchStorageFailure('cache_late_24');
+    /* The bridge reports the storage key it was handed, which carries the prefix. This
+       test used to pass the bare setting name, which is the shape only the synchronous
+       userscript path produces — so it asserted the recovery worked in exactly the build
+       where it could not run. Both shapes are exercised now. */
+    hooks.dispatchStorageFailure('imdb_enh_cache_late_24');
     const after = hooks.readCacheUsage();
     assert(after.entries.length < before.entries.length,
         'a reported cache write failure must make room rather than leaving the cache full');
@@ -1364,6 +1428,13 @@ test('an asynchronously reported cache write failure still evicts and reports', 
     assert(failures.length, 'the user must be told the cache is not being written');
     assert(!/late_24/.test(failures[failures.length - 1].message), 'the report must not carry the cache key');
 
+    const bare = loadScriptTestHooks();
+    for (let index = 0; index < 25; index += 1) bare.cacheSet(`late_${index}`, { payload, index });
+    const beforeBare = bare.readCacheUsage();
+    bare.dispatchStorageFailure('cache_late_24');
+    assert(bare.readCacheUsage().entries.length < beforeBare.entries.length,
+        'the synchronous manager names the setting without a prefix and must still recover');
+
     // A settings failure is the settings UI's business, not the cache's.
     const settings = loadScriptTestHooks();
     settings.cacheSet('kept', { value:true });
@@ -1371,6 +1442,56 @@ test('an asynchronously reported cache write failure still evicts and reports', 
     assert.strictEqual(settings.getFeatureFailures().filter(entry => entry.key === 'cache').length, 0,
         'a settings write failure must not be reported as a cache problem');
     assert(settings.cacheGet('kept'), 'a settings write failure must not evict the cache');
+});
+
+/* Defect found by adversarial review: in the extension the marks write is optimistic.
+   The bridge cannot throw, so setUserMarks adopted the new marks into its cache, every
+   counter and badge reported them as saved, and a reload lost them with no warning. */
+test('a marks write reported as failed afterwards is not left showing as saved', () => {
+    const hooks = loadScriptTestHooks();
+    const kept = { tt0000001:{ v:1, state:'watched', title:'Kept', ts:Date.now() } };
+    assert(hooks.setUserMarks(kept), 'the seeding write should succeed');
+
+    /* Reproduces the extension exactly. The optimistic write reports success and the
+       cache adopts the new mark, but storage still holds only what was there before,
+       so the late failure event is the only thing that can correct the page. */
+    assert(hooks.setUserMarks({ ...kept, tt0000002:{ v:1, state:'watched', title:'Never stored', ts:Date.now() } }),
+        'the optimistic write reports success, which is the whole problem');
+    assert.strictEqual(hooks.getUserMark('tt0000002'), 'watched', 'the cache adopted it');
+    hooks.seedRawStorage('imdb_enh_userMarks', kept);
+
+    hooks.dispatchStorageFailure('imdb_enh_userMarks');
+    assert.strictEqual(hooks.getUserMark('tt0000002'), '',
+        'the cache must stop reporting a mark that was never stored');
+    assert.strictEqual(hooks.getUserMark('tt0000001'), 'watched',
+        'marks that really are stored must survive the correction');
+    assert(hooks.getDispatchedEvents().includes('imdb-enhanced:marks-updated'),
+        'everything painted from the marks must be told to repaint');
+
+    // A different key's failure is not the marks' business.
+    const other = loadScriptTestHooks();
+    other.setUserMarks(kept);
+    other.dispatchStorageFailure('imdb_enh_themeVariant');
+    assert.strictEqual(other.getUserMark('tt0000001'), 'watched',
+        'an unrelated write failure must not discard the marks cache');
+});
+
+/* Defect found by adversarial review: Remove was a note write followed by a mark write,
+   so a failure between them destroyed the note and kept the mark. */
+test('removing a mark and its note is a single write', () => {
+    const hooks = loadScriptTestHooks();
+    hooks.setUserMarks({ tt0000002:{ v:1, state:'watched', title:'Godfather', ts:Date.now(), note:'the baptism scene' } });
+    assert.strictEqual(hooks.getUserNote('tt0000002'), 'the baptism scene', 'the note should seed');
+
+    hooks.failAllSettingWrites(true);
+    const remaining = { ...hooks.getUserMarks(true) };
+    delete remaining.tt0000002;
+    assert.strictEqual(hooks.setUserMarks(remaining), false, 'the removal must report failure');
+    hooks.failAllSettingWrites(false);
+    assert.strictEqual(hooks.getUserNote('tt0000002'), 'the baptism scene',
+        'a failed removal must leave the note intact rather than destroying half the record');
+    assert.strictEqual(hooks.getUserMark('tt0000002'), 'watched',
+        'a failed removal must leave the mark intact');
 });
 
 test('a persistently full quota reports a scrubbed failure and a recovery action', () => {
@@ -3017,16 +3138,27 @@ test('season progress counts the loaded season and batches marks in one transact
     assert.strictEqual((body.match(/setUserMarks\(/g) || []).length, 2,
         'the batch and its undo are one transaction each');
     assert(!/rows\.forEach[\s\S]{0,400}?setUserMark\(/.test(body), 'the batch must not write per row');
-    // Undo restores the exact prior state.
+    /* Undo restores the rows this batch touched and nothing else. These three assertions
+       used to require the opposite — a whole-store snapshot, restored wholesale — which
+       is the defect: any mark made anywhere while Undo was still armed was deleted by it,
+       with no second undo. The assertions were wrong, not the code they were written
+       against, so they are replaced rather than relaxed. */
     assert(body.includes('const before = getUserMarks(true);'), 'the batch must snapshot before writing');
-    assert(body.includes('this._pending = before;'), 'that snapshot is what undo restores');
-    assert(body.includes('setUserMarks(this._pending)'), 'undo must restore it wholesale');
+    assert(/this\._pending = rows\.map\(row => \(\{ id:row\.id, previous:before\[row\.id\] \}\)\)/.test(body),
+        'undo must remember only the rows this batch changed');
+    assert(/const current = \{ \.\.\.getUserMarks\(true\) \};/.test(body),
+        'undo must re-read the live marks rather than restoring a stale snapshot over them');
     // A failed write changes nothing and says so.
     assert(/if \(!setUserMarks\(marks\)\) \{[\s\S]{0,160}?Nothing was changed/.test(body),
         'a rejected batch must report that nothing changed');
-    // The 5,000-mark ceiling can silently drop the oldest, so the result is verified.
+    /* The 5,000-mark ceiling can silently drop the oldest, so the result is verified.
+       The batch rows always carry the freshest timestamps and so are never the ones
+       dropped: the old assertion required a message that counted them, which could not
+       fire. What a full store actually loses is the oldest marks from elsewhere. */
     assert(body.includes('USER_MARKS_MAX'), 'the batch must account for the mark ceiling');
-    assert(body.includes('could not be stored within the'), 'and say so rather than claim a clean success');
+    assert(/const evicted = Object\.keys\(before\)\.filter\(id => !touched\.has\(id\) && !stored\[id\]\)\.length/.test(body),
+        'the batch must count the marks the ceiling actually pushed out');
+    assert(body.includes('were pushed out by the'), 'and say so rather than claim a clean success');
     // Clearing a season must not take notes with it.
     assert(/normalizeUserNote\(marks\[row\.id\]\?\.note\)/.test(body), 'clearing must preserve a note');
     // No confirmation dialog anywhere.
@@ -3034,6 +3166,37 @@ test('season progress counts the loaded season and batches marks in one transact
     assert(body.includes('#enh-season-progress[hidden] { display: none; }'),
         'a display-setting rule needs its hidden companion');
     assert(body.includes("this._observer?.disconnect()"), 'the season-tab observer must be torn down');
+
+    /* The structure above is only worth asserting if the semantics it encodes hold, so
+       run the batch-then-undo shape against the real store. A mark made between the
+       batch and the undo stands for anything the user does while the button is armed:
+       a card's Seen toggle, the settings marks panel, another tab. */
+    const store = loadScriptTestHooks();
+    const stamp = Date.now();
+    const episodes = ['tt1000001', 'tt1000002', 'tt1000003'];
+    store.setUserMarks({ tt2000000:{ v:1, state:'skip', title:'Older, untouched', ts:stamp - 5000 } });
+
+    const before = store.getUserMarks(true);
+    const batched = { ...before };
+    episodes.forEach(id => { batched[id] = { v:1, state:'watched', title:id, ts:stamp }; });
+    assert(store.setUserMarks(batched), 'the batch write should succeed');
+    const pending = episodes.map(id => ({ id, previous:before[id] }));
+
+    store.setUserMark('tt3000000', 'watched', 'Marked while undo was armed');
+    assert.strictEqual(store.getUserMark('tt3000000'), 'watched', 'the later mark should be stored');
+
+    const current = { ...store.getUserMarks(true) };
+    pending.forEach(({ id, previous }) => {
+        if (previous) current[id] = previous;
+        else delete current[id];
+    });
+    assert(store.setUserMarks(current), 'the undo write should succeed');
+
+    episodes.forEach(id => assert.strictEqual(store.getUserMark(id), '', `undo must clear ${id}`));
+    assert.strictEqual(store.getUserMark('tt3000000'), 'watched',
+        'undo must not delete a mark made after the batch');
+    assert.strictEqual(store.getUserMark('tt2000000'), 'skip',
+        'undo must leave marks the batch never touched alone');
 });
 
 /* IE-20: decision fatigue is why long watchlists stop getting used. */
@@ -3283,6 +3446,17 @@ test('a title can carry a private note that survives backup and never leaks', ()
     // The editor lives on title pages and is bounded at the input too.
     assert(script.includes("maxlength:String(USER_MARK_NOTE_LIMIT)"), 'the note field must enforce the stored bound');
     assert(script.includes("id:'enh-title-note'"), 'title pages need a note editor');
+
+    /* Remove used to clear the note and then the mark, as two separate writes. A failure
+       between them destroyed the note and kept the mark, which is neither what was asked
+       for nor something the user can undo. One write, or the record survives whole. */
+    const clearHandler = script.slice(script.indexOf("className:'enh-mark-row__clear'"));
+    const clearBody = clearHandler.slice(0, clearHandler.indexOf("}, 'Remove')"));
+    assert(!/setUserNote\([^)]*\)\s*\|\|\s*!setUserMark\(/.test(clearBody),
+        'removing a record must not be a note write followed by a mark write');
+    assert.strictEqual((clearBody.match(/setUserMarks\(|setUserMark\(|setUserNote\(/g) || []).length, 1,
+        'removing a record must be a single write');
+    assert(/delete remaining\[id\];/.test(clearBody), 'and it must drop the whole record, note included');
 });
 
 /* IE-74: the trailer modal's Escape and Tab handling are document-level, so both go dead

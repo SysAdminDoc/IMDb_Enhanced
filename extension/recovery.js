@@ -813,8 +813,17 @@
         return bytes;
     }
 
+    /* A failed write is announced with three different key shapes: trySaveSetting names
+       the setting ('cache_rt_tt1'), while the extension bridge only ever sees the storage
+       key it was handed ('imdb_enh_cache_rt_tt1'). Every listener below compares against
+       setting names, so the prefix comes off here. Without this the whole extension-side
+       recovery path was dead — the one build where a 10 MiB quota makes it likely. */
+    function settingKeyFromFailure(key) {
+        if (typeof key !== 'string') return '';
+        return key.startsWith(PREFIX) ? key.slice(PREFIX.length) : key;
+    }
     function isCacheStorageKey(storageKey) {
-        return typeof storageKey === 'string' && storageKey.startsWith('cache_');
+        return settingKeyFromFailure(storageKey).startsWith('cache_');
     }
 
     /* `allowExpired` keeps an entry whose TTL has run out but which is still inside the
@@ -1339,6 +1348,27 @@
         if (!trySaveSetting('userMarks', normalized, { notify:notifyFailure })) return false;
         userMarksCache = normalized;
         return true;
+    }
+    /* Under a script manager a failed write throws and setUserMarks returns false before
+       the cache is touched. The extension bridge cannot throw — chrome.storage is async —
+       so the write above "succeeds", the cache adopts marks that were never stored, and
+       every counter and badge on the page reports them as saved until a reload silently
+       loses them. The bridge names the key when the rejection lands; treat that as the
+       real result of the write. */
+    if (typeof document !== 'undefined' && typeof document.addEventListener === 'function') {
+        document.addEventListener('imdb-enhanced:settings-save-failed', event => {
+            if (settingKeyFromFailure(event?.detail?.key) !== 'userMarks') return;
+            userMarksCache = null;
+            // Repaint first. A page that still shows the marks as saved is the worse
+            // failure, and it must not depend on the toast having somewhere to render.
+            try { document.dispatchEvent(new CustomEvent('imdb-enhanced:marks-updated')); }
+            catch (error) { console.warn('[IMDb Enhanced] could not request a marks repaint:', error); }
+            try {
+                showToast(`Your Seen and Skip marks were not saved. ${STORAGE_HOST_LABEL} may be full. Settings, then Data, then Clear cache frees space.`, 6000);
+            } catch (error) {
+                console.warn('[IMDb Enhanced] could not report a failed marks write:', error);
+            }
+        });
     }
     function getUserMark(imdbId) {
         return getUserMarks()[imdbId]?.state || '';
@@ -8457,19 +8487,22 @@ section[id*="quote" i] .ipc-list-card { padding: 4px 0 !important; margin: 2px 0
                     setTextIfChanged(note, 'Nothing was changed.');
                     return;
                 }
-                this._pending = before;
+                /* Only what this batch touched, not a copy of the whole store. Undoing
+                   from a full snapshot deleted every mark made anywhere else while the
+                   button was still armed, with no second undo to get them back. */
+                this._pending = rows.map(row => ({ id:row.id, previous:before[row.id] }));
                 undo.hidden = false;
                 refreshFeature('watchedMarking');
                 this._paint();
-                /* The store keeps the newest 5,000 marks, so a very large library can
-                   push older ones out. Say so rather than reporting a clean success. */
+                /* The store keeps the newest 5,000 marks. The rows written here carry the
+                   freshest timestamps, so they are never the ones dropped; what a full
+                   store loses is the oldest marks from elsewhere in the library. Counting
+                   the batch would always report success, so count those instead. */
                 const stored = getUserMarks(true);
-                const applied = rows.filter(row => (state === 'watched')
-                    ? stored[row.id]?.state === 'watched'
-                    : stored[row.id]?.state !== 'watched').length;
-                const dropped = rows.length - applied;
-                setTextIfChanged(note, dropped
-                    ? `${applied} of ${rows.length} applied; ${dropped} could not be stored within the ${USER_MARKS_MAX}-mark limit.`
+                const touched = new Set(rows.map(row => row.id));
+                const evicted = Object.keys(before).filter(id => !touched.has(id) && !stored[id]).length;
+                setTextIfChanged(note, evicted
+                    ? `${state === 'watched' ? 'Marked' : 'Cleared'} ${rows.length} loaded episodes; ${evicted} of your oldest marks were pushed out by the ${USER_MARKS_MAX}-mark limit.`
                     : `${state === 'watched' ? 'Marked' : 'Cleared'} ${rows.length} loaded episodes.`);
                 showToast(state === 'watched'
                     ? `Marked ${rows.length} loaded episodes seen. Undo is in the season bar.`
@@ -8477,7 +8510,14 @@ section[id*="quote" i] .ipc-list-card { padding: 4px 0 !important; margin: 2px 0
             };
             this._undo = () => {
                 if (!this._pending) return;
-                if (!setUserMarks(this._pending)) return;
+                // Re-read rather than restore a snapshot: anything marked since the batch
+                // is not this button's to revert.
+                const current = { ...getUserMarks(true) };
+                this._pending.forEach(({ id, previous }) => {
+                    if (previous) current[id] = previous;
+                    else delete current[id];
+                });
+                if (!setUserMarks(current)) return;
                 this._pending = null;
                 undo.hidden = true;
                 refreshFeature('watchedMarking');
@@ -10974,8 +11014,13 @@ section[data-testid="hero-parent"].enh-editorial-native-hidden { display: none !
                     onClick: () => {
                         /* Clearing from here removes the record outright, note included,
                            because this is the list's Remove action rather than a way to
-                           unset only the Seen/Skip half. */
-                        if (!setUserNote(id, '') || !setUserMark(id, '')) return;
+                           unset only the Seen/Skip half. One write, not two: as a note
+                           removal followed by a mark removal, a failure between them
+                           destroyed the note and kept the mark, which is the one outcome
+                           the user did not ask for and cannot undo. */
+                        const remaining = { ...getUserMarks(true) };
+                        delete remaining[id];
+                        if (!setUserMarks(remaining)) return;
                         refreshFeature('watchedMarking');
                         refreshFeature('titleNotes');
                         render();
