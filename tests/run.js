@@ -99,6 +99,10 @@ function loadScriptTestHooks({ withoutDeleteValue = false } = {}) {
         parseYouTubeTrailerVideoId,
         getListTitleIdsFromLinks,
         getListTitlesFromLinks,
+        MARK_FILTERS,
+        countMarkFilters,
+        markMatchesFilter,
+        collectMarkFilterCards,
         parseRuntimeMinutes,
         summarizeCollectionRuntime,
         formatRuntimeTotal,
@@ -1859,7 +1863,12 @@ test('polish: truncation, certifications, and dependent settings', () => {
     assert(script.includes("a[href*=\"parentalguide\"]"), 'certifications should come from the element IMDb publishes them in');
 
     // A setting another feature reads at run time has to restart that feature.
-    assert(script.includes("const FEATURE_DEPENDENTS = { spoilerBlur:['tvEpisodeTools'] };"), 'spoiler blur should declare its dependent');
+    assert(/const FEATURE_DEPENDENTS = \{[^}]*spoilerBlur:\['tvEpisodeTools'\]/.test(script),
+        'spoiler blur should declare its dependent');
+    // The mark filter reads watchedMarking at init and draws nothing without it, so the
+    // filter bar has to appear and disappear with that toggle rather than after a reload.
+    assert(/const FEATURE_DEPENDENTS = \{[^}]*watchedMarking:\['markFilters'\]/.test(script),
+        'private marks should declare the filter that depends on them');
     assert(script.includes('(FEATURE_DEPENDENTS[feature.key] || []).forEach(refreshFeature);'), 'toggling must refresh dependents');
 });
 
@@ -2861,6 +2870,85 @@ test('local request errors stay concise and text-only', () => {
         'Request failed',
         'non-numeric status values should not be coerced into UI text'
     );
+});
+
+/* IE-82: marks decorated cards but could not narrow a collection, which is where a long
+   chart or watchlist most needs them. */
+test('private marks can filter a collection without a request', () => {
+    const hooks = loadScriptTestHooks();
+    // Sandbox arrays are cross-realm, so compare contents rather than identity.
+    assert.strictEqual(hooks.MARK_FILTERS.map(filter => filter.id).join(','), 'all,unseen,watched,skip');
+
+    const marks = {
+        tt0000001:{ state:'watched' },
+        tt0000002:{ state:'skip' },
+        tt0000003:{ state:'watched' },
+    };
+    const card = id => ({ card:{ dataset:{ enhMarkId:id } }, id, duplicate:false });
+    const cards = ['tt0000001', 'tt0000002', 'tt0000003', 'tt0000004', 'tt0000005'].map(card);
+    assert.deepStrictEqual({ ...hooks.countMarkFilters(cards, marks) },
+        { all:5, unseen:2, watched:2, skip:1 });
+
+    // Counts are over unique titles: some surfaces render a title twice.
+    const withDuplicate = [...cards, { ...card('tt0000001'), duplicate:true }];
+    assert.strictEqual(hooks.countMarkFilters(withDuplicate, marks).all, 5,
+        'a title rendered twice must be counted once');
+
+    assert(hooks.markMatchesFilter('watched', 'all'));
+    assert(hooks.markMatchesFilter(undefined, 'all'));
+    assert(hooks.markMatchesFilter(undefined, 'unseen'));
+    assert(hooks.markMatchesFilter('', 'unseen'), 'a cleared mark counts as unseen');
+    assert(!hooks.markMatchesFilter('watched', 'unseen'));
+    assert(!hooks.markMatchesFilter('skip', 'unseen'));
+    assert(hooks.markMatchesFilter('watched', 'watched'));
+    assert(!hooks.markMatchesFilter('watched', 'skip'));
+
+    /* Rows are resolved from their own title links, never from the cards the marks
+       feature has decorated. Those sets differ: decoration walks the page progressively,
+       so on a 250-row chart it was half done when a filter ran and "Seen" showed the 2
+       marked titles plus 125 rows the filter had never seen. Caught only on the live
+       page, because a fixture decorates everything instantly. */
+    const collector = script.slice(script.indexOf('function collectMarkFilterCards'));
+    const collectorBody = collector.slice(0, collector.indexOf('\n    function countMarkFilters'));
+    assert(collectorBody.includes("querySelectorAll?.('a[href*=\"/title/tt\"]')"),
+        'the filter must see every row on the page, not only the decorated ones');
+    assert(!collectorBody.includes('enh-markable-card'),
+        'the filter must not depend on how far another feature has decorated');
+    assert(collectorBody.includes('getLinkedTitleId(link.href)'),
+        'row ids must come from the shared bounded title-link parser');
+    assert(collectorBody.includes('COLLECTION_LINK_SCAN_LIMIT'), 'the row scan needs the collection budget');
+
+    const feature = script.slice(script.indexOf("key: 'markFilters'"));
+    const body = feature.slice(0, feature.indexOf("key: 'servarrIntegration'"));
+    // Pure DOM over cards already present: no request of any kind.
+    ['httpRequest', 'GM_xmlhttpRequest', 'fetch(', 'graphql'].forEach(token => {
+        assert(!body.includes(token), `filtering must not ${token}`);
+    });
+    // Order is preserved because cards are hidden in place, never moved.
+    ['appendChild', 'insertBefore', 'sort('].forEach(token => {
+        assert(!new RegExp(`${token.replace('(', '\\(')}[^\\n]*card`).test(body), `filtering must not reorder cards (${token})`);
+    });
+    /* A class with !important, not the hidden property: these are IMDb's own list items
+       and they carry their own display, which the UA [hidden] rule loses to. */
+    assert(body.includes('.enh-mark-filtered-out { display: none !important; }'),
+        'hiding must outrank the row\'s own display');
+    assert(body.includes("classList.toggle('enh-mark-filtered-out', !match)"), 'non-matching rows are hidden in place');
+    // Everything comes back when the feature stops, whatever filter was active.
+    assert(/document\.querySelectorAll\('\.enh-mark-filtered-out'\)\.forEach\(node => node\.classList\.remove/.test(body),
+        'teardown must restore every hidden row');
+    // Recount as rows load and as marks change.
+    assert(body.includes("document.addEventListener('imdb-enhanced:marks-updated'"), 'marks changes must recount');
+    assert(body.includes('new MutationObserver(schedule)'), 'lazy-loaded rows must recount');
+    assert(body.includes("this._observer?.disconnect()"), 'the observer must be torn down with the route');
+    // Keyboard: a radiogroup that only responds to clicks is a set of buttons in costume.
+    assert(body.includes("role:'radiogroup'") && body.includes("role:'radio'"), 'the filter needs group semantics');
+    ['ArrowRight', 'ArrowLeft', 'Home', 'End'].forEach(key => {
+        assert(body.includes(`'${key}'`), `the radiogroup must handle ${key}`);
+    });
+    assert(body.includes('button.tabIndex = checked ? 0 : -1'), 'a radiogroup exposes one tab stop');
+    assert(body.includes('__empty'), 'an empty result needs to say so');
+    // Without marks there is nothing to filter, so the bar must not appear at all.
+    assert(body.includes("if (!get('watchedMarking')) return;"), 'the filter depends on marks being on');
 });
 
 /* IE-17: "how long is this list" is answerable from data already on the page. */

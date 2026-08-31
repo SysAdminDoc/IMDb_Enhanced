@@ -652,6 +652,7 @@
         castAges: true,
         // Utility
         quickCopyID: true, watchlistBatch: true, listMultiSearch: true, listRuntimeSummary: true,
+        markFilters: true,
         keyboardShortcuts: false,
         // Extension builds only: the userscript updates itself through its manager.
         updateNotice: true, updateDismissedVersion: '',
@@ -711,6 +712,7 @@
         watchlistBatch: 'Adds a watchlist-page button that copies all visible IMDb title IDs.',
         listMultiSearch: 'Builds a popup-safe queue of up to 20 title links on watchlist, list, and chart pages.',
         listRuntimeSummary: 'Totals how long the titles on a watchlist, list, or chart would take to watch, and says how many had no runtime listed.',
+        markFilters: 'Adds an All / Unseen / Seen / Skipped filter with counts to lists, charts, watchlists, search results, and filmographies. Needs private marks.',
         keyboardShortcuts: 'Optional. Enables ? for settings, c to copy, r for rating, and t for top.',
     };
 
@@ -6501,6 +6503,212 @@ section[id*="quote" i] .ipc-list-card { padding: 4px 0 !important; margin: 2px 0
         }
     });
 
+    /* Marks decorate cards but could not narrow a large collection, which is where they
+       are most useful — a 250-row chart or a long watchlist. Filtering is pure DOM over
+       cards already on the page: no request, no IMDb GraphQL call, and no reordering, so
+       a chart stays in its own ranking. */
+    const MARK_FILTERS = [
+        { id:'all', label:'All' },
+        { id:'unseen', label:'Unseen' },
+        { id:'watched', label:'Seen' },
+        { id:'skip', label:'Skipped' },
+    ];
+
+    /* Rows are resolved from their own title links, not from the cards the marks feature
+       has decorated. Those two are not the same set: decoration walks the page
+       progressively, so on a 250-row chart it can be half done when a filter runs, and a
+       filter that only knows about decorated cards leaves every other row on screen —
+       selecting "Seen" showed 2 marked titles plus 125 rows it had never seen. Reading
+       the links makes the filter's view of the page complete and independent of how far
+       another feature has got. */
+    const MARK_FILTER_ROW_SELECTOR = 'li, .ipc-poster-card, .ipc-metadata-list-summary-item';
+
+    function collectMarkFilterCards(root = document) {
+        const cards = [];
+        const seenIds = new Set();
+        const seenHosts = new Set();
+        const links = root.querySelectorAll?.('a[href*="/title/tt"]') || [];
+        let inspected = 0;
+        for (const link of links) {
+            if (inspected >= COLLECTION_LINK_SCAN_LIMIT) break;
+            inspected += 1;
+            const id = getLinkedTitleId(link.href);
+            if (!id) continue;
+            // The row, not the inner card: hiding the card leaves IMDb's grid holding an
+            // empty cell where a filtered title used to be.
+            const host = link.closest?.(MARK_FILTER_ROW_SELECTOR);
+            if (!host || seenHosts.has(host)) continue;
+            seenHosts.add(host);
+            // Counts are over unique titles: a row can carry several links to the same
+            // title (poster and headline), and some surfaces render a title twice.
+            const duplicate = seenIds.has(id);
+            if (!duplicate) seenIds.add(id);
+            cards.push({ card:host, id, duplicate });
+        }
+        return cards;
+    }
+
+    function countMarkFilters(cards, marks) {
+        const counts = { all:0, unseen:0, watched:0, skip:0 };
+        cards.forEach(entry => {
+            if (entry.duplicate) return;
+            counts.all += 1;
+            const state = marks[entry.id]?.state;
+            if (state === 'watched') counts.watched += 1;
+            else if (state === 'skip') counts.skip += 1;
+            else counts.unseen += 1;
+        });
+        return counts;
+    }
+
+    function markMatchesFilter(state, filter) {
+        if (filter === 'all') return true;
+        if (filter === 'unseen') return state !== 'watched' && state !== 'skip';
+        return state === filter;
+    }
+
+    reg({
+        key: 'markFilters', name: 'Filter by private marks', group: 'Utility',
+        _active: 'all',
+        init() {
+            if (!isIMDbHost()) return;
+            // The cards this filters are drawn by the marks feature; without it there is
+            // nothing to filter and the bar would be a control that does nothing.
+            if (!get('watchedMarking')) return;
+            if (document.getElementById('enh-mark-filters')) return;
+            const isCurrent = createFeatureGuard(this);
+            this._active = 'all';
+
+            addThemedCSS(t => `
+                #enh-mark-filters {
+                    display: flex; align-items: center; gap: 6px; flex-wrap: wrap;
+                    margin: 6px 0 10px;
+                }
+                .enh-mark-filters__label {
+                    font: 700 10px/1 -apple-system, BlinkMacSystemFont, 'Segoe UI', sans-serif;
+                    letter-spacing: .08em; text-transform: uppercase; color: ${t.tx3};
+                }
+                .enh-mark-filter-btn {
+                    height: 26px; padding: 0 10px; border-radius: 7px; cursor: pointer;
+                    border: 1px solid ${t.bd1}; background: ${t.sf0}; color: ${t.tx2};
+                    font: 650 11px/1 -apple-system, BlinkMacSystemFont, 'Segoe UI', sans-serif;
+                }
+                .enh-mark-filter-btn:hover { background: ${t.sf2}; color: ${t.tx0}; }
+                .enh-mark-filter-btn[aria-checked="true"] {
+                    background: ${t.accent}; border-color: ${t.accent}; color: ${readableTextColor(t.accent)};
+                }
+                .enh-mark-filter-btn:focus-visible { outline: 2px solid ${t.accent}; outline-offset: 2px; }
+                .enh-mark-filter-count { opacity: .75; margin-left: 4px; }
+                /* A class rather than the hidden property: these are IMDb's own list
+                   items, which carry their own display, and [hidden] would lose to it. */
+                .enh-mark-filtered-out { display: none !important; }
+                .enh-mark-filters__empty { color: ${t.tx3}; font: 500 12px/1.4 -apple-system, BlinkMacSystemFont, 'Segoe UI', sans-serif; }
+                .enh-mark-filters__empty:empty { display: none; }
+            `, 'enh-mark-filters-css');
+
+            const bar = makeEl('div', {
+                id:'enh-mark-filters', role:'radiogroup', 'aria-label':'Filter by private marks',
+            }, makeEl('span', { className:'enh-mark-filters__label' }, 'Private marks'));
+            const empty = makeEl('div', { className:'enh-mark-filters__empty', role:'status', 'aria-live':'polite' });
+
+            const buttons = MARK_FILTERS.map(filter => {
+                const count = makeEl('span', { className:'enh-mark-filter-count' }, '0');
+                const button = makeEl('button', {
+                    type:'button',
+                    className:'enh-mark-filter-btn',
+                    role:'radio',
+                    'aria-checked':String(filter.id === 'all'),
+                    dataset:{ enhMarkFilter:filter.id },
+                    onClick:() => this._select(filter.id),
+                }, makeEl('span', {}, filter.label), count);
+                button.tabIndex = filter.id === 'all' ? 0 : -1;
+                bar.appendChild(button);
+                return { filter, button, count };
+            });
+
+            /* Radiogroup keyboard contract: arrows move between options and select,
+               Home/End jump to the ends. Without it the group is a set of buttons
+               wearing radio roles. */
+            bar.addEventListener('keydown', event => {
+                const order = MARK_FILTERS.map(filter => filter.id);
+                const current = order.indexOf(this._active);
+                let next = null;
+                if (event.key === 'ArrowRight' || event.key === 'ArrowDown') next = (current + 1) % order.length;
+                else if (event.key === 'ArrowLeft' || event.key === 'ArrowUp') next = (current - 1 + order.length) % order.length;
+                else if (event.key === 'Home') next = 0;
+                else if (event.key === 'End') next = order.length - 1;
+                if (next === null) return;
+                event.preventDefault();
+                this._select(order[next]);
+                bar.querySelector(`[data-enh-mark-filter="${order[next]}"]`)?.focus();
+            });
+
+            this._apply = () => {
+                if (!isCurrent()) return;
+                const marks = getUserMarks();
+                const cards = collectMarkFilterCards();
+                const counts = countMarkFilters(cards, marks);
+                buttons.forEach(({ filter, button, count }) => {
+                    count.textContent = String(counts[filter.id]);
+                    const checked = filter.id === this._active;
+                    button.setAttribute('aria-checked', String(checked));
+                    button.tabIndex = checked ? 0 : -1;
+                    button.setAttribute('aria-label',
+                        `${filter.label}: ${counts[filter.id]} ${counts[filter.id] === 1 ? 'title' : 'titles'}`);
+                });
+                let shown = 0;
+                cards.forEach(({ card, id }) => {
+                    const match = markMatchesFilter(marks[id]?.state, this._active);
+                    card.classList.toggle('enh-mark-filtered-out', !match);
+                    if (match) shown += 1;
+                });
+                empty.textContent = cards.length && !shown
+                    ? `No titles on this page are ${MARK_FILTERS.find(f => f.id === this._active)?.label.toLowerCase()}.`
+                    : '';
+                bar.hidden = cards.length === 0;
+            };
+            this._select = id => {
+                this._active = id;
+                this._apply();
+            };
+
+            const target = document.querySelector('main') || document.body;
+            target.insertBefore(bar, target.firstElementChild?.nextSibling || null);
+            bar.insertAdjacentElement('afterend', empty);
+            this._empty = empty;
+            this._apply();
+
+            // Cards arrive as the page lazy-loads, and marks change from the cards
+            // themselves; both have to recount without a reload.
+            let frame = null;
+            const schedule = () => {
+                if (frame) return;
+                frame = requestAnimationFrame(() => { frame = null; this._apply(); });
+            };
+            this._marksHandler = schedule;
+            document.addEventListener('imdb-enhanced:marks-updated', this._marksHandler);
+            const observer = new MutationObserver(schedule);
+            observer.observe(target, { childList:true, subtree:true });
+            this._observer = observer;
+            this._cancelFrame = () => { if (frame) cancelAnimationFrame(frame); frame = null; };
+        },
+        destroy() {
+            removeCSS('enh-mark-filters-css');
+            this._observer?.disconnect();
+            this._observer = null;
+            this._cancelFrame?.();
+            this._cancelFrame = null;
+            if (this._marksHandler) document.removeEventListener('imdb-enhanced:marks-updated', this._marksHandler);
+            this._marksHandler = null;
+            // Every card comes back, whatever filter was active when this stopped.
+            document.querySelectorAll('.enh-mark-filtered-out').forEach(node => node.classList.remove('enh-mark-filtered-out'));
+            document.getElementById('enh-mark-filters')?.remove();
+            this._empty?.remove();
+            this._empty = null;
+            this._apply = null;
+        },
+    });
+
     reg({
         key: 'servarrIntegration', name: 'Servarr quick-add', group: 'Features',
         init() {
@@ -9985,7 +10193,7 @@ section[data-testid="hero-parent"].enh-editorial-native-hidden { display: none !
         /* tvEpisodeTools reads spoilerBlur at run time to decide whether to blur
            episode synopses, so toggling that setting has to restart it — otherwise the
            change only appears after a reload. */
-        const FEATURE_DEPENDENTS = { spoilerBlur:['tvEpisodeTools'] };
+        const FEATURE_DEPENDENTS = { spoilerBlur:['tvEpisodeTools'], watchedMarking:['markFilters'] };
         const makeFeatureCard = (title, description, badge, keys, compact = false) => {
             const card = makeCard(title, description, badge);
             if (compact) card.classList.add('enh-settings-card--compact');
@@ -10130,7 +10338,7 @@ section[data-testid="hero-parent"].enh-editorial-native-hidden { display: none !
                 'tvEpisodeTools', 'tvShowEnhancements', 'subtitleLinks', 'episodeHeatmap',
             ]),
             makeFeatureCard('Lists & shortcuts', 'Batch actions and quick navigation.', 'Lists', [
-                'watchlistBatch', 'listMultiSearch', 'listRuntimeSummary', 'quickCopyID', 'keyboardShortcuts',
+                'watchlistBatch', 'listMultiSearch', 'listRuntimeSummary', 'markFilters', 'quickCopyID', 'keyboardShortcuts',
             ]),
             makeFeatureCard('People', 'Additions to cast and crew pages.', 'Name pages', [
                 'castAges',
@@ -10629,10 +10837,14 @@ section[data-testid="hero-parent"].enh-editorial-native-hidden { display: none !
        search results are exactly where knowing what you already watched or
        dismissed changes what you click. */
     const COLLECTION_FEATURE_KEYS = new Set([
-        ...UNIVERSAL_FEATURE_KEYS, 'watchlistBatch', 'listMultiSearch', 'listRuntimeSummary', 'watchedMarking',
+        ...UNIVERSAL_FEATURE_KEYS, 'watchlistBatch', 'listMultiSearch', 'listRuntimeSummary',
+        'watchedMarking', 'markFilters',
     ]);
     const SECONDARY_PAGE_FEATURE_KEYS = new Set([
-        ...UNIVERSAL_FEATURE_KEYS, 'collapsibleSections', 'expandSummaries', 'quickNav', 'watchedMarking', 'castAges',
+        ...UNIVERSAL_FEATURE_KEYS, 'collapsibleSections', 'expandSummaries', 'quickNav',
+        // Person pages carry a filmography, which is exactly the long card list marks
+        // are useful for narrowing.
+        'watchedMarking', 'markFilters', 'castAges',
     ]);
     const EPISODE_LIST_FEATURE_KEYS = new Set([
         ...SECONDARY_PAGE_FEATURE_KEYS, 'tvEpisodeTools',
@@ -10645,7 +10857,7 @@ section[data-testid="hero-parent"].enh-editorial-native-hidden { display: none !
        IMDb's own cards rather than one title, so they take presentation and
        cleanup work without any title-scoped control. */
     const BROWSE_FEATURE_KEYS = new Set([
-        ...UNIVERSAL_FEATURE_KEYS, 'watchedMarking',
+        ...UNIVERSAL_FEATURE_KEYS, 'watchedMarking', 'markFilters',
     ]);
 
     function getPageSurface() {
@@ -10668,7 +10880,7 @@ section[data-testid="hero-parent"].enh-editorial-native-hidden { display: none !
         // episodeHeatmap would otherwise wait out its selector timeout on every title page.
         /* ratingGap needs the vote distribution, which IMDb stopped shipping on title
            pages — verified 2026-08-15 that no script there carries histogramData. */
-        if (surface === 'title') return !['watchlistBatch', 'listMultiSearch', 'listRuntimeSummary', 'episodeHeatmap', 'ratingGap'].includes(feature.key);
+        if (surface === 'title') return !['watchlistBatch', 'listMultiSearch', 'listRuntimeSummary', 'markFilters', 'episodeHeatmap', 'ratingGap'].includes(feature.key);
         if (surface === 'episodes') return EPISODE_LIST_FEATURE_KEYS.has(feature.key);
         if (surface === 'ratings') return RATINGS_FEATURE_KEYS.has(feature.key);
         if (surface === 'collection') return COLLECTION_FEATURE_KEYS.has(feature.key);
