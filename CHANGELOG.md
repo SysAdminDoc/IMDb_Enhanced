@@ -34,6 +34,8 @@
 
 - Lists, charts, watchlists, search results, and filmographies get a Private marks filter: All, Unseen, Seen, Skipped, each with a count. It works on what is already on the page, so it makes no request and does not reorder anything: filtering the Top 250 to unseen leaves them in chart order. Counts and filtering update as more rows load and as you mark things, and the arrow keys move through the options. It appears only when private marks are switched on.
 
+- Episode lists show how far through the loaded season you are, link to the next episode you have not marked, and can mark or clear that whole season in one step with an undo beside it. IMDb renders one season at a time, so the counts and the buttons both say "loaded" and nothing is fetched to fill in the rest. Clearing a season leaves any notes on those episodes alone, and if the 5,000-mark limit prevents part of a batch from being stored it says how many rather than reporting success.
+
 - A "Pick something" button on watchlists, lists, and charts chooses one title at random, highlights it, and scrolls to it. It never opens anything, because the point is to help you decide rather than decide for you. By default it skips titles you have already marked Seen or Skipped, and it says so when there is nothing left to pick.
 
 - Watchlists, lists, and charts show how long everything on them would take to watch. The IMDb Top 250 comes to 548:08. The total recounts as more rows load, and when some rows have no runtime listed it says how many rather than quietly reporting a smaller number: a chart of TV series, where IMDb lists no runtime at all, says so instead of showing zero.

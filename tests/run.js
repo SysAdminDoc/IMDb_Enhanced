@@ -55,6 +55,9 @@ function loadScriptTestHooks({ withoutDeleteValue = false } = {}) {
         getExportSettings,
         prepareSettingsImport,
         readHeatmapSeasons,
+        readLoadedEpisodes,
+        summarizeSeasonProgress,
+        describeSeasonProgress,
         summarizeHeatmapSeason,
         buildDiagnosticsReport,
         getFeatureFailures,
@@ -1876,12 +1879,14 @@ test('polish: truncation, certifications, and dependent settings', () => {
     assert(script.includes("a[href*=\"parentalguide\"]"), 'certifications should come from the element IMDb publishes them in');
 
     // A setting another feature reads at run time has to restart that feature.
-    assert(/const FEATURE_DEPENDENTS = \{[^}]*spoilerBlur:\['tvEpisodeTools'\]/.test(script),
+    assert(/const FEATURE_DEPENDENTS = \{[\s\S]{0,320}?spoilerBlur:\['tvEpisodeTools'\]/.test(script),
         'spoiler blur should declare its dependent');
     // The mark filter reads watchedMarking at init and draws nothing without it, so the
     // filter bar has to appear and disappear with that toggle rather than after a reload.
-    assert(/const FEATURE_DEPENDENTS = \{[^}]*watchedMarking:\['markFilters'\]/.test(script),
-        'private marks should declare the filter that depends on them');
+    // Both of these read watchedMarking at init and render nothing without it, so both
+    // have to appear and disappear with that toggle rather than after a reload.
+    assert(/const FEATURE_DEPENDENTS = \{[\s\S]{0,320}?watchedMarking:\['markFilters', 'seasonProgress'\]/.test(script),
+        'private marks should declare every feature that depends on them');
     assert(script.includes('(FEATURE_DEPENDENTS[feature.key] || []).forEach(refreshFeature);'), 'toggling must refresh dependents');
 });
 
@@ -2886,6 +2891,65 @@ test('local request errors stay concise and text-only', () => {
         'Request failed',
         'non-numeric status values should not be coerced into UI text'
     );
+});
+
+/* IE-83: per-episode marking does not scale to a season, let alone a series. */
+test('season progress counts the loaded season and batches marks in one transaction', () => {
+    const hooks = loadScriptTestHooks();
+    const row = (id, label) => ({ id, label, node:{} });
+    const rows = [row('tt0959621', 'S1.E1 ∙ Pilot'), row('tt1054724', 'S1.E2'), row('tt1054725', 'S1.E3')];
+
+    let summary = hooks.summarizeSeasonProgress(rows, {});
+    assert.deepStrictEqual([summary.total, summary.watched, summary.skipped], [3, 0, 0]);
+    assert.strictEqual(summary.next.id, 'tt0959621', 'the next episode is the first unmarked one');
+    assert.strictEqual(hooks.describeSeasonProgress(summary), 'Seen 0/3 loaded');
+
+    summary = hooks.summarizeSeasonProgress(rows, {
+        tt0959621:{ state:'watched' }, tt1054724:{ state:'skip' },
+    });
+    assert.deepStrictEqual([summary.watched, summary.skipped], [1, 1]);
+    assert.strictEqual(summary.next.id, 'tt1054725', 'a skipped episode is not the next one to watch');
+    assert.strictEqual(hooks.describeSeasonProgress(summary), 'Seen 1/3 loaded · 1 skipped');
+
+    const done = hooks.summarizeSeasonProgress(rows, {
+        tt0959621:{ state:'watched' }, tt1054724:{ state:'watched' }, tt1054725:{ state:'watched' },
+    });
+    assert.strictEqual(done.next, null, 'a finished season has no next episode');
+    assert.strictEqual(hooks.describeSeasonProgress({ total:0, watched:0, skipped:0, next:null }), '',
+        'no loaded rows renders nothing rather than 0/0');
+
+    const feature = script.slice(script.indexOf("key: 'seasonProgress'"));
+    const body = feature.slice(0, feature.indexOf("key: 'listRoulette'"));
+    /* Counts and copy both say "loaded", because a season list renders one page at a
+       time and nothing here fetches the rest. Quietly completing the set would be doing
+       something nobody asked for. */
+    assert(body.includes('Mark loaded season seen') && body.includes('Clear loaded season'),
+        'the wording must not imply the whole season was touched');
+    assert(script.includes('`Seen ${summary.watched}/${summary.total} loaded`'), 'counts are over loaded rows');
+    ['httpRequest', 'httpGet', 'GM_xmlhttpRequest', 'fetch('].forEach(token => {
+        assert(!body.includes(token), `batch marking must not ${token}`);
+    });
+    // One write for the whole batch, not one per episode.
+    assert.strictEqual((body.match(/setUserMarks\(/g) || []).length, 2,
+        'the batch and its undo are one transaction each');
+    assert(!/rows\.forEach[\s\S]{0,400}?setUserMark\(/.test(body), 'the batch must not write per row');
+    // Undo restores the exact prior state.
+    assert(body.includes('const before = getUserMarks(true);'), 'the batch must snapshot before writing');
+    assert(body.includes('this._pending = before;'), 'that snapshot is what undo restores');
+    assert(body.includes('setUserMarks(this._pending)'), 'undo must restore it wholesale');
+    // A failed write changes nothing and says so.
+    assert(/if \(!setUserMarks\(marks\)\) \{[\s\S]{0,160}?Nothing was changed/.test(body),
+        'a rejected batch must report that nothing changed');
+    // The 5,000-mark ceiling can silently drop the oldest, so the result is verified.
+    assert(body.includes('USER_MARKS_MAX'), 'the batch must account for the mark ceiling');
+    assert(body.includes('could not be stored within the'), 'and say so rather than claim a clean success');
+    // Clearing a season must not take notes with it.
+    assert(/normalizeUserNote\(marks\[row\.id\]\?\.note\)/.test(body), 'clearing must preserve a note');
+    // No confirmation dialog anywhere.
+    assert(!/confirm\(|window\.confirm/.test(body), 'no confirmation dialog may be introduced');
+    assert(body.includes('#enh-season-progress[hidden] { display: none; }'),
+        'a display-setting rule needs its hidden companion');
+    assert(body.includes("this._observer?.disconnect()"), 'the season-tab observer must be torn down');
 });
 
 /* IE-20: decision fatigue is why long watchlists stop getting used. */

@@ -669,7 +669,7 @@
         embyUrl: 'http://localhost:8096', embyApiKey: '',
         // TV
         tvEpisodeTools: true, tvShowEnhancements: true, subtitleLinks: true,
-        episodeHeatmap: true, ratingGap: true,
+        episodeHeatmap: true, ratingGap: true, seasonProgress: true,
         castAges: true,
         // Utility
         quickCopyID: true, watchlistBatch: true, listMultiSearch: true, listRuntimeSummary: true,
@@ -737,6 +737,7 @@
         markFilters: 'Adds an All / Unseen / Seen / Skipped filter with counts to lists, charts, watchlists, search results, and filmographies. Needs private marks.',
         titleNotes: 'Adds a private note field to title pages, saved on this device and included in backups. Never sent anywhere.',
         listRoulette: 'Adds a button to watchlists, lists, and charts that picks one title at random and scrolls to it. It never opens anything.',
+        seasonProgress: 'Shows how much of the loaded season you have marked seen, links to the next unmarked episode, and marks or clears the whole loaded season in one step with an undo. Needs private marks.',
         keyboardShortcuts: 'Optional. Enables ? for settings, c to copy, r for rating, and t for top.',
     };
 
@@ -8124,9 +8125,213 @@ section[id*="quote" i] .ipc-list-card { padding: 4px 0 !important; margin: 2px 0
         },
     });
 
+    /* IMDb's episode list renders one season at a time as `article.episode-item-wrapper`
+       nodes, each headed "S1.E1 ∙ Pilot" and linking to the episode's own title id.
+       Verified against Breaking Bad on 2026-08-31. Everything below works on the rows that
+       season has actually rendered and never fetches another: an episode list that quietly
+       issued requests to complete itself would be doing something nobody asked for. */
+    const EPISODE_ROW_SELECTOR = 'article.episode-item-wrapper';
+
+    function readLoadedEpisodes(root = document) {
+        const rows = [];
+        const seen = new Set();
+        const nodes = root.querySelectorAll?.(EPISODE_ROW_SELECTOR) || [];
+        let inspected = 0;
+        for (const node of nodes) {
+            if (inspected >= COLLECTION_LINK_SCAN_LIMIT) break;
+            inspected += 1;
+            const link = node.querySelector?.('a[href*="/title/tt"]');
+            const id = getLinkedTitleId(link?.href || '');
+            if (!id || seen.has(id)) continue;
+            seen.add(id);
+            const heading = node.querySelector?.('h4')?.textContent?.trim() || '';
+            rows.push({ node, id, label:heading.slice(0, USER_MARK_TITLE_LIMIT) });
+        }
+        return rows;
+    }
+
+    function summarizeSeasonProgress(rows, marks) {
+        const watched = rows.filter(row => marks[row.id]?.state === 'watched').length;
+        const skipped = rows.filter(row => marks[row.id]?.state === 'skip').length;
+        // The next thing to watch is the first row carrying no mark at all.
+        const next = rows.find(row => !marks[row.id]?.state) || null;
+        return { total:rows.length, watched, skipped, next };
+    }
+
+    function describeSeasonProgress(summary) {
+        if (!summary.total) return '';
+        const parts = [`Seen ${summary.watched}/${summary.total} loaded`];
+        if (summary.skipped) parts.push(`${summary.skipped} skipped`);
+        return parts.join(' · ');
+    }
+
     /* Decision fatigue on a long watchlist is the whole reason those lists stop getting
        used. This picks one and takes you to it — it never navigates, because the point is
        to help you choose, not to choose for you. */
+    reg({
+        key: 'seasonProgress', name: 'Season progress and batch marking', group: 'TV',
+        init() {
+            if (!isIMDbHost()) return;
+            if (getPageSurface() !== 'episodes') return;
+            if (!get('watchedMarking')) return;
+            if (document.getElementById('enh-season-progress')) return;
+            const isCurrent = createFeatureGuard(this);
+
+            addThemedCSS(t => `
+                #enh-season-progress {
+                    display: flex; align-items: center; gap: 8px; flex-wrap: wrap;
+                    margin: 8px 0 12px; padding: 9px 12px;
+                    border: 1px solid ${t.bd1}; border-radius: 10px; background: ${t.sf0};
+                }
+                #enh-season-progress[hidden] { display: none; }
+                .enh-season__count { color: ${t.tx1}; font: 700 12px/1.3 -apple-system, BlinkMacSystemFont, 'Segoe UI', sans-serif; }
+                .enh-season__next { color: ${t.blue} !important; text-decoration: none !important;
+                    font: 600 11px/1.3 -apple-system, BlinkMacSystemFont, 'Segoe UI', sans-serif; }
+                .enh-season__next:hover { color: ${t.blueHi} !important; }
+                .enh-season__btn {
+                    height: 26px; padding: 0 10px; border-radius: 7px; cursor: pointer;
+                    border: 1px solid ${t.bd1}; background: ${t.sf1}; color: ${t.tx2};
+                    font: 650 10px/1 -apple-system, BlinkMacSystemFont, 'Segoe UI', sans-serif;
+                }
+                .enh-season__btn:hover { background: ${t.sf2}; color: ${t.tx0}; }
+                .enh-season__btn:focus-visible { outline: 2px solid ${t.accent}; outline-offset: 2px; }
+                .enh-season__btn[hidden] { display: none; }
+                .enh-season__note { color: ${t.tx3}; font: 500 10px/1.3 -apple-system, BlinkMacSystemFont, 'Segoe UI', sans-serif; }
+                .enh-season__note:empty { display: none; }
+            `, 'enh-season-progress-css');
+
+            const count = makeEl('span', { className:'enh-season__count', role:'status', 'aria-live':'polite' });
+            const next = makeEl('a', { className:'enh-season__next' });
+            const note = makeEl('span', { className:'enh-season__note' });
+            const undo = makeEl('button', {
+                type:'button', className:'enh-season__btn', hidden:'hidden',
+                onClick: () => this._undo(),
+            }, 'Undo');
+            const markAll = makeEl('button', {
+                type:'button', className:'enh-season__btn',
+                onClick: () => this._batch('watched'),
+            }, 'Mark loaded season seen');
+            const clearAll = makeEl('button', {
+                type:'button', className:'enh-season__btn',
+                onClick: () => this._batch(''),
+            }, 'Clear loaded season');
+
+            const bar = makeEl('div', { id:'enh-season-progress', role:'region', 'aria-label':'Season progress' },
+                count, next, markAll, clearAll, undo, note);
+
+            this._paint = () => {
+                if (!isCurrent()) return;
+                const rows = readLoadedEpisodes();
+                const summary = summarizeSeasonProgress(rows, getUserMarks());
+                setTextIfChanged(count, describeSeasonProgress(summary));
+                if (summary.next) {
+                    next.href = `https://www.imdb.com/title/${summary.next.id}/`;
+                    setTextIfChanged(next, `Next: ${summary.next.label || summary.next.id}`);
+                    next.hidden = false;
+                } else {
+                    next.removeAttribute('href');
+                    setTextIfChanged(next, '');
+                    next.hidden = true;
+                }
+                markAll.disabled = !rows.length;
+                clearAll.disabled = !rows.length;
+                bar.hidden = !rows.length;
+            };
+            this._paint();
+
+            const target = document.querySelector('main') || document.body;
+            target.insertBefore(bar, target.firstElementChild?.nextSibling || null);
+
+            this._note = note;
+            this._undoButton = undo;
+            this._pending = null;
+
+            /* One bounded transaction over the rows this season has rendered. Nothing is
+               fetched to complete the set, so the counts and the wording both say
+               "loaded" rather than implying the whole season was touched. */
+            this._batch = state => {
+                if (!isCurrent()) return;
+                const rows = readLoadedEpisodes();
+                if (!rows.length) return;
+                const before = getUserMarks(true);
+                const marks = { ...before };
+                rows.forEach(row => {
+                    if (state === 'watched') {
+                        marks[row.id] = {
+                            state:'watched',
+                            title:row.label || marks[row.id]?.title || row.id,
+                            ts:Date.now(),
+                            ...(normalizeUserNote(marks[row.id]?.note) ? { note:normalizeUserNote(marks[row.id].note) } : {}),
+                        };
+                    } else if (normalizeUserNote(marks[row.id]?.note)) {
+                        // Clearing the season must not take a note with it.
+                        marks[row.id] = { ...marks[row.id], state:'', ts:Date.now() };
+                    } else {
+                        delete marks[row.id];
+                    }
+                });
+                if (!setUserMarks(marks)) {
+                    // setUserMarks reports its own failure; nothing was written.
+                    setTextIfChanged(note, 'Nothing was changed.');
+                    return;
+                }
+                this._pending = before;
+                undo.hidden = false;
+                refreshFeature('watchedMarking');
+                this._paint();
+                /* The store keeps the newest 5,000 marks, so a very large library can
+                   push older ones out. Say so rather than reporting a clean success. */
+                const stored = getUserMarks(true);
+                const applied = rows.filter(row => (state === 'watched')
+                    ? stored[row.id]?.state === 'watched'
+                    : stored[row.id]?.state !== 'watched').length;
+                const dropped = rows.length - applied;
+                setTextIfChanged(note, dropped
+                    ? `${applied} of ${rows.length} applied; ${dropped} could not be stored within the ${USER_MARKS_MAX}-mark limit.`
+                    : `${state === 'watched' ? 'Marked' : 'Cleared'} ${rows.length} loaded episodes.`);
+                showToast(state === 'watched'
+                    ? `Marked ${rows.length} loaded episodes seen. Undo is in the season bar.`
+                    : `Cleared ${rows.length} loaded episodes. Undo is in the season bar.`, 5000);
+            };
+            this._undo = () => {
+                if (!this._pending) return;
+                if (!setUserMarks(this._pending)) return;
+                this._pending = null;
+                undo.hidden = true;
+                refreshFeature('watchedMarking');
+                this._paint();
+                setTextIfChanged(note, 'Undone.');
+                showToast('Season marks restored');
+            };
+
+            // A season tab swap replaces the rows without a route change.
+            let frame = null;
+            const observer = new MutationObserver(() => {
+                if (frame) return;
+                frame = requestAnimationFrame(() => { frame = null; this._paint(); });
+            });
+            observer.observe(target, { childList:true, subtree:true });
+            this._observer = observer;
+            this._cancelFrame = () => { if (frame) cancelAnimationFrame(frame); frame = null; };
+            this._marksHandler = () => this._paint();
+            document.addEventListener('imdb-enhanced:marks-updated', this._marksHandler);
+        },
+        destroy() {
+            removeCSS('enh-season-progress-css');
+            this._observer?.disconnect();
+            this._observer = null;
+            this._cancelFrame?.();
+            this._cancelFrame = null;
+            if (this._marksHandler) document.removeEventListener('imdb-enhanced:marks-updated', this._marksHandler);
+            this._marksHandler = null;
+            document.getElementById('enh-season-progress')?.remove();
+            this._paint = null;
+            this._batch = null;
+            this._undo = null;
+            this._pending = null;
+        },
+    });
+
     reg({
         key: 'listRoulette', name: 'Pick something to watch', group: 'Utility',
         init() {
@@ -10800,7 +11005,11 @@ section[data-testid="hero-parent"].enh-editorial-native-hidden { display: none !
         /* tvEpisodeTools reads spoilerBlur at run time to decide whether to blur
            episode synopses, so toggling that setting has to restart it — otherwise the
            change only appears after a reload. */
-        const FEATURE_DEPENDENTS = { spoilerBlur:['tvEpisodeTools'], watchedMarking:['markFilters'] };
+        const FEATURE_DEPENDENTS = {
+            spoilerBlur:['tvEpisodeTools'],
+            // Both read watchedMarking at init and render nothing without it.
+            watchedMarking:['markFilters', 'seasonProgress'],
+        };
         const makeFeatureCard = (title, description, badge, keys, compact = false) => {
             const card = makeCard(title, description, badge);
             if (compact) card.classList.add('enh-settings-card--compact');
@@ -10963,7 +11172,7 @@ section[data-testid="hero-parent"].enh-editorial-native-hidden { display: none !
                 'searchButtons', 'externalLinks', 'trailerPopover', 'expandedLinkMenu', 'watchedMarking', 'titleNotes',
             ]),
             makeFeatureCard('TV & episodes', 'Focused tools for series and episode lists.', 'TV', [
-                'tvEpisodeTools', 'tvShowEnhancements', 'subtitleLinks', 'episodeHeatmap',
+                'tvEpisodeTools', 'tvShowEnhancements', 'subtitleLinks', 'episodeHeatmap', 'seasonProgress',
             ]),
             makeFeatureCard('Lists & shortcuts', 'Batch actions and quick navigation.', 'Lists', [
                 'watchlistBatch', 'listMultiSearch', 'listRuntimeSummary', 'markFilters', 'listRoulette',
@@ -11476,7 +11685,7 @@ section[data-testid="hero-parent"].enh-editorial-native-hidden { display: none !
         'watchedMarking', 'markFilters', 'castAges',
     ]);
     const EPISODE_LIST_FEATURE_KEYS = new Set([
-        ...SECONDARY_PAGE_FEATURE_KEYS, 'tvEpisodeTools',
+        ...SECONDARY_PAGE_FEATURE_KEYS, 'tvEpisodeTools', 'seasonProgress',
     ]);
     /* The ratings tab is a title subpage that additionally owns IMDb's episode grid. */
     const RATINGS_FEATURE_KEYS = new Set([
