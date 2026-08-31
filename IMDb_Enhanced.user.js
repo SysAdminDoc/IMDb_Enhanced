@@ -678,7 +678,9 @@
             try { raw = GM_getValue(storageKey, null); }
             catch { return; }
             if (raw === null || raw === undefined) return;
-            const entry = parseCacheEntry(raw, now);
+            // Expired entries are retained as stale-if-error fallbacks until the envelope
+            // ceiling, so they are counted here and evicted before any live entry.
+            const entry = parseCacheEntry(raw, now, { allowExpired:true });
             if (!entry) {
                 try {
                     if (typeof GM_deleteValue === 'function') GM_deleteValue(storageKey);
@@ -687,7 +689,7 @@
             }
             const size = encodedByteLength(storageKey) + encodedByteLength(raw);
             bytes += size;
-            entries.push({ storageKey, ts:entry.ts, at:entry.at, bytes:size });
+            entries.push({ storageKey, ts:entry.ts, at:entry.at, bytes:size, expired:entry.expired });
         });
         return { bytes, entries };
     }
@@ -695,7 +697,13 @@
     /* Evict least-recently-accessed first until the cache fits both ceilings. Returns
        the bytes reclaimed so a failed write can tell whether retrying is worth it. */
     function evictCacheEntries(usage, { byteBudget = CACHE_TOTAL_BYTE_BUDGET, maxEntries = CACHE_MAX_ENTRIES } = {}) {
-        const ordered = usage.entries.slice().sort((a, b) => (a.at - b.at) || (a.ts - b.ts));
+        /* Expired entries go first whatever their access time: they are only kept as a
+           fallback for an unreachable provider, so they are worth strictly less than any
+           live value competing for the same budget. */
+        const ordered = usage.entries.slice().sort((a, b) =>
+            (Number(Boolean(b.expired)) - Number(Boolean(a.expired)))
+            || (a.at - b.at)
+            || (a.ts - b.ts));
         let bytes = usage.bytes;
         let count = ordered.length;
         let reclaimed = 0;
@@ -761,17 +769,35 @@
         });
     }
 
+    /* Returns a value that is expired but still inside the envelope ceiling, with the
+       date it was written, or null. Used only after a lookup failed to reach its service:
+       a provider being briefly unreachable is the one case where last week's score beats
+       nothing, and only if it is shown as old. An `unavailable` sentinel is never
+       returned — "we asked and there was nothing" is not a value worth re-showing. */
+    function cacheGetStale(key) {
+        try {
+            const raw = GM_getValue('cache_' + key, null);
+            if (!raw) return null;
+            const entry = parseCacheEntry(raw, Date.now(), { allowExpired:true });
+            if (!entry || !entry.expired || entry.data?.unavailable) return null;
+            return { data: entry.data, ts: entry.ts };
+        } catch { return null; }
+    }
+
     function cacheGet(key) {
         try {
             const storageKey = 'cache_' + key;
             const raw = GM_getValue(storageKey, null);
             if (!raw) return null;
             const now = Date.now();
-            const entry = parseCacheEntry(raw, now);
+            // Parsed permissively so an expired-but-usable value is left in place for
+            // cacheGetStale; deleting it here would destroy the fallback on first read.
+            const entry = parseCacheEntry(raw, now, { allowExpired:true });
             if (!entry) {
                 if (typeof GM_deleteValue === 'function') GM_deleteValue(storageKey);
                 return null;
             }
+            if (entry.expired) return null;
             if (now - entry.at >= CACHE_ACCESS_STAMP_INTERVAL) {
                 try { GM_setValue(storageKey, JSON.stringify({ ...entry, at:now })); }
                 catch { /* the value is still usable; only eviction order degrades */ }
@@ -5002,6 +5028,50 @@ section[id*="quote" i] .ipc-list-card { padding: 4px 0 !important; margin: 2px 0
         return parseHistogramScriptTexts(scripts.map(script => script.textContent));
     }
 
+    /* Which widget each score source owns, so the shared fallback below can label the one
+       it just rendered without every feature repeating the wiring. */
+    const SCORE_WIDGET_IDS = {
+        inlineRTScore: 'enh-rt-widget',
+        inlineLetterboxdScore: 'enh-lb-widget',
+        inlineMetacriticScore: 'enh-mc-widget',
+        streamAvailability: 'enh-jw-widget',
+    };
+
+    /* Only a failure to reach the service qualifies. An identity mismatch or an
+       unparseable response means the lookup worked and the answer was wrong or absent,
+       and showing an old value for those would be asserting something the current data
+       contradicts. Those paths do not throw at all — they fall through — so the absence
+       of an error is itself the signal. */
+    function isReachabilityFailure(error) {
+        if (!error) return false;
+        const category = classifyFailure(error);
+        return category === 'network' || category === 'timeout';
+    }
+
+    /* stale-if-error, RFC 5861's shape: a bounded expired value is better than nothing
+       when the provider is unreachable, but only if it says how old it is and offers a
+       way to try again. */
+    function renderStaleScore(feature, cacheKey, error) {
+        if (!isReachabilityFailure(error)) return false;
+        const stale = cacheGetStale(cacheKey);
+        if (!stale) return false;
+        feature._render(stale.data);
+        const widget = document.getElementById(SCORE_WIDGET_IDS[feature.key]);
+        if (!widget) return false;
+        widget.classList.add('enh-score-widget--stale');
+        const date = new Date(stale.ts).toISOString().slice(0, 10);
+        widget.appendChild(makeEl('div', { className:'enh-score-stale' },
+            makeEl('span', { className:'enh-score-stale__age' }, `Cached ${date}`),
+            makeEl('button', {
+                type:'button',
+                className:'enh-score-stale__retry',
+                'aria-label':`Look up ${feature.name} again`,
+                onClick: () => refreshFeature(feature.key),
+            }, 'Retry')
+        ));
+        return true;
+    }
+
     reg({
         key: 'inlineRTScore', name: 'Rotten Tomatoes scores', group: 'Scores',
         async init() {
@@ -5046,6 +5116,7 @@ section[id*="quote" i] .ipc-list-card { padding: 4px 0 !important; margin: 2px 0
                 if (!isCurrent()) return;
             }
 
+            let lookupError = null;
             try {
                 const searchUrl = `https://www.rottentomatoes.com/search?search=${encodeURIComponent(title)}`;
                 const res2 = await httpGet(searchUrl, { cancelOnRouteChange:true });
@@ -5062,8 +5133,13 @@ section[id*="quote" i] .ipc-list-card { padding: 4px 0 !important; margin: 2px 0
                     cacheSet(cacheKey, data); this._render(data);
                     return;
                 }
-            } catch { /* handled below */ }
+            } catch (error) { lookupError = error; }
             if (!isCurrent()) return;
+            /* A provider that could not be reached is the one case where a bounded
+               expired value beats nothing, provided it is labelled with its date and
+               offers a retry. A mismatch or an unparseable response is not: the lookup
+               worked and the answer was absent, so an old score would contradict it. */
+            if (renderStaleScore(this, cacheKey, lookupError)) return;
             /* Nothing is recorded when the failure was only a missing host grant, so the
                next visit retries instead of reading back a stale "unavailable". */
             await cacheUnavailableUnlessBlocked(this.key, cacheKey);
@@ -5148,6 +5224,7 @@ section[id*="quote" i] .ipc-list-card { padding: 4px 0 !important; margin: 2px 0
             this._renderLoading();
 
             const lookupUrl = `https://letterboxd.com/imdb/${imdbId}/`;
+            let lookupError = null;
             try {
                 const res = await httpGet(lookupUrl, { cancelOnRouteChange:true });
                 if (!isCurrent()) return;
@@ -5158,9 +5235,14 @@ section[id*="quote" i] .ipc-list-card { padding: 4px 0 !important; margin: 2px 0
                     this._render(data);
                     return;
                 }
-            } catch { /* handled below */ }
+            } catch (error) { lookupError = error; }
 
             if (!isCurrent()) return;
+            /* A provider that could not be reached is the one case where a bounded
+               expired value beats nothing, provided it is labelled with its date and
+               offers a retry. A mismatch or an unparseable response is not: the lookup
+               worked and the answer was absent, so an old score would contradict it. */
+            if (renderStaleScore(this, cacheKey, lookupError)) return;
             /* Nothing is recorded when the failure was only a missing host grant, so the
                next visit retries instead of reading back a stale "unavailable". */
             await cacheUnavailableUnlessBlocked(this.key, cacheKey);
@@ -5247,6 +5329,7 @@ section[id*="quote" i] .ipc-list-card { padding: 4px 0 !important; margin: 2px 0
             const typeId = mediaType === 'tv' ? '1' : '2';
             const url = `https://backend.metacritic.com/finder/metacritic/search/${encodeURIComponent(title)}/web?componentName=search-tabs&componentDisplayName=Search+Page+Tab+Filters&componentType=FilterConfig&mcoTypeId=${typeId}&offset=0&limit=10`;
 
+            let lookupError = null;
             try {
                 const res = await httpGet(url, { cancelOnRouteChange:true });
                 if (!isCurrent()) return;
@@ -5276,8 +5359,13 @@ section[id*="quote" i] .ipc-list-card { padding: 4px 0 !important; margin: 2px 0
                     cacheSet(cacheKey, d); this._render(d);
                     return;
                 }
-            } catch { /* handled below */ }
+            } catch (error) { lookupError = error; }
             if (!isCurrent()) return;
+            /* A provider that could not be reached is the one case where a bounded
+               expired value beats nothing, provided it is labelled with its date and
+               offers a retry. A mismatch or an unparseable response is not: the lookup
+               worked and the answer was absent, so an old score would contradict it. */
+            if (renderStaleScore(this, cacheKey, lookupError)) return;
             /* Nothing is recorded when the failure was only a missing host grant, so the
                next visit retries instead of reading back a stale "unavailable". */
             await cacheUnavailableUnlessBlocked(this.key, cacheKey);
@@ -5375,6 +5463,7 @@ section[id*="quote" i] .ipc-list-card { padding: 4px 0 !important; margin: 2px 0
                 }
             } catch { /* fall back to search below */ }
 
+            let lookupError = null;
             try {
                 const searchUrl = getJustWatchSearchUrl(title);
                 const searchRes = await httpGet(searchUrl, { headers, timeout: 12000, cancelOnRouteChange:true });
@@ -5393,9 +5482,14 @@ section[id*="quote" i] .ipc-list-card { padding: 4px 0 !important; margin: 2px 0
                         return;
                     }
                 }
-            } catch { /* handled below */ }
+            } catch (error) { lookupError = error; }
 
             if (!isCurrent()) return;
+            /* A provider that could not be reached is the one case where a bounded
+               expired value beats nothing, provided it is labelled with its date and
+               offers a retry. A mismatch or an unparseable response is not: the lookup
+               worked and the answer was absent, so an old score would contradict it. */
+            if (renderStaleScore(this, cacheKey, lookupError)) return;
             /* Nothing is recorded when the failure was only a missing host grant, so the
                next visit retries instead of reading back a stale "unavailable". */
             await cacheUnavailableUnlessBlocked(this.key, cacheKey);
@@ -8698,6 +8792,21 @@ section[data-testid="hero-parent"].enh-editorial-native-hidden { display: none !
 }
 .enh-score-widget__sub { font-size: 10px; color: ${t.tx3}; margin-top: 2px; }
 .enh-score-widget--muted { --score-color: ${t.tx2}; }
+/* A value shown because its provider was unreachable says so and offers a retry, rather
+   than presenting week-old data as current. */
+.enh-score-widget--stale { opacity: .92; }
+.enh-score-stale {
+    display: flex; align-items: center; gap: 6px; margin-top: 4px;
+    font: 500 9px/1.2 -apple-system, BlinkMacSystemFont, 'Segoe UI', sans-serif;
+    color: ${t.tx3};
+}
+.enh-score-stale__retry {
+    padding: 2px 6px; border-radius: 5px; cursor: pointer;
+    border: 1px solid ${t.bd1}; background: ${t.sf0}; color: ${t.tx2};
+    font: 650 9px/1 -apple-system, BlinkMacSystemFont, 'Segoe UI', sans-serif;
+}
+.enh-score-stale__retry:hover { border-color: ${t.accentBorder}; color: ${t.accent}; }
+.enh-score-stale__retry:focus-visible { outline: 2px solid ${t.accent}; outline-offset: 2px; }
 .enh-score-widget__skeleton {
     width: 58px; height: 24px; border-radius: 6px;
     background: linear-gradient(90deg, ${t.sf1}, ${t.sf2}, ${t.sf1});

@@ -129,6 +129,8 @@ function loadScriptTestHooks({ withoutDeleteValue = false } = {}) {
         SITE_LIST_LIMIT,
         cacheSet,
         cacheGet,
+        cacheGetStale,
+        isReachabilityFailure,
         cacheGC,
         cacheCount,
         cacheBytes,
@@ -2884,6 +2886,92 @@ test('local request errors stay concise and text-only', () => {
         'Request failed',
         'non-numeric status values should not be coerced into UI text'
     );
+});
+
+/* IE-85: a transient provider failure turned a bounded expired value into no result at
+   all, when it could have been shown honestly with its date. */
+test('an unreachable provider falls back to a labelled cached value', () => {
+    const hooks = loadScriptTestHooks();
+    const day = 24 * 60 * 60 * 1000;
+
+    // Fresh values are returned normally and are not "stale".
+    hooks.cacheSet('rt_tt0133093', { tomatometer: 88 });
+    assert.strictEqual(hooks.cacheGet('rt_tt0133093').tomatometer, 88);
+    assert.strictEqual(hooks.cacheGetStale('rt_tt0133093'), null, 'a live value is not a fallback');
+
+    /* An expired value must survive a cacheGet rather than being deleted by it — that
+       read happens first on every page, so deleting there would destroy the fallback
+       before anything could use it. */
+    const writtenAt = Date.now() - (10 * day);
+    hooks.seedRawStorage('cache_rt_tt0111161', JSON.stringify({
+        data:{ tomatometer: 91 }, ts: writtenAt, at: writtenAt, ttl: 7 * day, schema: 3,
+    }));
+    assert.strictEqual(hooks.cacheGet('rt_tt0111161'), null, 'an expired value is not a current value');
+    assert(hooks.getStorageKeys().includes('cache_rt_tt0111161'), 'reading must not destroy the fallback');
+    const stale = hooks.cacheGetStale('rt_tt0111161');
+    assert.strictEqual(stale.data.tomatometer, 91);
+    assert.strictEqual(stale.ts, writtenAt, 'the fallback must carry the date it was written');
+
+    // The ceiling is absolute, whatever the entry's own shorter TTL was.
+    const ancient = Date.now() - (hooks.CACHE_MAX_TTL + day);
+    hooks.seedRawStorage('cache_rt_ancient', JSON.stringify({
+        data:{ tomatometer: 50 }, ts: ancient, at: ancient, ttl: 7 * day, schema: 3,
+    }));
+    assert.strictEqual(hooks.cacheGetStale('ancient'), null, 'a fallback may not outlive the envelope ceiling');
+
+    // "We asked and there was nothing" is not worth re-showing as a cached score.
+    hooks.seedRawStorage('cache_rt_none', JSON.stringify({
+        data:{ unavailable: true }, ts: writtenAt, at: writtenAt, ttl: 24 * 60 * 60 * 1000, schema: 3,
+    }));
+    assert.strictEqual(hooks.cacheGetStale('rt_none'), null, 'an unavailable sentinel is not a fallback');
+
+    // A corrupt entry is not a fallback either.
+    hooks.seedRawStorage('cache_rt_corrupt', '{not json');
+    assert.strictEqual(hooks.cacheGetStale('rt_corrupt'), null);
+
+    /* Only a failure to REACH the provider qualifies. A mismatch or an unparseable
+       response means the lookup worked and the answer was absent, so an old score would
+       contradict what the service just said — and those paths do not throw at all. */
+    assert.strictEqual(hooks.isReachabilityFailure(new Error('Failed to fetch')), true);
+    assert.strictEqual(hooks.isReachabilityFailure(new Error('The request timed out')), true);
+    assert.strictEqual(hooks.isReachabilityFailure(new Error('Unexpected token < in JSON')), false,
+        'a parse failure must not resurrect an old value');
+    assert.strictEqual(hooks.isReachabilityFailure(null), false,
+        'an identity mismatch throws nothing, so no error means no fallback');
+
+    // Expired entries are evicted before any live one competing for the same budget.
+    const evicting = loadScriptTestHooks();
+    const payload = 'x'.repeat(200 * 1024);
+    for (let i = 0; i < 20; i += 1) evicting.cacheSet(`live_${i}`, { payload, i });
+    const old = Date.now() - (10 * day);
+    for (let i = 0; i < 20; i += 1) {
+        evicting.seedRawStorage(`cache_dead_${i}`, JSON.stringify({
+            data:{ payload }, ts: old, at: Date.now(), ttl: 7 * day, schema: 3,
+        }));
+    }
+    evicting.cacheGC(true);
+    const surviving = evicting.getStorageKeys().filter(k => k.startsWith('cache_'));
+    assert(surviving.some(k => k.startsWith('cache_live_')), 'live values must survive');
+    assert(surviving.filter(k => k.startsWith('cache_dead_')).length
+        < surviving.filter(k => k.startsWith('cache_live_')).length,
+        'expired fallbacks are worth less than live values and go first');
+
+    // Every score source uses the shared fallback, and it labels what it rendered.
+    assert.strictEqual((script.match(/renderStaleScore\(this, cacheKey, lookupError\)/g) || []).length, 4,
+        'all four score sources must offer the fallback');
+    assert.strictEqual((script.match(/\} catch \{ \/\* handled below \*\/ \}/g) || []).length, 0,
+        'the failure must be captured, not discarded, or its kind cannot be judged');
+    const helper = script.slice(script.indexOf('function renderStaleScore'));
+    assert(helper.includes("new Date(stale.ts).toISOString().slice(0, 10)"), 'the fallback must show its date');
+    assert(helper.includes('`Cached ${date}`'), 'the fallback must say it is cached');
+    assert(helper.includes('refreshFeature(feature.key)'), 'the fallback must offer a retry');
+    /* Asserted as the literal guard, not as an ordering: indexOf returns -1 when the call
+       is gone, and -1 sorts before everything, so an ordering check passes against a
+       version that removed the gate entirely. */
+    assert(helper.includes('if (!isReachabilityFailure(error)) return false;'),
+        'the fallback must be gated on the failure being a reachability failure');
+    assert(helper.indexOf('isReachabilityFailure') < helper.indexOf('cacheGetStale'),
+        'and that gate must come before an old value is even looked up');
 });
 
 /* IE-87: destinations rot, and an earlier attempt at noticing that from the user's
