@@ -745,8 +745,13 @@
         if (typeof key !== 'string') return '';
         return key.startsWith(PREFIX) ? key.slice(PREFIX.length) : key;
     }
+    /* Stripping the prefix widened this: a setting literally named cache_* would now match
+       and become an eviction candidate, and readCacheUsage deletes what it classifies as a
+       cache key and cannot parse. No such setting exists, and this makes sure one added
+       later cannot be silently destroyed by the cache. */
     function isCacheStorageKey(storageKey) {
-        return settingKeyFromFailure(storageKey).startsWith('cache_');
+        const key = settingKeyFromFailure(storageKey);
+        return key.startsWith('cache_') && !Object.prototype.hasOwnProperty.call(DEFAULTS, key);
     }
 
     /* `allowExpired` keeps an entry whose TTL has run out but which is still inside the
@@ -2761,7 +2766,9 @@
             };
             const cancel = () => {
                 try { requestHandle?.abort?.(); } catch { /* request still rejects below */ }
-                finish(reject, new Error('Route changed'));
+                /* Says what it is. A bare Error here classified as unclassified, so a
+                   navigation away looked the same in the failure journal as a defect. */
+                finish(reject, describeRequestFailure('aborted', { error:'Route changed' }, url));
             };
             if (cancelOnRouteChange) pendingRouteWorkCancels.add(cancel);
             try {
@@ -5514,8 +5521,8 @@ section[id*="quote" i] .ipc-list-card { padding: 4px 0 !important; margin: 2px 0
         widget.appendChild(makeEl('button', {
             type:'button',
             className:'enh-score-stale__retry',
-            onClick: () => {
-                if (openOptionsPage()) showToast('Grant site access on the page that just opened, then reload this one.', 5000);
+            onClick: async () => {
+                if (await openOptionsPage()) showToast('Grant site access on the page that just opened, then reload this one.', 5000);
             },
         }, 'Grant access'));
     }
@@ -10523,10 +10530,13 @@ section[data-testid="hero-parent"].enh-editorial-native-hidden { display: none !
        extension page; a content script has the gesture but not the page, and the
        background has neither. So the settings row reports the real state and hands the
        user to the options page, which has both. */
-    function openOptionsPage() {
+    /* Async because it used to answer "yes" the instant it sent the message, so every
+       caller announced that a page had opened even when the worker was gone or the call
+       failed. The answer now comes back from the worker that did or did not open it. */
+    async function openOptionsPage() {
         if (!supportsOptionalPermissions()) return false;
-        askBackground('imdb-enhanced:open-options');
-        return true;
+        const response = await askBackground('imdb-enhanced:open-options');
+        return response?.ok === true;
     }
 
     /* Only give back what nothing else still needs. Wikidata is shared by three score
@@ -11464,8 +11474,8 @@ section[data-testid="hero-parent"].enh-editorial-native-hidden { display: none !
                     type:'button',
                     className:'enh-settings-access-btn',
                     hidden:'hidden',
-                    onClick: () => {
-                        if (openOptionsPage()) showToast('Grant site access on the page that just opened, then return here.', 5000);
+                    onClick: async () => {
+                        if (await openOptionsPage()) showToast('Grant site access on the page that just opened, then return here.', 5000);
                     },
                 }, 'Grant access');
                 const copy = row.querySelector('.enh-settings-row-copy');
@@ -12046,7 +12056,7 @@ section[data-testid="hero-parent"].enh-editorial-native-hidden { display: none !
                    strings, and restoring it wiped the real keys. */
                 if (error?.message === 'CREDENTIALS_UNREADABLE') {
                     showToast('Your integration keys are not readable from an IMDb page, so this backup would be empty. Make it from the extension\'s own page instead.', 7000);
-                    if (openOptionsPage()) setDataDisclosureState('');
+                    if (await openOptionsPage()) setDataDisclosureState('');
                     return;
                 }
                 showToast(error?.message || 'The encrypted backup could not be created.', 5000);

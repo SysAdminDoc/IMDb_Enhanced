@@ -198,8 +198,8 @@ const bridgeFor = ({ trusted }) => String.raw`
                 delete __state[key];
                 return;
             }
-            if (has) __state[key] = change.newValue;
-            else delete __state[key];
+            if (has) { __state[key] = change.newValue; __confirm(key, true, change.newValue); }
+            else { delete __state[key]; __confirm(key, false); }
         });
     };
     chrome.storage.onChanged.addListener((changes, areaName) => {
@@ -224,10 +224,15 @@ const bridgeFor = ({ trusted }) => String.raw`
     const __recordCredential = (key, value) => {
         __configuredCredentials[key] = typeof value === 'string' && value.trim() !== '';
     };
+    /* The last value storage confirmed for each key. Declared before the seed below,
+       which is its first writer. */
+    const __confirmed = Object.create(null);
+    const __confirm = (key, present, value) => { __confirmed[key] = { present, value }; };
     const __extensionState = await __storage('get', null).catch(() => ({}));
     Object.entries(__extensionState || {}).forEach(([key, value]) => {
         if (!__TRUSTED_CONTEXT && __isCredentialKey(key)) { __recordCredential(key, value); return; }
         __state[key] = value;
+        __confirm(key, true, value);
     });
     __stateReady = true;
     __pendingChanges.splice(0).forEach(__applyChanges);
@@ -273,11 +278,18 @@ const bridgeFor = ({ trusted }) => String.raw`
        primitive unchanged, so comparing values would let a rejected write roll back a
        later successful write of the same string or number — two identical values in
        flight is all it takes. */
+    /* Rolls back to the last value storage actually confirmed, not to whatever the
+       mirror held when this write started. Under sustained quota pressure that earlier
+       value is itself an optimistic write that never landed, so restoring it left the
+       page showing a mark that does not exist while telling the user twice that nothing
+       was saved. Tracked synchronously: re-reading storage here would delay the failure
+       event past the point where callers act on it. */
     let __writeSequence = 0;
     const __latestWrite = Object.create(null);
-    const __rollbackMirror = (key, had, previous, token) => {
+    const __rollbackMirror = (key, token) => {
         if (__latestWrite[key] !== token) return;
-        if (had) __state[key] = previous;
+        const known = __confirmed[key];
+        if (known && known.present) __state[key] = known.value;
         else delete __state[key];
     };
     globalThis.GM_setValue = (key, value) => {
@@ -294,10 +306,14 @@ const bridgeFor = ({ trusted }) => String.raw`
            kept, so the field can still report itself as configured. */
         if (!__TRUSTED_CONTEXT && __isCredentialKey(key)) __recordCredential(key, written);
         else __state[key] = written;
-        __storage('set', { [key]:written }).catch(error => {
-            __rollbackMirror(key, had, previous, token);
-            __reportWriteFailure(error, key);
-        });
+        /* The failure event is what makes callers re-read, so it must not fire until
+           the mirror is authoritative again. */
+        __storage('set', { [key]:written })
+            .then(() => { if (__latestWrite[key] === token) __confirm(key, true, written); })
+            .catch(error => {
+                __rollbackMirror(key, token);
+                __reportWriteFailure(error, key);
+            });
         if (key === 'imdb_enh_removeAds') __sendAdState(value !== false);
     };
     globalThis.GM_listValues = () => Object.keys(__state);
@@ -308,10 +324,12 @@ const bridgeFor = ({ trusted }) => String.raw`
         const token = ++__writeSequence;
         __latestWrite[key] = token;
         delete __state[key];
-        __storage('remove', key).catch(error => {
-            __rollbackMirror(key, had, previous, token);
-            __reportWriteFailure(error, key);
-        });
+        __storage('remove', key)
+            .then(() => { if (__latestWrite[key] === token) __confirm(key, false); })
+            .catch(error => {
+                __rollbackMirror(key, token);
+                __reportWriteFailure(error, key);
+            });
         if (key === 'imdb_enh_removeAds') __sendAdState(true);
     };
     /* copyTextToClipboard reports success from this call returning, so a rejected

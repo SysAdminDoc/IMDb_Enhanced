@@ -89,7 +89,10 @@ async function createBridgeAdapter({ seed = {} } = {}) {
     Object.assign(store, seed);
     const changeListeners = [];
     const observed = { writeFailures: 0, clipboardFailures: 0, writeFailureKeys: [] };
-    let failWriteMessage = null;
+    /* A queue, not a single slot: sustained quota pressure fails every write, and a
+       one-shot flag could not express two failures in flight, which is the shape that
+       exposed the rollback restoring an earlier unstored value. */
+    const failWriteMessages = [];
     let clipboardRejection = null;
 
     const withLastError = (message, run) => {
@@ -118,20 +121,16 @@ async function createBridgeAdapter({ seed = {} } = {}) {
                     setImmediate(() => done({ ...store }));
                 },
                 set: (values, callback) => setImmediate(() => {
-                    if (failWriteMessage) {
-                        const message = failWriteMessage;
-                        failWriteMessage = null;
-                        withLastError(message, () => callback());
+                    if (failWriteMessages.length) {
+                        withLastError(failWriteMessages.shift(), () => callback());
                         return;
                     }
                     Object.assign(store, values);
                     callback();
                 }),
                 remove: (key, callback) => setImmediate(() => {
-                    if (failWriteMessage) {
-                        const message = failWriteMessage;
-                        failWriteMessage = null;
-                        withLastError(message, () => callback());
+                    if (failWriteMessages.length) {
+                        withLastError(failWriteMessages.shift(), () => callback());
                         return;
                     }
                     delete store[key];
@@ -195,7 +194,7 @@ async function createBridgeAdapter({ seed = {} } = {}) {
             changeListeners.forEach(fn => fn({ [key]: { newValue: value } }, 'local'));
         },
         asyncWrites: true,
-        failNextWrite: error => { failWriteMessage = error.message; },
+        failNextWrite: error => { failWriteMessages.push(error.message); },
         failNextClipboard: error => { clipboardRejection = error; },
         observed,
         settle,
@@ -396,6 +395,40 @@ async function runCredentialBoundary() {
             'the field must know one is now set');
         assert.strictEqual(bridge.credentials.backingStore().imdb_enh_plexToken, typed,
             'and it must really have been stored, or the setting silently did nothing');
+    });
+
+    /* The single-failure case was already covered and passed. Two in flight was not, and
+       that is the shape sustained quota pressure actually produces: the second write's
+       rollback restored what the mirror held, which was the first write's value, itself
+       never stored. The page kept showing a mark that did not exist while the user was
+       told twice that nothing had been saved. */
+    await check(label, 'two rejected writes in a row leave nothing behind in the mirror', async () => {
+        const bridge = await createBridgeAdapter({ seed: { imdb_enh_userMarks: { tt0000009: { state:'skip' } } } });
+        bridge.failNextWrite(new Error('simulated quota failure'));
+        try { bridge.gm.setValue('imdb_enh_userMarks', { tt0000001:{ state:'watched' } }); } catch { /* reported below */ }
+        bridge.failNextWrite(new Error('simulated quota failure'));
+        try { bridge.gm.setValue('imdb_enh_userMarks', { tt0000001:{ state:'watched' }, tt0000002:{ state:'watched' } }); } catch { /* reported below */ }
+        await bridge.settle();
+        await bridge.settle();
+        assert.deepStrictEqual(
+            bridge.gm.getValue('imdb_enh_userMarks', null),
+            { tt0000009: { state:'skip' } },
+            'the mirror must report what storage actually holds, not an earlier write that also failed');
+        assert.deepStrictEqual(
+            bridge.credentials.backingStore().imdb_enh_userMarks,
+            { tt0000009: { state:'skip' } },
+            'and storage really must be unchanged, or the premise is wrong');
+    });
+
+    await check(label, 'a rejected write after a successful one falls back to the successful value', async () => {
+        const bridge = await createBridgeAdapter();
+        bridge.gm.setValue('imdb_enh_themeVariant', 'oled');
+        await bridge.settle();
+        bridge.failNextWrite(new Error('simulated quota failure'));
+        try { bridge.gm.setValue('imdb_enh_themeVariant', 'light'); } catch { /* reported below */ }
+        await bridge.settle();
+        assert.strictEqual(bridge.gm.getValue('imdb_enh_themeVariant', ''), 'oled',
+            'a value that really was stored must survive a later failure');
     });
 
     await check(label, 'a credential changed in another tab updates only whether it is set', async () => {

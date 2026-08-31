@@ -73,6 +73,8 @@ function loadScriptTestHooks({ withoutDeleteValue = false, withheldCredentials =
         recordFeatureFailure,
         classifyFailure,
         describeRequestFailure,
+        DEFAULTS,
+        httpGet,
         getFailureJournal,
         clearFailureJournal,
         formatFailureJournal,
@@ -3177,6 +3179,38 @@ test('a refusal by the worker is not an outage, and still says what it was', () 
         'a service that explained itself must still be quoted');
 });
 
+/* Found by adversarial review. A lookup abandoned because the user navigated rejected
+   with a bare Error, which classified as unclassified — so every navigation away looked
+   like a defect in the failure journal, and the reachability check could not tell it from
+   one. Driven through the real cancellation rather than a hand-built error. */
+test('a lookup abandoned by navigation is recorded as a cancellation', async () => {
+    const hooks = loadScriptTestHooks();
+    const pending = hooks.httpGet('https://www.rottentomatoes.com/m/matrix', { cancelOnRouteChange:true });
+    const settled = pending.then(() => null, error => error);
+    hooks.cancelPendingRouteWork();
+    const error = await settled;
+    assert(error, 'the request must reject when its route goes away');
+    assert.strictEqual(hooks.classifyFailure(error), 'aborted',
+        'navigating away is a cancellation, not an unclassified failure');
+    assert.strictEqual(hooks.isReachabilityFailure(error), false,
+        'and must never offer a stale score, since nothing was wrong with the provider');
+    assert(!/rottentomatoes|matrix/i.test(String(error.message)),
+        'the message must not carry what was being looked up');
+});
+
+/* Found by adversarial review. The cache treats any cache_-prefixed key as an eviction
+   candidate and deletes what it cannot parse, so a setting that ever collides with that
+   prefix would be silently destroyed. Nothing collides today; this fails on the day one
+   does, which is the only day it matters. */
+test('no setting can be mistaken for a cache entry', () => {
+    const hooks = loadScriptTestHooks();
+    const colliding = Object.keys(hooks.DEFAULTS || {}).filter(key => key.startsWith('cache_'));
+    assert.deepStrictEqual(Array.from(colliding), [],
+        'a setting named cache_* would be treated as an evictable cache entry');
+    assert(script.includes("return key.startsWith('cache_') && !Object.prototype.hasOwnProperty.call(DEFAULTS, key);"),
+        'and the guard must exclude anything that is a real setting, not just check the prefix');
+});
+
 test('local request errors stay concise and text-only', () => {
     const hooks = loadScriptTestHooks();
     const longMessage = `  ${'failure '.repeat(80)}\nretry  `;
@@ -4179,6 +4213,14 @@ test('external access is requested per feature, not demanded at install', () => 
     assert(recoveryPage.includes('renderAccessList'), 'the options page must list each feature\'s access');
     assert(recoveryPage.includes('core.releasableOriginsFor(key)'),
         'revoking one feature must not take an origin its siblings still need');
+    /* It returned true the instant it posted the message, so every caller announced that
+       a page had opened even when the worker was gone. Tripwire: stubbing the message
+       round trip here would be testing the stub. */
+    assert(script.includes("const response = await askBackground('imdb-enhanced:open-options');"),
+        'opening the options page must wait for the worker that opens it');
+    assert(script.includes('return response?.ok === true;'), 'and report what it actually said');
+    assert(!/if \(openOptionsPage\(\)\)/.test(script),
+        'no caller may treat the answer as synchronous');
 
     /* A permission gap cached as "unavailable" for 24 hours outlives the fix, so a lookup
        that failed only for want of a grant records nothing. */

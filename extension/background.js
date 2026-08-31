@@ -429,9 +429,15 @@ chrome.runtime.onMessage.addListener((message, sender, sendResponse) => {
         return true;
     }
     if (message?.type === 'imdb-enhanced:open-options') {
-        if (chrome.runtime.openOptionsPage) chrome.runtime.openOptionsPage();
-        else chrome.tabs.create({ url: chrome.runtime.getURL('recovery.html') });
-        sendResponse({ ok:true });
+        /* Reports what happened rather than assuming it worked. The caller tells the user
+           a page has opened, and saying so when it has not is worse than saying nothing. */
+        try {
+            if (chrome.runtime.openOptionsPage) chrome.runtime.openOptionsPage();
+            else chrome.tabs.create({ url: chrome.runtime.getURL('recovery.html') });
+            sendResponse({ ok:true });
+        } catch (error) {
+            sendResponse({ ok:false, error:String(error && error.message || 'The options page could not be opened') });
+        }
         return true;
     }
     return undefined;

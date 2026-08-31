@@ -54,8 +54,8 @@
                 delete __state[key];
                 return;
             }
-            if (has) __state[key] = change.newValue;
-            else delete __state[key];
+            if (has) { __state[key] = change.newValue; __confirm(key, true, change.newValue); }
+            else { delete __state[key]; __confirm(key, false); }
         });
     };
     chrome.storage.onChanged.addListener((changes, areaName) => {
@@ -80,10 +80,15 @@
     const __recordCredential = (key, value) => {
         __configuredCredentials[key] = typeof value === 'string' && value.trim() !== '';
     };
+    /* The last value storage confirmed for each key. Declared before the seed below,
+       which is its first writer. */
+    const __confirmed = Object.create(null);
+    const __confirm = (key, present, value) => { __confirmed[key] = { present, value }; };
     const __extensionState = await __storage('get', null).catch(() => ({}));
     Object.entries(__extensionState || {}).forEach(([key, value]) => {
         if (!__TRUSTED_CONTEXT && __isCredentialKey(key)) { __recordCredential(key, value); return; }
         __state[key] = value;
+        __confirm(key, true, value);
     });
     __stateReady = true;
     __pendingChanges.splice(0).forEach(__applyChanges);
@@ -129,11 +134,18 @@
        primitive unchanged, so comparing values would let a rejected write roll back a
        later successful write of the same string or number — two identical values in
        flight is all it takes. */
+    /* Rolls back to the last value storage actually confirmed, not to whatever the
+       mirror held when this write started. Under sustained quota pressure that earlier
+       value is itself an optimistic write that never landed, so restoring it left the
+       page showing a mark that does not exist while telling the user twice that nothing
+       was saved. Tracked synchronously: re-reading storage here would delay the failure
+       event past the point where callers act on it. */
     let __writeSequence = 0;
     const __latestWrite = Object.create(null);
-    const __rollbackMirror = (key, had, previous, token) => {
+    const __rollbackMirror = (key, token) => {
         if (__latestWrite[key] !== token) return;
-        if (had) __state[key] = previous;
+        const known = __confirmed[key];
+        if (known && known.present) __state[key] = known.value;
         else delete __state[key];
     };
     globalThis.GM_setValue = (key, value) => {
@@ -150,10 +162,14 @@
            kept, so the field can still report itself as configured. */
         if (!__TRUSTED_CONTEXT && __isCredentialKey(key)) __recordCredential(key, written);
         else __state[key] = written;
-        __storage('set', { [key]:written }).catch(error => {
-            __rollbackMirror(key, had, previous, token);
-            __reportWriteFailure(error, key);
-        });
+        /* The failure event is what makes callers re-read, so it must not fire until
+           the mirror is authoritative again. */
+        __storage('set', { [key]:written })
+            .then(() => { if (__latestWrite[key] === token) __confirm(key, true, written); })
+            .catch(error => {
+                __rollbackMirror(key, token);
+                __reportWriteFailure(error, key);
+            });
         if (key === 'imdb_enh_removeAds') __sendAdState(value !== false);
     };
     globalThis.GM_listValues = () => Object.keys(__state);
@@ -164,10 +180,12 @@
         const token = ++__writeSequence;
         __latestWrite[key] = token;
         delete __state[key];
-        __storage('remove', key).catch(error => {
-            __rollbackMirror(key, had, previous, token);
-            __reportWriteFailure(error, key);
-        });
+        __storage('remove', key)
+            .then(() => { if (__latestWrite[key] === token) __confirm(key, false); })
+            .catch(error => {
+                __rollbackMirror(key, token);
+                __reportWriteFailure(error, key);
+            });
         if (key === 'imdb_enh_removeAds') __sendAdState(true);
     };
     /* copyTextToClipboard reports success from this call returning, so a rejected
@@ -957,8 +975,13 @@
         if (typeof key !== 'string') return '';
         return key.startsWith(PREFIX) ? key.slice(PREFIX.length) : key;
     }
+    /* Stripping the prefix widened this: a setting literally named cache_* would now match
+       and become an eviction candidate, and readCacheUsage deletes what it classifies as a
+       cache key and cannot parse. No such setting exists, and this makes sure one added
+       later cannot be silently destroyed by the cache. */
     function isCacheStorageKey(storageKey) {
-        return settingKeyFromFailure(storageKey).startsWith('cache_');
+        const key = settingKeyFromFailure(storageKey);
+        return key.startsWith('cache_') && !Object.prototype.hasOwnProperty.call(DEFAULTS, key);
     }
 
     /* `allowExpired` keeps an entry whose TTL has run out but which is still inside the
@@ -2973,7 +2996,9 @@
             };
             const cancel = () => {
                 try { requestHandle?.abort?.(); } catch { /* request still rejects below */ }
-                finish(reject, new Error('Route changed'));
+                /* Says what it is. A bare Error here classified as unclassified, so a
+                   navigation away looked the same in the failure journal as a defect. */
+                finish(reject, describeRequestFailure('aborted', { error:'Route changed' }, url));
             };
             if (cancelOnRouteChange) pendingRouteWorkCancels.add(cancel);
             try {
@@ -5726,8 +5751,8 @@ section[id*="quote" i] .ipc-list-card { padding: 4px 0 !important; margin: 2px 0
         widget.appendChild(makeEl('button', {
             type:'button',
             className:'enh-score-stale__retry',
-            onClick: () => {
-                if (openOptionsPage()) showToast('Grant site access on the page that just opened, then reload this one.', 5000);
+            onClick: async () => {
+                if (await openOptionsPage()) showToast('Grant site access on the page that just opened, then reload this one.', 5000);
             },
         }, 'Grant access'));
     }
@@ -10735,10 +10760,13 @@ section[data-testid="hero-parent"].enh-editorial-native-hidden { display: none !
        extension page; a content script has the gesture but not the page, and the
        background has neither. So the settings row reports the real state and hands the
        user to the options page, which has both. */
-    function openOptionsPage() {
+    /* Async because it used to answer "yes" the instant it sent the message, so every
+       caller announced that a page had opened even when the worker was gone or the call
+       failed. The answer now comes back from the worker that did or did not open it. */
+    async function openOptionsPage() {
         if (!supportsOptionalPermissions()) return false;
-        askBackground('imdb-enhanced:open-options');
-        return true;
+        const response = await askBackground('imdb-enhanced:open-options');
+        return response?.ok === true;
     }
 
     /* Only give back what nothing else still needs. Wikidata is shared by three score
@@ -11676,8 +11704,8 @@ section[data-testid="hero-parent"].enh-editorial-native-hidden { display: none !
                     type:'button',
                     className:'enh-settings-access-btn',
                     hidden:'hidden',
-                    onClick: () => {
-                        if (openOptionsPage()) showToast('Grant site access on the page that just opened, then return here.', 5000);
+                    onClick: async () => {
+                        if (await openOptionsPage()) showToast('Grant site access on the page that just opened, then return here.', 5000);
                     },
                 }, 'Grant access');
                 const copy = row.querySelector('.enh-settings-row-copy');
@@ -12258,7 +12286,7 @@ section[data-testid="hero-parent"].enh-editorial-native-hidden { display: none !
                    strings, and restoring it wiped the real keys. */
                 if (error?.message === 'CREDENTIALS_UNREADABLE') {
                     showToast('Your integration keys are not readable from an IMDb page, so this backup would be empty. Make it from the extension\'s own page instead.', 7000);
-                    if (openOptionsPage()) setDataDisclosureState('');
+                    if (await openOptionsPage()) setDataDisclosureState('');
                     return;
                 }
                 showToast(error?.message || 'The encrypted backup could not be created.', 5000);
