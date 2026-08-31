@@ -341,22 +341,121 @@
         'http://127.0.0.1/*', 'https://127.0.0.1/*',
     ];
     const WIKIDATA_ORIGIN = 'https://query.wikidata.org/*';
-    const FEATURE_ORIGIN_GROUPS = {
-        inlineRTScore: ['https://www.rottentomatoes.com/*', WIKIDATA_ORIGIN],
-        inlineMetacriticScore: ['https://backend.metacritic.com/*', WIKIDATA_ORIGIN],
-        inlineLetterboxdScore: ['https://letterboxd.com/*', WIKIDATA_ORIGIN],
-        streamAvailability: ['https://www.justwatch.com/*'],
-        trailerPopover: ['https://www.youtube.com/*'],
-        removeAds: [
-            'https://*.amazon-adsystem.com/*', 'https://advertising.amazon.dev/*',
-            'https://images-na.ssl-images-amazon.com/*', 'https://sb.scorecardresearch.com/*',
-            'https://fls-na.amazon.com/*', 'https://unagi.amazon.com/*', 'https://unagi-na.amazon.com/*',
-        ],
-        servarrIntegration: LOOPBACK_ORIGINS,
-        mediaServerIntegration: LOOPBACK_ORIGINS,
+    /* One declaration per provider, and everything about that provider is derived from
+       it. Its origins, how long its answers may be cached, what leaves the browser to
+       reach it, the sentence the settings panel shows, the credit it requires, and the
+       builds it may ship in used to live in four separate places: this map, the build's
+       origin reader, the Firefox data-collection block, and prose in the settings panel.
+       They drifted, and nothing failed when they did. `transmits` is the vocabulary
+       Firefox's data_collection_permissions uses, because that declaration is generated
+       from these rather than written alongside them. */
+    const DISTRIBUTION_PROFILES = ['default', 'store'];
+    const PROVIDER_REQUIRED_FIELDS = ['label', 'origins', 'transmits', 'consent', 'ttl', 'attribution', 'profiles'];
+    const PROVIDERS = {
+        rottenTomatoes: {
+            label: 'Rotten Tomatoes',
+            origins: ['https://www.rottentomatoes.com/*'],
+            transmits: 'websiteContent',
+            consent: 'Sends the title and year read from the page to Rotten Tomatoes to find its scores.',
+            ttl: CACHE_TTL,
+            attribution: '',
+            // Answers come from parsing their pages, which a store listing should not do.
+            profiles: ['default'],
+        },
+        metacritic: {
+            label: 'Metacritic',
+            origins: ['https://backend.metacritic.com/*'],
+            transmits: 'websiteContent',
+            consent: 'Sends the title and year read from the page to Metacritic to find its score.',
+            ttl: CACHE_TTL,
+            attribution: '',
+            profiles: ['default'],
+        },
+        letterboxd: {
+            label: 'Letterboxd',
+            origins: ['https://letterboxd.com/*'],
+            transmits: 'websiteContent',
+            consent: 'Sends the title and year read from the page to Letterboxd to find its rating.',
+            ttl: CACHE_TTL,
+            attribution: '',
+            profiles: ['default'],
+        },
+        justWatch: {
+            label: 'JustWatch',
+            origins: ['https://www.justwatch.com/*'],
+            transmits: 'websiteContent',
+            consent: 'Sends the title and year read from the page to JustWatch to find where it streams.',
+            ttl: CACHE_TTL,
+            attribution: '',
+            profiles: ['default'],
+        },
+        youTube: {
+            label: 'YouTube',
+            origins: ['https://www.youtube.com/*'],
+            transmits: 'websiteContent',
+            consent: 'Loads the trailer from YouTube, which sees the video you opened.',
+            ttl: CACHE_TTL,
+            attribution: '',
+            profiles: ['default', 'store'],
+        },
+        wikidata: {
+            label: 'Wikidata',
+            origins: [WIKIDATA_ORIGIN],
+            transmits: 'websiteContent',
+            consent: 'Sends the IMDb id to Wikidata to find the matching page on another site.',
+            /* An identifier mapping does not go stale the way a score does, and validating
+               one against the score TTL threw away every successful mapping on first read. */
+            ttl: CACHE_MAX_TTL,
+            attribution: '',
+            profiles: ['default', 'store'],
+        },
+        amazonAds: {
+            label: 'Amazon advertising and tracking',
+            origins: [
+                'https://*.amazon-adsystem.com/*', 'https://advertising.amazon.dev/*',
+                'https://images-na.ssl-images-amazon.com/*', 'https://sb.scorecardresearch.com/*',
+                'https://fls-na.amazon.com/*', 'https://unagi.amazon.com/*', 'https://unagi-na.amazon.com/*',
+            ],
+            // Access is held to block these, never to call them: nothing is ever sent.
+            transmits: 'none',
+            consent: 'Blocks requests to these hosts. Nothing is sent to them.',
+            ttl: 0,
+            attribution: '',
+            profiles: ['default', 'store'],
+        },
+        localServices: {
+            label: 'your own computer',
+            origins: LOOPBACK_ORIGINS,
+            transmits: 'none',
+            consent: 'Talks to services on your own machine. Nothing leaves it.',
+            ttl: 0,
+            attribution: '',
+            profiles: ['default', 'store'],
+        },
     };
+    const FEATURE_PROVIDERS = {
+        inlineRTScore: ['rottenTomatoes', 'wikidata'],
+        inlineMetacriticScore: ['metacritic', 'wikidata'],
+        inlineLetterboxdScore: ['letterboxd', 'wikidata'],
+        streamAvailability: ['justWatch'],
+        trailerPopover: ['youTube'],
+        removeAds: ['amazonAds'],
+        servarrIntegration: ['localServices'],
+        mediaServerIntegration: ['localServices'],
+    };
+    /* Kept under its original name because every caller already reads it, but it is now
+       a projection of the map above rather than a second list to maintain. */
+    const FEATURE_ORIGIN_GROUPS = Object.fromEntries(
+        Object.entries(FEATURE_PROVIDERS).map(([feature, providers]) =>
+            [feature, [...new Set(providers.flatMap(id => PROVIDERS[id]?.origins || []))]])
+    );
     const REQUIRED_ORIGINS = ['https://www.imdb.com/*'];
     const OPTIONAL_ORIGINS = [...new Set(Object.values(FEATURE_ORIGIN_GROUPS).flat())].sort();
+    /* What the Firefox manifest must declare. A provider that only has access so its
+       requests can be blocked transmits nothing, so it contributes no category. */
+    const TRANSMITTED_DATA_CATEGORIES = [...new Set(
+        Object.values(PROVIDERS).map(provider => provider.transmits).filter(category => category !== 'none')
+    )].sort();
 
     const AD_SHELL_SELECTOR = [
         '.nas-slot',
@@ -4742,7 +4841,7 @@ section[id*="quote" i] .ipc-list-card { padding: 4px 0 !important; margin: 2px 0
        search into a direct fetch; when Wikidata has no mapping, the validated
        search path still runs unchanged. */
     const WIKIDATA_ENDPOINT = 'https://query.wikidata.org/sparql';
-    const WIKIDATA_ID_TTL = CACHE_MAX_TTL;
+    const WIKIDATA_ID_TTL = PROVIDERS.wikidata.ttl;
     const WIKIDATA_RESPONSE_LIMIT = 256 * 1024;
     const EXTERNAL_ID_PATTERNS = {
         rt: /^(?:m|tv)\/[a-z0-9][a-z0-9_-]{0,120}$/i,
@@ -10311,13 +10410,24 @@ section[data-testid="hero-parent"].enh-editorial-native-hidden { display: none !
 
     /* Origin patterns are not something to put in front of a user. Loopback collapses to
        one plain phrase rather than four near-identical URLs. */
-    function describeFeatureOrigins(key) {
-        const origins = getFeatureOrigins(key);
+    // Fallback for a feature with origins but no provider declaration, so a new origin
+    // group still reads sensibly before it is declared.
+    function describeOriginHosts(origins) {
         const loopback = origins.some(origin => /\/\/(localhost|127\.0\.0\.1)\//.test(origin));
         const hosts = origins
             .filter(origin => !/\/\/(localhost|127\.0\.0\.1)\//.test(origin))
             .map(origin => origin.replace(/^https?:\/\//, '').replace(/\/\*$/, '').replace(/^\*\./, ''));
-        const names = loopback ? [...hosts, 'your own computer'] : hosts;
+        return loopback ? [...hosts, 'your own computer'] : hosts;
+    }
+
+    /* Still the hostnames rather than the providers' labels. The registry now carries a
+       readable name for each, and "Rotten Tomatoes and Wikidata" beats
+       "www.rottentomatoes.com and query.wikidata.org" for a reader deciding whether to
+       grant access, but that is a change to what the panel says and belongs with the rest
+       of that wording, not smuggled in beneath a refactor. The origins themselves come
+       from the registry, so this is derived either way. */
+    function describeFeatureOrigins(key) {
+        const names = describeOriginHosts(getFeatureOrigins(key));
         if (names.length <= 1) return names[0] || 'no external sites';
         if (names.length === 2) return `${names[0]} and ${names[1]}`;
         return `${names.slice(0, -1).join(', ')} and ${names[names.length - 1]}`;

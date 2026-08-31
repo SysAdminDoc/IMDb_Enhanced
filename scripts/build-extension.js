@@ -35,17 +35,80 @@ const BOOT_TIMEOUT_MS = 1500;
    permission it no longer uses, or loses one it does — and the install prompt is the
    thing users read to decide whether to trust this at all. Evaluated rather than parsed,
    because the map is plain data built from a couple of shared constants. */
-function readOriginLists() {
-    const block = source.match(/const LOOPBACK_ORIGINS = \[[\s\S]*?const OPTIONAL_ORIGINS = [^;]+;/);
-    if (!block) throw new Error('Origin groups could not be read from the userscript.');
+/* The provider declarations reference two cache constants defined earlier in the file.
+   Reading them by name keeps the evaluated block small and self-contained: widening the
+   capture to include everything in between would pull in code that cannot run outside
+   the userscript's own scope. */
+function readNumericConstant(name) {
+    const match = source.match(new RegExp(`const ${name} = ([^;]+);`));
+    if (!match) throw new Error(`${name} could not be read from the userscript.`);
     // eslint-disable-next-line no-new-func
-    const evaluate = new Function(`${block[0]}\nreturn { FEATURE_ORIGIN_GROUPS, REQUIRED_ORIGINS, OPTIONAL_ORIGINS };`);
+    const value = new Function(`return (${match[1]});`)();
+    if (!Number.isFinite(value)) throw new Error(`${name} did not evaluate to a number.`);
+    return value;
+}
+
+function readOriginLists() {
+    const block = source.match(/const LOOPBACK_ORIGINS = \[[\s\S]*?const TRANSMITTED_DATA_CATEGORIES = [\s\S]*?\)\]\.sort\(\);/);
+    if (!block) throw new Error('The provider registry could not be read from the userscript.');
+    const preamble = ['CACHE_TTL', 'CACHE_MAX_TTL']
+        .map(name => `const ${name} = ${readNumericConstant(name)};`)
+        .join('\n');
+    // eslint-disable-next-line no-new-func
+    const evaluate = new Function(`${preamble}\n${block[0]}\nreturn { PROVIDERS, FEATURE_PROVIDERS, FEATURE_ORIGIN_GROUPS, REQUIRED_ORIGINS, OPTIONAL_ORIGINS, TRANSMITTED_DATA_CATEGORIES, DISTRIBUTION_PROFILES, PROVIDER_REQUIRED_FIELDS };`);
     const lists = evaluate();
     if (!lists.REQUIRED_ORIGINS.length) throw new Error('REQUIRED_ORIGINS is empty.');
     if (!lists.OPTIONAL_ORIGINS.length) throw new Error('OPTIONAL_ORIGINS is empty.');
     const overlap = lists.OPTIONAL_ORIGINS.filter(origin => lists.REQUIRED_ORIGINS.includes(origin));
     if (overlap.length) throw new Error(`Origins cannot be both required and optional: ${overlap.join(', ')}`);
+    validateProviders(lists);
     return lists;
+}
+
+/* A provider that forgets a field, or a feature that names one that does not exist, is a
+   build failure rather than something that shows up later as a blank line in the settings
+   panel or an origin nobody can explain. */
+function validateProviders({ PROVIDERS, FEATURE_PROVIDERS, OPTIONAL_ORIGINS, DISTRIBUTION_PROFILES, PROVIDER_REQUIRED_FIELDS, TRANSMITTED_DATA_CATEGORIES }) {
+    const ids = Object.keys(PROVIDERS);
+    if (!ids.length) throw new Error('No providers are declared.');
+    ids.forEach(id => {
+        const provider = PROVIDERS[id];
+        PROVIDER_REQUIRED_FIELDS.forEach(field => {
+            if (!Object.prototype.hasOwnProperty.call(provider, field)) {
+                throw new Error(`Provider "${id}" is missing the required field "${field}".`);
+            }
+        });
+        if (!Array.isArray(provider.origins) || !provider.origins.length) {
+            throw new Error(`Provider "${id}" declares no origins.`);
+        }
+        if (!provider.label || !provider.consent) {
+            throw new Error(`Provider "${id}" needs a label and a consent sentence a person can read.`);
+        }
+        if (!Number.isFinite(provider.ttl) || provider.ttl < 0) {
+            throw new Error(`Provider "${id}" declares an unusable cache lifetime.`);
+        }
+        if (!Array.isArray(provider.profiles) || !provider.profiles.length) {
+            throw new Error(`Provider "${id}" must name at least one distribution profile.`);
+        }
+        provider.profiles.forEach(profile => {
+            if (!DISTRIBUTION_PROFILES.includes(profile)) {
+                throw new Error(`Provider "${id}" names unknown distribution profile "${profile}".`);
+            }
+        });
+    });
+    Object.entries(FEATURE_PROVIDERS).forEach(([feature, providers]) => {
+        providers.forEach(id => {
+            if (!PROVIDERS[id]) throw new Error(`Feature "${feature}" names undeclared provider "${id}".`);
+        });
+    });
+    // The other direction: an origin the manifest requests must belong to a provider,
+    // or nothing can say why it is being asked for.
+    const declared = new Set(ids.flatMap(id => PROVIDERS[id].origins));
+    const orphans = OPTIONAL_ORIGINS.filter(origin => !declared.has(origin));
+    if (orphans.length) throw new Error(`Requested origins belong to no provider: ${orphans.join(', ')}`);
+    if (!TRANSMITTED_DATA_CATEGORIES.length) {
+        throw new Error('No provider declares what it transmits, so the data-collection declaration would be empty.');
+    }
 }
 
 function readAdShellSelector() {
@@ -357,6 +420,7 @@ const bootCssPath = path.join(extensionDir, 'boot.css');
 const manifest = JSON.parse(fs.readFileSync(manifestPath, 'utf8'));
 manifest.version = packageJson.version;
 const originLists = readOriginLists();
+const { TRANSMITTED_DATA_CATEGORIES } = originLists;
 manifest.host_permissions = originLists.REQUIRED_ORIGINS;
 manifest.optional_host_permissions = originLists.OPTIONAL_ORIGINS;
 const serializedManifest = `${JSON.stringify(manifest, null, 2)}\n`;
@@ -383,7 +447,9 @@ function toFirefoxManifest(base) {
                browser, and a user deciding whether to enable it deserves to see it said.
                It is optional because it happens only for the sources they switch on, and
                those now request their origins at that moment. */
-            data_collection_permissions: { required:['none'], optional:['websiteContent'] },
+            /* Derived from what the providers say they transmit, so adding one that sends
+               something new cannot leave this declaration behind. */
+            data_collection_permissions: { required:['none'], optional:[...TRANSMITTED_DATA_CATEGORIES] },
         },
     };
     firefox.action = { ...base.action, default_popup:'permissions.html' };
@@ -425,6 +491,7 @@ function buildFirefoxBuild() {
 const EXTENSION_BRIDGE_SOURCE = `${prelude}\n${bridgeFor({ trusted:false })}`;
 
 module.exports = {
+    validateProviders,
     toFirefoxManifest,
     FIREFOX_ADDON_ID,
     FIREFOX_MIN_VERSION,

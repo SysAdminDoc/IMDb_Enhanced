@@ -38,12 +38,14 @@ assert.deepStrictEqual(manifest.host_permissions, ['https://www.imdb.com/*'],
 });
 /* Derived from the userscript's feature map, never maintained beside it: a hand-kept
    second list is how a feature quietly keeps a permission it no longer uses. */
-assert(/const FEATURE_ORIGIN_GROUPS = \{[\s\S]*?\n    \};/.test(source),
-    'the userscript must declare which origins each feature needs');
+assert(/const FEATURE_PROVIDERS = \{[\s\S]*?\n    \};/.test(source),
+    'the userscript must declare which providers each feature needs');
+assert(/const FEATURE_ORIGIN_GROUPS = Object\.fromEntries\(/.test(source),
+    'the origin groups must be projected from the provider declarations, not kept beside them');
 /* Collected from the declaration region by text, independently of how the build computes
    the union, so this catches a feature group the manifest forgot and a manifest entry no
    feature asks for. */
-const originRegion = source.match(/const LOOPBACK_ORIGINS = \[[\s\S]*?const OPTIONAL_ORIGINS = [^;]+;/);
+const originRegion = source.match(/const LOOPBACK_ORIGINS = \[[\s\S]*?const TRANSMITTED_DATA_CATEGORIES = [\s\S]*?\)\]\.sort\(\);/);
 assert(originRegion, 'the origin declarations must stay in one readable region');
 const declaredOrigins = [...new Set((originRegion[0].match(/'(https?:\/\/[^']+)'/g) || []).map(s => s.slice(1, -1)))]
     .filter(origin => !manifest.host_permissions.includes(origin));
@@ -53,6 +55,58 @@ assert.deepStrictEqual(
     'the manifest optional origins must be exactly the union of the feature groups');
 assert(source.includes('const OPTIONAL_ORIGINS = [...new Set(Object.values(FEATURE_ORIGIN_GROUPS).flat())]'),
     'the optional origin list must be derived structurally, not enumerated by hand');
+
+/* IE-90: a provider's origins, cache lifetime, what it transmits, what the panel says
+   about it, the credit it requires, and the builds it may ship in were maintained in four
+   places that drifted with nothing to catch it. One declaration is the source now, and an
+   incomplete one has to stop the build rather than surface later as a blank line in the
+   settings panel or an origin nobody can account for. */
+const REQUIRED_PROVIDER_FIELDS = ['label', 'origins', 'transmits', 'consent', 'ttl', 'attribution', 'profiles'];
+const providerRegion = originRegion[0];
+assert(/const PROVIDERS = \{/.test(providerRegion), 'the providers must be declared in that same region');
+const providerIds = [...providerRegion.matchAll(/^\s{8}(\w+): \{$/gm)].map(match => match[1]);
+assert(providerIds.length >= 8, `expected every provider to be declared, found ${providerIds.length}`);
+providerIds.forEach(id => {
+    const body = providerRegion.slice(providerRegion.indexOf(`        ${id}: {`));
+    const declaration = body.slice(0, body.indexOf('\n        },'));
+    REQUIRED_PROVIDER_FIELDS.forEach(field => {
+        assert(new RegExp(`^\\s{12}${field}:`, 'm').test(declaration),
+            `provider "${id}" does not declare ${field}`);
+    });
+});
+assert(source.includes("const WIKIDATA_ID_TTL = PROVIDERS.wikidata.ttl;"),
+    'a cache lifetime must come from the provider that owns it, not be restated at the call site');
+
+/* The build is the thing that has to fail, so exercise it rather than trusting the shape
+   above. Each mutation is applied to a copy of the source and the generator is asked to
+   read it; a build that accepts any of these has stopped being a gate. */
+const { validateProviders } = require('../scripts/build-extension.js');
+assert.strictEqual(typeof validateProviders, 'function', 'the provider validator must be reachable to test');
+const soundRegistry = () => ({
+    PROVIDERS: {
+        alpha: { label:'Alpha', origins:['https://alpha.test/*'], transmits:'websiteContent', consent:'Sends the title.', ttl:1000, attribution:'', profiles:['default'] },
+    },
+    FEATURE_PROVIDERS: { someFeature:['alpha'] },
+    OPTIONAL_ORIGINS: ['https://alpha.test/*'],
+    DISTRIBUTION_PROFILES: ['default', 'store'],
+    PROVIDER_REQUIRED_FIELDS: REQUIRED_PROVIDER_FIELDS,
+    TRANSMITTED_DATA_CATEGORIES: ['websiteContent'],
+});
+assert.doesNotThrow(() => validateProviders(soundRegistry()), 'a complete registry must pass');
+[
+    ['a missing field', r => { delete r.PROVIDERS.alpha.consent; }, /missing the required field "consent"/],
+    ['no origins', r => { r.PROVIDERS.alpha.origins = []; }, /declares no origins/],
+    ['an empty label', r => { r.PROVIDERS.alpha.label = ''; }, /label and a consent sentence/],
+    ['a negative lifetime', r => { r.PROVIDERS.alpha.ttl = -1; }, /unusable cache lifetime/],
+    ['no profile', r => { r.PROVIDERS.alpha.profiles = []; }, /at least one distribution profile/],
+    ['an unknown profile', r => { r.PROVIDERS.alpha.profiles = ['beta']; }, /unknown distribution profile/],
+    ['a feature naming a provider that does not exist', r => { r.FEATURE_PROVIDERS.someFeature = ['ghost']; }, /undeclared provider "ghost"/],
+    ['an origin belonging to no provider', r => { r.OPTIONAL_ORIGINS.push('https://stray.test/*'); }, /belong to no provider/],
+].forEach(([name, break_, expected]) => {
+    const registry = soundRegistry();
+    break_(registry);
+    assert.throws(() => validateProviders(registry), expected, `the build must refuse ${name}`);
+});
 assert.strictEqual(manifest.background.service_worker, 'background.js');
 assert.strictEqual(manifest.content_scripts[0].js[0], 'content.js');
 assert.strictEqual(manifest.content_scripts[0].run_at, 'document_start');
