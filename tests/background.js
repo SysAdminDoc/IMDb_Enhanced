@@ -99,17 +99,33 @@ function loadBackground({ engine = 'chromium', fetchImpl } = {}) {
 
 const IMDB_SENDER = { url: 'https://www.imdb.com/title/tt0133093/', tab: { id: 7 } };
 
+/* The message a browser gives for a failed fetch. Chrome and Firefox both refuse to
+   leak redirect detail into it, which is why classification must never sniff it. */
+const OPAQUE_FETCH_FAILURE = 'Failed to fetch';
+
 /* Simulates a redirect chain. `chain` maps a start URL to the URL the response
    ultimately came from, which is exactly what response.url reports after a followed
-   redirect. Under redirect:'error' any hop rejects, the way fetch does. */
+   redirect. Under redirect:'manual' a hop yields an opaque-redirect response instead
+   of being followed, exactly as the platform does — status 0, empty url, no body. */
 function makeFetch(chain, { body = 'PAYLOAD', status = 200 } = {}) {
     return (url, init = {}) => {
         const finalUrl = chain[url] || url;
         const redirected = finalUrl !== url;
-        if (redirected && init.redirect === 'error') {
-            return Promise.reject(new TypeError('Failed to fetch: redirect mode is error'));
+        if (redirected && init.redirect === 'manual') {
+            /* Measured against Chrome 143 in a real MV3 service worker: an opaque
+               redirect reports the ORIGINAL request URL, not the target, and status 0.
+               That matters — a check that looked at .url first would read this as a
+               successful same-origin response, so the type check has to come first. */
+            return Promise.resolve({
+                type: 'opaqueredirect',
+                url,
+                status: 0,
+                redirected: false,
+                text: () => Promise.resolve(''),
+            });
         }
         return Promise.resolve({
+            type: 'basic',
             url: finalUrl,
             status,
             redirected,
@@ -175,19 +191,11 @@ for (const engine of ['chromium', 'gecko']) {
 
     test(`[${engine}] a loopback service cannot redirect a credentialed request outward`, async () => {
         const captured = [];
-        const { dispatch } = loadBackground({
+        const { dispatch, calls } = loadBackground({
             engine,
             fetchImpl: (url, init) => {
                 captured.push(init);
-                if (init.redirect === 'error') {
-                    return Promise.reject(new TypeError('Failed to fetch: redirect mode is error'));
-                }
-                return Promise.resolve({
-                    url: 'https://attacker.example/steal',
-                    status: 200,
-                    redirected: true,
-                    text: () => Promise.resolve('ok'),
-                });
+                return makeFetch({ 'http://localhost:7878/api/v3/movie': 'https://attacker.example/steal' })(url, init);
             },
         });
         const response = await dispatch(request('http://localhost:7878/api/v3/movie', {
@@ -195,10 +203,37 @@ for (const engine of ['chromium', 'gecko']) {
         }), IMDB_SENDER);
         assert.strictEqual(response.ok, false);
         assert.strictEqual(response.errorType, 'redirect_blocked');
-        assert.strictEqual(captured[0].redirect, 'error',
-            'a request carrying an API key must forbid redirects outright, since a followed hop cannot be un-sent');
+        assert.strictEqual(captured[0].redirect, 'manual',
+            'a request carrying an API key must not follow a hop, since a followed one cannot be un-sent');
         assert.strictEqual(captured[0].headers['X-Api-Key'], 'radarr-secret',
             'the credential must still reach the local service it was meant for');
+        assert.strictEqual(calls.fetches.length, 1,
+            'the redirect target must never be requested, so the credential goes nowhere else');
+    });
+
+    /* The refusal above and an unreachable service must not look the same. Both used to
+       reject with the browser's opaque "Failed to fetch", so a stopped Radarr was
+       reported as a blocked redirect and vice versa. */
+    test(`[${engine}] an unreachable local service reads as a network error, not a blocked redirect`, async () => {
+        const { dispatch } = loadBackground({
+            engine,
+            fetchImpl: () => Promise.reject(new TypeError(OPAQUE_FETCH_FAILURE)),
+        });
+        const response = await dispatch(request('http://localhost:7878/api/v3/movie', {
+            headers: { 'X-Api-Key': 'radarr-secret' },
+        }), IMDB_SENDER);
+        assert.strictEqual(response.ok, false);
+        assert.strictEqual(response.errorType, 'network',
+            'a service that is simply not running must not be reported as a redirect attempt');
+    });
+
+    test(`[${engine}] a credentialed request that does not redirect still succeeds`, async () => {
+        const { dispatch } = loadBackground({ engine, fetchImpl: makeFetch({}) });
+        const response = await dispatch(request('http://localhost:7878/api/v3/movie', {
+            headers: { 'X-Api-Key': 'radarr-secret' },
+        }), IMDB_SENDER);
+        assert.strictEqual(response.ok, true, 'forbidding redirects must not break ordinary local calls');
+        assert.strictEqual(response.responseText, 'PAYLOAD');
     });
 
     test(`[${engine}] every credential header shape forbids redirects`, async () => {
@@ -214,7 +249,7 @@ for (const engine of ['chromium', 'gecko']) {
             await dispatch(request('http://127.0.0.1:32400/library/sections', {
                 headers: { [header]: 'secret' },
             }), IMDB_SENDER);
-            assert.strictEqual(captured[0].redirect, 'error', `${header} must be treated as a credential`);
+            assert.strictEqual(captured[0].redirect, 'manual', `${header} must be treated as a credential`);
         }
     });
 
@@ -244,15 +279,18 @@ for (const engine of ['chromium', 'gecko']) {
         assert.strictEqual(response.errorType, 'redirect_crossed_trust_boundary');
     });
 
-    test(`[${engine}] a redirect loop is reported as a refused redirect, not a mystery`, async () => {
+    test(`[${engine}] a redirect loop fails cleanly rather than hanging`, async () => {
         const { dispatch } = loadBackground({
             engine,
-            // What the engine does once its own hop limit is exhausted.
-            fetchImpl: () => Promise.reject(new TypeError('Failed to fetch: too many redirects')),
+            // Once its own hop limit is exhausted the engine rejects with the same
+            // opaque failure it uses for everything else; there is nothing to read
+            // from it, so this only has to fail closed and stay typed.
+            fetchImpl: () => Promise.reject(new TypeError(OPAQUE_FETCH_FAILURE)),
         });
         const response = await dispatch(request('https://letterboxd.com/imdb/tt0133093/'), IMDB_SENDER);
         assert.strictEqual(response.ok, false);
-        assert.strictEqual(response.errorType, 'redirect_blocked');
+        assert.strictEqual(response.errorType, 'network');
+        assert.strictEqual(response.responseText, undefined, 'a failed chain must yield no body');
     });
 
     test(`[${engine}] an unlisted or malformed start URL never reaches fetch`, async () => {

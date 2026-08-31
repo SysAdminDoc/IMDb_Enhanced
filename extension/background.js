@@ -29,7 +29,6 @@ const SENSITIVE_HEADER_NAMES = new Set([
    same-origin and still works. The engine caps a same-origin chain at 20 hops and
    reports a loop as a network failure; this is the bound that matters, because a
    chain that cannot leave its origin cannot reach anything new by being long. */
-const REDIRECT_ERROR_PATTERN = /redirect/i;
 
 function isLoopbackHost(hostname) {
     return LOOPBACK_HOSTS.has(String(hostname || '').toLowerCase());
@@ -165,11 +164,19 @@ function sendHttpRequest(message, sender, sendResponse) {
         ? undefined
         : String(message.body).slice(0, MAX_RESPONSE_TEXT);
 
-    /* A credential-bearing request is not permitted to redirect at all. There is no
+    /* A credential-bearing request is not permitted to redirect at all: there is no
        point in the flow where a followed redirect's headers can be rewritten, so the
        only way to guarantee the token never reaches a second origin is to refuse the
-       hop outright — and a local Radarr, Sonarr, Plex, Jellyfin or Emby endpoint has
-       no legitimate reason to redirect a caller elsewhere. */
+       hop — and a local Radarr, Sonarr, Plex, Jellyfin or Emby endpoint has no
+       legitimate reason to redirect a caller elsewhere.
+
+       'manual' rather than 'error' because both stop the hop, but only 'manual' lets us
+       say which happened. 'error' rejects with the same opaque TypeError the browser
+       uses for an unreachable host ("Failed to fetch" in Chrome, "NetworkError…" in
+       Firefox), so a stopped Radarr and a redirecting one were indistinguishable.
+       'manual' returns an opaque-redirect response instead — the second request is
+       never made, so the credential still goes nowhere — and a genuinely dead host
+       still throws, so the two stay apart. */
     const carriesCredentials = hasSensitiveHeader(headers);
 
     fetch(url, {
@@ -177,9 +184,18 @@ function sendHttpRequest(message, sender, sendResponse) {
         headers,
         body,
         credentials: 'omit',
-        redirect: carriesCredentials ? 'error' : 'follow',
+        redirect: carriesCredentials ? 'manual' : 'follow',
         signal: controller.signal,
     }).then(async response => {
+        if (response.type === 'opaqueredirect' || (carriesCredentials && response.status === 0)) {
+            sendResponse({
+                ok:false,
+                status:0,
+                errorType:'redirect_blocked',
+                error:'The service tried to redirect a request carrying a credential, so it was stopped',
+            });
+            return;
+        }
         /* The initial URL was allowlisted; the URL the response actually came from is
            the one that matters. Validate it before the body is read, so a redirected
            response is discarded rather than parsed. */
@@ -223,11 +239,11 @@ function sendHttpRequest(message, sender, sendResponse) {
     }).catch(error => {
         const aborted = error?.name === 'AbortError';
         const message = String(error?.message || 'Request failed');
-        let errorType = 'network';
-        if (aborted) errorType = 'aborted';
-        // redirect:'error' and an over-long chain both surface as network failures
-        // naming the redirect; report them as the redirect refusals they are.
-        else if (REDIRECT_ERROR_PATTERN.test(message)) errorType = 'redirect_blocked';
+        /* Classified from what this code knows, never from the message: browsers do not
+           leak redirect detail into fetch's TypeError, so a refused hop and a dead host
+           read identically here. A refused hop is recognized above, from the response,
+           which is why this is left as a plain network failure. */
+        let errorType = aborted ? 'aborted' : 'network';
         sendResponse({
             ok:false,
             status: Number(error?.status) || 0,
