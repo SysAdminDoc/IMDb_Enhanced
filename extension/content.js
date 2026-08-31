@@ -143,7 +143,14 @@
                     });
                     return;
                 }
-                finish(options.onerror, { status:Number(response.status) || 0, message:String(response.error || 'Request failed') });
+                finish(options.onerror, {
+                    status:Number(response.status) || 0,
+                    // The background classifies its refusals (redirect_blocked,
+                    // redirect_changed_origin, …); losing that here would leave a
+                    // blocked redirect indistinguishable from the site being down.
+                    errorType:String(response.errorType || 'network'),
+                    message:String(response.error || 'Request failed'),
+                });
             });
         } catch (error) {
             finish(options.onerror, error);
@@ -2317,6 +2324,12 @@
         if (typeof value !== 'string' && typeof value !== 'number') return '';
         return String(value).trim().replace(/\s+/g, ' ').slice(0, REQUEST_ERROR_TEXT_LIMIT);
     }
+    const REDIRECT_ERROR_MESSAGES = {
+        redirect_blocked: 'Blocked: the service tried to redirect a request carrying your API key.',
+        redirect_changed_origin: 'Blocked: the service redirected to a different site.',
+        redirect_destination_not_allowed: 'Blocked: the service redirected somewhere this extension does not allow.',
+        redirect_crossed_trust_boundary: 'Blocked: the service redirected between a local and a public address.',
+    };
     function getRequestErrorMessage(error) {
         const responseText = typeof error?.responseText === 'string' ? error.responseText : '';
         if (responseText && responseText.length <= 100000) {
@@ -2331,6 +2344,11 @@
                 }
             } catch { /* use status fallback */ }
         }
+        /* A refused redirect is a security decision, not an outage, and saying "request
+           failed" would send someone debugging their network instead of the service that
+           redirected them. Only the extension bridge classifies errors this way. */
+        const redirectMessage = REDIRECT_ERROR_MESSAGES[String(error?.errorType || '')];
+        if (redirectMessage) return redirectMessage;
         const status = Number(error?.status);
         if (Number.isInteger(status) && status >= 100 && status <= 599) return `HTTP ${status}`;
         return normalizeRequestErrorText(error?.message) || 'Request failed';

@@ -14,6 +14,44 @@ const ALLOWED_REQUEST_HOSTS = new Set([
     'localhost',
     '127.0.0.1',
 ]);
+const LOOPBACK_HOSTS = new Set(['localhost', '127.0.0.1']);
+/* Credentials the userscript attaches to local-service calls. fetch strips
+   Authorization across an origin change but carries arbitrary custom headers with
+   it, so these are exactly the ones a redirect could hand to a third party. Compared
+   lowercased: header names are case-insensitive. */
+const SENSITIVE_HEADER_NAMES = new Set([
+    'authorization', 'cookie', 'proxy-authorization',
+    'x-api-key', 'x-plex-token', 'x-emby-token', 'x-mediabrowser-token',
+]);
+/* Redirects are permitted only within one origin, so no hop can move a request to a
+   host the allowlist never approved or across the loopback boundary. Letterboxd's
+   /imdb/{ttID}/ route — the one deliberate redirect this extension depends on — is
+   same-origin and still works. The engine caps a same-origin chain at 20 hops and
+   reports a loop as a network failure; this is the bound that matters, because a
+   chain that cannot leave its origin cannot reach anything new by being long. */
+const REDIRECT_ERROR_PATTERN = /redirect/i;
+
+function isLoopbackHost(hostname) {
+    return LOOPBACK_HOSTS.has(String(hostname || '').toLowerCase());
+}
+
+function describeRequestUrl(value) {
+    try {
+        const url = new URL(String(value || ''));
+        if (String(value || '').length > 8192) return null;
+        if (!/^https?:$/.test(url.protocol)) return null;
+        if (url.username || url.password) return null;
+        const hostname = url.hostname.toLowerCase();
+        if (!ALLOWED_REQUEST_HOSTS.has(hostname)) return null;
+        return { url, hostname, origin:url.origin, loopback:isLoopbackHost(hostname) };
+    } catch {
+        return null;
+    }
+}
+
+function hasSensitiveHeader(headers) {
+    return Object.keys(headers || {}).some(name => SENSITIVE_HEADER_NAMES.has(String(name).toLowerCase()));
+}
 /* Gecko's chrome.* alias is callback-style, so awaiting the return value of these
    calls is not portable. The callback form is accepted by both engines. */
 function callApi(namespace, method, arg) {
@@ -68,15 +106,7 @@ function isAllowedContentSender(sender) {
 }
 
 function isHttpUrl(value) {
-    try {
-        const url = new URL(String(value || ''));
-        return String(value || '').length <= 8192
-            && /^https?:$/.test(url.protocol)
-            && ALLOWED_REQUEST_HOSTS.has(url.hostname.toLowerCase())
-            && !url.username && !url.password;
-    } catch {
-        return false;
-    }
+    return Boolean(describeRequestUrl(value));
 }
 
 function normalizeHeaders(value) {
@@ -116,8 +146,9 @@ function sendHttpRequest(message, sender, sendResponse) {
     const requestId = String(message.id || '');
     const requestKey = getRequestKey(message, sender);
     const url = String(message.url || '');
-    if (!requestId || !isHttpUrl(url)) {
-        sendResponse({ ok:false, status:0, error:'Invalid HTTP(S) request' });
+    const target = describeRequestUrl(url);
+    if (!requestId || !target) {
+        sendResponse({ ok:false, status:0, errorType:'invalid_url', error:'Invalid HTTP(S) request' });
         return;
     }
 
@@ -129,31 +160,79 @@ function sendHttpRequest(message, sender, sendResponse) {
     activeRequests.set(requestKey, controller);
 
     const method = String(message.method || 'GET').toUpperCase().slice(0, 16);
+    const headers = normalizeHeaders(message.headers);
     const body = message.body === undefined || message.body === null
         ? undefined
         : String(message.body).slice(0, MAX_RESPONSE_TEXT);
 
+    /* A credential-bearing request is not permitted to redirect at all. There is no
+       point in the flow where a followed redirect's headers can be rewritten, so the
+       only way to guarantee the token never reaches a second origin is to refuse the
+       hop outright — and a local Radarr, Sonarr, Plex, Jellyfin or Emby endpoint has
+       no legitimate reason to redirect a caller elsewhere. */
+    const carriesCredentials = hasSensitiveHeader(headers);
+
     fetch(url, {
         method,
-        headers: normalizeHeaders(message.headers),
+        headers,
         body,
         credentials: 'omit',
-        redirect: 'follow',
+        redirect: carriesCredentials ? 'error' : 'follow',
         signal: controller.signal,
     }).then(async response => {
+        /* The initial URL was allowlisted; the URL the response actually came from is
+           the one that matters. Validate it before the body is read, so a redirected
+           response is discarded rather than parsed. */
+        const finalUrl = String(response.url || url);
+        const landed = describeRequestUrl(finalUrl);
+        if (!landed) {
+            sendResponse({
+                ok:false,
+                status:0,
+                errorType:'redirect_destination_not_allowed',
+                error:'Request was redirected to a destination that is not allowed',
+            });
+            return;
+        }
+        if (landed.loopback !== target.loopback) {
+            sendResponse({
+                ok:false,
+                status:0,
+                errorType:'redirect_crossed_trust_boundary',
+                error:'Request was redirected across the local/public boundary',
+            });
+            return;
+        }
+        if (landed.origin !== target.origin) {
+            sendResponse({
+                ok:false,
+                status:0,
+                errorType:'redirect_changed_origin',
+                error:'Request was redirected to a different origin',
+            });
+            return;
+        }
         const text = await response.text();
         if (text.length > MAX_RESPONSE_TEXT) throw new Error('Response was too large');
         sendResponse({
             ok: response.status < 400,
             status: response.status,
             responseText: text,
-            responseURL: response.url,
+            responseURL: finalUrl,
         });
     }).catch(error => {
+        const aborted = error?.name === 'AbortError';
+        const message = String(error?.message || 'Request failed');
+        let errorType = 'network';
+        if (aborted) errorType = 'aborted';
+        // redirect:'error' and an over-long chain both surface as network failures
+        // naming the redirect; report them as the redirect refusals they are.
+        else if (REDIRECT_ERROR_PATTERN.test(message)) errorType = 'redirect_blocked';
         sendResponse({
             ok:false,
             status: Number(error?.status) || 0,
-            error: String(error?.message || 'Request failed').slice(0, 240),
+            errorType,
+            error: message.slice(0, 240),
         });
     }).finally(() => {
         clearTimeout(timeout);

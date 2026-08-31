@@ -102,6 +102,14 @@ assert.deepStrictEqual(firefox.content_scripts, manifest.content_scripts, 'both 
 FIREFOX_COPIED_FILES.forEach(name => {
     assert(fs.existsSync(path.join(root, 'extension', name)), `Firefox build input missing: ${name}`);
 });
+/* The behavioural coverage for these lives in tests/background.js, which executes the
+   worker. These two only guard against the hardening being deleted wholesale, since a
+   background.js that no longer classifies redirects would still load and answer. */
+assert(background.includes("redirect: carriesCredentials ? 'error' : 'follow'"),
+    'a credential-bearing privileged fetch must forbid redirects rather than follow them');
+assert(background.includes('describeRequestUrl(finalUrl)'),
+    'the privileged fetch must re-validate the URL a response actually came from');
+
 const permissionsScript = fs.readFileSync(path.join(root, 'extension', 'permissions.js'), 'utf8');
 assert(permissionsScript.includes('permissions.request'), 'the popup must be able to request the opt-in origins');
 assert(permissionsScript.includes('getManifest'), 'the popup must derive origins from the manifest rather than a second hard-coded list');

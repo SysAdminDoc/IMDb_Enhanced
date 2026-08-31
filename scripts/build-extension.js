@@ -195,7 +195,14 @@ const bridge = String.raw`
                     });
                     return;
                 }
-                finish(options.onerror, { status:Number(response.status) || 0, message:String(response.error || 'Request failed') });
+                finish(options.onerror, {
+                    status:Number(response.status) || 0,
+                    // The background classifies its refusals (redirect_blocked,
+                    // redirect_changed_origin, …); losing that here would leave a
+                    // blocked redirect indistinguishable from the site being down.
+                    errorType:String(response.errorType || 'network'),
+                    message:String(response.error || 'Request failed'),
+                });
             });
         } catch (error) {
             finish(options.onerror, error);

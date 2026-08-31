@@ -2,6 +2,10 @@
 
 ## 2.15.0 — 2026-08-31
 
+### Security
+
+- The extension's privileged fetch no longer follows a redirect anywhere it likes. It checked the address it was asked for, then let the network take it wherever a redirect pointed, which mattered most for calls to Radarr, Sonarr, Plex, Jellyfin, and Emby: those carry your API key in a header, and a redirect would have carried the header along to whatever answered. A request holding a credential now refuses to redirect at all, every response is re-checked against the address it actually came from, and a hop between a local and a public address is rejected outright. Letterboxd's IMDb lookup, which is a genuine redirect within its own site, still works. A blocked redirect now says so rather than reading as a network error.
+
 ### Fixed
 
 - The lookup cache can no longer outgrow the storage it lives in. Its 120-entry by 256 KiB limits allowed roughly 30 MB of cached scores while a Chromium extension gets 10 MB for everything it stores, so a heavy browsing session could fill the quota and quietly stop saving lookups. The cache now measures itself in real encoded bytes, holds a 6 MB ceiling, and drops least-recently-read entries as it fills. Settings, private marks, and integration credentials are never eviction candidates. If storage is full anyway, you get a message pointing at Data → Clear cache instead of silence, and the Data page shows what the cache is using.
