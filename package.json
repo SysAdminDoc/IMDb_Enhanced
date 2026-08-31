@@ -4,7 +4,7 @@
   "description": "Desktop IMDb enhancement userscript and Chromium extension",
   "private": true,
   "engines": {
-    "node": ">=20.0.0"
+    "node": ">=22.0.0"
   },
   "scripts": {
     "build:extension": "node scripts/build-extension.js",

@@ -38,6 +38,12 @@
 
 - Your TMDB token is stored the way the other integration keys are, so in the extension the background holds it and the IMDb page never sees it. It is the only key that leaves your machine, and it is bound to TMDB: a request to any other address cannot ask for it, and a request to TMDB cannot ask for any other key.
 
+### Changed
+
+- Building now needs Node 22 or newer. Node 20 reached end of life on 30 April 2026, and the README, the package manifest, and the test that ties them together all say 22 now. Release builds are made on Node 24; the suite is verified on both.
+
+- The documented AMO lint command names the version it was run with (`npx web-ext@10.6.0`). The validator's rules change between its own releases, so an unpinned run proves nothing repeatable. The README also no longer claims the Firefox build declares no data collection, which stopped being true when the build started declaring optional website content.
+
 ### Fixed
 
 - The web-store build carries its own listing description now. It used to reuse the full build's, which advertises score widgets and a directory of watch destinations that this build deliberately leaves out. The suite also reads the built `extension-store/` directory back and compares it with the generator, so a stale or hand-edited store build fails the tests instead of reaching a reviewer.

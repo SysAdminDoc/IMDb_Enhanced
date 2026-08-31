@@ -78,7 +78,7 @@ instead; it needs none of these steps.
 
 The extension build is generated locally from the same userscript source and adds proper extension storage, privileged cross-origin lookups, and stronger request blocking.
 
-1. Install Node.js 20 or newer.
+1. Install Node.js 22 or newer.
 2. From the repository root, run `npm run build:extension`.
 3. Open `chrome://extensions`, enable **Developer mode**, choose **Load unpacked**, and select the repository's `extension` folder.
 4. Open or refresh an IMDb page. After source changes, run the build command again and use the extension card's reload button before refreshing IMDb.
@@ -106,7 +106,10 @@ build. Firefox 142 or newer is required.
 4. Reload any IMDb tabs that were already open.
 
 Temporary add-ons are removed when Firefox restarts. The build passes
-`web-ext lint` with no errors and declares no data collection.
+`npx web-ext@10.6.0 lint` with no errors. It declares the page content an
+enabled score or availability lookup sends to a third party, and nothing else.
+The linter is pinned because its rules change between releases, so an unpinned
+run says nothing repeatable.
 
 The userscript remains the better option on Firefox for permanent installs,
 since Mozilla continues to support the Manifest V2 userscript managers.

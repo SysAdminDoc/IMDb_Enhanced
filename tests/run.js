@@ -5029,10 +5029,23 @@ test('public documentation matches what the project actually ships', () => {
     assert(declared, 'package.json must declare the Node floor the README quotes');
     const floor = /^>=\s*(\d+)/.exec(declared)?.[1];
     assert(floor, `package.json engines.node should be a >=MAJOR range, got ${declared}`);
-    assert(Number(floor) >= 20, 'the declared Node floor must not be an end-of-life release');
+    assert(Number(floor) >= 22, 'the declared Node floor must not be an end-of-life release (Node 20 ended 2026-04-30)');
     const readmeFloor = /Install Node\.js (\d+) or newer/.exec(readme)?.[1];
     assert.strictEqual(readmeFloor, floor,
         `the README's Node floor (${readmeFloor}) must match package.json engines.node (${declared})`);
+
+    /* The AMO validator's rules change between its own releases, so an unpinned run is
+       not a repeatable result and "lints clean" stops meaning anything. web-ext is not a
+       devDependency — the trust posture above keeps that list at one entry — so the pin
+       lives in the documented invocation. */
+    const unpinnedLinter = readme.match(/web-ext(?!@\d)/g) || [];
+    assert.deepStrictEqual(unpinnedLinter, [],
+        'every web-ext invocation the README documents must name the version it was run with');
+    assert(/npx web-ext@\d+\.\d+\.\d+ lint/.test(readme),
+        'the README must document how the Firefox build is linted');
+    // The Firefox build declares optional website content; claiming otherwise was false.
+    assert(!/declares no data collection/.test(readme),
+        'the README must not claim the Firefox build declares no data collection');
 
     // The vote-distribution widget was retired in v2.14.0; only the ratings-route
     // comparison survives, and the README must not promise the widget.
