@@ -1012,7 +1012,11 @@
             }
             if (entry.expired) return null;
             if (now - entry.at >= CACHE_ACCESS_STAMP_INTERVAL) {
-                try { GM_setValue(storageKey, JSON.stringify({ ...entry, at:now })); }
+                /* parseCacheEntry adds `expired`, which is derived from the clock. Writing
+                   the parsed object back put that on disk, where it is meaningless and
+                   only grows the envelope. Only the stored fields are re-stamped. */
+                const { expired, ...stored } = entry;
+                try { GM_setValue(storageKey, JSON.stringify({ ...stored, at:now })); }
                 catch { /* the value is still usable; only eviction order degrades */ }
             }
             return entry.data;
@@ -7003,7 +7007,20 @@ section[id*="quote" i] .ipc-list-card { padding: 4px 0 !important; margin: 2px 0
        selecting "Seen" showed 2 marked titles plus 125 rows it had never seen. Reading
        the links makes the filter's view of the page complete and independent of how far
        another feature has got. */
-    const MARK_FILTER_ROW_SELECTOR = 'li, .ipc-poster-card, .ipc-metadata-list-summary-item';
+    /* IMDb's episode list renders one season at a time as `article.episode-item-wrapper`
+       nodes, each headed "S1.E1 ∙ Pilot" and linking to the episode's own title id.
+       Verified against Breaking Bad on 2026-08-31. The season bar below works on the rows
+       that season has actually rendered and never fetches another: an episode list that
+       quietly issued requests to complete itself would be doing something nobody asked for.
+       Declared here because the mark filter needs it too, and two copies of a selector is
+       how one of them silently stops matching. */
+    const EPISODE_ROW_SELECTOR = 'article.episode-item-wrapper';
+    /* An episode row is an article, matching none of the card selectors, so on a season's
+       episode list the filter found nothing: the bar stayed hidden with every count at
+       zero while its observer still ran over the whole document on each mutation. Episodes
+       do carry marks, from the season bar's batch buttons and from each episode's own
+       page, so the fix is to let the filter see the rows rather than to stop offering it. */
+    const MARK_FILTER_ROW_SELECTOR = `li, .ipc-poster-card, .ipc-metadata-list-summary-item, ${EPISODE_ROW_SELECTOR}`;
 
     function collectMarkFilterCards(root = document) {
         const cards = [];
@@ -8415,13 +8432,6 @@ section[id*="quote" i] .ipc-list-card { padding: 4px 0 !important; margin: 2px 0
             document.getElementById('enh-runtime-summary')?.remove();
         },
     });
-
-    /* IMDb's episode list renders one season at a time as `article.episode-item-wrapper`
-       nodes, each headed "S1.E1 ∙ Pilot" and linking to the episode's own title id.
-       Verified against Breaking Bad on 2026-08-31. Everything below works on the rows that
-       season has actually rendered and never fetches another: an episode list that quietly
-       issued requests to complete itself would be doing something nobody asked for. */
-    const EPISODE_ROW_SELECTOR = 'article.episode-item-wrapper';
 
     function readLoadedEpisodes(root = document) {
         const rows = [];

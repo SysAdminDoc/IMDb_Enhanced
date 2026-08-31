@@ -20,6 +20,8 @@
 
 ### Fixed
 
+- The private-marks filter works on a season's episode list. Every episode row is a different kind of element than the cards the filter knew about, so the bar rendered with all four counts at zero, stayed hidden, and kept an observer running over the page for nothing. On an eight-episode season with two seen and one skipped it now reads All 8, Unseen 5, Seen 2, Skipped 1, and picking Seen leaves those two rows.
+
 - A score source you have not granted access to no longer pretends to be a service outage. The browser refuses an ungranted request with exactly the same opaque error a dead host produces, so the widget fell back to showing last week's score with a Retry button that could never work, and the message naming the real problem was never reached. It now says the site access is not granted and offers a button that takes you to the page where you can grant it.
 
 - Your Seen and Skip marks no longer disappear without warning in the extension. Storage there is asynchronous, so a write that failed still reported success: the page went on showing the marks as saved and a reload lost them. A failed write is now noticed, the page is corrected, and you are told.

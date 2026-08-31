@@ -1338,6 +1338,26 @@ test('lookup caches remain bounded and storage failures do not hide fetched resu
     assert(script.includes('CACHE_SCHEMA_VERSION = 3'), 'cache schema invalidation marker missing');
     assert.strictEqual((script.match(/function parseCacheEntry\(/g) || []).length, 1, 'cache reads and GC should share one envelope validator');
 
+    /* parseCacheEntry adds `expired`, computed from the clock at read time. The access
+       re-stamp wrote the parsed object straight back, so that derived field landed on
+       disk where it means nothing and only grows the envelope. */
+    const stamping = loadScriptTestHooks();
+    const day = 24 * 60 * 60 * 1000;
+    stamping.seedRawStorage('cache_restamped', JSON.stringify({
+        data:{ value:'live' },
+        ts: Date.now() - (2 * day),
+        // Older than the access-stamp interval, so the next read re-stamps it.
+        at: Date.now() - (3 * day),
+        ttl: 7 * day,
+        schema: 3,
+    }));
+    assert.strictEqual(stamping.cacheGet('restamped')?.value, 'live', 'a live entry must still read back');
+    const restamped = JSON.parse(stamping.getRawStorage('cache_restamped'));
+    assert(!Object.prototype.hasOwnProperty.call(restamped, 'expired'),
+        'a field derived from the clock must not be persisted');
+    assert(restamped.at > Date.now() - (2 * 60 * 1000), 'the access stamp must actually have been refreshed');
+    assert.strictEqual(restamped.ttl, 7 * day, 're-stamping must not disturb the stored envelope');
+
     /* This assertion previously required cacheSet to give up on the first thrown write.
        That encoded the absence of the recovery path, not a guarantee anyone depends on:
        a single transient rejection is exactly what eviction-then-retry exists to absorb.
@@ -3674,6 +3694,22 @@ test('private marks can filter a collection without a request', () => {
     assert(hooks.shouldInitFeature({ key:'markFilters', group:'Utility' }));
     hooks.setTestPath('/search/title/');
     assert(hooks.shouldInitFeature({ key:'markFilters', group:'Utility' }));
+    /* A season's episode list is routed here too, and every row is an <article> matching
+       none of the card selectors — so the bar rendered with all counts at zero, stayed
+       hidden, and kept a document-wide observer running for nothing. Episodes do carry
+       marks, from the season bar's batch buttons and from each episode's own page.
+       Measured in a loaded extension on an 8-row season with 2 seen and 1 skipped:
+       before, All 0 / Unseen 0 / Seen 0 / Skipped 0 and the bar hidden; after,
+       All 8 / Unseen 5 / Seen 2 / Skipped 1, and the Seen filter leaves 2 rows visible. */
+    hooks.setTestPath('/title/tt0306414/episodes/');
+    assert.strictEqual(hooks.getPageSurface(), 'episodes');
+    assert(hooks.shouldInitFeature({ key:'markFilters', group:'Utility' }),
+        'a season list is a long card list too');
+    assert(/const MARK_FILTER_ROW_SELECTOR = `[^`]*\$\{EPISODE_ROW_SELECTOR\}`/.test(script),
+        'the filter must be able to resolve an episode row, or it is a hidden bar with a live observer');
+    // One definition, not two copies: a duplicated selector is how one of them rots.
+    assert.strictEqual((script.match(/'article\.episode-item-wrapper'/g) || []).length, 1,
+        'the episode row selector must be declared once');
     // Pure DOM over cards already present: no request of any kind.
     ['httpRequest', 'GM_xmlhttpRequest', 'fetch(', 'graphql'].forEach(token => {
         assert(!body.includes(token), `filtering must not ${token}`);
