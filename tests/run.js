@@ -3006,12 +3006,23 @@ test('an unreachable provider falls back to a labelled cached value', () => {
     assert.strictEqual(stale.data.tomatometer, 91);
     assert.strictEqual(stale.ts, writtenAt, 'the fallback must carry the date it was written');
 
-    // The ceiling is absolute, whatever the entry's own shorter TTL was.
+    /* The ceiling is absolute, whatever the entry's own shorter TTL was. The key here
+       must match what cacheGetStale builds ('cache_' + key) — an earlier version of this
+       seeded `cache_rt_ancient` and then read `ancient`, so it passed against a missing
+       entry and proved nothing. */
     const ancient = Date.now() - (hooks.CACHE_MAX_TTL + day);
     hooks.seedRawStorage('cache_rt_ancient', JSON.stringify({
         data:{ tomatometer: 50 }, ts: ancient, at: ancient, ttl: 7 * day, schema: 3,
     }));
-    assert.strictEqual(hooks.cacheGetStale('ancient'), null, 'a fallback may not outlive the envelope ceiling');
+    assert(hooks.getStorageKeys().includes('cache_rt_ancient'), 'the fixture must exist for this to mean anything');
+    assert.strictEqual(hooks.cacheGetStale('rt_ancient'), null, 'a fallback may not outlive the envelope ceiling');
+    // And one a day inside the ceiling still is a fallback, so the bound is the reason.
+    const justInside = Date.now() - (hooks.CACHE_MAX_TTL - day);
+    hooks.seedRawStorage('cache_rt_inside', JSON.stringify({
+        data:{ tomatometer: 51 }, ts: justInside, at: justInside, ttl: 7 * day, schema: 3,
+    }));
+    assert.strictEqual(hooks.cacheGetStale('rt_inside')?.data.tomatometer, 51,
+        'an expired value inside the ceiling must still be usable, or the test above proves nothing');
 
     // "We asked and there was nothing" is not worth re-showing as a cached score.
     hooks.seedRawStorage('cache_rt_none', JSON.stringify({
