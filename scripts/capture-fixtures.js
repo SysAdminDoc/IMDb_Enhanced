@@ -30,7 +30,21 @@ const PAGES = [
     { name: 'episodes', url: 'https://www.imdb.com/title/tt0903747/episodes/?season=1' },
     { name: 'person', url: 'https://www.imdb.com/name/nm0000206/' },
     { name: 'chart', url: 'https://www.imdb.com/chart/top/' },
+    /* IMDb's reference view is a different page for the same title: its own layout, its
+       own class names, and none of the testids the main title page is built from. */
+    { name: 'reference', url: 'https://www.imdb.com/title/tt0133093/reference/' },
 ];
+
+/* Capture one page rather than all of them. Re-capturing everything to add a surface
+   rewrites five committed fixtures against whatever IMDb shipped today, which is a large
+   unrelated diff and a suite full of failures that have nothing to do with the change. */
+const ONLY = process.argv.slice(2).filter(argument => !argument.startsWith('-'));
+const SELECTED = ONLY.length ? PAGES.filter(page => ONLY.includes(page.name)) : PAGES;
+if (!SELECTED.length) {
+    process.stderr.write(`No fixture named ${ONLY.join(', ')}. Known: ${PAGES.map(page => page.name).join(', ')}
+`);
+    process.exit(1);
+}
 
 const PLAYWRIGHT = process.env.IMDB_ENH_PLAYWRIGHT
     || 'C:/Users/--/AppData/Local/npm-cache/_npx/9833c18b2d85bc59/node_modules/playwright/index.js';
@@ -101,7 +115,7 @@ async function main() {
     const browser = { close: () => context.close() };
     const manifest = [];
 
-    for (const page of PAGES) {
+    for (const page of SELECTED) {
         const tab = await context.newPage();
         process.stderr.write(`capturing ${page.name} …\n`);
         await tab.goto(page.url, { waitUntil: 'domcontentloaded' });
@@ -144,10 +158,19 @@ ${captured.main}
         await tab.close();
     }
 
+    /* Merged rather than replaced, so capturing one surface does not delete the record
+       of the four this run did not touch. */
+    const previous = fs.existsSync(path.join(outDir, 'manifest.json'))
+        ? JSON.parse(fs.readFileSync(path.join(outDir, 'manifest.json'), 'utf8')).pages || []
+        : [];
+    const written = new Set(manifest.map(entry => entry.name));
+    const merged = [...previous.filter(entry => !written.has(entry.name)), ...manifest]
+        .sort((a, b) => PAGES.findIndex(page => page.name === a.name) - PAGES.findIndex(page => page.name === b.name));
+
     fs.writeFileSync(path.join(outDir, 'manifest.json'), `${JSON.stringify({
         capturedAt: new Date().toISOString(),
         note: 'Captured by scripts/capture-fixtures.js from live IMDb. Re-capture when a selector regression is confirmed against the live site.',
-        pages: manifest,
+        pages: merged,
     }, null, 2)}\n`, 'utf8');
 
     await browser.close();
