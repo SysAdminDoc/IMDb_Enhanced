@@ -27,6 +27,7 @@
     "https://api.themoviedb.org/*",
     "https://backend.metacritic.com/*",
     "https://fls-na.amazon.com/*",
+    "https://graphql.anilist.co/*",
     "https://images-na.ssl-images-amazon.com/*",
     "https://letterboxd.com/*",
     "https://localhost/*",

@@ -83,6 +83,9 @@
   "aria_jump_to": {
     "message": "Jump to $1"
   },
+  "aria_loading_anilist_score": {
+    "message": "Loading AniList score"
+  },
   "aria_loading_letterboxd_score": {
     "message": "Loading Letterboxd score"
   },
@@ -412,6 +415,12 @@
   },
   "feature_externalLinks_name": {
     "message": "External links bar"
+  },
+  "feature_inlineAnimeScore_detail": {
+    "message": "On anime titles, shows the AniList community average beside the other scores. Off by default, and nothing is requested for a title that is not anime."
+  },
+  "feature_inlineAnimeScore_name": {
+    "message": "AniList anime scores"
   },
   "feature_inlineLetterboxdScore_detail": {
     "message": "Shows Letterboxd average ratings inline for films when available."
@@ -949,6 +958,9 @@
   },
   "provider_amazonAds_label": {
     "message": "the ad and tracking hosts it blocks"
+  },
+  "provider_anilist_consent": {
+    "message": "Sends the title and year read from the page to AniList to find an anime rating."
   },
   "provider_justWatch_consent": {
     "message": "Sends the title and year read from the page to JustWatch to find where it streams."
@@ -1678,6 +1690,9 @@
   },
   "text_all_opened": {
     "message": "All opened"
+  },
+  "text_anilist_community_average": {
+    "message": "Community average"
   },
   "text_audience_score": {
     "message": "Audience: $1%"

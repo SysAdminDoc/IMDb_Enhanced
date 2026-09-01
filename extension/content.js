@@ -358,6 +358,7 @@
         aria_import_imdb_watched_titles_shown_on: 'Import IMDb Watched titles shown on this page into private Seen marks',
         aria_integration_service_tabs: '$1 services',
         aria_jump_to: 'Jump to $1',
+        aria_loading_anilist_score: 'Loading AniList score',
         aria_loading_letterboxd_score: 'Loading Letterboxd score',
         aria_loading_metacritic_score: 'Loading Metacritic score',
         aria_loading_rotten_tomatoes_score: 'Loading Rotten Tomatoes score',
@@ -468,6 +469,8 @@
         feature_expandedLinkMenu_name: 'Expanded link menu',
         feature_externalLinks_detail: 'Adds trusted research and trailer links near the title.',
         feature_externalLinks_name: 'External links bar',
+        feature_inlineAnimeScore_detail: 'On anime titles, shows the AniList community average beside the other scores. Off by default, and nothing is requested for a title that is not anime.',
+        feature_inlineAnimeScore_name: 'AniList anime scores',
         feature_inlineLetterboxdScore_detail: 'Shows Letterboxd average ratings inline for films when available.',
         feature_inlineLetterboxdScore_name: 'Letterboxd scores',
         feature_inlineMetacriticScore_detail: 'Shows Metacritic score feedback inline when available.',
@@ -647,6 +650,7 @@
         permissions_site_access_needed: 'Site access needed',
         provider_amazonAds_consent: 'Blocks requests to these hosts. Nothing is sent to them.',
         provider_amazonAds_label: 'the ad and tracking hosts it blocks',
+        provider_anilist_consent: 'Sends the title and year read from the page to AniList to find an anime rating.',
         provider_justWatch_consent: 'Sends the title and year read from the page to JustWatch to find where it streams.',
         provider_letterboxd_consent: 'Sends the title and year read from the page to Letterboxd to find its rating.',
         provider_localServices_consent: 'Talks to services on your own machine. Nothing leaves it.',
@@ -890,6 +894,7 @@
         text_age_parenthetical: '(age $1)',
         text_all_of_them: 'all',
         text_all_opened: 'All opened',
+        text_anilist_community_average: 'Community average',
         text_audience_score: 'Audience: $1%',
         text_automatic_matching_is_active: 'Automatic matching is active.',
         text_availability_unavailable: 'Availability unavailable',
@@ -1347,6 +1352,17 @@
             // A documented API with a key of your own, so a store listing can ship it.
             profiles: ['default', 'store'],
         },
+        anilist: {
+            label: 'AniList',
+            origins: ['https://graphql.anilist.co/*'],
+            // The title and year read from the page, which is what the search takes.
+            transmits: 'websiteContent',
+            consent: t('provider_anilist_consent'),
+            ttl: CACHE_TTL,
+            attribution: '',
+            // A documented public API with no key and no page parsing, so a store listing can ship it.
+            profiles: ['default', 'store'],
+        },
         youTube: {
             label: 'YouTube',
             origins: ['https://www.youtube.com/*'],
@@ -1407,6 +1423,7 @@
         inlineRTScore: ['rottenTomatoes', 'omdb', 'wikidata'],
         inlineMetacriticScore: ['metacritic', 'omdb', 'wikidata'],
         inlineLetterboxdScore: ['letterboxd', 'wikidata'],
+        inlineAnimeScore: ['anilist'],
         /* Both are declared so either can be granted, but only the chosen source is ever
            contacted; activeProvidersFor narrows this to what is actually in play. */
         streamAvailability: ['justWatch', 'tmdb'],
@@ -1755,6 +1772,7 @@
         collapsibleSections: true, expandSummaries: false, sectionCollapseState: {}, spoilerBlur: false, quickNav: true,
         // Scores
         inlineRTScore: true, inlineLetterboxdScore: true, inlineMetacriticScore: true,
+        inlineAnimeScore: false,
         streamAvailability: true,
         /* Which service answers "where can I watch this". JustWatch is read by parsing
            their page; TMDB is a documented API but needs a read token of your own. The
@@ -1831,6 +1849,7 @@
         inlineRTScore: t('feature_inlineRTScore_detail'),
         inlineLetterboxdScore: t('feature_inlineLetterboxdScore_detail'),
         inlineMetacriticScore: t('feature_inlineMetacriticScore_detail'),
+        inlineAnimeScore: t('feature_inlineAnimeScore_detail'),
         streamAvailability: t('feature_streamAvailability_detail'),
         searchButtons: t('feature_searchButtons_detail'),
         externalLinks: t('feature_externalLinks_detail'),
@@ -6848,6 +6867,36 @@ section[id*="quote" i] .ipc-list-card { padding: 4px 0 !important; margin: 2px 0
         return !wantedYear || Boolean(candidateYear) && Math.abs(candidateYear - wantedYear) <= 1;
     }
 
+    /* AniList answers a search with an array of anime, and the one that comes back first
+       is not necessarily the one on screen: searching "Akira" returns the 1988 film, an
+       unaired remake, and an unrelated OVA whose title merely contains the word. Each
+       candidate is checked against the title and year the page already knows, and a title
+       is allowed to match on either of the two names AniList carries, because it lists
+       "Spirited Away" only as its English title and "Sen to Chihiro no Kamikakushi" as
+       its romaji one.
+
+       averageScore is a percentage and is null for anything unrated, which is normal for
+       a title that has not aired; that is an absent answer, not a zero. */
+    const ANILIST_RESULT_LIMIT = 5;
+    function parseAniListSearch(payload, title, year) {
+        const media = payload?.data?.Page?.media;
+        if (!Array.isArray(media)) return null;
+        for (let index = 0; index < media.length && index < ANILIST_RESULT_LIMIT; index++) {
+            const entry = media[index];
+            if (!entry || typeof entry !== 'object') continue;
+            const names = [entry.title?.romaji, entry.title?.english];
+            const candidateYear = Number(entry.seasonYear) || 0;
+            if (!names.some(name => name && isMatchingTitleIdentity({ title:name, year:candidateYear }, title, year))) continue;
+            const score = boundedScore(entry.averageScore, 100);
+            if (score === null) continue;
+            return {
+                score,
+                url: normalizeTrustedUrl(entry.siteUrl, 'anilist.co', ''),
+            };
+        }
+        return null;
+    }
+
     /* Pulls one numeric field out of a named object in Rotten Tomatoes' embedded score
        payload. The character class excludes braces and the length is bounded, so the
        match cannot wander into a neighbouring object or backtrack catastrophically on a
@@ -7862,6 +7911,7 @@ section[id*="quote" i] .ipc-list-card { padding: 4px 0 !important; margin: 2px 0
         inlineRTScore: 'enh-rt-widget',
         inlineLetterboxdScore: 'enh-lb-widget',
         inlineMetacriticScore: 'enh-mc-widget',
+        inlineAnimeScore: 'enh-anilist-widget',
         streamAvailability: 'enh-jw-widget',
     };
 
@@ -8341,6 +8391,116 @@ section[id*="quote" i] .ipc-list-card { padding: 4px 0 !important; margin: 2px 0
             bar.appendChild(w);
         },
         destroy() { document.getElementById('enh-lb-widget')?.remove(); }
+    });
+
+    /* AniList is the one source in this space with a documented public API, no key, and
+       no page to parse — so it is the one a store build can also ship. It has no IMDb-id
+       lookup, which is why the title and year are validated against every candidate it
+       returns rather than trusting the first.
+
+       Nothing here runs unless the page is an anime title, which is decided from what the
+       page already carries. A non-anime title makes no request at all. */
+    const ANILIST_ENDPOINT = 'https://graphql.anilist.co';
+    const ANILIST_QUERY = 'query($s:String){Page(perPage:5){media(search:$s,type:ANIME){title{romaji english} averageScore seasonYear siteUrl}}}';
+
+    reg({
+        key: 'inlineAnimeScore', name: t('feature_inlineAnimeScore_name'), group: 'Scores',
+        async init() {
+            const isCurrent = createFeatureGuard(this);
+            const imdbId = getIMDbID(), title = getTitleText(), year = getTitleYear();
+            if (!imdbId || !title) return;
+            // The gate, before anything else: no request is made about a title that is not one.
+            if (!isAnimeTitle()) return;
+
+            const cacheKey = 'anilist_' + imdbId;
+            if (featureExcludedByProfile(this.key)) { this._renderUnavailable('excluded'); return; }
+            const cached = cacheGet(cacheKey);
+            const bar = await waitForRatingBar(isCurrent);
+            if (!bar || !isCurrent()) return;
+            if (cached) {
+                if (cached.unavailable) this._renderUnavailable();
+                else this._render(cached);
+                return;
+            }
+            if (!await waitUntilVisible(bar, isCurrent) || !isCurrent()) return;
+            this._renderLoading();
+
+            let lookupError = null;
+            try {
+                const response = await httpRequest(ANILIST_ENDPOINT, {
+                    method:'POST',
+                    body: JSON.stringify({ query:ANILIST_QUERY, variables:{ s:title } }),
+                    cancelOnRouteChange:true,
+                });
+                if (!isCurrent()) return;
+                const data = parseAniListSearch(parseJSONResponse(response), title, year);
+                if (data) {
+                    cacheSet(cacheKey, data);
+                    this._render(data);
+                    return;
+                }
+            } catch (error) { lookupError = error; }
+
+            if (!isCurrent()) return;
+            recordLookupFailure(this, lookupError);
+            if (await renderStaleScore(this, cacheKey, lookupError, isCurrent)) return;
+            const blocked = await cacheUnavailableUnlessBlocked(this.key, cacheKey, lookupError);
+            if (!isCurrent()) return;
+            this._renderUnavailable(blocked ? 'access' : 'unavailable');
+        },
+        _render(data) {
+            document.getElementById('enh-anilist-widget')?.remove();
+            const bar = findRatingBar();
+            if (!bar) return;
+            const score = boundedScore(data.score, 100);
+            if (score === null) { this._renderUnavailable(); return; }
+            const w = makeEl('div', { id:'enh-anilist-widget', className:'enh-score-widget' });
+            const value = makeEl('span', { className:'enh-score-widget__value' }, `${score}%`);
+            const badge = makeEl('span', { className:'enh-score-widget__badge enh-score-widget__badge--outline' }, 'AL');
+            /* A link only when the answer carried one that survived validation. An entry
+               with no usable address is still a score worth showing. */
+            const href = normalizeTrustedUrl(data.url, 'anilist.co', '');
+            w.append(
+                makeEl('div', { className:'enh-score-widget__label' }, 'ANILIST'),
+                href
+                    ? makeEl('a', {
+                        href, target:'_blank', rel:'noopener noreferrer', className:'enh-score-widget__score',
+                        style:{ '--score-color':mcColor(score) },
+                    }, badge, value)
+                    : makeEl('div', { className:'enh-score-widget__score', style:{ '--score-color':mcColor(score) } }, badge, value),
+                makeEl('div', { className:'enh-score-widget__sub' }, t('text_anilist_community_average'))
+            );
+            announceScore('AniList', `${score}%`);
+            bar.appendChild(w);
+        },
+        _renderLoading() {
+            if (document.getElementById('enh-anilist-widget')) return;
+            const bar = findRatingBar();
+            if (!bar) return;
+            const w = makeEl('div', { id:'enh-anilist-widget', className:'enh-score-widget enh-score-widget--loading', 'aria-busy':'true' });
+            w.innerHTML = `
+                <div class="enh-score-widget__label">ANILIST</div>
+                <div class="enh-score-widget__skeleton" aria-label="${t('aria_loading_anilist_score')}"></div>
+            `;
+            bar.appendChild(w);
+        },
+        _renderUnavailable(reason = 'unavailable') {
+            document.getElementById('enh-anilist-widget')?.remove();
+            const bar = findRatingBar();
+            if (!bar) return;
+            const w = makeEl('div', { id:'enh-anilist-widget', className:'enh-score-widget enh-score-widget--muted' });
+            w.append(
+                makeEl('div', { className:'enh-score-widget__label' }, 'ANILIST'),
+                makeEl('div', { className:'enh-score-widget__score' },
+                    makeEl('span', { className:'enh-score-widget__badge enh-score-widget__badge--outline' }, 'AL'),
+                    makeEl('span', { className:'enh-score-widget__value' }, t('text_score_unavailable'))
+                )
+            );
+            const note = reason === 'excluded' ? describeProfileExclusion(this.key) : t('text_score_unavailable');
+            appendUnavailableNote(w, reason, note);
+            bar.appendChild(w);
+        },
+        destroy() { document.getElementById('enh-anilist-widget')?.remove(); },
     });
 
     reg({
@@ -14736,7 +14896,7 @@ section[data-testid="hero-parent"].enh-editorial-native-hidden { display: none !
         previewCard.appendChild(preview);
         ratingsPage.append(previewCard,
             makeEl('div', { style:{ marginTop:'12px' } }, makeFeatureCard(t('settings_heading_score_sources'), t('settings_choose_which_ratings_and_availability'), t('settings_title_pages'), [
-                'ratingGap', 'inlineRTScore', 'inlineLetterboxdScore', 'inlineMetacriticScore', 'streamAvailability',
+                'ratingGap', 'inlineRTScore', 'inlineLetterboxdScore', 'inlineMetacriticScore', 'inlineAnimeScore', 'streamAvailability',
             ])),
             createAvailabilitySourceControl(),
             makeEl('div', { className:'enh-settings-callout', style:{ marginTop:'12px' } },

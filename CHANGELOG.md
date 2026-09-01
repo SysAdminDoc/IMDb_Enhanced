@@ -20,6 +20,8 @@
 
 ### Added
 
+- Anime scores from AniList, off by default. On a title the page identifies as anime, the AniList community average appears beside the other scores. Nothing is requested for anything else: a title has to be animated and either made in Japan or keyworded as anime or manga before a lookup happens, so Pixar films and live-action Japanese films cost nothing. AniList is a public API with no key, so it works in every build including the web-store one.
+
 - Ready for translation. Every word either build shows you now comes from one catalog: feature names and descriptions, settings copy, buttons and column headers, toasts, error messages, screen-reader labels, and the extension's own recovery and permissions pages. The extension packages carry it as a standard `_locales` file, so a translated locale installed in the browser is used, and anything a translation does not cover falls back to English. Counts have a singular and a plural form rather than a noun pasted into a sentence. Service names stay as they are, and so does the diagnostics report, which is meant to be read by whoever receives your bug report. Nothing reads differently in English today.
 
 - Rotten Tomatoes and Metacritic scores can now come from the OMDb API with a key of your own, free for a thousand lookups a day from omdbapi.com. It matters most in the web-store build, which does not read either site's pages and so had no source for those two widgets at all; there they now work, labelled "via OMDb" with the credit its licence asks for. In the ordinary build it is optional, and used only when reading the page did not produce an answer. One lookup answers both widgets, and nothing is requested at all without a key.

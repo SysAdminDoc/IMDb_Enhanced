@@ -283,6 +283,10 @@ function loadScriptTestHooks({ withoutDeleteValue = false, withheldCredentials =
         getAvailabilityCacheKey,
         getJustWatchSearchUrl,
         isTmdbConfigured,
+        parseAniListSearch,
+        getFeature: key => features.find(feature => feature.key === key),
+        FEATURE_PROVIDERS,
+        SCORE_WIDGET_IDS,
         isAnimatedTitle,
         isAnimeTitle,
         originsHeldByOtherEnabledFeatures,
@@ -789,7 +793,11 @@ test('score results are announced through a region that exists before any result
     ['Rotten Tomatoes', 'Letterboxd', 'Metascore'].forEach(source => {
         assert(script.includes(`announceScore('${source}'`), `${source} results must be announced`);
     });
-    assert.strictEqual((script.match(/'aria-busy':'true'/g) || []).length, 4,
+    /* One per score widget, derived rather than counted: a hand-written number stops
+       covering the next widget someone adds and says nothing when it does. */
+    const widgetCount = Object.keys(loadScriptTestHooks().SCORE_WIDGET_IDS).length;
+    assert(widgetCount >= 4, 'the score widgets should be discoverable');
+    assert.strictEqual((script.match(/'aria-busy':'true'/g) || []).length, widgetCount,
         'every loading score widget must report itself busy');
 });
 
@@ -2642,6 +2650,91 @@ test('anime is identified from the page, and animation alone is not enough', () 
     assert.strictEqual(hooks.isAnimeTitle({ genre:['Animation'] }, { querySelector() { throw new Error('bad root'); } }), false);
 });
 
+/* IE-12: AniList answers a search with several anime and the first is not the one on
+   screen. Verified live 2026-08-31 against graphql.anilist.co: "Akira" returns the 1988
+   film, an unaired TV remake with a null score, and an unrelated OVA whose romaji title
+   merely contains the word; "Spirited Away" comes back with that as its English title and
+   "Sen to Chihiro no Kamikakushi" as its romaji one. */
+test('an AniList answer is matched against the title on the page', () => {
+    const hooks = loadScriptTestHooks();
+    const akira = { data:{ Page:{ media:[
+        { title:{ romaji:'AKIRA', english:'Akira' }, averageScore:79, seasonYear:1988, siteUrl:'https://anilist.co/anime/47' },
+        { title:{ romaji:'AKIRA (Shin Anime)', english:null }, averageScore:null, seasonYear:null, siteUrl:'https://anilist.co/anime/126016' },
+        { title:{ romaji:'Yuuwaku Countdown: Kagami AKIRA', english:'Countdown: Akira Complex' }, averageScore:50, seasonYear:1997, siteUrl:'https://anilist.co/anime/4608' },
+    ] } } };
+    const matched = hooks.parseAniListSearch(akira, 'Akira', '1988');
+    assert.strictEqual(matched.score, 79);
+    assert.strictEqual(matched.url, 'https://anilist.co/anime/47');
+
+    // Position is not identity: the same set with the film last still resolves to it.
+    const reordered = { data:{ Page:{ media:[akira.data.Page.media[2], akira.data.Page.media[0]] } } };
+    assert.strictEqual(hooks.parseAniListSearch(reordered, 'Akira', '1988').score, 79);
+
+    // A title AniList knows only by its English name.
+    const spirited = { data:{ Page:{ media:[
+        { title:{ romaji:'Sen to Chihiro no Kamikakushi', english:'Spirited Away' }, averageScore:86, seasonYear:2001, siteUrl:'https://anilist.co/anime/199' },
+    ] } } };
+    assert.strictEqual(hooks.parseAniListSearch(spirited, 'Spirited Away', '2001').score, 86);
+
+    // The wrong year is the wrong title, however close the name is.
+    assert.strictEqual(hooks.parseAniListSearch(akira, 'Akira', '2020'), null);
+    // A year the page does not know is not a reason to accept anything.
+    assert.strictEqual(hooks.parseAniListSearch(akira, 'Akira', '').score, 79);
+
+    /* averageScore is null for anything unrated, which is normal for a title that has
+       not aired. That is an absent answer, not a zero. */
+    const unrated = { data:{ Page:{ media:[
+        { title:{ romaji:'Akira', english:'Akira' }, averageScore:null, seasonYear:1988, siteUrl:'https://anilist.co/anime/47' },
+    ] } } };
+    assert.strictEqual(hooks.parseAniListSearch(unrated, 'Akira', '1988'), null);
+
+    // A search that matched nothing comes back as an empty list rather than an error.
+    assert.strictEqual(hooks.parseAniListSearch({ data:{ Page:{ media:[] } } }, 'Akira', '1988'), null);
+    assert.strictEqual(hooks.parseAniListSearch(null, 'Akira', '1988'), null);
+    assert.strictEqual(hooks.parseAniListSearch({ data:{ Page:{ media:'not a list' } } }, 'Akira', ''), null);
+    assert.strictEqual(hooks.parseAniListSearch({ errors:[{ message:'bad request' }] }, 'Akira', ''), null);
+
+    /* The link is theirs, so it is validated like every other address this renders. An
+       entry whose siteUrl points somewhere else is still a score, with no link. */
+    const spoofed = { data:{ Page:{ media:[
+        { title:{ romaji:'Akira' }, averageScore:79, seasonYear:1988, siteUrl:'https://evil.example.com/anime/47' },
+    ] } } };
+    const unlinked = hooks.parseAniListSearch(spoofed, 'Akira', '1988');
+    assert.strictEqual(unlinked.score, 79);
+    assert.strictEqual(unlinked.url, '', 'an address that is not theirs is dropped, not rendered');
+
+    // A score outside the scale is not a score.
+    const impossible = { data:{ Page:{ media:[
+        { title:{ romaji:'Akira' }, averageScore:1000, seasonYear:1988, siteUrl:'https://anilist.co/anime/47' },
+    ] } } };
+    assert.strictEqual(hooks.parseAniListSearch(impossible, 'Akira', '1988'), null);
+});
+
+/* The whole point of the gate is that a title which is not anime costs nothing. */
+test('the anime score asks nothing about a title that is not anime', () => {
+    const hooks = loadScriptTestHooks();
+    const feature = hooks.getFeature('inlineAnimeScore');
+    assert(feature, 'the feature should be registered');
+    assert.strictEqual(hooks.DEFAULTS.inlineAnimeScore, false, 'it is a second opinion, so it is opt-in');
+
+    /* The gate is the first thing after the page identifiers, before the cache read, the
+       rating bar and every await — so nothing downstream can fire a request first. */
+    const body = script.slice(script.indexOf("key: 'inlineAnimeScore'"));
+    const init = body.slice(0, body.indexOf('        _render(data) {'));
+    const gateAt = init.indexOf('if (!isAnimeTitle()) return;');
+    assert(gateAt >= 0, 'the feature must ask whether the title is anime at all');
+    assert(gateAt < init.indexOf('httpRequest('),
+        'the gate must come before the request');
+    assert(gateAt < init.indexOf('_renderLoading()'),
+        'and before anything is drawn, so a non-anime page is untouched');
+
+    // AniList is declared as the provider, so its origin is asked for with the feature.
+    assert.deepStrictEqual(Array.from(hooks.FEATURE_PROVIDERS.inlineAnimeScore), ['anilist']);
+    assert.deepStrictEqual(Array.from(hooks.PROVIDERS.anilist.origins), ['https://graphql.anilist.co/*']);
+    assert(hooks.PROVIDERS.anilist.profiles.includes('store'),
+        'a keyless documented API with no page parsing can ship in a store build');
+});
+
 test('version strings match', () => {
     const metaVersion = script.match(/@version\s+(\S+)/)?.[1];
     const constVersion = script.match(/const VERSION\s*=\s*'([^']+)'/)?.[1];
@@ -4168,8 +4261,11 @@ test('an unreachable provider falls back to a labelled cached value', () => {
         'expired fallbacks are worth less than live values and go first');
 
     // Every score source uses the shared fallback, and it labels what it rendered.
-    assert.strictEqual((script.match(/await renderStaleScore\(this, cacheKey, lookupError, isCurrent\)/g) || []).length, 4,
-        'all four score sources must offer the fallback');
+    /* One per score widget, derived: a fixed number stops covering the next source
+       someone adds, and says nothing at all when it does. */
+    const scoreSources = Object.keys(loadScriptTestHooks().SCORE_WIDGET_IDS).length;
+    assert.strictEqual((script.match(/await renderStaleScore\(this, cacheKey, lookupError, isCurrent\)/g) || []).length, scoreSources,
+        'every score source must offer the fallback');
     assert.strictEqual((script.match(/\} catch \{ \/\* handled below \*\/ \}/g) || []).length, 0,
         'the failure must be captured, not discarded, or its kind cannot be judged');
     const helper = script.slice(script.indexOf('function renderStaleScore'));
@@ -4196,7 +4292,7 @@ test('an unreachable provider falls back to a labelled cached value', () => {
        match the mutant. They are exact rather than behavioural because rendering these
        needs a real rating bar; the behaviour itself was verified in a loaded extension
        with the grant withheld against a live provider. */
-    assert.strictEqual((script.match(/this\._renderUnavailable\(blocked \? 'access' : 'unavailable'\)/g) || []).length, 4,
+    assert.strictEqual((script.match(/this\._renderUnavailable\(blocked \? 'access' : 'unavailable'\)/g) || []).length, scoreSources,
         'every score lookup must distinguish a missing grant from an outage when it gives up');
     assert(script.includes("if (reason !== 'access') {"),
         'the unavailable note must keep a branch for a missing grant');
@@ -4886,13 +4982,16 @@ test('external access is requested per feature, not demanded at install', () => 
        that failed only for want of a grant records nothing. */
     assert(script.includes('async function cacheUnavailableUnlessBlocked'),
         'a blocked lookup must not poison the cache');
-    /* Five: the three score sources, JustWatch, and the TMDB failure branch. Provider
-       failures must pass the error so authentication refusals cannot become a 24-hour
-       unavailable answer. An empty TMDB region stores its structured source and region
-       answer directly, so it does not pass through the failure-only helper. */
-    assert.strictEqual((script.match(/cacheUnavailableUnlessBlocked\(this\.key, cacheKey(?:, (?:lookupError|tmdbError))?\)/g) || []).length, 5,
+    /* One per score widget plus the TMDB failure branch, which is the second way the
+       availability widget can give up. Provider failures must pass the error so an
+       authentication refusal cannot become a 24-hour unavailable answer. An empty TMDB
+       region stores its structured source-and-region answer directly, so it does not go
+       through the failure-only helper. Derived, so the next source someone adds is
+       covered instead of silently exempt. */
+    const guardedLookups = Object.keys(loadScriptTestHooks().SCORE_WIDGET_IDS).length + 1;
+    assert.strictEqual((script.match(/cacheUnavailableUnlessBlocked\(this\.key, cacheKey(?:, (?:lookupError|tmdbError))?\)/g) || []).length, guardedLookups,
         'every score and availability lookup must use the guarded form');
-    assert.strictEqual((script.match(/cacheUnavailableUnlessBlocked\(this\.key, cacheKey, lookupError\)/g) || []).length, 4,
+    assert.strictEqual((script.match(/cacheUnavailableUnlessBlocked\(this\.key, cacheKey, lookupError\)/g) || []).length, guardedLookups - 1,
         'each ordinary provider failure must pass its real error to the cache guard');
     assert.strictEqual((script.match(/cacheUnavailableUnlessBlocked\(this\.key, cacheKey, tmdbError\)/g) || []).length, 1,
         'the TMDB failure must pass its real error to the cache guard');
@@ -5434,7 +5533,7 @@ test('every sentence in the source comes from the catalog', () => {
     const BRANDS = new Set([
         'IMDb', 'IMDb Enhanced', 'Rotten Tomatoes', 'Metacritic', 'Letterboxd', 'JustWatch',
         'TMDB', 'OMDb', 'YouTube', 'Wikidata', 'Plex', 'Jellyfin', 'Emby', 'Radarr', 'Sonarr',
-        'Overseerr', 'RT', 'LB', 'MC', 'TOMATOMETER', 'LETTERBOXD', 'METASCORE', 'SERVARR',
+        'Overseerr', 'AniList', 'ANILIST', 'RT', 'LB', 'MC', 'AL', 'TOMATOMETER', 'LETTERBOXD', 'METASCORE', 'SERVARR',
         'Box Office Mojo', 'Ep Calendar', 'Box Office',
     ]);
     /* Named one at a time, because each is a reason rather than a rule. */

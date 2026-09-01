@@ -397,7 +397,14 @@ storeExcluded.forEach(id => {
 });
 assert(source.includes('function featureExcludedByProfile(key)'),
     'a feature whose providers are all excluded must be able to know it');
-assert.strictEqual((source.match(/if \(featureExcludedByProfile\(this\.key\)\) \{ this\._renderUnavailable\('excluded'\); return; \}/g) || []).length, 4,
+/* One per score widget, read from the map that names them rather than written down: a
+   fixed number stops covering the next source someone adds. */
+const scoreWidgetCount = Object.keys(
+    // eslint-disable-next-line no-new-func
+    new Function(`${source.match(/const SCORE_WIDGET_IDS = \{[\s\S]*?\n    \};/)[0]}\nreturn SCORE_WIDGET_IDS;`)()
+).length;
+assert(scoreWidgetCount >= 4, 'the score widgets should be discoverable');
+assert.strictEqual((source.match(/if \(featureExcludedByProfile\(this\.key\)\) \{ this\._renderUnavailable\('excluded'\); return; \}/g) || []).length, scoreWidgetCount,
     'and every score lookup must check before it starts');
 assert(source.includes('function describeProfileExclusion(key)'),
     'and say which source is missing rather than just going quiet');
