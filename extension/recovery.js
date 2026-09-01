@@ -905,6 +905,7 @@
         settings_watch_stream: 'Watch & stream',
         settings_watch_stream_includes_a_built_in_catalog: 'Watch & stream includes a built-in catalog of every streaming destination from the FMHY video wiki. Open it below to add any of them with one click, then edit the row like any other destination.',
         settings_watchlist_alerts_note: 'Which services are worth telling you about. Checked once a day, in one notification, for the titles on the watchlist page you last opened.',
+        settings_watchlist_alerts_pace: 'A large watchlist is worked through a slice at a time, so it can take a few days for every title to come round. Series are skipped: the source only answers for films.',
         settings_watchlist_services_pending: 'The services here are the ones the daily check has seen so far. Turn the alerts on and this fills in after the first check.',
         settings_when_optional_keyboard_shortcuts_is_enabled: 'When “Optional keyboard shortcuts” is enabled',
         settings_where_availability_comes_from: 'Where availability comes from',
@@ -1821,6 +1822,11 @@
            checking after you have closed the tab. */
         watchlistAlerts: false,
         watchlistAlertServices: [],
+        /* Data rather than preference, but declared here for the same reason the title
+           marks are: reset and export both work from this map, so anything left out of
+           it is a record somebody cannot see, cannot back up and cannot clear. */
+        watchlistSnapshot: {},
+        watchlistAlertState: {},
         streamAvailability: true,
         /* Which service answers "where can I watch this". JustWatch is read by parsing
            their page; TMDB is a documented API but needs a read token of your own. The
@@ -4006,6 +4012,18 @@
         if (key === 'userMarks') {
             if (!value || Array.isArray(value) || typeof value !== 'object') return null;
             return { key, value:Object.fromEntries(normalizeUserMarkEntries(value)) };
+        }
+        /* Written by the watchlist page and by the extension's worker rather than by
+           anyone's hand, and read back through their own validators — so a restore keeps
+           the shape those two agreed on rather than whatever a file contained. Declared
+           so that reset clears them and an export can show they exist at all. */
+        if (key === 'watchlistSnapshot') {
+            if (!value || Array.isArray(value) || typeof value !== 'object') return null;
+            return { key, value: Object.keys(value).length ? (normalizeWatchlistSnapshot(value) || {}) : {} };
+        }
+        if (key === 'watchlistAlertState') {
+            if (!value || Array.isArray(value) || typeof value !== 'object') return null;
+            return { key, value:{} };
         }
         if (key === 'scoreCorrections') {
             if (!value || Array.isArray(value) || typeof value !== 'object') return null;
@@ -15566,6 +15584,7 @@ section[data-testid="hero-parent"].enh-editorial-native-hidden { display: none !
         function createWatchlistAlertControl() {
             if (!IS_EXTENSION_BUILD) return null;
             const card = makeCard(t('settings_heading_watchlist_alerts'), t('settings_watchlist_alerts_note'));
+            card.appendChild(makeEl('div', { className:'enh-settings-card-description' }, t('settings_watchlist_alerts_pace')));
             const list = makeEl('div', { className:'enh-settings-card-description' });
             const render = () => {
                 list.replaceChildren();

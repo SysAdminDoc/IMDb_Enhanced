@@ -1715,6 +1715,9 @@
   "settings_watchlist_alerts_note": {
     "message": "[!! Which services are worth telling you about. Checked once a day, in one notification, for the titles on the watchlist page you last opened. !!]"
   },
+  "settings_watchlist_alerts_pace": {
+    "message": "[!! A large watchlist is worked through a slice at a time, so it can take a few days for every title to come round. Series are skipped: the source only answers for films. !!]"
+  },
   "settings_watchlist_services_pending": {
     "message": "[!! The services here are the ones the daily check has seen so far. Turn the alerts on and this fills in after the first check. !!]"
   },

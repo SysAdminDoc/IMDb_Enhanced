@@ -290,6 +290,7 @@ function loadScriptTestHooks({ withoutDeleteValue = false, withheldCredentials =
         getAvailabilityCacheKey,
         getJustWatchSearchUrl,
         isTmdbConfigured,
+        setStoredSetting: (key, value) => set(key, value),
         readSettingsPanelText: () => document.getElementById('enh-settings-overlay')?.textContent || '',
         normalizeWatchlistSnapshot,
         getWatchlistSnapshot,
@@ -3092,6 +3093,47 @@ test('the watchlist snapshot is bounded, validated, and never emptied by an empt
     assert(script.includes('if (IS_EXTENSION_BUILD) {\n        reg({\n            key: \'watchlistAlerts\''),
         'and the registration itself must be what is conditional');
     assert.strictEqual(hooks.DEFAULTS.watchlistAlerts, false, 'a background job is opt-in');
+});
+
+/* IE-25: the record of somebody's watchlist is data about them, so "Reset all settings"
+   has to reach it and a backup has to show it exists. Left out of DEFAULTS it was neither
+   resettable nor visible anywhere — a list of up to 200 titles they could not see and
+   could not clear. */
+test('the watchlist record is reset and exported like every other stored thing', () => {
+    const hooks = loadScriptTestHooks();
+    hooks.setStoredSetting('watchlistSnapshot', {
+        v:1, ts:1, titles:{ tt0133093:{ title:'The Matrix' } },
+    });
+    hooks.setStoredSetting('watchlistAlertState', { checkedAt:1, cursor:'tt0133093', seen:{ tt0133093:['Netflix'] } });
+
+    // Visible: a backup shows it exists rather than leaving it as a hidden record.
+    const backup = hooks.getExportSettings();
+    assert(Object.prototype.hasOwnProperty.call(backup, 'watchlistSnapshot'),
+        'a backup must account for it');
+    assert.strictEqual(Object.keys(backup.watchlistSnapshot.titles).length, 1);
+
+    // Clearable: reset writes every default, and these are among them.
+    const cleared = hooks.getDefaultSettingsEntries();
+    const snapshot = cleared.find(entry => entry.key === 'watchlistSnapshot');
+    const state = cleared.find(entry => entry.key === 'watchlistAlertState');
+    assert(snapshot && state, 'reset must cover both of them');
+    assert.strictEqual(Object.keys(snapshot.value).length, 0, 'and reset them to nothing');
+    assert.strictEqual(Object.keys(state.value).length, 0);
+
+    /* Restoring one keeps the shape the page and the worker agreed on rather than
+       whatever a file happened to hold, and the per-title availability history is not
+       restored at all: it is a record of what a schedule saw, not a preference. */
+    const restored = hooks.prepareSettingsImport({
+        watchlistSnapshot: { v:1, ts:1, titles:{ 'javascript:alert(1)':{ title:'Bad' }, tt0903747:{ title:'Breaking Bad' } } },
+        watchlistAlertState: { seen:{ tt0903747:['Netflix'] } },
+    });
+    const importedSnapshot = restored.entries.find(entry => entry.key === 'watchlistSnapshot');
+    assert.deepStrictEqual(Array.from(Object.keys(importedSnapshot.value.titles)), ['tt0903747'],
+        'a restored snapshot is validated, not trusted');
+    const importedState = restored.entries.find(entry => entry.key === 'watchlistAlertState');
+    assert.strictEqual(Object.keys(importedState.value).length, 0,
+        'and what a schedule saw is not something a backup puts back');
+    assert.strictEqual(restored.ignored, 0, 'both are recognized fields');
 });
 
 test('version strings match', () => {
