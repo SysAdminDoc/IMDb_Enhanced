@@ -566,6 +566,12 @@
   "feature_removeSponsoredRecs_name": {
     "message": "Hide sponsored recommendations"
   },
+  "feature_restoreImageContextMenu_detail": {
+    "message": "IMDb blocks the right-click menu over gallery images, so Save image as does nothing there. This lets the browser show its own menu again."
+  },
+  "feature_restoreImageContextMenu_name": {
+    "message": "Right-click on images"
+  },
   "feature_searchButtons_detail": {
     "message": "Adds prominent, keyboard-friendly watch-site links near the title."
   },

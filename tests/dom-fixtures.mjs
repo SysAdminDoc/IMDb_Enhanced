@@ -496,6 +496,45 @@ await runFixture('title', async (window, hooks) => {
     }
 });
 
+/* IE-112: IMDb suppresses the context menu over gallery images, which is why Save image
+   as does nothing there. Stopping the event before their handler runs is the whole fix,
+   and it must not itself prevent anything: the point is to let the browser do what it
+   would do anywhere else. */
+await runFixture('title', async (window, hooks) => {
+    const gallery = window.document.createElement('div');
+    gallery.innerHTML = '<div data-testid="media-viewer"><img alt="Poster" src="about:blank"></div>';
+    window.document.body.appendChild(gallery);
+    const image = gallery.querySelector('img');
+
+    // IMDb's suppression, as the page does it: a listener on an ancestor.
+    let suppressed = 0;
+    gallery.addEventListener('contextmenu', event => { suppressed += 1; event.preventDefault(); });
+
+    hooks.initFeature('restoreImageContextMenu');
+    const event = new window.MouseEvent('contextmenu', { bubbles:true, cancelable:true });
+    assert.equal(event.cancelable, true, 'the event has to be cancellable for the next check to mean anything');
+    image.dispatchEvent(event);
+    assert.equal(suppressed, 0, 'their handler must never see the event');
+    assert.equal(event.defaultPrevented, false,
+        'and nothing of ours may prevent it either, or the menu still will not open');
+
+    /* Only over pictures. A page-wide swallow would take the context menu away from every
+       link and every piece of text on IMDb, which is a much larger change than the one
+       being asked for. */
+    const paragraph = window.document.createElement('p');
+    paragraph.textContent = 'Not an image';
+    gallery.appendChild(paragraph);
+    const elsewhere = new window.MouseEvent('contextmenu', { bubbles:true, cancelable:true });
+    paragraph.dispatchEvent(elsewhere);
+    assert.equal(suppressed, 1, 'the page keeps its own handling everywhere else');
+
+    hooks.stopFeature('restoreImageContextMenu');
+    const after = new window.MouseEvent('contextmenu', { bubbles:true, cancelable:true });
+    image.dispatchEvent(after);
+    assert.equal(suppressed, 2, 'switching it off gives the page its handler back over images too');
+    gallery.remove();
+});
+
 /* IE-21: the preview has to appear for someone tabbing through the cast list, not only
    for a mouse, and it has to come down again. A feature that only answers mouseover is
    the half of this that is easy to write and useless with a keyboard. */

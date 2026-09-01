@@ -271,6 +271,8 @@
         feature_removeRelatedInterests_name: 'Hide related interests',
         feature_removeSponsoredRecs_detail: 'Suppresses sponsored recommendation blocks where IMDb inserts them.',
         feature_removeSponsoredRecs_name: 'Hide sponsored recommendations',
+        feature_restoreImageContextMenu_detail: 'IMDb blocks the right-click menu over gallery images, so Save image as does nothing there. This lets the browser show its own menu again.',
+        feature_restoreImageContextMenu_name: 'Right-click on images',
         feature_searchButtons_detail: 'Adds prominent, keyboard-friendly watch-site links near the title.',
         feature_searchButtons_name: 'Watch search buttons',
         feature_seasonProgress_detail: 'Shows how much of the loaded season you have marked seen, links to the next unmarked episode, and marks or clears the whole loaded season in one step with an undo. Needs private marks.',
@@ -1580,6 +1582,9 @@
         inlineAnimeScore: false,
         // Off by default: it changes what hovering a picture does.
         imageZoom: false,
+        /* On by default: it restores what the browser does anyway, and a right-click that
+           does nothing reads as the page being broken rather than as a choice. */
+        restoreImageContextMenu: true,
         // Off by default: it puts someone else's page inside this one.
         movieChatBoard: false,
         // Off by default: it is a whole section of other films.
@@ -1670,6 +1675,7 @@
         inlineLetterboxdScore: t('feature_inlineLetterboxdScore_detail'),
         inlineMetacriticScore: t('feature_inlineMetacriticScore_detail'),
         imageZoom: t('feature_imageZoom_detail'),
+        restoreImageContextMenu: t('feature_restoreImageContextMenu_detail'),
         movieChatBoard: t('feature_movieChatBoard_detail'),
         collectionPanel: t('feature_collectionPanel_detail'),
         watchlistAlerts: t('feature_watchlistAlerts_detail'),
@@ -8845,6 +8851,32 @@ section[id*="quote" i] .ipc-list-card { padding: 4px 0 !important; margin: 2px 0
         },
     });
 
+    /* IMDb suppresses the context menu over gallery images, which is why "save image as"
+       does nothing there. The most-installed script in this corner of the ecosystem does
+       nothing else at all.
+
+       Stopping the event before their handler sees it is the whole fix, and it is done
+       without preventDefault: the aim is to restore what the browser would do, not to
+       replace it with something of ours. Capture phase, because their listener is on an
+       ancestor and the point is to arrive first. */
+    reg({
+        key: 'restoreImageContextMenu', name: t('feature_restoreImageContextMenu_name'), group: 'Appearance',
+        init() {
+            this._onContextMenu = event => {
+                if (!event.target?.closest?.('img, [data-testid="media-viewer"], picture')) return;
+                /* Their suppression is a listener that calls preventDefault; stopping the
+                   event here means it never runs. Nothing is prevented by us, so the
+                   browser shows its own menu exactly as it would anywhere else. */
+                event.stopPropagation();
+            };
+            document.addEventListener('contextmenu', this._onContextMenu, true);
+        },
+        destroy() {
+            document.removeEventListener('contextmenu', this._onContextMenu, true);
+            this._onContextMenu = null;
+        },
+    });
+
     reg({
         key: 'imageZoom', name: t('feature_imageZoom_name'), group: 'Appearance',
         _overlay: null,
@@ -15419,6 +15451,7 @@ ${scopedRules('.enh-zoom', {
         experienceGrid.appendChild(makeFeatureCard(t('settings_tune_the_interface'), t('settings_refine_how_content_looks_and_is_presented'), 'Desktop', [
             'modernUI', 'editorialTitleSurface', 'compactHeader', 'enhancedRatingDisplay', 'widerLayout', 'ratingColorCoding',
             'collapsibleSections', 'expandSummaries', 'spoilerBlur', 'quickNav', 'dimLowRated', 'imageZoom',
+            'restoreImageContextMenu',
         ], true));
         experiencePage.appendChild(experienceGrid);
         /* The threshold belongs with the toggle it qualifies. Changing it restarts the
