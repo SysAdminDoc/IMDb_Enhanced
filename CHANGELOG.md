@@ -18,6 +18,10 @@
 
 - The extension's privileged fetch no longer follows a redirect anywhere it likes. It checked the address it was asked for, then let the network take it wherever a redirect pointed, which mattered most for calls to Radarr, Sonarr, Plex, Jellyfin, and Emby: those carry your API key in a header, and a redirect would have carried the header along to whatever answered. A request holding a credential now refuses to redirect at all, every response is re-checked against the address it actually came from, and a hop between a local and a public address is rejected outright. Letterboxd's IMDb lookup, which is a genuine redirect within its own site, still works. A blocked redirect now says so rather than reading as a network error.
 
+### Fixed
+
+- Moving from one title to another without a page reload could show the previous title’s information for about half a second, which was long enough for a score lookup to match against the wrong year and remember that answer for a week. The page details are now re-read as soon as the address changes.
+
 ### Added
 
 - A message board for the title, off by default. IMDb closed its boards in 2017; MovieChat keeps one per title, and this puts it at the bottom of the page with a line saying whose page it is. Nothing loads until you scroll to it, and if the board cannot be shown in place the section becomes a plain link to it.

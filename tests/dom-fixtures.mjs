@@ -210,6 +210,34 @@ await runFixture('title', async (window, hooks) => {
     }
 });
 
+/* IE-123: the structured-data memo used to be cleared only by init(), which runs about
+   600 ms after a pushState. Inside that window a title-to-title navigation served the
+   previous title's year and media type to everything that asked — including the identity
+   check every score source validates its match with, which then cached the wrong answer
+   under the new title's id for a week. */
+await runFixture('title', async (window, hooks) => {
+    assert.equal(hooks.getTitleYear(), '1999', 'the fixture title is dated 1999');
+    assert.equal(hooks.getMediaType(), 'movie');
+
+    // The page IMDb swaps in, with the address changed and no init run yet.
+    const replacement = window.document.querySelector('script[type="application/ld+json"]');
+    assert.ok(replacement, 'the fixture should carry structured data to replace');
+    replacement.textContent = JSON.stringify({
+        '@context':'https://schema.org',
+        '@type':'TVSeries',
+        url:'/title/tt0903747/',
+        name:'Breaking Bad',
+        datePublished:'2008-01-20',
+        genre:['Crime', 'Drama'],
+    });
+    window.happyDOM.setURL('https://www.imdb.com/title/tt0903747/');
+
+    assert.equal(hooks.getTitleYear(), '2008',
+        'the year must come from the page that is on screen, not the one that was');
+    assert.equal(hooks.getMediaType(), 'series',
+        'and so must the media type, which decides which sources are asked at all');
+});
+
 /* The half of the gate that costs nothing: a board nobody has scrolled to is a heading
    and a link, and contacts MovieChat not at all. */
 await runFixture('title', async (window, hooks) => {

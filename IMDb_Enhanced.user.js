@@ -4111,7 +4111,20 @@
     }
 
     let _ldData = null;
+    let _ldRoute = '';
+    /* Memoized against the route it was parsed from, not merely until the next init.
+       init() runs about 600 ms after a pushState — 250 to notice the route changed, then
+       350 more — and it used to be the only thing that cleared this. Anything reading
+       structured data inside that window on a title-to-title navigation got the previous
+       title's year, media type and genres, and every score source validates its match
+       against that year, so a wrong answer could be cached for a week under the new
+       title's id. The route key is what changed first, so it is what this keys on. */
     function getLDData() {
+        const route = getRouteKey();
+        if (_ldRoute !== route) {
+            _ldData = null;
+            _ldRoute = route;
+        }
         if (_ldData) return _ldData;
         const scripts = Array.from(document.querySelectorAll('script[type="application/ld+json"]'))
             .slice(0, STRUCTURED_DATA_SCRIPT_LIMIT);
@@ -15781,7 +15794,10 @@ section[data-testid="hero-parent"].enh-editorial-native-hidden { display: none !
         if (activeRouteKey) destroyRouteFeatures();
         activeRouteKey = routeKey;
         activeRouteGeneration += 1;
+        // Belt and braces: getLDData drops it on a route change on its own, and this
+        // additionally re-reads a page that was replaced under the same address.
         _ldData = null;
+        _ldRoute = '';
         cacheGC();
         /* Before any feature reads a setting, so a migration cannot race a consumer.
            A failure leaves the stored version untouched and is retried next load. */
