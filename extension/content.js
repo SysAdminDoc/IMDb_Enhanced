@@ -5172,6 +5172,12 @@
         if (!document.body) return;
         const t = makeEl('div', { id:'enh-toast', 'aria-hidden':'true' }, message);
         document.body.appendChild(t);
+        /* The toast carries the highest z-index in the script on purpose, and the top
+           layer paints above every z-index there is — so the moment anything else was
+           promoted, a toast raised while it was open went behind it. Promoted last, it
+           is on top of the top layer too. Nothing is lost where popovers are unsupported:
+           the z-index still decides it there. */
+        showInTopLayer(t);
         requestAnimationFrame(() => t.classList.add('visible'));
         toastTimers.push(setTimeout(() => {
             t.classList.remove('visible');
@@ -10963,11 +10969,16 @@ section[id*="quote" i] .ipc-list-card { padding: 4px 0 !important; margin: 2px 0
                     display: flex; align-items: center; justify-content: center;
                     padding: 24px; background: rgba(0,0,0,.82);
                 }
-                /* The UA popover box would shrink this to fit its content and centre
-                   it; the overlay IS the viewport, so it says so again here. */
+                /* The UA popover box would shrink this to fit its content, centre it,
+                   and give it a border; the overlay IS the viewport, so every property
+                   the rule above leaves unset is said again here.
+
+                   width/height auto, not 100%: nothing here sets box-sizing, so a
+                   percentage would put the 24px padding OUTSIDE the viewport and push
+                   the dialog 24px down and right. inset: 0 already gives it the size. */
                 #enh-trailer-overlay[popover] {
-                    width: 100%; height: 100%; max-width: none; max-height: none;
-                    margin: 0; border: 0; overflow: hidden; color: inherit;
+                    width: auto; height: auto;
+                    margin: 0; border: 0; overflow: visible; color: inherit;
                 }
                 #enh-trailer-dialog {
                     width: min(960px, calc(100vw - 32px));
@@ -14023,6 +14034,12 @@ section[id*="quote" i] .ipc-list-card { padding: 4px 0 !important; margin: 2px 0
     pointer-events: none;
 }
 #enh-toast.visible { transform: translateY(0); opacity: 1; }
+/* The UA popover box would centre it and give it a border and colours of its own. */
+#enh-toast[popover] {
+    inset: auto; bottom: 24px; right: 24px;
+    width: auto; height: auto; margin: 0; overflow: visible;
+    padding: 10px 20px; border: 1px solid ${t.bd1}; color: ${t.tx0};
+}
 /* Announced, never drawn. Kept in the layout tree (not display:none) so the live
    region stays in the accessibility tree between messages. */
 #enh-update-notice {
@@ -14273,8 +14290,18 @@ section[data-testid="hero-parent"].enh-editorial-native-hidden { display: none !
     text-align: left; border-radius: 8px;
 }
 #enh-editorial-actions #enh-link-menu-wrap { display: flex; }
-#enh-editorial-actions #enh-link-menu-wrap .enh-link-dropdown {
+/* :not([popover]) rather than a heavier selector on the top-layer rules. Two IDs beat
+   any class-and-attribute selector, so an override would have had to out-specify this
+   and lose the argument anyway; what is actually true is that this places the menu
+   against its wrapper, and a menu in the top layer has no wrapper to be placed against.
+   Without this the anchor rules lost, position: fixed won on its own, and
+   bottom: calc(100% + 8px) resolved against the viewport — putting the whole menu above
+   the top of the screen on every Chromium install. */
+#enh-editorial-actions #enh-link-menu-wrap .enh-link-dropdown:not([popover]) {
     top: auto; bottom: calc(100% + 8px); left: 0; right: auto;
+    max-height: min(60vh, 520px); overflow: auto;
+}
+#enh-editorial-actions #enh-link-menu-wrap .enh-link-dropdown[popover] {
     max-height: min(60vh, 520px); overflow: auto;
 }
 .enh-link-groups { display: flex; flex-direction: column; gap: 8px; }
@@ -14441,7 +14468,7 @@ section[data-testid="hero-parent"].enh-editorial-native-hidden { display: none !
     color: ${t.accent};
     transform: translateY(-1px);
 }
-#enh-link-menu-wrap .enh-link-dropdown { left: auto; right: 0; }
+#enh-link-menu-wrap .enh-link-dropdown:not([popover]) { left: auto; right: 0; }
 
 /* ════ Expanded Link Dropdown ════ */
 .enh-link-dropdown {
@@ -14451,14 +14478,18 @@ section[data-testid="hero-parent"].enh-editorial-native-hidden { display: none !
     box-shadow: ${t.sh3}; display: none;
 }
 .enh-link-dropdown.enh-visible { display: block; }
-/* min-width alone gave the absolutely positioned menu its 340px; a top-layer box
-   is measured against the viewport instead, so the ceiling has to be stated. */
-.enh-link-dropdown[popover] { margin: 0; max-width: 340px; overflow: visible; color: inherit; }
+/* Only inside the @supports, because an anchored surface is never promoted on an
+   engine that cannot anchor it — see showInTopLayer. The UA popover rules supply
+   inset: 0, fit-content sizing, auto margins, a solid border, overflow and colours
+   for every property the author sheet leaves unset, so each one is said again here.
+   min-width alone gave the absolutely positioned menu its 340px; a top-layer box is
+   measured against the viewport, so the ceiling has to be stated too. */
 @supports (anchor-name: --enh-anchor-probe) {
     .enh-link-dropdown[popover] {
         position: fixed; inset: auto;
         top: anchor(bottom); right: anchor(right);
-        margin-top: 8px;
+        width: auto; height: auto; max-width: 340px;
+        margin: 8px 0 0; overflow: visible; color: inherit;
         position-try-fallbacks: flip-block;
     }
 }
@@ -14556,12 +14587,11 @@ section[data-testid="hero-parent"].enh-editorial-native-hidden { display: none !
     background: ${t.sf1}; color: ${t.tx1}; box-shadow: ${t.sh3};
     text-align: left; font: 500 11px/1.4 -apple-system, BlinkMacSystemFont, 'Segoe UI', sans-serif;
 }
-.enh-score-correction[popover] { margin: 0; overflow: visible; }
 @supports (anchor-name: --enh-anchor-probe) {
     .enh-score-correction[popover] {
         position: fixed; inset: auto;
         top: anchor(bottom); right: anchor(right);
-        margin-top: 6px;
+        height: auto; margin: 6px 0 0; overflow: visible;
         position-try-fallbacks: flip-block;
     }
 }
@@ -14646,15 +14676,12 @@ ${scopedRules('.enh-zoom', {
     .enh-zoom { animation: enh-zoom-in .12s ease-out; }
     @keyframes enh-zoom-in { from { opacity: 0; } to { opacity: 1; } }
 }
-/* In the top layer the UA stylesheet supplies a box of its own — auto margins, a
-   solid border, its own colours. Everything the absolute placement got from the
-   cascade has to be said again here. */
-.enh-zoom[popover] { margin: 0; border-width: 1px; overflow: visible; color: inherit; }
 @supports (anchor-name: --enh-anchor-probe) {
     .enh-zoom[popover] {
         position: fixed; inset: auto;
         left: anchor(right); top: anchor(top);
-        margin-left: 12px;
+        width: auto; height: auto;
+        margin: 0 0 0 12px; border-width: 1px; overflow: visible; color: inherit;
         /* The side with room, decided by the engine rather than by measuring. */
         position-try-fallbacks: flip-inline;
     }

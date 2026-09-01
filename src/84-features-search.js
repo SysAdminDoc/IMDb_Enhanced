@@ -207,11 +207,16 @@
                     display: flex; align-items: center; justify-content: center;
                     padding: 24px; background: rgba(0,0,0,.82);
                 }
-                /* The UA popover box would shrink this to fit its content and centre
-                   it; the overlay IS the viewport, so it says so again here. */
+                /* The UA popover box would shrink this to fit its content, centre it,
+                   and give it a border; the overlay IS the viewport, so every property
+                   the rule above leaves unset is said again here.
+
+                   width/height auto, not 100%: nothing here sets box-sizing, so a
+                   percentage would put the 24px padding OUTSIDE the viewport and push
+                   the dialog 24px down and right. inset: 0 already gives it the size. */
                 #enh-trailer-overlay[popover] {
-                    width: 100%; height: 100%; max-width: none; max-height: none;
-                    margin: 0; border: 0; overflow: hidden; color: inherit;
+                    width: auto; height: auto;
+                    margin: 0; border: 0; overflow: visible; color: inherit;
                 }
                 #enh-trailer-dialog {
                     width: min(960px, calc(100vw - 32px));

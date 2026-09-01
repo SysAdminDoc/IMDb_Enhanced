@@ -1173,6 +1173,53 @@ await runFixture('title', async (window, hooks) => {
         delete window.HTMLElement.prototype.hidePopover;
     }
 
+    /* The engine shape in between: showPopover but no anchor positioning, which is every
+       Firefox before 147 and every Safari before 26. The top layer's containing block is
+       the viewport, so a surface that positions itself against a thumbnail has to stay
+       out of it there. happy-dom answers CSS.supports with yes for anything, so the
+       answer is stubbed on the prototype the window hands out a fresh CSS object from. */
+    const cssPrototype = Object.getPrototypeOf(window.CSS);
+    const realSupports = cssPrototype.supports;
+    window.HTMLElement.prototype.showPopover = function showPopover() { shownPopovers.push(this); };
+    window.HTMLElement.prototype.hidePopover = function hidePopover() { hiddenPopovers.push(this); };
+    cssPrototype.supports = property => property !== 'anchor-name';
+    try {
+        const shownBefore = shownPopovers.length;
+        thumbnail.dispatchEvent(new window.MouseEvent('mouseover', { bubbles:true }));
+        const unanchored = requireSelector(window.document, '.enh-zoom');
+        assert.equal(unanchored.getAttribute('popover'), null,
+            'an engine that cannot anchor must not put an anchored surface in the top layer');
+        assert.equal(shownPopovers.length, shownBefore, 'and must not have shown one either');
+        assert.ok(unanchored.style.left && unanchored.style.top,
+            'it keeps positioning itself the way it always has');
+        assert.equal(thumbnail.style.getPropertyValue('anchor-name'), '',
+            'and nothing is written onto the thumbnail');
+        thumbnail.dispatchEvent(new window.MouseEvent('mouseout', { bubbles:true }));
+    } finally {
+        cssPrototype.supports = realSupports;
+        delete window.HTMLElement.prototype.showPopover;
+        delete window.HTMLElement.prototype.hidePopover;
+    }
+
+    /* A popover attribute on an element that would not open is worse than no promotion:
+       the UA stylesheet hides it. Refusing to show has to leave nothing behind. */
+    window.HTMLElement.prototype.showPopover = function showPopover() { throw new Error('not showable'); };
+    window.HTMLElement.prototype.hidePopover = function hidePopover() {};
+    try {
+        thumbnail.dispatchEvent(new window.MouseEvent('mouseover', { bubbles:true }));
+        const refused = requireSelector(window.document, '.enh-zoom');
+        assert.equal(refused.getAttribute('popover'), null,
+            'a refused showPopover must take the attribute back off');
+        assert.equal(refused.style.getPropertyValue('position-anchor'), '');
+        assert.equal(thumbnail.style.getPropertyValue('anchor-name'), '');
+        assert.ok(refused.style.left && refused.style.top,
+            'and the preview still appears, placed the old way');
+        thumbnail.dispatchEvent(new window.MouseEvent('mouseout', { bubbles:true }));
+    } finally {
+        delete window.HTMLElement.prototype.showPopover;
+        delete window.HTMLElement.prototype.hidePopover;
+    }
+
     /* An image IMDb serves from somewhere else, or under a name with no transform in it,
        is left alone rather than rewritten into an address that means something else. */
     thumbnail.setAttribute('src', 'https://example.test/poster.jpg');

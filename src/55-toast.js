@@ -133,6 +133,12 @@
         if (!document.body) return;
         const t = makeEl('div', { id:'enh-toast', 'aria-hidden':'true' }, message);
         document.body.appendChild(t);
+        /* The toast carries the highest z-index in the script on purpose, and the top
+           layer paints above every z-index there is — so the moment anything else was
+           promoted, a toast raised while it was open went behind it. Promoted last, it
+           is on top of the top layer too. Nothing is lost where popovers are unsupported:
+           the z-index still decides it there. */
+        showInTopLayer(t);
         requestAnimationFrame(() => t.classList.add('visible'));
         toastTimers.push(setTimeout(() => {
             t.classList.remove('visible');
