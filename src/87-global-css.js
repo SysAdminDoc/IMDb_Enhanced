@@ -27,17 +27,9 @@
 }
 /* Announced, never drawn. Kept in the layout tree (not display:none) so the live
    region stays in the accessibility tree between messages. */
-#enh-update-notice {
-    position: fixed; right: 16px; bottom: 16px; z-index: 2147483000;
-    display: flex; align-items: center; gap: 12px;
-    max-width: min(420px, calc(100vw - 32px));
-    padding: 10px 14px; border-radius: 10px;
-    background: ${t.sf1}; border: 1px solid ${t.accentBorder}; color: ${t.tx1};
-    font: 600 12px/1.45 -apple-system, BlinkMacSystemFont, 'Segoe UI', sans-serif;
-    box-shadow: ${t.sh3};
-}
 /* The welcome notice wears the update notice's clothes: same corner, same shape, and
    the two never appear together. */
+#enh-update-notice,
 #enh-first-run {
     position: fixed; right: 16px; bottom: 16px; z-index: 2147483000;
     display: flex; align-items: center; gap: 12px;
@@ -52,7 +44,8 @@
     background: ${t.sf2}; border: 1px solid ${t.bd1}; color: ${t.tx2};
     border-radius: 6px; padding: 4px 10px; cursor: pointer; white-space: nowrap;
 }
-.enh-update-notice__dismiss:hover { background: ${t.sf2}; color: ${t.tx0}; }
+.enh-update-notice__dismiss:hover { background: ${t.sf2}; color: ${t.tx0}; border-color: ${t.bd2}; }
+.enh-update-notice__dismiss:focus-visible { outline: 2px solid ${t.accent}; outline-offset: 2px; }
 
 #enh-toast-announcer, #enh-score-announcer {
     position: fixed; bottom: 0; left: 0; width: 1px; height: 1px; padding: 0;
@@ -768,7 +761,7 @@ ${scopedRules('.enh-zoom', {
 .enh-settings-subtitle {
     margin: 3px 0 0;
     color: ${t.tx2};
-    font-size: 10px;
+    font-size: 11px;
     line-height: 1.35;
 }
 .enh-settings-header-actions {
@@ -795,7 +788,7 @@ ${scopedRules('.enh-zoom', {
     display: flex; align-items: center; justify-content: center;
     transition: background .15s ease, border-color .15s ease, color .15s ease;
 }
-.enh-settings-close:hover { background: ${t.sf2}; color: ${t.tx0}; }
+.enh-settings-close:hover { background: ${t.sf2}; color: ${t.tx0}; border-color: ${t.bd2}; }
 
 .enh-settings-shell { display: flex; min-height: 0; flex: 1; }
 .enh-settings-nav {
@@ -1031,12 +1024,13 @@ ${scopedRules('.enh-zoom', {
 .enh-settings-footer-actions { display: flex; gap: 6px; }
 .enh-settings-footer-btn {
     min-height: 32px; padding: 6px 12px; border-radius: 8px;
-    font: 600 11px -apple-system, sans-serif;
+    font: 650 11px/1.2 -apple-system, BlinkMacSystemFont, 'Segoe UI', sans-serif;
     background: ${t.sf1}; border: 1px solid ${t.bd1};
     color: ${t.tx2}; cursor: pointer;
     transition: background .15s ease, border-color .15s ease, color .15s ease, transform .15s cubic-bezier(.4,0,.2,1);
 }
 .enh-settings-footer-btn:hover { background: ${t.sf2}; color: ${t.tx0}; border-color: ${t.bd2}; }
+.enh-settings-footer-btn:active:not(:disabled) { transform: translateY(1px); }
 .enh-settings-footer-btn:disabled { opacity: .45; cursor: not-allowed; }
 .enh-settings-footer-btn--danger { color: ${t.red}; }
 .enh-settings-footer-note { text-align: right; line-height: 1.35; }
@@ -1080,6 +1074,7 @@ ${scopedRules('.enh-zoom', {
     min-height: 30px; margin-right: 8px; padding: 5px 10px; border-radius: 7px;
     border: 1px solid ${t.bd1}; background: ${t.sf2}; color: ${t.tx1}; cursor: pointer;
 }
+.enh-csv-file:focus-visible { outline: 2px solid ${t.accent}; outline-offset: 2px; border-radius: 7px; }
 .enh-csv-preview { min-height: 34px; margin-top: 8px; color: ${t.tx2}; font-size: 11px; line-height: 1.45; }
 
 /* ════ Site Editors ════ */
@@ -1150,7 +1145,7 @@ ${scopedRules('.enh-zoom', {
 .enh-site-order { display: inline-flex; gap: 3px; }
 .enh-site-order-btn { width: 27px; height: 30px; padding: 0; border-radius: 7px; border: 1px solid ${t.bd1}; background: ${t.sf0}; color: ${t.tx2}; cursor: pointer; font: 700 13px/1 -apple-system, BlinkMacSystemFont, 'Segoe UI', sans-serif; }
 .enh-site-order-btn:hover:not(:disabled) { background: ${t.sf2}; color: ${t.tx0}; border-color: ${t.bd2}; }
-.enh-site-order-btn:disabled { opacity: .32; cursor: not-allowed; }
+.enh-site-order-btn:disabled { opacity: .45; cursor: not-allowed; }
 .enh-site-color {
     width: 34px;
     height: 30px;

@@ -32,6 +32,10 @@
 
 - Toasts, notices, and the recovery page title no longer use dashes to join clauses.
 
+- The streaming widget drew JustWatch's brand yellow as text, which is about 1.6:1 against the light theme's white. It uses the theme's accent now, the same gold on dark themes and a readable amber on light.
+
+- Settings buttons share one font stack and line height with the rest of the panel, show a press state, and use one disabled opacity. The CSV file picker and the notice's Dismiss button gained focus rings. The header subtitle was the last 10px line in the chrome.
+
 ### Changed
 
 - The source now lives as a set of modules under `src/`, one per area, and `IMDb_Enhanced.user.js` is assembled from them. Nothing about the installed file changes: the build is a byte concatenation in filename order, so it is still the same readable script with no minifier or bundler anywhere near it, and it is still committed. What changes is that a storage fix and a theme change no longer land in the same 17,000-line file. `npm test` fails if the committed script and the modules disagree in either direction.

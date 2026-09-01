@@ -2148,7 +2148,8 @@
                     target: '_blank',
                     rel: 'noopener noreferrer',
                     className: 'enh-score-widget__score enh-score-widget__score--availability',
-                    style: { '--score-color': '#fbc500' },
+                    // The theme's accent, not the brand yellow: that one is 1.6:1 on white.
+                    style: { '--score-color': getTheme().accent },
                 },
                     makeEl('span', { className: 'enh-score-widget__badge enh-score-widget__badge--outline' }, fromTmdb ? 'TMDB' : 'JW'),
                     makeEl('span', { className: 'enh-score-widget__value enh-score-widget__value--availability' },
