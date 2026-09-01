@@ -111,8 +111,15 @@ assert.notEqual(instrumented, userscript, 'DOM fixture hook injection did not fi
 
 const manifest = JSON.parse(fs.readFileSync(path.join(fixtureDir, 'manifest.json'), 'utf8'));
 const fixtureByName = new Map(manifest.pages.map(page => [page.name, page]));
-assert.deepEqual([...fixtureByName.keys()], ['title', 'title-ratings', 'episodes', 'person', 'chart'],
-    'fixture manifest must cover every supported DOM surface');
+/* Every surface the suite reads has to be there. Not an exact list: capturing a new
+   surface is the first step of covering one, and failing the whole suite on a fixture
+   nothing reads yet turns that first step into a broken build. */
+['title', 'title-ratings', 'episodes', 'person', 'chart'].forEach(name =>
+    assert.ok(fixtureByName.has(name), `fixture manifest must cover the ${name} surface`));
+/* What is listed has to be on disk, though. A manifest entry with no file is a capture
+   that half happened, and every test reading it would fail somewhere less obvious. */
+manifest.pages.forEach(page => assert.ok(fs.existsSync(path.join(fixtureDir, `${page.name}.html`)),
+    `${page.name} is in the manifest with no captured file beside it`));
 
 function requireSelector(document, selector) {
     const node = document.querySelector(selector);
@@ -833,6 +840,72 @@ await runFixture('title', async (window, hooks) => {
     window.document.dispatchEvent(new window.CustomEvent('imdb-enhanced:marks-updated'));
     assert.equal(mark(owned), 'watched', 'it is still marked');
     assert.equal(owned.title, 'IMDb says something here', 'and IMDb keeps its own tooltip');
+
+    /* The tooltip has to keep up with the record. A rewatch and a note change neither the
+       state nor the address, so keying the repaint on the state alone left the link saying
+       "Local seen" forever, which is exactly what this feature promises it says. */
+    hooks.setStoredSetting('userMarks', {
+        ...hooks.getUserMarks(true),
+        tt2395385:{ v:2, state:'skip', title:'Passed', ts:2, note:'not for me' },
+    });
+    hooks.getUserMarks(true);
+    window.document.dispatchEvent(new window.CustomEvent('imdb-enhanced:marks-updated'));
+    assert.match(link('tt2395385').title, /note/i, 'a note written later reaches the tooltip');
+    hooks.setStoredSetting('userMarks', {
+        ...hooks.getUserMarks(true),
+        tt2395385:{ v:2, state:'skip', title:'Passed', ts:2 },
+    });
+    hooks.getUserMarks(true);
+    window.document.dispatchEvent(new window.CustomEvent('imdb-enhanced:marks-updated'));
+    assert.doesNotMatch(link('tt2395385').title, /note/i, 'and deleting it takes the words away again');
+
+    /* IMDb's SPA reuses anchor nodes and rewrites their href. Without noticing that, a
+       link that used to point at something seen keeps the underline and the tooltip while
+       pointing somewhere the person has never marked. */
+    const reused = link('tt0133093');
+    reused.setAttribute('href', '/title/tt9999999/');
+    await new Promise(resolve => window.setTimeout(resolve, 0));
+    assert.equal(mark(reused), null, 'an anchor pointed somewhere else loses the mark that was not its');
+    assert.equal(reused.title, '', 'and the tooltip that went with it');
+    reused.setAttribute('href', '/title/tt0133093/');
+    await new Promise(resolve => window.setTimeout(resolve, 0));
+    assert.equal(mark(reused), 'watched', 'and gets it back when it points there again');
+
+    /* The hard case: moved between two titles the tooltip describes identically. Nothing
+       visible changes, so only knowing which title it was decorated for catches it, and
+       without that the extension is holding a mark against the wrong film. */
+    hooks.setStoredSetting('userMarks', {
+        ...hooks.getUserMarks(true),
+        tt0068646:{ v:2, state:'watched', title:'Another seen one', ts:9 },
+    });
+    hooks.getUserMarks(true);
+    reused.setAttribute('href', '/title/tt0111161/');
+    await new Promise(resolve => window.setTimeout(resolve, 0));
+    const plainLabel = reused.title;
+    reused.setAttribute('href', '/title/tt0068646/');
+    await new Promise(resolve => window.setTimeout(resolve, 0));
+    assert.equal(reused.title, plainLabel, 'the two read the same, which is what makes this hard');
+    assert.equal(reused.getAttribute('data-enh-link-mark-id'), 'tt0068646',
+        'a link moved between two identical-looking marks follows the title it points at');
+    reused.setAttribute('href', '/title/tt0133093/');
+    await new Promise(resolve => window.setTimeout(resolve, 0));
+
+    /* This script's own interface is not a page to decorate, and an anchor that ends up
+       inside it has to be cleaned rather than skipped: skipping leaves whatever was
+       written on it before it moved. */
+    const panel = window.document.createElement('div');
+    panel.id = 'enh-settings-panel';
+    window.document.body.appendChild(panel);
+    const inPanel = link('tt2395385');
+    assert.equal(mark(inPanel), 'skip', 'decorated where it was');
+    panel.appendChild(inPanel);
+    hooks.rescanLinkMarks();
+    assert.equal(mark(inPanel), null, 'and cleaned when it lands somewhere this does not decorate');
+    assert.equal(inPanel.title, '', 'tooltip included');
+    trivia.querySelector('p').appendChild(inPanel);
+    panel.remove();
+    hooks.rescanLinkMarks();
+    assert.equal(mark(inPanel), 'skip', 'and decorated again once it is back on the page');
 
     /* A card already carries a badge and a set of controls. Underlining its title as well
        says the same thing twice in the same place. */

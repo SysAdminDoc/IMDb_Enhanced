@@ -727,7 +727,7 @@
         text_correction_candidate_count_one: '$1 candidate match.',
         text_correction_candidate_count_other: '$1 candidate matches.',
         text_count_skipped: '$1 skipped',
-        text_csv_import_is_too_large_choose: 'CSV import is too large. Choose a file under 4 MB.',
+        text_csv_import_is_too_large_choose: 'CSV import is too large. Choose a file under $1 MB.',
         text_csv_matched_existing: '$1 matched to titles already stored here',
         text_csv_rows_across_titles_one: '$2: $1 row across $3 titles',
         text_csv_rows_across_titles_other: '$2: $1 rows across $3 titles',
@@ -11113,6 +11113,10 @@ section[id*="quote" i] .ipc-list-card { padding: 4px 0 !important; margin: 2px 0
 
     const LINK_MARK_ATTRIBUTE = 'data-enh-link-mark';
     const LINK_MARK_TITLED = 'data-enh-link-mark-titled';
+    /* Which title the decoration was written for. IMDb's SPA reuses anchor nodes and
+       rewrites their href, so without this a link that used to point at something seen
+       keeps the underline and the tooltip while pointing somewhere else entirely. */
+    const LINK_MARK_ID = 'data-enh-link-mark-id';
     /* Anchors another feature already speaks for, and this script's own interface. A card
        carries a badge and a set of controls; underlining its title as well says the same
        thing twice in the same place. */
@@ -11147,9 +11151,15 @@ section[id*="quote" i] .ipc-list-card { padding: 4px 0 !important; margin: 2px 0
             /* Only added nodes. Watching attributes would watch this feature's own
                writes, which is a repaint loop with extra steps. */
             this._observer = new MutationObserver(mutations => {
-                mutations.forEach(mutation => mutation.addedNodes.forEach(node => {
-                    if (node?.matches || node?.querySelectorAll) this._pending.add(node);
-                }));
+                mutations.forEach(mutation => {
+                    if (mutation.type === 'attributes') {
+                        if (mutation.target?.matches) this._pending.add(mutation.target);
+                        return;
+                    }
+                    mutation.addedNodes.forEach(node => {
+                        if (node?.matches || node?.querySelectorAll) this._pending.add(node);
+                    });
+                });
                 if (!this._pending.size || !isCurrent()) return;
                 if (this._pending.size > 50) {
                     this._pending.clear();
@@ -11162,7 +11172,11 @@ section[id*="quote" i] .ipc-list-card { padding: 4px 0 !important; margin: 2px 0
                     if (isCurrent()) roots.forEach(root => this._scan(root));
                 });
             });
-            this._observer.observe(document.documentElement, { childList:true, subtree:true });
+            /* Added nodes, and href. Watching every attribute would watch this feature's
+               own writes, which is a repaint loop with extra steps; watching href alone is
+               how a reused anchor pointed at a different title gets noticed. */
+            this._observer.observe(document.documentElement,
+                { childList:true, subtree:true, attributes:true, attributeFilter:['href'] });
 
             this._onMarksUpdated = () => { if (isCurrent()) this._scan(document); };
             document.addEventListener('imdb-enhanced:marks-updated', this._onMarksUpdated);
@@ -11175,15 +11189,26 @@ section[id*="quote" i] .ipc-list-card { padding: 4px 0 !important; margin: 2px 0
             anchors.forEach(anchor => this._apply(anchor, marks));
         },
         _apply(anchor, marks) {
-            if (anchor.closest(LINK_MARK_EXCLUDED)) return;
-            const imdbId = getLinkedTitleId(anchor.href);
+            /* An anchor that has moved into the settings panel, or gained an excluded
+               ancestor, still carries whatever was written on it. Read as "no mark" rather
+               than returned from, so the removal below cleans it up. */
+            const excluded = Boolean(anchor.closest(LINK_MARK_EXCLUDED));
+            const imdbId = excluded ? '' : getLinkedTitleId(anchor.href);
             const record = imdbId ? marks[imdbId] : null;
             const state = record?.state === 'watched' || record?.state === 'skip' ? record.state : '';
-            /* Written only when it changes, for the same reason the badge counts are: this
-               runs from a document-wide observer over the subtree it writes into. */
-            if ((anchor.getAttribute(LINK_MARK_ATTRIBUTE) || '') === state) return;
+            const label = state ? describeLinkMark(record) : '';
+            /* Written only when something it says would change, for the same reason the
+               badge counts are: this runs from a document-wide observer over the subtree it
+               writes into. Keyed on the id and the tooltip as well as the state, because a
+               rewatch or a new note changes neither the state nor the href, and an anchor
+               React points at a different title keeps the same node. */
+            const unchanged = (anchor.getAttribute(LINK_MARK_ATTRIBUTE) || '') === state
+                && (anchor.getAttribute(LINK_MARK_ID) || '') === imdbId
+                && (!anchor.hasAttribute(LINK_MARK_TITLED) || anchor.title === label);
+            if (unchanged) return;
             if (!state) {
                 anchor.removeAttribute(LINK_MARK_ATTRIBUTE);
+                anchor.removeAttribute(LINK_MARK_ID);
                 if (anchor.hasAttribute(LINK_MARK_TITLED)) {
                     anchor.removeAttribute('title');
                     anchor.removeAttribute(LINK_MARK_TITLED);
@@ -11191,10 +11216,11 @@ section[id*="quote" i] .ipc-list-card { padding: 4px 0 !important; margin: 2px 0
                 return;
             }
             anchor.setAttribute(LINK_MARK_ATTRIBUTE, state);
+            anchor.setAttribute(LINK_MARK_ID, imdbId);
             /* Never over a tooltip IMDb wrote. Somebody hovering a link to read what the
                site says about it should still get that. */
             if (!anchor.title || anchor.hasAttribute(LINK_MARK_TITLED)) {
-                anchor.setAttribute('title', describeLinkMark(record));
+                anchor.setAttribute('title', label);
                 anchor.setAttribute(LINK_MARK_TITLED, '1');
             }
         },
@@ -11211,6 +11237,7 @@ section[id*="quote" i] .ipc-list-card { padding: 4px 0 !important; margin: 2px 0
             this._onMarksUpdated = null;
             document.querySelectorAll(`a[${LINK_MARK_ATTRIBUTE}]`).forEach(anchor => {
                 anchor.removeAttribute(LINK_MARK_ATTRIBUTE);
+                anchor.removeAttribute(LINK_MARK_ID);
                 if (!anchor.hasAttribute(LINK_MARK_TITLED)) return;
                 anchor.removeAttribute('title');
                 anchor.removeAttribute(LINK_MARK_TITLED);
@@ -16359,7 +16386,10 @@ ${scopedRules('.enh-zoom', {
         let pendingCsvImport = null;
         const csvTextarea = makeEl('textarea', {
             id:'enh-csv-textarea', className:'enh-import-textarea', spellcheck:'false',
-            maxlength:String(SETTINGS_IMPORT_TEXT_LIMIT),
+            /* The marks ceiling, not the settings one. At 4 MB a full library was
+               refused at the door, and a paste over the limit was truncated by the
+               browser and then reported as a successful partial import. */
+            maxlength:String(CSV_IMPORT_TEXT_LIMIT),
             placeholder:t('field_const_your_rating_date_rated_title'),
         });
         const csvFile = makeEl('input', {
@@ -16392,9 +16422,9 @@ ${scopedRules('.enh-zoom', {
         csvFile.addEventListener('change', async () => {
             const file = csvFile.files?.[0];
             if (!file) return;
-            if (file.size > SETTINGS_IMPORT_TEXT_LIMIT) {
+            if (file.size > CSV_IMPORT_TEXT_LIMIT) {
                 resetCsvPreview();
-                csvPreview.textContent = t('text_csv_import_is_too_large_choose');
+                csvPreview.textContent = t('text_csv_import_is_too_large_choose', [CSV_IMPORT_TEXT_MB]);
                 return;
             }
             try {
@@ -16936,8 +16966,16 @@ ${scopedRules('.enh-zoom', {
                Refusing once too often leaves somebody on a page they can navigate away
                from; allowing once too often is the loop this exists to stop. */
             const age = now - Number(when);
-            const expired = Number.isFinite(age) && age >= DESKTOP_REDIRECT_LOOP_MS;
-            if ((claimed || stored) === target && !expired) return false;
+            const unreadable = !Number.isFinite(age) || age < 0;
+            const expired = !unreadable && age >= DESKTOP_REDIRECT_LOOP_MS;
+            if ((claimed || stored) === target && !expired) {
+                /* A claim written before the stamp existed, or one whose time is in the
+                   future because the clock moved, cannot say how long ago it was made.
+                   It holds this once and is restamped, so it expires from now instead of
+                   sitting on that address for the rest of the session. */
+                if (unreadable) store.setItem(DESKTOP_REDIRECT_MARK, `${now} ${target}`);
+                return false;
+            }
             store.setItem(DESKTOP_REDIRECT_MARK, `${now} ${target}`);
             return true;
         } catch { return true; }

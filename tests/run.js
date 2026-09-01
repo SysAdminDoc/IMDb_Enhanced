@@ -261,6 +261,10 @@ function loadScriptTestHooks({ withoutDeleteValue = false, withheldCredentials =
         CSV_IMPORT_ROW_LIMIT,
         CSV_IMPORT_TEXT_LIMIT,
         CSV_IMPORT_TEXT_MB,
+        UNIVERSAL_FEATURE_KEYS,
+        COLLECTION_FEATURE_KEYS,
+        SECONDARY_PAGE_FEATURE_KEYS,
+        BROWSE_FEATURE_KEYS,
         summarizeLocalStats,
         LOCAL_STATS_GROUP_LIMIT,
         readCurrentTitleMarkMetadata,
@@ -1762,6 +1766,21 @@ test('CSV import reports every storage bound instead of silently dropping histor
         new RegExp(`under ${hooks.CSV_IMPORT_TEXT_MB} MB`),
         'the text-size ceiling should fail before parsing an oversized CSV'
     );
+
+    /* The ceiling has to be the one at the door, not only the one in the parser. Both
+       ways into that textarea kept the settings backup's limit, so a full library was
+       refused before anything read it and a paste over the limit was silently truncated
+       by the browser and then reported as a successful partial import. */
+    const csvPanel = script.slice(script.indexOf('const csvTextarea = makeEl('),
+        script.indexOf('csvApply.addEventListener'));
+    assert(csvPanel.includes('maxlength:String(CSV_IMPORT_TEXT_LIMIT)'),
+        'the box people paste into must hold what the exporter can write');
+    assert(csvPanel.includes('file.size > CSV_IMPORT_TEXT_LIMIT'),
+        'and a chosen file must be measured against the same ceiling');
+    assert(!csvPanel.includes('SETTINGS_IMPORT_TEXT_LIMIT'),
+        'neither of them belongs to the settings backup any more');
+    assert(!/under 4 MB/.test(messageCatalog.text_csv_import_is_too_large_choose || ''),
+        'and the refusal must not name a number the code no longer uses');
 
     /* A file cut short and a file full of rows that could not be read are different
        problems with different answers. Rolled together, somebody is sent looking for bad
@@ -3725,6 +3744,12 @@ test('a mobile IMDb address is rewritten to the desktop one, path and all', () =
     } };
     assert.strictEqual(hooks.claimDesktopRedirect('https://www.imdb.com/title/tt5/', upgradedTab), false,
         'a claim from before the stamp existed is still a claim');
+    /* And it is written down again on the way past, or it holds that one address for the
+       rest of the session and a deliberate click on it can never do anything. */
+    assert.match(upgraded.get('imdb_enh_desktop_redirect'), /^\d+ https:/,
+        'a claim with no time is given one rather than left to hold forever');
+    assert.strictEqual(hooks.claimDesktopRedirect('https://www.imdb.com/title/tt5/', upgradedTab,
+        Date.now() + 60000), true, 'so it expires like any other');
 
     /* A stamp from the future says nothing about how long ago the claim was made, so it
        is not treated as old. Measuring the gap without its sign would call an hour's
@@ -3782,6 +3807,14 @@ test('an episode mark records the series it belongs to', () => {
         'only the episodes of this show that were actually watched');
     assert.strictEqual(hooks.countSeenEpisodes('tt0306414', marks), 1);
     assert.strictEqual(hooks.countSeenEpisodes('tt0000001', marks), 0, 'a show with none says none');
+    /* Counted per show. The page-level memo that keeps this off the observer's hot path
+       is keyed on the show as well as on the marks, or one series would answer with
+       another's count on the first navigation between them. */
+    assert.notStrictEqual(hooks.countSeenEpisodes('tt0903747', marks),
+        hooks.countSeenEpisodes('tt0306414', marks),
+        'two shows in the same store do not share an answer');
+    assert(/this\._episodeCountId !== seriesId/.test(script),
+        'and the memo that caches it has to notice which show it was counting');
     assert.strictEqual(hooks.countSeenEpisodes('', marks), 0, 'and neither does a missing id');
     assert.strictEqual(hooks.countSeenEpisodes('not-an-id', marks), 0);
 
@@ -3869,6 +3902,20 @@ test('a second viewing is added to a title rather than replacing the first', () 
     assert(kept.includes('2026-06-06'), 'the new viewing is there');
     assert(!kept.includes(dates[0]), 'and the oldest is the one that made room');
     hooks.setStoredSetting('userMarks', {});
+});
+
+/* IE-116: the point of marking plain links is the surfaces no card ever reaches, so this
+   has to run on all of them. Left out of the universal set it would quietly become another
+   card feature, which is the one thing it exists not to be. */
+test('marks on plain links run wherever IMDb draws a link', () => {
+    const hooks = loadScriptTestHooks();
+    assert(hooks.UNIVERSAL_FEATURE_KEYS.has('markLinkTint'),
+        'the link tint has to run on every surface, not only where cards are');
+    /* And the sets built on top of it inherit that, which is what puts it on charts,
+       filmographies and search results. */
+    ['COLLECTION_FEATURE_KEYS', 'SECONDARY_PAGE_FEATURE_KEYS', 'BROWSE_FEATURE_KEYS']
+        .forEach(name => assert(hooks[name].has('markLinkTint'),
+            `${name} must carry it too, or it stops on that surface`));
 });
 
 /* IE-114: the fixture exercises the notice by calling it, which says nothing about
@@ -6260,6 +6307,29 @@ test('TMDB availability resolves an IMDb id and reads only the chosen region', (
         'and a date that is not one is dropped rather than rendered');
     [null, {}, { results:'nonsense' }].forEach(value =>
         assert.strictEqual(hooks.parseTmdbReleaseDates(value, 'US'), null, 'a broken payload is not an answer'));
+
+    /* Bounded like every other response this reads. A payload with ten thousand countries
+       or ten thousand dates in one is not a thing TMDB sends, which is exactly why the
+       walk over it has to stop somewhere. */
+    const huge = {
+        results:[
+            ...Array.from({ length:5000 }, (_, index) => ({
+                iso_3166_1:`X${index}`,
+                release_dates:[{ type:4, release_date:'2001-01-01' }],
+            })),
+            { iso_3166_1:'US', release_dates:[{ type:4, release_date:'2002-02-02' }] },
+        ],
+    };
+    assert.strictEqual(hooks.parseTmdbReleaseDates(huge, 'US'), null,
+        'a country list past the ceiling is not walked to the end');
+    const manyDates = {
+        results:[{ iso_3166_1:'US', release_dates:[
+            ...Array.from({ length:5000 }, () => ({ type:3, release_date:'2001-01-01' })),
+            { type:4, release_date:'2002-02-02' },
+        ] }],
+    };
+    assert.strictEqual(hooks.parseTmdbReleaseDates(manyDates, 'US'), null,
+        'and neither is a country carrying thousands of dates');
 
     /* Movies only. There is no release_dates endpoint for a series, so nothing is asked
        for one, and the request rides on the same cached answer as the offers. */

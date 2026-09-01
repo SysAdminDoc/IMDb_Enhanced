@@ -1926,7 +1926,7 @@
     "message": "[!! $1 skipped !!]"
   },
   "text_csv_import_is_too_large_choose": {
-    "message": "[!! CSV import is too large. Choose a file under 4 MB. !!]"
+    "message": "[!! CSV import is too large. Choose a file under $1 MB. !!]"
   },
   "text_csv_matched_existing": {
     "message": "[!! $1 matched to titles already stored here !!]"
