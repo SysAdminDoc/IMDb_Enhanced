@@ -4122,6 +4122,13 @@ test('the first-run notice is wired into the page setup', () => {
     assert(/\bcreateFAB\(\)/.test(body), 'and create the gear button it points at');
 });
 
+test('the first-run notice sits beside the settings gear', () => {
+    assert(script.includes(`#enh-first-run {
+    right: auto; left: 76px; bottom: 12px;
+    max-width: min(420px, calc(100vw - 92px));
+}`), 'the welcome notice should clear the right-hand title scores at 1024px');
+});
+
 test('version strings match', () => {
     const metaVersion = script.match(/@version\s+(\S+)/)?.[1];
     const constVersion = script.match(/const VERSION\s*=\s*'([^']+)'/)?.[1];

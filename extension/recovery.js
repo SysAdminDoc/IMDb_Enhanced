@@ -14149,8 +14149,8 @@ section[id*="quote" i] .ipc-list-card { padding: 4px 0 !important; margin: 2px 0
 }
 /* Announced, never drawn. Kept in the layout tree (not display:none) so the live
    region stays in the accessibility tree between messages. */
-/* The welcome notice wears the update notice's clothes: same corner, same shape, and
-   the two never appear together. */
+/* The welcome notice wears the update notice's clothes, and the two never appear
+   together. It sits beside the gear rather than over the right-hand score widgets. */
 #enh-update-notice,
 #enh-first-run {
     position: fixed; right: 16px; bottom: 16px; z-index: 2147483000;
@@ -14160,6 +14160,10 @@ section[id*="quote" i] .ipc-list-card { padding: 4px 0 !important; margin: 2px 0
     background: ${t.sf1}; border: 1px solid ${t.accentBorder}; color: ${t.tx1};
     font: 600 12px/1.45 -apple-system, BlinkMacSystemFont, 'Segoe UI', sans-serif;
     box-shadow: ${t.sh3};
+}
+#enh-first-run {
+    right: auto; left: 76px; bottom: 12px;
+    max-width: min(420px, calc(100vw - 92px));
 }
 .enh-update-notice__link { color: ${t.accent}; text-decoration: underline; white-space: nowrap; }
 .enh-update-notice__dismiss {
