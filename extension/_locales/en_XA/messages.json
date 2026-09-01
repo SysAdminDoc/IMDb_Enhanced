@@ -294,7 +294,7 @@
     "message": "[!! CSV has a quote in the middle of an unquoted field. !!]"
   },
   "error_csv_too_large": {
-    "message": "[!! CSV import is too large. Use a file under 4 MB. !!]"
+    "message": "[!! CSV import is too large. Use a file under $1 MB. !!]"
   },
   "error_csv_unterminated_quote": {
     "message": "[!! CSV ends inside a quoted field. !!]"

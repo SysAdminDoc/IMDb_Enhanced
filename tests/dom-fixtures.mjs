@@ -676,6 +676,38 @@ await runFixture('title', async (window, hooks) => {
     assert.match(repainted.querySelector('.enh-mark-badge').textContent, /x2/i,
         'and the badge carries the rewatch count without waiting for a reload');
 
+    /* A refused write is a third thing, and it used to be reported as the second: the
+       storage layer said what went wrong, and the message that followed replaced it with
+       "already logged today". Somebody is told their viewing is safe when nothing was
+       stored, and the only explanation is wiped off the screen. */
+    const realSetValue = window.GM_setValue;
+    window.GM_setValue = (key, value) => {
+        if (key === 'imdb_enh_userMarks') throw new Error('quota');
+        return realSetValue(key, value);
+    };
+    try {
+        hooks.setStoredSetting('userMarks', {
+            [id]:{ v:2, state:'watched', title:'Seen before', ts:1, viewings:[{ date:'2018-01-02' }] },
+        });
+    } catch { /* the seed goes through the same door and is refused too; that is the point */ }
+    window.GM_setValue = realSetValue;
+    hooks.setStoredSetting('userMarks', {
+        [id]:{ v:2, state:'watched', title:'Seen before', ts:1, viewings:[{ date:'2018-01-02' }] },
+    });
+    hooks.getUserMarks(true);
+    window.GM_setValue = (key, value) => {
+        if (key === 'imdb_enh_userMarks') throw new Error('quota');
+        return realSetValue(key, value);
+    };
+    hooks.stopFeature('watchedMarking');
+    hooks.initFeature('watchedMarking');
+    window.document.querySelector(`.enh-markable-card[data-enh-mark-id="${id}"] [data-enh-mark-action="again"]`).click();
+    const toast = window.document.getElementById('enh-toast');
+    assert.ok(toast, 'a refused write still says something');
+    assert.doesNotMatch(toast.textContent, /already logged/i,
+        'and what it says is not that the viewing is already safely recorded');
+    window.GM_setValue = realSetValue;
+
     /* IE-107 from here: the same page, turned into a series. The marks for a show's
        episodes were in the store and its own page said nothing about them. */
     hooks.stopFeature('watchedMarking');
@@ -700,6 +732,15 @@ await runFixture('title', async (window, hooks) => {
     hooks.rescanMarks();
     assert.match(episodeBadge(window).textContent, /2\D+62/,
         'seen against the total the page already carries');
+
+    /* A total smaller than the count is a total for something else, or a page mid-render.
+       "Seen 2 of 1 episodes" reads as a bug in the count rather than in the page. */
+    hooks.forgetStructuredData();
+    makeSeriesPage(window, 1);
+    hooks.rescanMarks();
+    assert.doesNotMatch(episodeBadge(window).textContent, /\bof\b/i,
+        'a total below the count is not a total, and nothing is claimed');
+    assert.match(episodeBadge(window).textContent, /\b2\b/, 'the count itself still stands');
 
     // Nothing marked, nothing said. An empty badge is worse than no badge.
     hooks.setStoredSetting('userMarks', {});
@@ -1285,6 +1326,23 @@ await runFixture('episodes', async (window, hooks) => {
     const metadata = hooks.readCardMarkMetadata(card, 'tt0959621');
     assert.equal(metadata.series, hooks.getIMDbID(),
         'a mark made from the episode list belongs to the series that list is of');
+
+    /* IMDb puts "More to explore" and a recently-viewed rail on the same tab. Those cards
+       are films, and stamping them made a film somebody marked from a rail count as an
+       episode of the show whose page they happened to be on. */
+    const rail = window.document.createElement('div');
+    rail.innerHTML = '<div class="ipc-poster-card"><a href="/title/tt0111161/">'
+        + '<img alt="poster"></a></div>';
+    window.document.body.appendChild(rail);
+    const railCard = rail.querySelector('.ipc-poster-card');
+    assert.equal(hooks.readCardMarkMetadata(railCard, 'tt0111161').series, undefined,
+        'a film in a rail beside the episode list is not an episode of the show');
+
+    /* A card carrying this page's own id is read as the page itself, which is where the
+       check against a title being an episode of itself lives. */
+    assert.equal(hooks.readCardMarkMetadata(card, hooks.getIMDbID()).series, undefined,
+        'a show is never an episode of itself');
+    rail.remove();
 });
 
 await runFixture('person', async (window, hooks) => {

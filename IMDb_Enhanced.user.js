@@ -183,7 +183,7 @@
         error_csv_no_header: 'CSV does not contain a header row.',
         error_csv_no_usable_column: 'CSV needs a Const or imdbID column, or a Title column that can match an existing local title.',
         error_csv_stray_quote: 'CSV has a quote in the middle of an unquoted field.',
-        error_csv_too_large: 'CSV import is too large. Use a file under 4 MB.',
+        error_csv_too_large: 'CSV import is too large. Use a file under $1 MB.',
         error_csv_unterminated_quote: 'CSV ends inside a quoted field.',
         error_import_recovery_incomplete: 'Import failed and automatic recovery was incomplete. Reload before changing settings.',
         error_import_rolled_back: 'Import could not be saved; previous settings were restored.',
@@ -1074,10 +1074,15 @@
     /* Big enough that a file this extension wrote always reads back. The export is a row
        per viewing, so the worst case is every one of the 5,000 marks carrying its full
        hundred dates, and a ten-thousand-row ceiling silently dropped a third of a large
-       library on restore while reporting the import a success. The real guard on a
-       pasted file is SETTINGS_IMPORT_TEXT_LIMIT above, which a file this long passes
-       only if its rows are short. */
+       library on restore while reporting the import a success. */
     const CSV_IMPORT_ROW_LIMIT = USER_MARKS_MAX * USER_MARK_VIEWINGS_MAX;
+    /* And a size to match. A marks CSV is not a settings backup and does not belong under
+       the same 4 MiB ceiling: at that size the row cap above could never be reached,
+       every full library was refused outright, and the guard read as a bug. A maximal
+       export with ordinary titles measures about 26 MB, so this covers one with room
+       for long titles and notes. */
+    const CSV_IMPORT_TEXT_MB = 48;
+    const CSV_IMPORT_TEXT_LIMIT = CSV_IMPORT_TEXT_MB * 1024 * 1024;
     const SITE_CATEGORY_OPTIONS = [
         { key:'watch', label:t('category_watch'), description:t('category_watch_detail') },
         { key:'reviews', label:t('category_reviews'), description:t('category_reviews_detail') },
@@ -2509,9 +2514,11 @@
        people write to IMDb about their own check-ins. The record has carried a list of
        viewing dates since v2; this is the way to add to it.
 
-       Returns the number of dates held afterwards, or 0 if nothing was stored, so a
-       caller can tell "logged" from "already logged today" from "the write failed"
-       without reading the record back. */
+       Returns the number of dates held afterwards; 0 when there was nothing to add, and
+       null when the write itself was refused. Those are three different things to say and
+       one number cannot say them: reporting a rejected write as "already logged today"
+       tells somebody their viewing is safe when nothing was stored, and the toast saying
+       what really went wrong is wiped out by the one that follows it. */
     function countViewings(record) {
         return normalizeViewingEvents(record?.viewings).length;
     }
@@ -2532,7 +2539,8 @@
         if (before.some(viewing => viewing.date === date)) return 0;
         const viewings = mergeViewingEvents(before, [{ date }]);
         marks[imdbId] = { ...existing, v:USER_MARK_RECORD_VERSION, viewings, ts:Date.now() };
-        if (!setUserMarks(marks, notifyFailure)) return 0;
+        // Refused. setUserMarks has already said why, and saying anything else erases it.
+        if (!setUserMarks(marks, notifyFailure)) return null;
         return viewings.length;
     }
 
@@ -2674,7 +2682,7 @@
     function parseCsvTable(value) {
         const text = String(value || '').replace(/^\uFEFF/, '');
         if (!text.trim()) throw failure('unknown', t('error_csv_empty'));
-        if (text.length > SETTINGS_IMPORT_TEXT_LIMIT) throw failure('unknown', t('error_csv_too_large'));
+        if (text.length > CSV_IMPORT_TEXT_LIMIT) throw failure('unknown', t('error_csv_too_large', [CSV_IMPORT_TEXT_MB]));
         const rows = [];
         let row = [];
         let field = '';
@@ -2897,9 +2905,16 @@
             /* Only an empty cell means no state. A file whose State column says something
                this does not recognise is still a file about titles somebody watched, and
                reading "Completed" as no state at all would put the row in the store
-               showing as unmarked everywhere. */
-            const state = rawState === 'skip' || rawState === 'skipped' ? 'skip'
-                : rawState || columns.state < 0 ? 'watched' : '';
+               showing as unmarked everywhere.
+
+               But a guess must not overwrite something known. "Want to watch" is as
+               plausible a value as "Completed" and would turn a whole watchlist into
+               history, over a Skip the person had made deliberately, so where a mark
+               already exists an unrecognised word leaves it alone. */
+            const known = rawState === 'skip' || rawState === 'skipped' ? 'skip'
+                : rawState === 'watched' || rawState === 'seen' ? 'watched' : '';
+            const state = known
+                || (rawState ? (previous.state || 'watched') : (columns.state < 0 ? 'watched' : ''));
             /* A date is a date whatever the state says. A Skip can hold the dates
                somebody watched a thing on before deciding against it again, and dropping
                them here destroyed that history on the way back in from a file this
@@ -2912,7 +2927,12 @@
                     `${viewing.date}\u0000${viewing.rating ?? ''}` === eventKey);
                 if (!alreadyStored && previousViewings.length >= USER_MARK_VIEWINGS_MAX) droppedViewings += 1;
             }
-            const series = normalizeUserMarkSeries(normalizeCsvIMDbId(readCsvCell(row, columns.series)));
+            /* Both writers refuse to record a title as an episode of itself; a file can
+               say anything, so the reader has to refuse it too. A row claiming that would
+               make a series page count its own page as one of its episodes, and the value
+               would survive every trip afterwards. */
+            const rawSeries = normalizeUserMarkSeries(normalizeCsvIMDbId(readCsvCell(row, columns.series)));
+            const series = rawSeries === imdbId ? '' : rawSeries;
             const markedOn = normalizeViewingDate(readCsvCell(row, columns.marked));
             const viewingTimestamp = markedOn ? Date.parse(`${markedOn}T12:00:00.000Z`)
                 : date ? Date.parse(`${date}T12:00:00.000Z`) : importedAt;
@@ -2956,7 +2976,16 @@
     }
     function describeCsvMarkImport(result) {
         if (!result?.importedRows) {
-            return tCount('text_no_importable_rows_skipped', (result?.skippedRows || 0) + (result?.truncatedRows || 0));
+            /* A file that was cut short and one whose rows could not be read are different
+               problems with different answers, and rolling them together tells somebody to
+               go looking for bad rows in a file that had none. */
+            if (result?.truncatedRows && !result?.skippedRows) {
+                return t('text_csv_rows_past_the_limit', [result.truncatedRows]);
+            }
+            return tCount('text_no_importable_rows_skipped', result?.skippedRows || 0)
+                + (result?.truncatedRows
+                    ? t('text_clause_separator') + t('text_csv_rows_past_the_limit', [result.truncatedRows])
+                    : '');
         }
         const parts = [
             tCount('text_csv_rows_across_titles', result.importedRows, [result.source, result.importedTitles]),
@@ -10658,6 +10687,10 @@ section[id*="quote" i] .ipc-list-card { padding: 4px 0 !important; margin: 2px 0
         _clickHandler: null,
         _raf: 0,
         _pendingScanRoots: null,
+        // The last episode count and the marks object it was counted from.
+        _episodeCount: 0,
+        _episodeCountFor: null,
+        _episodeCountId: '',
         init() {
             if (!isIMDbHost()) return;
             addThemedCSS(t => `
@@ -10689,7 +10722,6 @@ section[id*="quote" i] .ipc-list-card { padding: 4px 0 !important; margin: 2px 0
                    above gives these buttons a display of their own and would win. */
                 .enh-mark-btn--again{display:none}
                 .enh-markable-card.enh-marked--watched .enh-mark-btn--again{display:inline-block}
-                .enh-mark-btn--again[hidden]{display:none}
                 .enh-mark-badge{
                     position:absolute;left:6px;bottom:6px;z-index:19;
                     padding:4px 7px;border-radius:6px;background:${t.accent};color:${readableTextColor(t.accent)};
@@ -10708,7 +10740,6 @@ section[id*="quote" i] .ipc-list-card { padding: 4px 0 !important; margin: 2px 0
                     font:800 10px/1 -apple-system,BlinkMacSystemFont,'Segoe UI',sans-serif;
                     text-transform:uppercase;letter-spacing:.04em;pointer-events:none;
                 }
-                .enh-episode-badge[hidden]{display:none}
                 /* IMDb draws its own Watched control on the same corner of a card.
                    Where one is present, the local controls and badge step aside so
                    the native account action stays clickable and unambiguous. */
@@ -10729,6 +10760,9 @@ section[id*="quote" i] .ipc-list-card { padding: 4px 0 !important; margin: 2px 0
                 if (action === 'again') {
                     const before = countViewings(getUserMarks()[imdbId]);
                     const total = logAdditionalViewing(imdbId);
+                    // The write was refused and has already said so. Anything said here
+                    // replaces that message with a reassuring one that is not true.
+                    if (total === null) return;
                     if (!total) {
                         showToast(t('toast_already_logged_a_viewing_today'));
                         return;
@@ -10810,9 +10844,20 @@ section[id*="quote" i] .ipc-list-card { padding: 4px 0 !important; margin: 2px 0
             const existing = Array.from(card.children)
                 .find(child => child.classList?.contains('enh-episode-badge'));
             const type = getMediaType();
-            const seenCount = type === 'series' || type === 'miniseries'
-                ? countSeenEpisodes(seriesId)
-                : 0;
+            /* Counting walks every mark in the store, and this runs from a document-wide
+               observer that can hand over fifty roots in one frame. The store is replaced
+               wholesale on every write, so the object itself is the version stamp: the
+               same one means the same answer. */
+            const marks = getUserMarks();
+            let seenCount = 0;
+            if (type === 'series' || type === 'miniseries') {
+                if (this._episodeCountFor !== marks || this._episodeCountId !== seriesId) {
+                    this._episodeCountFor = marks;
+                    this._episodeCountId = seriesId;
+                    this._episodeCount = countSeenEpisodes(seriesId, marks);
+                }
+                seenCount = this._episodeCount;
+            }
             if (!seenCount) {
                 existing?.remove();
                 return;
@@ -10941,6 +10986,9 @@ section[id*="quote" i] .ipc-list-card { padding: 4px 0 !important; margin: 2px 0
             cancelAnimationFrame(this._raf);
             this._pendingScanRoots?.clear();
             this._pendingScanRoots = null;
+            this._episodeCountFor = null;
+            this._episodeCountId = '';
+            this._episodeCount = 0;
             document.querySelectorAll('.enh-markable-card').forEach(card => {
                 card.classList.remove('enh-markable-card', 'enh-marked', 'enh-marked--watched', 'enh-marked--skip');
                 delete card.dataset.enhMarkId;
@@ -10991,17 +11039,22 @@ section[id*="quote" i] .ipc-list-card { padding: 4px 0 !important; margin: 2px 0
             if (runtime === null) runtime = normalizeUserMarkRuntime(parseRuntimeMinutes(text));
         }
         const imdbRating = normalizeUserMarkRating(readCardRating(card));
-        /* Every card on an episodes list belongs to the series whose page it is, and that
-           page's own id is the series id. Nothing else on IMDb lists episodes of one show
-           this way, so the surface is the whole test. */
-        const series = getPageSurface() === 'episodes'
+        /* An episode row on an episodes list belongs to the series whose page it is, and
+           that page's own id is the series id. The surface alone is not enough: IMDb puts
+           "More to explore" and a recently-viewed rail on the same tab, and stamping those
+           made a film somebody marked from a rail count as an episode of the show. The row
+           has to be an episode row. */
+        /* No self-check here: a card carrying this page's own id is handed to
+           readCurrentTitleMarkMetadata on the first line, and that is where the check
+           against a title being an episode of itself lives. */
+        const series = getPageSurface() === 'episodes' && card?.closest?.(EPISODE_ROW_SELECTOR)
             ? normalizeUserMarkSeries(getIMDbID())
             : '';
         return {
             ...(year !== null ? { year } : {}),
             ...(imdbRating !== null ? { imdbRating } : {}),
             ...(runtime !== null ? { runtime } : {}),
-            ...(series && series !== imdbId ? { series } : {}),
+            ...(series ? { series } : {}),
         };
     }
 
@@ -16656,11 +16709,16 @@ ${scopedRules('.enh-zoom', {
                half an hour later meant it. A permanent claim could not tell the two
                apart and refused the second one for the rest of the session, so the
                address the person deliberately clicked sat there doing nothing. */
-            const [when, claimed] = String(store.getItem(DESKTOP_REDIRECT_MARK) || '').split(' ');
+            const stored = String(store.getItem(DESKTOP_REDIRECT_MARK) || '');
+            const [when, claimed = ''] = stored.split(' ');
+            /* A claim written before this carried a timestamp, and a clock that has been
+               put back makes the age negative. Neither says the loop is over, so a claim
+               on this exact address holds unless the time it names has genuinely passed.
+               Refusing once too often leaves somebody on a page they can navigate away
+               from; allowing once too often is the loop this exists to stop. */
             const age = now - Number(when);
-            if (claimed === target && Number.isFinite(age) && age >= 0 && age < DESKTOP_REDIRECT_LOOP_MS) {
-                return false;
-            }
+            const expired = Number.isFinite(age) && age >= DESKTOP_REDIRECT_LOOP_MS;
+            if ((claimed || stored) === target && !expired) return false;
             store.setItem(DESKTOP_REDIRECT_MARK, `${now} ${target}`);
             return true;
         } catch { return true; }

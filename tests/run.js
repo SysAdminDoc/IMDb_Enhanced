@@ -259,6 +259,8 @@ function loadScriptTestHooks({ withoutDeleteValue = false, withheldCredentials =
         prepareCsvMarkImport,
         describeCsvMarkImport,
         CSV_IMPORT_ROW_LIMIT,
+        CSV_IMPORT_TEXT_LIMIT,
+        CSV_IMPORT_TEXT_MB,
         summarizeLocalStats,
         LOCAL_STATS_GROUP_LIMIT,
         readCurrentTitleMarkMetadata,
@@ -1711,9 +1713,38 @@ test('CSV import reports every storage bound instead of silently dropping histor
     /* The export is a row per viewing, so the largest file it can write is every mark
        carrying its full history. An importer that stops short of that reads back part of
        a library and calls it a success, which is how a restore loses a third of somebody's
-       marks with a cheerful summary. */
+       marks with a cheerful summary. Both ceilings have to clear it: the row cap, and the
+       size cap that used to be the settings backup's 4 MB and refused every full library
+       outright while making the row cap unreachable. */
     assert(hooks.CSV_IMPORT_ROW_LIMIT >= hooks.USER_MARKS_MAX * hooks.USER_MARK_VIEWINGS_MAX,
         'the importer must be able to read back the biggest file the exporter can write');
+
+    /* Built at a hundredth of full size and multiplied out. The whole thing is 25 MB and
+       half a million rows, which is a two-minute test for one number; the shape of a row
+       is what decides the answer and that is what is measured here. */
+    const everyDate = Array.from({ length:hooks.USER_MARK_VIEWINGS_MAX },
+        (_, index) => ({ date:new Date(Date.UTC(2020, 0, index + 1)).toISOString().slice(0, 10) }));
+    const sampleTitles = Math.round(hooks.USER_MARKS_MAX / 100);
+    const sample = {};
+    for (let index = 0; index < sampleTitles; index += 1) {
+        sample[`tt${String(1000000 + index).padStart(7, '0')}`] = {
+            v:2, state:'watched', title:`A film with an ordinary sort of title ${index}`,
+            ts:1, year:1999, viewings:everyDate,
+        };
+    }
+    const sampleCsv = hooks.buildMarksCsv(Object.entries(sample));
+    const maximalBytes = sampleCsv.length * (hooks.USER_MARKS_MAX / sampleTitles);
+    assert(maximalBytes < hooks.CSV_IMPORT_TEXT_LIMIT,
+        `a full library exports to about ${Math.round(maximalBytes / 1048576)} MB, over the import ceiling`);
+
+    /* And the real trip at that shape: every title carrying its full history, read back
+       whole rather than cut off at a row cap. */
+    const restored = hooks.prepareCsvMarkImport(sampleCsv, {});
+    assert.strictEqual(restored.truncatedRows, 0, 'nothing of it is cut off');
+    assert.strictEqual(Object.keys(restored.marks).length, sampleTitles,
+        'every title comes back, not the ones that fitted');
+    assert.strictEqual(restored.marks.tt1000000.viewings.length, hooks.USER_MARK_VIEWINGS_MAX,
+        'with every date behind it');
 
     /* And when a file really is longer than that, the rows past the end are reported as
        what they are. Rolled up with the rows that could not be parsed, "skipped" reads as
@@ -1726,10 +1757,20 @@ test('CSV import reports every storage bound instead of silently dropping histor
     assert.match(hooks.describeCsvMarkImport(rowLimited), /2 rows past the limit were not read/);
 
     assert.throws(
-        () => hooks.parseCsvTable('Const,Title\n' + 'x'.repeat(hooks.SETTINGS_IMPORT_TEXT_LIMIT)),
-        /under 4 MB/,
+        () => hooks.parseCsvTable('Const,Title\n' + 'x'.repeat(hooks.CSV_IMPORT_TEXT_LIMIT)),
+        new RegExp(`under ${hooks.CSV_IMPORT_TEXT_MB} MB`),
         'the text-size ceiling should fail before parsing an oversized CSV'
     );
+
+    /* A file cut short and a file full of rows that could not be read are different
+       problems with different answers. Rolled together, somebody is sent looking for bad
+       rows in a file that had none. */
+    assert.match(hooks.describeCsvMarkImport({ importedRows:0, skippedRows:0, truncatedRows:7 }),
+        /7 rows past the limit/, 'a file that was only too long says so');
+    assert.doesNotMatch(hooks.describeCsvMarkImport({ importedRows:0, skippedRows:0, truncatedRows:7 }),
+        /skipped/i, 'and does not call them skipped');
+    assert.match(hooks.describeCsvMarkImport({ importedRows:0, skippedRows:3, truncatedRows:7 }),
+        /3[\s\S]*7 rows past the limit/, 'a file with both says both');
 });
 
 test('generic CSV rows resolve only against unambiguous stored title identities', () => {
@@ -3441,6 +3482,24 @@ test('an exported CSV carries every field a mark record holds', () => {
     assert.strictEqual(foreignState.state, 'watched',
         'only an empty cell means no state; an unfamiliar word is not a reason to forget the row');
 
+    /* A guess must not overwrite something known. "Want to watch" is as plausible a value
+       as "Completed", and reading it as watched would turn a whole watchlist into history
+       over marks somebody had made deliberately. */
+    const overExisting = hooks.prepareCsvMarkImport(
+        'Const,Status,Title\r\ntt0133093,Want to watch,The Matrix\r\ntt2395385,Planned,Passed', {
+            tt0133093:{ v:2, state:'skip', title:'The Matrix', ts:1 },
+            tt2395385:{ v:2, state:'watched', title:'Passed', ts:2 },
+        }).marks;
+    assert.strictEqual(overExisting.tt0133093.state, 'skip', 'a deliberate Skip survives a word nobody knows');
+    assert.strictEqual(overExisting.tt2395385.state, 'watched', 'and so does a deliberate Seen');
+
+    /* A rating cell that is not a rating means the row was misread, and importing the rest
+       of it would attach the wrong year or note to a title. */
+    const badRating = hooks.prepareCsvMarkImport(
+        'Const,State,Title Rating,Title\r\ntt0068646,watched,eleven,The Godfather', {});
+    assert.strictEqual(badRating.importedRows, 0, 'a row with an unreadable rating is not imported');
+    assert.strictEqual(badRating.skippedRows, 1, 'and is reported as skipped');
+
     /* Letterboxd and IMDb export files with no State column at all, and every row in one
        of those is something the person watched. That default has to stay. */
     const letterboxd = hooks.prepareCsvMarkImport(
@@ -3644,6 +3703,23 @@ test('a mobile IMDb address is rewritten to the desktop one, path and all', () =
         'the same link a minute later is a fresh journey, not a loop');
     assert.strictEqual(hooks.claimDesktopRedirect('https://www.imdb.com/title/tt2/', tab, later + 1000), false,
         'and the loop guard still holds inside the window');
+    /* A claim written before this carried a timestamp still holds. Reading it as "no time,
+       so not recent" let the exact bounce this exists to stop through once, on the first
+       load after an upgrade, which is when a session is most likely to be mid-loop. */
+    const upgraded = new Map([['imdb_enh_desktop_redirect', 'https://www.imdb.com/title/tt5/']]);
+    const upgradedTab = { sessionStorage: {
+        getItem: key => (upgraded.has(key) ? upgraded.get(key) : null),
+        setItem: (key, value) => upgraded.set(key, String(value)),
+    } };
+    assert.strictEqual(hooks.claimDesktopRedirect('https://www.imdb.com/title/tt5/', upgradedTab), false,
+        'a claim from before the stamp existed is still a claim');
+
+    /* A stamp from the future says nothing about how long ago the claim was made, so it
+       is not treated as old. Measuring the gap without its sign would call an hour's
+       difference expired either way round and hand the loop back. */
+    assert.strictEqual(hooks.claimDesktopRedirect('https://www.imdb.com/title/tt2/', tab, later - 3600000),
+        false, 'a clock put back an hour does not reopen the loop');
+
     // Private modes throw on the first touch of session storage; that must not stop the fix.
     assert.strictEqual(hooks.claimDesktopRedirect('https://www.imdb.com/title/tt1/',
         { get sessionStorage() { throw new Error('denied'); } }), true,
@@ -3706,6 +3782,17 @@ test('an episode mark records the series it belongs to', () => {
     assert.strictEqual(hooks.normalizeUserMark({ state:'watched', ts:1 }).series, undefined,
         'and a mark made before this shipped simply does not carry one');
 
+    /* Saving a mark has to actually write the field. Everything above works on records
+       that already carry it, so the one line that puts it there when somebody clicks Seen
+       could be deleted with all of it still passing. */
+    hooks.setStoredSetting('userMarks', {});
+    assert.strictEqual(hooks.setUserMark('tt0959621', 'watched', 'Pilot', true,
+        { series:'tt0903747', year:2008 }), true);
+    assert.strictEqual(hooks.getUserMarks(true).tt0959621.series, 'tt0903747',
+        'marking an episode Seen records the show it belongs to');
+    assert.strictEqual(hooks.countSeenEpisodes('tt0903747', hooks.getUserMarks(true)), 1);
+    hooks.setStoredSetting('userMarks', {});
+
     /* It has to survive a backup. A restore that lost the link would leave every series
        page reporting nothing while the episode marks were all still there. */
     const csv = hooks.buildMarksCsv(Object.entries(marks));
@@ -3713,6 +3800,15 @@ test('an episode mark records the series it belongs to', () => {
     assert.strictEqual(back.tt0959621.series, 'tt0903747', 'the link comes back');
     assert.strictEqual(back.tt0133093.series, undefined, 'and a film still belongs to nothing');
     assert.strictEqual(hooks.countSeenEpisodes('tt0903747', back), 2, 'so the count survives too');
+
+    /* A file can say anything, so the reader refuses what both writers refuse. A row
+       claiming a title is an episode of itself would make a series page count its own
+       page, and the value would survive every trip after that. */
+    const selfReferential = hooks.prepareCsvMarkImport(
+        'Const,State,Title,Series\r\ntt0903747,watched,Breaking Bad,tt0903747', {}).marks.tt0903747;
+    assert.strictEqual(selfReferential.state, 'watched', 'the mark itself is still imported');
+    assert.strictEqual(selfReferential.series, undefined, 'a title is never an episode of itself');
+    assert.strictEqual(hooks.countSeenEpisodes('tt0903747', { tt0903747:selfReferential }), 0);
 });
 
 /* IE-105: watching something twice is the ordinary case a Seen mark could not describe.
