@@ -6931,9 +6931,7 @@ html[data-imdb-enhanced="active"] .ipc-page-background {
                     adopt(
                         document.querySelector('[data-testid="inline-video-playback-container"]'),
                         surface.querySelector('#enh-editorial-media-slot'));
-                    document.querySelectorAll('.enh-score-widget').forEach(widget => {
-                        if (!rail.contains(widget)) rail.appendChild(widget);
-                    });
+                    document.querySelectorAll('.enh-score-widget').forEach(widget => adopt(widget, rail));
                 };
                 this._sync = sync;
                 sync();
@@ -7101,7 +7099,6 @@ section[id*="quote" i] .ipc-list-card { padding: 4px 0 !important; margin: 2px 0
 }
         `,
         init() { addCSS(this.css, 'enh-wider'); }, destroy() { removeCSS('enh-wider'); } });
-
     // ===================== RATING COLOR CODING =====================
     function getHexLuminance(value) {
         const match = String(value || '').trim().match(/^#([0-9a-f]{3}|[0-9a-f]{6})$/i);
