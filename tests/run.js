@@ -290,6 +290,7 @@ function loadScriptTestHooks({ withoutDeleteValue = false, withheldCredentials =
         getAvailabilityCacheKey,
         getJustWatchSearchUrl,
         isTmdbConfigured,
+        desktopUrlForMobile,
         computeTrimmedMean,
         buildMarksCsv,
         buildLetterboxdCsv,
@@ -588,7 +589,10 @@ test('metadata stays distribution-safe', () => {
     assert(!/@connect\s+\*/.test(script), 'wildcard @connect should not return');
     assert(!/@grant\s+GM_addStyle/.test(script), 'unused style-injection permission should stay removed');
     assert(/@noframes/.test(script), '@noframes should remain present');
-    assert(!/@match\s+https:\/\/m\.imdb\.com\//.test(script), 'desktop-only userscript must not match mobile IMDb');
+    assert(/@match\s+https:\/\/m\.imdb\.com\//.test(script),
+        'the mobile host is matched so a shared link can be sent to the desktop site');
+    assert(/function isIMDbHost[\s\S]{0,200}=== 'www\.imdb\.com'/.test(script),
+        'and nothing else runs there: every feature is gated on the desktop host alone');
     assert(/@updateURL/.test(script), '@updateURL should be present for update channel');
     assert(/@downloadURL/.test(script), '@downloadURL should be present for update channel');
     [
@@ -3365,6 +3369,58 @@ test('the trimmed mean drops the two ends of the scale and says it is derived', 
     const init = feature.slice(0, feature.indexOf('destroy()'));
     assert.strictEqual((init.match(/getHistogramData\(\)/g) || []).length, 1,
         'the buckets are read once and both means computed from them');
+});
+
+/* IE-113: a link shared from a phone points at IMDb's mobile host, and opening it on a
+   computer lands on a page this script does not run on and that nobody chose. The same
+   path on the desktop host is where the person was going. */
+test('a mobile IMDb address is rewritten to the desktop one, path and all', () => {
+    const hooks = loadScriptTestHooks();
+    const desktopView = { matchMedia: () => ({ matches:false }), innerWidth: 1440 };
+
+    assert.strictEqual(
+        hooks.desktopUrlForMobile('https://m.imdb.com/title/tt0133093/', desktopView),
+        'https://www.imdb.com/title/tt0133093/');
+    // The query and the fragment are part of where somebody was going.
+    assert.strictEqual(
+        hooks.desktopUrlForMobile('https://m.imdb.com/title/tt0133093/?ref_=nv_sr_1#reviews', desktopView),
+        'https://www.imdb.com/title/tt0133093/?ref_=nv_sr_1#reviews');
+    assert.strictEqual(
+        hooks.desktopUrlForMobile('https://m.imdb.com/', desktopView),
+        'https://www.imdb.com/');
+
+    // Only that host, and only over TLS.
+    ['https://www.imdb.com/title/tt0133093/', 'https://evil.example.com/title/tt1/',
+        'http://m.imdb.com/title/tt1/', 'https://notm.imdb.com/', '', null, 'not a url']
+        .forEach(value => assert.strictEqual(hooks.desktopUrlForMobile(value, desktopView), '',
+            `${value} must not be rewritten`));
+
+    /* Never on a phone. Sending somebody holding a phone to the desktop site is the same
+       mistake pointed the other way, so a coarse pointer on a narrow viewport is left
+       alone — and a coarse pointer on a large screen, which is a touchscreen laptop or a
+       television, is not a phone. */
+    const phone = { matchMedia: query => ({ matches: query === '(pointer: coarse)' }), innerWidth: 390 };
+    assert.strictEqual(hooks.desktopUrlForMobile('https://m.imdb.com/title/tt1/', phone), '',
+        'a phone keeps the site built for it');
+    const touchLaptop = { matchMedia: query => ({ matches: query === '(pointer: coarse)' }), innerWidth: 1600 };
+    assert.strictEqual(hooks.desktopUrlForMobile('https://m.imdb.com/title/tt1/', touchLaptop),
+        'https://www.imdb.com/title/tt1/', 'a touchscreen laptop is not a phone');
+    // A view that cannot answer the question is treated as a desktop, which is the default.
+    assert.strictEqual(hooks.desktopUrlForMobile('https://m.imdb.com/title/tt1/', {}),
+        'https://www.imdb.com/title/tt1/');
+
+    assert.strictEqual(hooks.DEFAULTS.desktopFromMobileLinks, true, 'on by default');
+    /* And switchable off: somebody who wants the mobile layout on a desktop should keep
+       it, and a redirect with no way out is a hijack rather than a convenience. */
+    const boot = script.slice(script.indexOf('registerManagerMenuCommands();', script.length - 4000));
+    assert(/get\('desktopFromMobileLinks'\) !== false/.test(boot),
+        'the redirect must consult the setting rather than always firing');
+
+    /* It has to happen before anything paints, and it has to replace rather than push, or
+       the back button bounces between the two hosts forever. */
+    assert(/location\.replace\(desktop\)/.test(script), 'the history entry is replaced, not added to');
+    assert(boot.indexOf('desktopUrlForMobile(location.href)') < boot.indexOf('installSPARouter()'),
+        'and before the router or any feature starts');
 });
 
 test('version strings match', () => {

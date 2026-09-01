@@ -24,6 +24,8 @@
 
 ### Added
 
+- A link shared from a phone opens the desktop site. IMDb mobile addresses land on a page this extension deliberately does not run on and that nobody chose, so opening one on a computer now takes you to the same page on the normal site, before anything is drawn. Never on a phone, where the mobile site is the right one, and there is a toggle if you prefer it left alone.
+
 - Right-click works on gallery images again. IMDb blocks the menu there, which is why Save image as does nothing; this lets the browser show its own menu, and only over pictures, so the rest of the page behaves as IMDb intends. On by default, because a right-click that does nothing reads as breakage rather than as a choice.
 
 - On a title Ratings tab, the comparison line now also reports the average with the 1s and the 10s left out. A review-bombed film is bombed at one end and defended at the other, and both are where a few people move an average furthest, so the middle of the audience is worth seeing on its own. It is derived from the vote counts IMDb publishes, labelled as derived, and it never replaces the rating on the page.

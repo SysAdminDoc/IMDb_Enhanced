@@ -17,7 +17,8 @@
     "alarms"
   ],
   "host_permissions": [
-    "https://www.imdb.com/*"
+    "https://www.imdb.com/*",
+    "https://m.imdb.com/*"
   ],
   "optional_host_permissions": [
     "http://127.0.0.1/*",
@@ -73,7 +74,8 @@
         "https://www.imdb.com/*/find*",
         "https://www.imdb.com/*/search/*",
         "https://www.imdb.com/",
-        "https://www.imdb.com/?*"
+        "https://www.imdb.com/?*",
+        "https://m.imdb.com/*"
       ],
       "js": [
         "content.js"

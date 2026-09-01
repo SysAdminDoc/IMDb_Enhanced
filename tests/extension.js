@@ -83,7 +83,10 @@ new Set([
 /* IE-75: the install prompt is what a user reads to decide whether to trust this, and it
    used to describe every score, ad, video and loopback origin whether or not the feature
    was on. IMDb is the only thing the extension cannot work without. */
-assert.deepStrictEqual(manifest.host_permissions, ['https://www.imdb.com/*'],
+/* Both of IMDb's own hosts, and nothing else. The mobile one carries a single job — send
+   a desktop browser to the page it was actually looking for — and asking permission to
+   leave a page nobody chose would be a strange prompt to write. */
+assert.deepStrictEqual(manifest.host_permissions, ['https://www.imdb.com/*', 'https://m.imdb.com/*'],
     'only IMDb access may be required at install');
 [
     'https://backend.metacritic.com/*', 'https://www.rottentomatoes.com/*',

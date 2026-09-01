@@ -1493,7 +1493,10 @@
         Object.entries(FEATURE_PROVIDERS).map(([feature, providers]) =>
             [feature, [...new Set(providers.flatMap(id => PROVIDERS[id]?.origins || []))]])
     );
-    const REQUIRED_ORIGINS = ['https://www.imdb.com/*'];
+    /* IMDb's own mobile host is required rather than optional: the redirect that sends a
+       desktop browser from it to the desktop site has to run there, and asking for
+       permission to leave a page nobody chose would be a strange thing to prompt for. */
+    const REQUIRED_ORIGINS = ['https://www.imdb.com/*', 'https://m.imdb.com/*'];
     const OPTIONAL_ORIGINS = [...new Set(Object.values(FEATURE_ORIGIN_GROUPS).flat())].sort();
     /* What the Firefox manifest must declare. A provider that only has access so its
        requests can be blocked transmits nothing, so it contributes no category. */
@@ -1833,6 +1836,8 @@
         /* On by default: it restores what the browser does anyway, and a right-click that
            does nothing reads as the page being broken rather than as a choice. */
         restoreImageContextMenu: true,
+        // On by default: a shared link landing on the mobile site is nobody's intent.
+        desktopFromMobileLinks: true,
         // Off by default: it puts someone else's page inside this one.
         movieChatBoard: false,
         // Off by default: it is a whole section of other films.
@@ -16501,6 +16506,36 @@ ${scopedRules('.enh-zoom', {
         return String(hostname || '').toLowerCase() === 'www.imdb.com';
     }
 
+    /* A link shared from a phone points at m.imdb.com, and opening it on a computer lands
+       on a page this script deliberately does not run on and that nobody chose. The same
+       path on the desktop host is where the person was going.
+
+       Never on a phone, though: this is about a desktop browser being sent somewhere it
+       did not ask for, and doing the reverse to somebody actually holding a phone would
+       be the same mistake pointed the other way. A coarse primary pointer on a narrow
+       viewport is what a phone is. */
+    const MOBILE_IMDB_HOST = 'm.imdb.com';
+    const DESKTOP_IMDB_HOST = 'www.imdb.com';
+
+    function looksLikeHandheld(view = window) {
+        try {
+            const coarse = view.matchMedia?.('(pointer: coarse)')?.matches === true;
+            return coarse && Number(view.innerWidth) > 0 && Number(view.innerWidth) <= 820;
+        } catch { return false; }
+    }
+
+    function desktopUrlForMobile(href, view = window) {
+        let parsed;
+        try { parsed = new URL(String(href || '')); }
+        catch { return ''; }
+        if (parsed.hostname.toLowerCase() !== MOBILE_IMDB_HOST) return '';
+        if (parsed.protocol !== 'https:') return '';
+        if (looksLikeHandheld(view)) return '';
+        parsed.hostname = DESKTOP_IMDB_HOST;
+        // Path, query and fragment are what the person was after; only the host changes.
+        return parsed.href;
+    }
+
     const UNIVERSAL_FEATURE_KEYS = new Set([
         'modernUI', 'compactHeader', 'widerLayout', 'keyboardShortcuts',
     ]);
@@ -16790,6 +16825,18 @@ ${scopedRules('.enh-zoom', {
         });
     }
     registerManagerMenuCommands();
+
+    /* Before anything else has a chance to paint. A shared link from a phone lands on
+       IMDb's mobile host, which this script does not run on and which nobody chose; the
+       same path on the desktop host is where the person was going. Replaced rather than
+       assigned, so the back button does not bounce between the two. */
+    if (get('desktopFromMobileLinks') !== false) {
+        const desktop = desktopUrlForMobile(location.href);
+        if (desktop) {
+            location.replace(desktop);
+            return;
+        }
+    }
 
     if (isIMDbHost()) installSPARouter();
     // Let IMDb's Next.js hydration settle before mutating title-page DOM.
