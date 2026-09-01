@@ -2203,6 +2203,8 @@ test('secondary interactions expose complete keyboard and toggle semantics', () 
         'score correction dialogs should take focus so Escape works as soon as they open');
     assert(script.includes('.enh-score-correction {\n    box-sizing: border-box;'),
         'score correction popovers should own their border-box width instead of inheriting IMDb reset styles');
+    assert(script.includes('open._enhReleaseReserve?.();'),
+        'score correction popovers should release the layout space they reserve while open');
     assert(script.includes('.enh-link-dropdown {\n    box-sizing: border-box;'),
         'expanded link popovers should own their border-box width instead of inheriting IMDb reset styles');
     assert(script.includes('#enh-title-note textarea:focus-visible'),

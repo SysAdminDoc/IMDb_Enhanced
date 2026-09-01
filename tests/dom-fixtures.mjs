@@ -1350,12 +1350,16 @@ await runFixture('title', async (window, hooks) => {
     assert.match(correctionTrigger.getAttribute('aria-controls') || '', /rottenTomatoes-tt0133093$/);
     correctionTrigger.click();
     await waitForSelector(window, '.enh-score-correction__choice');
+    assert.match(correctionWidget.style.marginBottom, /8px/,
+        'an open correction panel must reserve room before the next score widget');
     assert.equal(requireSelector(correctionWidget, '.enh-score-correction').getAttribute('popover'), null,
         'IE-121: without showPopover the panel stays where the absolute placement puts it');
     requireSelector(correctionWidget, '.enh-score-correction').dispatchEvent(
         new window.KeyboardEvent('keydown', { key:'Escape', bubbles:true }));
     assert.equal(correctionWidget.querySelector('.enh-score-correction'), null,
         'Escape must close the inline correction dialog');
+    assert.equal(correctionWidget.style.marginBottom, '',
+        'closing the correction panel must release its temporary score-rail space');
     correctionTrigger.click();
     await waitForSelector(window, '.enh-score-correction__choice');
     const manualInput = requireSelector(correctionWidget, '.enh-score-correction__input');

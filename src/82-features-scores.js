@@ -347,6 +347,7 @@
         const closePanel = (restoreFocus = false) => {
             const open = widget.querySelector?.('.enh-score-correction');
             if (open) {
+                open._enhReleaseReserve?.();
                 hideFromTopLayer(open, trigger);
                 open.remove();
             }
@@ -367,6 +368,7 @@
             }
             const otherPanel = document.querySelector?.('.enh-score-correction');
             if (otherPanel) {
+                otherPanel._enhReleaseReserve?.();
                 hideFromTopLayer(otherPanel);
                 otherPanel.remove();
             }
@@ -438,7 +440,24 @@
             );
             widget.appendChild(panel);
             showInTopLayer(panel, trigger);
-            requestAnimationFrame(() => { if (panel.isConnected) closeButton.focus(); });
+            const previousMarginBottom = widget.style.marginBottom;
+            const syncPanelReserve = () => {
+                if (!panel.isConnected) return;
+                const panelRect = panel.getBoundingClientRect();
+                const widgetRect = widget.getBoundingClientRect();
+                const reserve = Math.max(0, Math.ceil(panelRect.bottom - widgetRect.bottom + 8));
+                widget.style.marginBottom = reserve
+                    ? `calc(${previousMarginBottom || '0px'} + ${reserve}px)`
+                    : previousMarginBottom;
+            };
+            panel._enhReleaseReserve = () => {
+                if (previousMarginBottom) widget.style.marginBottom = previousMarginBottom;
+                else widget.style.removeProperty('margin-bottom');
+            };
+            requestAnimationFrame(() => {
+                syncPanelReserve();
+                if (panel.isConnected) closeButton.focus();
+            });
             panel.addEventListener('keydown', event => {
                 if (event.key !== 'Escape') return;
                 event.preventDefault();
@@ -466,6 +485,7 @@
                 choices.replaceChildren();
                 if (!candidates.length) {
                     status.textContent = t('text_no_candidate_matches_were_found_paste');
+                    syncPanelReserve();
                     return;
                 }
                 candidates.forEach(candidate => {
@@ -482,8 +502,12 @@
                     }, label));
                 });
                 status.textContent = tCount('text_correction_candidate_count', choices.children.length);
+                syncPanelReserve();
             } catch {
-                if (panel.isConnected) status.textContent = t('text_candidate_matches_could_not_be_loaded');
+                if (panel.isConnected) {
+                    status.textContent = t('text_candidate_matches_could_not_be_loaded');
+                    syncPanelReserve();
+                }
             }
         });
         widget.appendChild(trigger);
