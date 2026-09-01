@@ -16540,11 +16540,50 @@ ${scopedRules('.enh-zoom', {
     const MOBILE_IMDB_HOST = 'm.imdb.com';
     const DESKTOP_IMDB_HOST = 'www.imdb.com';
 
+    const HANDHELD_MAX_EDGE = 820;
+    const DESKTOP_REDIRECT_MARK = 'imdb_enh_desktop_redirect';
+
+    /* The short edge, not the width. A phone held sideways is 844 CSS pixels across and
+       would read as a computer measured on width alone, and a tablet would change its
+       answer when somebody turned it over. The shorter side does not move. */
+    function shortViewportEdge(view) {
+        const width = Number(view.innerWidth);
+        const height = Number(view.innerHeight);
+        const viewport = [width, height].filter(value => Number.isFinite(value) && value > 0);
+        if (viewport.length === 2) return Math.min(...viewport);
+        /* A tab that has not been painted yet reports zero. The screen is still the
+           device's, so ask it rather than guessing from a measurement that does not exist. */
+        const screenWidth = Number(view.screen?.width);
+        const screenHeight = Number(view.screen?.height);
+        const physical = [screenWidth, screenHeight].filter(value => Number.isFinite(value) && value > 0);
+        if (physical.length === 2) return Math.min(...physical);
+        return viewport[0] ?? physical[0] ?? 0;
+    }
+
     function looksLikeHandheld(view = window) {
         try {
             const coarse = view.matchMedia?.('(pointer: coarse)')?.matches === true;
-            return coarse && Number(view.innerWidth) > 0 && Number(view.innerWidth) <= 820;
-        } catch { return false; }
+            if (!coarse) return false;
+            const edge = shortViewportEdge(view);
+            /* Nothing measurable and a coarse pointer: treat it as a phone. The cost of
+               being wrong here is a desktop browser staying on the mobile page, which the
+               person can leave. The other way round takes a phone off the page it asked
+               for and onto one built for a mouse. */
+            if (!(edge > 0)) return true;
+            return edge <= HANDHELD_MAX_EDGE;
+        } catch { return true; }
+    }
+
+    /* IMDb sends some visitors back to the mobile host, and two redirects that disagree
+       with each other loop until the tab gives up. One rewrite per tab per address. */
+    function claimDesktopRedirect(target, view = window) {
+        try {
+            const store = view.sessionStorage;
+            if (!store) return true;
+            if (store.getItem(DESKTOP_REDIRECT_MARK) === target) return false;
+            store.setItem(DESKTOP_REDIRECT_MARK, target);
+            return true;
+        } catch { return true; }
     }
 
     function desktopUrlForMobile(href, view = window) {
@@ -16553,6 +16592,10 @@ ${scopedRules('.enh-zoom', {
         catch { return ''; }
         if (parsed.hostname.toLowerCase() !== MOBILE_IMDB_HOST) return '';
         if (parsed.protocol !== 'https:') return '';
+        /* Credentials in the address belong to the host they were typed for. Carrying them
+           to a different one hands them to somebody who was never offered them, and a real
+           IMDb link has neither those nor a port. */
+        if (parsed.username || parsed.password || parsed.port) return '';
         if (looksLikeHandheld(view)) return '';
         parsed.hostname = DESKTOP_IMDB_HOST;
         // Path, query and fragment are what the person was after; only the host changes.
@@ -16855,7 +16898,7 @@ ${scopedRules('.enh-zoom', {
        assigned, so the back button does not bounce between the two. */
     if (get('desktopFromMobileLinks') !== false) {
         const desktop = desktopUrlForMobile(location.href);
-        if (desktop) {
+        if (desktop && claimDesktopRedirect(desktop)) {
             location.replace(desktop);
             return;
         }

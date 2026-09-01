@@ -291,6 +291,7 @@ function loadScriptTestHooks({ withoutDeleteValue = false, withheldCredentials =
         getJustWatchSearchUrl,
         isTmdbConfigured,
         desktopUrlForMobile,
+        claimDesktopRedirect,
         computeTrimmedMean,
         buildMarksCsv,
         buildLetterboxdCsv,
@@ -3424,9 +3425,65 @@ test('a mobile IMDb address is rewritten to the desktop one, path and all', () =
     const touchLaptop = { matchMedia: query => ({ matches: query === '(pointer: coarse)' }), innerWidth: 1600 };
     assert.strictEqual(hooks.desktopUrlForMobile('https://m.imdb.com/title/tt1/', touchLaptop),
         'https://www.imdb.com/title/tt1/', 'a touchscreen laptop is not a phone');
-    // A view that cannot answer the question is treated as a desktop, which is the default.
+    // A view with no coarse pointer at all is a computer, which is the default.
     assert.strictEqual(hooks.desktopUrlForMobile('https://m.imdb.com/title/tt1/', {}),
         'https://www.imdb.com/title/tt1/');
+
+    /* Measured on the short edge. The same phone turned sideways is 844 pixels across and
+       read on width alone would be sent to the desktop site mid-scroll, and a tablet would
+       change its answer every time somebody rotated it. */
+    const coarse = query => ({ matches: query === '(pointer: coarse)' });
+    [
+        ['a phone held sideways', { matchMedia: coarse, innerWidth: 844, innerHeight: 390 }],
+        ['a tablet upright', { matchMedia: coarse, innerWidth: 820, innerHeight: 1180 }],
+        ['the same tablet sideways', { matchMedia: coarse, innerWidth: 1180, innerHeight: 820 }],
+        /* A tab that has not painted reports zero. Asking the screen instead beats
+           concluding from a measurement that does not exist. */
+        ['a tab that has not painted yet',
+            { matchMedia: coarse, innerWidth: 0, innerHeight: 0, screen: { width: 390, height: 844 } }],
+        /* And with nothing measurable at all, a coarse pointer is enough to leave alone.
+           A computer left on the mobile page can navigate away; a phone taken off the page
+           it asked for and dropped on a layout built for a mouse cannot undo that. */
+        ['a coarse pointer and nothing to measure', { matchMedia: coarse }],
+    ].forEach(([label, view]) => assert.strictEqual(
+        hooks.desktopUrlForMobile('https://m.imdb.com/title/tt1/', view), '',
+        `${label} keeps the site built for it`));
+
+    /* The screen has to be the answer and not merely a way of reaching the phone verdict:
+       an unpainted tab on a touchscreen laptop measures zero too, and reading the screen
+       is the only thing that tells the two apart. */
+    assert.strictEqual(hooks.desktopUrlForMobile('https://m.imdb.com/title/tt1/',
+        { matchMedia: coarse, innerWidth: 0, innerHeight: 0, screen: { width: 1920, height: 1080 } }),
+        'https://www.imdb.com/title/tt1/',
+        'an unpainted tab on a touchscreen laptop is still not a phone');
+
+    /* Credentials in an address belong to the host they were typed for; carrying them to
+       another one hands them to somebody who was never offered them. A real IMDb link has
+       neither those nor a port. */
+    ['https://user:secret@m.imdb.com/title/tt1/', 'https://user@m.imdb.com/title/tt1/',
+        'https://m.imdb.com:8443/title/tt1/']
+        .forEach(value => assert.strictEqual(hooks.desktopUrlForMobile(value, desktopView), '',
+            `${value} must not be carried to another host`));
+
+    /* IMDb sends some visitors back to the mobile host, and two redirects that disagree
+       loop until the tab gives up. The second attempt at the same address is refused. */
+    const store = new Map();
+    const tab = { sessionStorage: {
+        getItem: key => (store.has(key) ? store.get(key) : null),
+        setItem: (key, value) => store.set(key, String(value)),
+    } };
+    assert.strictEqual(hooks.claimDesktopRedirect('https://www.imdb.com/title/tt1/', tab), true,
+        'the first rewrite goes ahead');
+    assert.strictEqual(hooks.claimDesktopRedirect('https://www.imdb.com/title/tt1/', tab), false,
+        'the second one for the same address does not');
+    assert.strictEqual(hooks.claimDesktopRedirect('https://www.imdb.com/title/tt2/', tab), true,
+        'a different page is a different journey');
+    // Private modes throw on the first touch of session storage; that must not stop the fix.
+    assert.strictEqual(hooks.claimDesktopRedirect('https://www.imdb.com/title/tt1/',
+        { get sessionStorage() { throw new Error('denied'); } }), true,
+        'a browser that refuses session storage still gets the redirect');
+    assert(/claimDesktopRedirect\(desktop\)/.test(script),
+        'and the boot path must actually consult it');
 
     assert.strictEqual(hooks.DEFAULTS.desktopFromMobileLinks, true, 'on by default');
     /* And switchable off: somebody who wants the mobile layout on a desktop should keep
