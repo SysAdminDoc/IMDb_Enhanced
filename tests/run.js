@@ -237,6 +237,8 @@ function loadScriptTestHooks({ withoutDeleteValue = false, withheldCredentials =
         setUserMark,
         logAdditionalViewing,
         countViewings,
+        countSeenEpisodes,
+        readCurrentTitleMarkMetadata,
         getUserMark,
         getUserNote,
         setUserNote,
@@ -3236,7 +3238,7 @@ test('exported marks quote awkward values and defuse formulas', () => {
     const csv = hooks.buildMarksCsv(entries);
     const lines = csv.split('\r\n');
     assert.strictEqual(lines[0],
-        'Const,State,Title,Year,Genres,Your Rating,Title Rating,IMDb Rating,Runtime (mins),Watched Date,Marked On,Note',
+        'Const,State,Title,Year,Genres,Your Rating,Title Rating,IMDb Rating,Runtime (mins),Watched Date,Marked On,Series,Note',
         'the header is the documented one');
     /* Every column the store holds, not the five it used to write. Read back through the
        parser rather than compared as a string, so the check is about the values. */
@@ -3672,6 +3674,45 @@ test('a mobile IMDb address is rewritten to the desktop one, path and all', () =
     assert(/location\.replace\(desktop\)/.test(script), 'the history entry is replaced, not added to');
     assert(boot.indexOf('desktopUrlForMobile(location.href)') < boot.indexOf('installSPARouter()'),
         'and before the router or any feature starts');
+});
+
+/* IE-107: a series page knew nothing about the episodes of it somebody had watched, even
+   though the marks were in the store. They are keyed by the episode's own id and carried
+   no way back to the show, so the link has to be recorded when the mark is made. */
+test('an episode mark records the series it belongs to', () => {
+    const hooks = loadScriptTestHooks();
+    const marks = {
+        tt0959621:{ v:2, state:'watched', title:'Pilot', ts:1, series:'tt0903747' },
+        tt0959622:{ v:2, state:'watched', title:'Cat in the Bag', ts:2, series:'tt0903747' },
+        // A Skip is a decision not to watch an episode, so it is not progress through one.
+        tt0959623:{ v:2, state:'skip', title:'Skipped one', ts:3, series:'tt0903747' },
+        // Another show entirely, and a film that belongs to nothing.
+        tt0994359:{ v:2, state:'watched', title:'Other show', ts:4, series:'tt0306414' },
+        tt0133093:{ v:2, state:'watched', title:'The Matrix', ts:5 },
+    };
+    assert.strictEqual(hooks.countSeenEpisodes('tt0903747', marks), 2,
+        'only the episodes of this show that were actually watched');
+    assert.strictEqual(hooks.countSeenEpisodes('tt0306414', marks), 1);
+    assert.strictEqual(hooks.countSeenEpisodes('tt0000001', marks), 0, 'a show with none says none');
+    assert.strictEqual(hooks.countSeenEpisodes('', marks), 0, 'and neither does a missing id');
+    assert.strictEqual(hooks.countSeenEpisodes('not-an-id', marks), 0);
+
+    /* Stored only when it is a real id and not the record's own. A record pointing at
+       itself would count a series page as one of its own episodes. */
+    assert.strictEqual(hooks.normalizeUserMark({ state:'watched', ts:1, series:'tt0903747' }).series,
+        'tt0903747');
+    assert.strictEqual(hooks.normalizeUserMark({ state:'watched', ts:1, series:'nonsense' }).series,
+        undefined, 'junk in the field is dropped rather than stored');
+    assert.strictEqual(hooks.normalizeUserMark({ state:'watched', ts:1 }).series, undefined,
+        'and a mark made before this shipped simply does not carry one');
+
+    /* It has to survive a backup. A restore that lost the link would leave every series
+       page reporting nothing while the episode marks were all still there. */
+    const csv = hooks.buildMarksCsv(Object.entries(marks));
+    const back = hooks.prepareCsvMarkImport(csv, {}).marks;
+    assert.strictEqual(back.tt0959621.series, 'tt0903747', 'the link comes back');
+    assert.strictEqual(back.tt0133093.series, undefined, 'and a film still belongs to nothing');
+    assert.strictEqual(hooks.countSeenEpisodes('tt0903747', back), 2, 'so the count survives too');
 });
 
 /* IE-105: watching something twice is the ordinary case a Seen mark could not describe.

@@ -1089,6 +1089,9 @@
         text_saved_letterboxd_match_unavailable: 'Saved Letterboxd match unavailable',
         text_saved_locally: 'Saved locally',
         text_saved_mark_count: '$1 saved',
+        text_seen_episodes_of_total: 'Seen $1 of $2 episodes',
+        text_seen_episodes_one: 'Seen $1 episode',
+        text_seen_episodes_other: 'Seen $1 episodes',
         text_saved_metacritic_match_unavailable: 'Saved Metacritic match unavailable',
         text_saved_on_this_device: 'Saved on this device',
         text_saved_rotten_tomatoes_match_unavailable: 'Saved Rotten Tomatoes match unavailable',
@@ -2599,6 +2602,19 @@
         if (!Number.isFinite(timestamp) || timestamp <= 0 || timestamp > Date.now() + 60000) return '';
         return new Date(timestamp).toISOString().slice(0, 10);
     }
+    /* IE-107: which series an episode belongs to. Marks are keyed by the episode's own id
+       and carry no way back to the show, so a series page had no way to know that fourteen
+       of the records in the store were its own episodes. Recorded when the mark is made,
+       from the page that already knows: an episode page names its series in its structured
+       data, and the episodes list is the series page.
+
+       Never derived by asking IMDb for anything. A mark made before this shipped does not
+       carry it, and the count says only what it can see. */
+    function normalizeUserMarkSeries(value) {
+        const id = String(value || '').trim();
+        return /^tt\d+$/.test(id) ? id : '';
+    }
+
     function mergeUserMarkMetadata(record, metadata) {
         const merged = { ...(record || {}) };
         if (!metadata || typeof metadata !== 'object') return merged;
@@ -2610,6 +2626,8 @@
         if (genres.length) merged.genres = normalizeUserMarkGenres([...(merged.genres || []), ...genres]);
         if (imdbRating !== null) merged.imdbRating = imdbRating;
         if (runtime !== null) merged.runtime = runtime;
+        const series = normalizeUserMarkSeries(metadata.series);
+        if (series) merged.series = series;
         return merged;
     }
     function normalizeUserMark(record) {
@@ -2632,6 +2650,7 @@
         const genres = normalizeUserMarkGenres(record.genres);
         const imdbRating = normalizeUserMarkRating(record.imdbRating);
         const runtime = normalizeUserMarkRuntime(record.runtime);
+        const series = normalizeUserMarkSeries(record.series);
         return {
             v: USER_MARK_RECORD_VERSION,
             state,
@@ -2644,6 +2663,7 @@
             ...(genres.length ? { genres } : {}),
             ...(imdbRating !== null ? { imdbRating } : {}),
             ...(runtime !== null ? { runtime } : {}),
+            ...(series ? { series } : {}),
         };
     }
     /* Control characters are stripped rather than escaped: a note is rendered as text
@@ -2771,6 +2791,16 @@
         return viewings.length;
     }
 
+    /* How much of a series has been watched, from marks alone. Counts records that name
+       this series and are marked Seen; a Skip is a decision not to watch an episode, and
+       counting one as progress would overstate what somebody has actually seen. */
+    function countSeenEpisodes(seriesId, marks = getUserMarks()) {
+        const id = normalizeUserMarkSeries(seriesId);
+        if (!id) return 0;
+        return Object.values(marks || {}).filter(record =>
+            record?.state === 'watched' && normalizeUserMarkSeries(record.series) === id).length;
+    }
+
     function getUserNote(imdbId) {
         return normalizeUserNote(getUserMarks()[imdbId]?.note);
     }
@@ -2839,7 +2869,7 @@
        one score held against the title. Writing the title's score into every viewing row
        invented a rating for each of them on the way back in. */
     const MARKS_CSV_HEADER = ['Const', 'State', 'Title', 'Year', 'Genres', 'Your Rating',
-        'Title Rating', 'IMDb Rating', 'Runtime (mins)', 'Watched Date', 'Marked On', 'Note'];
+        'Title Rating', 'IMDb Rating', 'Runtime (mins)', 'Watched Date', 'Marked On', 'Series', 'Note'];
 
     function buildMarksCsv(entries = getUserMarkEntries()) {
         const rows = [csvRow(MARKS_CSV_HEADER)];
@@ -2867,6 +2897,7 @@
                     record?.runtime ?? '',
                     viewing?.date || '',
                     markedOn,
+                    record?.series || '',
                     record?.note || '',
                 ]));
             });
@@ -3026,6 +3057,8 @@
                particular viewing. Files from anywhere else have only one rating column,
                and it means both; this extension's own export separates them. */
             titleRating:findCsvColumn(headers, ['titlerating']),
+            // Which show an episode belongs to, so a restore can still count a series.
+            series:findCsvColumn(headers, ['series', 'seriesconst', 'parentconst']),
             genres:findCsvColumn(headers, ['genres', 'genre']),
             imdbRating:findCsvColumn(headers, ['imdbrating']),
             runtime:findCsvColumn(headers, ['runtimemins', 'runtimeminutes', 'runtime']),
@@ -3134,6 +3167,7 @@
                     `${viewing.date}\u0000${viewing.rating ?? ''}` === eventKey);
                 if (!alreadyStored && previousViewings.length >= USER_MARK_VIEWINGS_MAX) droppedViewings += 1;
             }
+            const series = normalizeUserMarkSeries(normalizeCsvIMDbId(readCsvCell(row, columns.series)));
             const markedOn = normalizeViewingDate(readCsvCell(row, columns.marked));
             const viewingTimestamp = markedOn ? Date.parse(`${markedOn}T12:00:00.000Z`)
                 : date ? Date.parse(`${date}T12:00:00.000Z`) : importedAt;
@@ -3154,6 +3188,7 @@
                     : {}),
                 ...(imdbRating !== null ? { imdbRating } : {}),
                 ...(runtime !== null ? { runtime } : {}),
+                ...(series ? { series } : {}),
             };
             touched.add(imdbId);
             importedRows += 1;
@@ -4856,11 +4891,16 @@
         const genres = normalizeUserMarkGenres(ld?.genre);
         const imdbRating = normalizeUserMarkRating(getIMDbRating());
         const runtime = parseStructuredDurationMinutes(ld?.duration);
+        /* An episode page names its series in the same structured data everything else
+           here is read from, so marking an episode Seen records what it belongs to at no
+           cost and with no request. */
+        const series = normalizeUserMarkSeries(structuredDataTitleId(ld?.partOfSeries));
         return {
             ...(year !== null ? { year } : {}),
             ...(genres.length ? { genres } : {}),
             ...(imdbRating !== null ? { imdbRating } : {}),
             ...(runtime !== null ? { runtime } : {}),
+            ...(series && series !== imdbId ? { series } : {}),
         };
     }
 
@@ -10913,6 +10953,17 @@ section[id*="quote" i] .ipc-list-card { padding: 4px 0 !important; margin: 2px 0
                     pointer-events:none;
                 }
                 .enh-mark-badge--skip{background:${t.red};color:${readableTextColor(t.red)}}
+                /* Above the Seen/Skip badge, in the surface colours rather than the
+                   accent: it reports progress through a show rather than saying this
+                   title carries a mark of its own. */
+                .enh-episode-badge{
+                    position:absolute;left:6px;bottom:34px;z-index:19;
+                    padding:4px 7px;border-radius:6px;background:${t.sf1};color:${t.tx1};
+                    border:1px solid ${t.bd1};box-shadow:${t.sh1};
+                    font:800 10px/1 -apple-system,BlinkMacSystemFont,'Segoe UI',sans-serif;
+                    text-transform:uppercase;letter-spacing:.04em;pointer-events:none;
+                }
+                .enh-episode-badge[hidden]{display:none}
                 /* IMDb draws its own Watched control on the same corner of a card.
                    Where one is present, the local controls and badge step aside so
                    the native account action stays clickable and unambiguous. */
@@ -10990,6 +11041,7 @@ section[id*="quote" i] .ipc-list-card { padding: 4px 0 !important; margin: 2px 0
             const heroPoster = document.querySelector('[data-testid="hero-media__poster"]');
             if (heroPoster && currentId) {
                 this._decorate(heroPoster, currentId, getTitleText());
+                this._applySeriesProgress(heroPoster, currentId);
                 seen.add(heroPoster);
             }
 
@@ -11004,6 +11056,29 @@ section[id*="quote" i] .ipc-list-card { padding: 4px 0 !important; margin: 2px 0
                 seen.add(card);
                 this._decorate(card, imdbId, this._extractTitle(card, anchor));
             });
+        },
+        /* IE-107: a series page knows nothing about the episodes of it somebody has
+           watched, even though the marks are right there. This says how many, and how
+           many there are only when the page already says so: the total comes from the
+           structured data IMDb ships with the page, never from a request. */
+        _applySeriesProgress(card, seriesId) {
+            const existing = Array.from(card.children)
+                .find(child => child.classList?.contains('enh-episode-badge'));
+            const type = getMediaType();
+            const seenCount = type === 'series' || type === 'miniseries'
+                ? countSeenEpisodes(seriesId)
+                : 0;
+            if (!seenCount) {
+                existing?.remove();
+                return;
+            }
+            const badge = existing || makeEl('div', { className:'enh-episode-badge' });
+            if (!existing) card.appendChild(badge);
+            const total = Number(getLDData()?.numberOfEpisodes);
+            const knownTotal = Number.isSafeInteger(total) && total >= seenCount ? total : 0;
+            setTextIfChanged(badge, knownTotal
+                ? t('text_seen_episodes_of_total', [seenCount, knownTotal])
+                : tCount('text_seen_episodes', seenCount));
         },
         _findCard(anchor) {
             const posterCard = anchor.closest('.ipc-poster-card');
@@ -11126,7 +11201,7 @@ section[id*="quote" i] .ipc-list-card { padding: 4px 0 !important; margin: 2px 0
                 delete card.dataset.enhMarkId;
                 delete card.dataset.enhMarkTitle;
                 delete card.dataset.enhNativeWatched;
-                card.querySelectorAll('.enh-mark-controls,.enh-mark-badge').forEach(el => el.remove());
+                card.querySelectorAll('.enh-mark-controls,.enh-mark-badge,.enh-episode-badge').forEach(el => el.remove());
             });
         }
     });
@@ -11171,10 +11246,17 @@ section[id*="quote" i] .ipc-list-card { padding: 4px 0 !important; margin: 2px 0
             if (runtime === null) runtime = normalizeUserMarkRuntime(parseRuntimeMinutes(text));
         }
         const imdbRating = normalizeUserMarkRating(readCardRating(card));
+        /* Every card on an episodes list belongs to the series whose page it is, and that
+           page's own id is the series id. Nothing else on IMDb lists episodes of one show
+           this way, so the surface is the whole test. */
+        const series = getPageSurface() === 'episodes'
+            ? normalizeUserMarkSeries(getIMDbID())
+            : '';
         return {
             ...(year !== null ? { year } : {}),
             ...(imdbRating !== null ? { imdbRating } : {}),
             ...(runtime !== null ? { runtime } : {}),
+            ...(series && series !== imdbId ? { series } : {}),
         };
     }
 

@@ -24,6 +24,8 @@
 
 ### Added
 
+- A series page now says how much of the show you have watched. If you have marked episodes Seen, the poster carries a count, and where IMDb's own page data says how many episodes there are it reads "Seen 12 of 62". Nothing is looked up for this: the count comes from your own marks and the total from what the page already carries. Marks made from an episode's page or from the episode list record which show they belong to; marks you made before this update do not, so the count starts from what it can see.
+
 - Watching something again is now something you can record. A Seen mark used to hold one date and marking it again just moved that date, so a rewatch erased the first time you saw it. Hover a title you have marked Seen and there's an Again button; it logs today alongside the dates already there, and the badge on the card and the row in your marks list show how many times you have seen it. Clicking it twice in a day does not count twice. A title holds a hundred dates, and past that the oldest makes room and you are told so.
 
 - You can hide the reviews IMDb shows on a title page. It picks which ones and puts them above the fold, and that is not a choice you made, which is why IMDb has a help article for people who write in about it. Switch this on under Clean up and the review cards go; the "User reviews" heading, the count and the link through to all of them stay where they are. Off by default.

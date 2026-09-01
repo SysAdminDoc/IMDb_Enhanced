@@ -38,6 +38,9 @@ const instrumented = userscript.replace(/\}\)\(\);\s*$/, `globalThis.__imdbEnhan
     getUserMarks,
     setUserMark,
     logAdditionalViewing,
+    countSeenEpisodes,
+    readCardMarkMetadata,
+    readCurrentTitleMarkMetadata,
     getHistogramData,
     readLoadedEpisodes,
     readPersonBirthDate,
@@ -51,6 +54,9 @@ const instrumented = userscript.replace(/\}\)\(\);\s*$/, `globalThis.__imdbEnhan
     boundedImageVariant,
     createSettingsPanel,
     getStoredSetting: key => get(key),
+    /* What init() does to the structured-data memo on a route change. happy-dom cannot
+       navigate, so a fixture that needs a second page says so this way. */
+    forgetStructuredData: () => { _ldData = null; _ldRoute = ''; },
     setStoredSetting: (key, value) => set(key, value),
     createFAB,
     showFirstRunNotice,
@@ -84,6 +90,12 @@ const instrumented = userscript.replace(/\}\)\(\);\s*$/, `globalThis.__imdbEnhan
         if (!feature) throw new Error('Unknown feature: ' + key);
         advanceFeatureGeneration(feature);
         await feature.init();
+    },
+    /* What the page's own MutationObserver does when IMDb replaces something: walk
+       the document again and repaint from the marks as they are now. */
+    rescanMarks: () => {
+        const feature = features.find(candidate => candidate.key === 'watchedMarking');
+        feature._scan(document);
     },
     stopFeature: key => {
         const feature = features.find(candidate => candidate.key === key);
@@ -567,15 +579,70 @@ await runFixture('title', async (window, hooks) => {
     gallery.remove();
 });
 
+/* IE-107: the marks for a show's episodes were in the store and its own page said nothing
+   about them. The count comes from the marks; the total comes from what IMDb already ships
+   with the page, or is left unsaid. */
+/* Structured data is read once per route, the way a real page is only parsed once, so a
+   block cannot change what kind of title it is halfway through. Each case gets its own
+   window, and each sets the page up before anything reads it. */
+const episodeBadge = window => window.document.querySelector('.enh-episode-badge');
+
+function makeSeriesPage(window, episodes) {
+    const ld = window.document.querySelector('script[type="application/ld+json"]');
+    assert.ok(ld, 'the fixture carries structured data to work from');
+    const id = JSON.parse(ld.textContent).url.match(/(tt\d+)/)[1];
+    ld.textContent = JSON.stringify({
+        '@type':'TVSeries',
+        url:`https://www.imdb.com/title/${id}/`,
+        name:'A Show',
+        ...(episodes ? { numberOfEpisodes:episodes } : {}),
+    });
+    return id;
+}
+
+function seedEpisodeMarks(hooks, seriesId) {
+    hooks.setStoredSetting('userMarks', {
+        tt0959621:{ v:2, state:'watched', title:'Pilot', ts:1, series:seriesId },
+        tt0959622:{ v:2, state:'watched', title:'Second', ts:2, series:seriesId },
+        // A Skip is a decision not to watch an episode, so it is not progress through one.
+        tt0959623:{ v:2, state:'skip', title:'Skipped', ts:3, series:seriesId },
+        // Another show's episode, which this one must not count.
+        tt0994359:{ v:2, state:'watched', title:'Elsewhere', ts:4, series:'tt0306414' },
+    });
+    /* Written straight into storage, which is the one door that does not clear the marks
+       cache the way saving a mark does. Everything reading them next would otherwise see
+       whatever this window had already loaded. */
+    hooks.getUserMarks(true);
+}
+
 /* IE-105: a rewatch is a thing the store can hold and the page could not say. The button
    for it belongs on something already Seen and nowhere else, and the count has to show up
-   where somebody would look for it. */
+   where somebody would look for it.
+
+   Both features share this window. A happy-dom page over the captured fixture is not
+   cheap, and a suite that opens one per assertion runs the process out of memory. */
 await runFixture('title', async (window, hooks) => {
     window.GM_setValue('imdb_enh_watchedMarking', true);
+    /* A film has no episodes to have watched, whatever the store holds. Checked here
+       rather than in its own window, because a fixture window is not cheap. */
+    seedEpisodeMarks(hooks, hooks.getIMDbID());
     hooks.initFeature('watchedMarking');
+    assert.equal(episodeBadge(window), null, 'a film says nothing about episodes');
+    hooks.stopFeature('watchedMarking');
+    hooks.setStoredSetting('userMarks', {});
+    hooks.initFeature('watchedMarking');
+
     const card = window.document.querySelector('.enh-markable-card[data-enh-mark-id]');
     assert.ok(card, 'the feature decorates something on a title page');
     const id = card.dataset.enhMarkId;
+
+    /* IE-107: only an episode list says what its cards are episodes of. A title page
+       carries "More like this" rows, and stamping this page's id onto those would make
+       every recommendation an episode of the film you were looking at. */
+    assert.equal(hooks.getPageSurface(), 'title');
+    assert.ok(hooks.getIMDbID(), 'and this page does have an id to stamp, so the check means something');
+    assert.equal(hooks.readCardMarkMetadata(card, 'tt0111161').series, undefined,
+        'a card on a title page belongs to no series');
     const again = card.querySelector('[data-enh-mark-action="again"]');
     const shown = node => window.getComputedStyle(node).display !== 'none';
 
@@ -609,9 +676,67 @@ await runFixture('title', async (window, hooks) => {
     assert.match(repainted.querySelector('.enh-mark-badge').textContent, /x2/i,
         'and the badge carries the rewatch count without waiting for a reload');
 
+    /* IE-107 from here: the same page, turned into a series. The marks for a show's
+       episodes were in the store and its own page said nothing about them. */
     hooks.stopFeature('watchedMarking');
+    hooks.forgetStructuredData();
+    const seriesId = makeSeriesPage(window, 0);
+    seedEpisodeMarks(hooks, seriesId);
+    hooks.initFeature('watchedMarking');
+    const episodes = episodeBadge(window);
+    assert.ok(episodes, 'a series with episode marks says how many were watched');
+    assert.match(episodes.textContent, /\b2\b/,
+        'the two that were watched, not the skip and not the other show');
+    assert.doesNotMatch(episodes.textContent, /\bof\b/i,
+        'and no total, because nothing on this page says what it is');
+
+    /* The page does carry the total sometimes, and it is read from the data IMDb ships
+       with the page rather than asked for, which is the whole constraint on this.
+       Repainted the way the page's own observer repaints it rather than by restarting the
+       feature, which is both what happens on a real page and the only way this fixture
+       survives: a happy-dom window does not give the memory back between restarts. */
+    hooks.forgetStructuredData();
+    makeSeriesPage(window, 62);
+    hooks.rescanMarks();
+    assert.match(episodeBadge(window).textContent, /2\D+62/,
+        'seen against the total the page already carries');
+
+    // Nothing marked, nothing said. An empty badge is worse than no badge.
+    hooks.setStoredSetting('userMarks', {});
+    hooks.getUserMarks(true);
+    hooks.rescanMarks();
+    assert.equal(episodeBadge(window), null, 'a show with no episode marks carries no badge');
+
+    hooks.stopFeature('watchedMarking');
+    assert.equal(episodeBadge(window), null, 'switching the feature off takes it away');
     window.GM_setValue('imdb_enh_watchedMarking', false);
     hooks.setStoredSetting('userMarks', {});
+
+    /* The other half of the link: an episode's own page names its series in the same
+       structured data everything else here is read from, so marking an episode Seen from
+       that page records what it belongs to at no cost and with no request. */
+    hooks.forgetStructuredData();
+    const ld = window.document.querySelector('script[type="application/ld+json"]');
+    ld.textContent = JSON.stringify({
+        '@type':'TVEpisode',
+        url:`https://www.imdb.com/title/${seriesId}/`,
+        name:'An episode',
+        partOfSeries:{ '@type':'TVSeries', url:'https://www.imdb.com/title/tt0306414/' },
+    });
+    assert.equal(hooks.readCurrentTitleMarkMetadata(seriesId).series, 'tt0306414',
+        'an episode page records the show it belongs to');
+
+    /* And a page that names itself as its own series records nothing, or a series would
+       count its own page as one of its episodes. */
+    hooks.forgetStructuredData();
+    ld.textContent = JSON.stringify({
+        '@type':'TVSeries',
+        url:`https://www.imdb.com/title/${seriesId}/`,
+        name:'A Show',
+        partOfSeries:{ '@type':'TVSeries', url:`https://www.imdb.com/title/${seriesId}/` },
+    });
+    assert.equal(hooks.readCurrentTitleMarkMetadata(seriesId).series, undefined,
+        'a title is never an episode of itself');
 });
 
 /* IE-115: the featured review puts one stranger's opinion above the fold, and which one
@@ -1152,6 +1277,14 @@ await runFixture('episodes', async (window, hooks) => {
     assert.equal(episodes.length, 3, 'selector "article.episode-item-wrapper" must expose the loaded season');
     assert.deepEqual(episodes.map(episode => episode.id), ['tt0959621', 'tt1054724', 'tt1054725']);
     assert.equal(episodes[0].label, 'S1.E1 Pilot');
+
+    /* IE-107: every card on this page is an episode of the show whose page it is, and
+       this page's own id is the show's. Marking one Seen records that, which is the only
+       way a series page can later count its own episodes without asking IMDb anything. */
+    const card = requireSelector(window.document, 'article.episode-item-wrapper');
+    const metadata = hooks.readCardMarkMetadata(card, 'tt0959621');
+    assert.equal(metadata.series, hooks.getIMDbID(),
+        'a mark made from the episode list belongs to the series that list is of');
 });
 
 await runFixture('person', async (window, hooks) => {

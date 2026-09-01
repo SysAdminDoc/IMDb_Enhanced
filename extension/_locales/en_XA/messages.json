@@ -2246,6 +2246,15 @@
   "text_saved_mark_count": {
     "message": "[!! $1 saved !!]"
   },
+  "text_seen_episodes_of_total": {
+    "message": "[!! Seen $1 of $2 episodes !!]"
+  },
+  "text_seen_episodes_one": {
+    "message": "[!! Seen $1 episode !!]"
+  },
+  "text_seen_episodes_other": {
+    "message": "[!! Seen $1 episodes !!]"
+  },
   "text_saved_metacritic_match_unavailable": {
     "message": "[!! Saved Metacritic match unavailable !!]"
   },
