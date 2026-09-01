@@ -506,11 +506,21 @@ await runFixture('title', async (window, hooks) => {
     window.document.body.appendChild(gallery);
     const image = gallery.querySelector('img');
 
-    // IMDb's suppression, as the page does it: a listener on an ancestor.
-    let suppressed = 0;
-    gallery.addEventListener('contextmenu', event => { suppressed += 1; event.preventDefault(); });
-
+    /* Registered first, the way document_start puts it ahead of the page's own scripts.
+       That order is the mechanism: among listeners on the same node in the same phase the
+       earlier one runs first, and stopping immediately is what keeps the rest from
+       running at all. */
     hooks.initFeature('restoreImageContextMenu');
+
+    /* Where a site actually suppresses this. A listener on a container is defeated by
+       stopping propagation at all; ones on window and on document in the capture phase
+       are not, because propagation has not begun leaving that node — those need the
+       immediate form, and need this listener to have been registered first. */
+    let suppressed = 0;
+    const suppress = event => { suppressed += 1; event.preventDefault(); };
+    gallery.addEventListener('contextmenu', suppress);
+    window.addEventListener('contextmenu', suppress, true);
+    window.document.addEventListener('contextmenu', suppress, true);
     const event = new window.MouseEvent('contextmenu', { bubbles:true, cancelable:true });
     assert.equal(event.cancelable, true, 'the event has to be cancellable for the next check to mean anything');
     image.dispatchEvent(event);
@@ -526,12 +536,12 @@ await runFixture('title', async (window, hooks) => {
     gallery.appendChild(paragraph);
     const elsewhere = new window.MouseEvent('contextmenu', { bubbles:true, cancelable:true });
     paragraph.dispatchEvent(elsewhere);
-    assert.equal(suppressed, 1, 'the page keeps its own handling everywhere else');
+    assert.equal(suppressed, 3, 'the page keeps all of its own handling everywhere else');
 
     hooks.stopFeature('restoreImageContextMenu');
     const after = new window.MouseEvent('contextmenu', { bubbles:true, cancelable:true });
     image.dispatchEvent(after);
-    assert.equal(suppressed, 2, 'switching it off gives the page its handler back over images too');
+    assert.equal(suppressed, 6, 'switching it off gives all three handlers back over images too');
     gallery.remove();
 });
 

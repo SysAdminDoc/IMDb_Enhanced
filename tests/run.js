@@ -3346,8 +3346,27 @@ test('the trimmed mean drops the two ends of the scale and says it is derived', 
     assert.strictEqual(hooks.computeTrimmedMean([]), null);
     assert.strictEqual(hooks.computeTrimmedMean(null), null);
     // Junk in a bucket is skipped rather than counted as a zero.
-    assert.strictEqual(hooks.computeTrimmedMean([bucket('x', 10), bucket(5, 10)]), 5);
-    assert.strictEqual(hooks.computeTrimmedMean([bucket(5, -10), bucket(5, 10)]), 5);
+    assert.strictEqual(hooks.computeTrimmedMean([bucket('x', 100), bucket(5, 100)]), 5);
+    assert.strictEqual(hooks.computeTrimmedMean([bucket(5, -100), bucket(5, 100)]), 5);
+
+    /* The number has to come from an audience. A review-bombed title can have nearly all
+       its votes at the two ends, and the mean of the handful left says nothing about
+       anybody while looking exactly like an answer — which is the misleading case this
+       whole line exists to avoid producing. */
+    assert.strictEqual(hooks.computeTrimmedMean([bucket(1, 100000), bucket(7, 5)]), null,
+        'five surviving votes is not a second opinion');
+    assert.strictEqual(hooks.computeTrimmedMean([bucket(9, 1), bucket(10, 900000)]), null,
+        'and neither is one');
+    // A small share of a large vote count is still too small a share.
+    assert.strictEqual(hooks.computeTrimmedMean([bucket(1, 100000), bucket(7, 1000)]), null,
+        'one percent of the votes does not describe the audience');
+    // But a genuine minority does: six percent of a large count is thousands of people.
+    assert.strictEqual(hooks.computeTrimmedMean([bucket(1, 94000), bucket(7, 6000)]), 7);
+
+    /* The rounding is part of the answer: a mean of 7.25 is reported to one decimal like
+       every other rating on the page. */
+    assert.strictEqual(hooks.computeTrimmedMean([bucket(7, 300), bucket(8, 100)]), 7.3,
+        'the mean is rounded to one decimal, not printed raw');
 
     /* What the line says. The trimmed figure is additional, labelled, and the displayed
        rating is still the thing being compared against. */

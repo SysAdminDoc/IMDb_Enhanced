@@ -175,8 +175,15 @@ ${scoped.join(',\n')} {
 const prelude = String.raw`
     const __root = document.documentElement;
     const __clearBoot = () => { if (__root) __root.removeAttribute('${BOOT_ATTRIBUTE}'); };
-    if (__root) __root.setAttribute('${BOOT_ATTRIBUTE}', '1');
-    setTimeout(__clearBoot, ${BOOT_TIMEOUT_MS});
+    /* Only where this actually restyles the page. The script is injected on IMDb's mobile
+       host too, where its whole job is to send a desktop browser to the desktop page — and
+       hiding the body there blanks a page nothing will ever restyle, for anybody who
+       turned that redirect off or is holding a phone, where it never fires. */
+    const __host = typeof location === 'undefined' ? '' : String(location.hostname || '').toLowerCase();
+    if (__root && __host === 'www.imdb.com') {
+        __root.setAttribute('${BOOT_ATTRIBUTE}', '1');
+        setTimeout(__clearBoot, ${BOOT_TIMEOUT_MS});
+    }
 `;
 
 /* Read from the userscript so the bridge and the exporter agree on what counts as a
@@ -579,6 +586,17 @@ const { TRANSMITTED_DATA_CATEGORIES } = originLists;
 /* Mandatory the moment _locales exists, and it is the locale every lookup falls
    back to. */
 manifest.default_locale = 'en';
+/* Where the content script runs, read from the one place that says so. Hand-keeping a
+   second copy of this list is how a host ends up matched by the userscript and not by the
+   extension — with nothing to notice, because each half looks right on its own. */
+function readUserscriptMatches() {
+    const matches = [...source.matchAll(/^\/\/ @match\s+(\S+)$/gm)].map(match => match[1]);
+    if (!matches.length) throw new Error('The userscript declares no @match patterns.');
+    return matches;
+}
+manifest.content_scripts = (manifest.content_scripts || []).map((entry, index) => (index === 0
+    ? { ...entry, matches: readUserscriptMatches() }
+    : entry));
 manifest.host_permissions = originLists.REQUIRED_ORIGINS;
 manifest.optional_host_permissions = originLists.OPTIONAL_ORIGINS;
 const serializedManifest = `${JSON.stringify(manifest, null, 2)}\n`;

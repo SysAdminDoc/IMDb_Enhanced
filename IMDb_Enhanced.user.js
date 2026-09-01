@@ -7633,22 +7633,32 @@ section[id*="quote" i] .ipc-list-card { padding: 4px 0 !important; margin: 2px 0
        move a mean furthest — so a mean without them says what the middle of the audience
        thought. It is derived here from buckets IMDb publishes, not a rating anyone gave,
        and it never replaces the score on the page. */
+    /* Below these the surviving votes are not an audience. A review-bombed title can have
+       99.99% of its votes at the two ends, and the mean of what is left says nothing about
+       anybody — while looking exactly like an answer. */
+    const TRIMMED_MEAN_MIN_VOTES = 50;
+    const TRIMMED_MEAN_MIN_SHARE = 0.05;
+
     function computeTrimmedMean(buckets) {
         if (!Array.isArray(buckets) || !buckets.length) return null;
         let votes = 0;
         let weighted = 0;
+        let total = 0;
         for (const bucket of buckets) {
             const rating = Number(bucket?.rating);
             const count = Number(bucket?.voteCount);
             if (!Number.isFinite(rating) || !Number.isFinite(count) || count < 0) continue;
             // Strictly inside the scale: 1 and 10 are the buckets being excluded.
+            total += count;
             if (rating <= 1 || rating >= 10) continue;
             votes += count;
             weighted += rating * count;
         }
-        /* Every vote at one end or the other leaves nothing to average. That is a real
-           answer about a title, and a made-up number would be a worse one. */
-        if (!votes) return null;
+        /* Every vote at one end leaves nothing to average, and almost every vote at the
+           ends leaves too little. Both are real answers about a title; a number computed
+           from the remainder would be a worse one. */
+        if (!votes || votes < TRIMMED_MEAN_MIN_VOTES) return null;
+        if (total && votes / total < TRIMMED_MEAN_MIN_SHARE) return null;
         return Math.round((weighted / votes) * 10) / 10;
     }
 
@@ -8872,15 +8882,21 @@ section[id*="quote" i] .ipc-list-card { padding: 4px 0 !important; margin: 2px 0
         init() {
             this._onContextMenu = event => {
                 if (!event.target?.closest?.('img, [data-testid="media-viewer"], picture')) return;
-                /* Their suppression is a listener that calls preventDefault; stopping the
-                   event here means it never runs. Nothing is prevented by us, so the
-                   browser shows its own menu exactly as it would anywhere else. */
-                event.stopPropagation();
+                /* Their suppression is a listener that calls preventDefault. Stopping the
+                   event immediately means no further listener runs — including any other
+                   on this same node, which plain stopPropagation would have left to fire.
+                   Nothing is prevented by us, so the browser shows its own menu exactly as
+                   it would anywhere else. */
+                event.stopImmediatePropagation();
             };
-            document.addEventListener('contextmenu', this._onContextMenu, true);
+            /* window, in the capture phase: the first node the event reaches, so a
+               suppression anywhere below it — window itself included, for anything
+               registered after this — never sees the event. Running at document-start is
+               what makes "after this" the common case. */
+            window.addEventListener('contextmenu', this._onContextMenu, true);
         },
         destroy() {
-            document.removeEventListener('contextmenu', this._onContextMenu, true);
+            window.removeEventListener('contextmenu', this._onContextMenu, true);
             this._onContextMenu = null;
         },
     });

@@ -135,6 +135,10 @@ function declaredFiles(dir) {
     Object.values(manifest.icons || {}).forEach(add);
     Object.values(manifest.action?.default_icon || {}).forEach(add);
     add(manifest.action?.default_popup);
+    // The extension's own pages, named where a browser looks for them.
+    add(manifest.options_ui?.page);
+    add(manifest.options_page);
+    add(manifest.chrome_url_overrides?.newtab);
     add(manifest.background?.service_worker);
     (manifest.background?.scripts || []).forEach(add);
     (manifest.content_scripts || []).forEach(script => {
@@ -142,22 +146,32 @@ function declaredFiles(dir) {
         (script.css || []).forEach(add);
     });
     (manifest.web_accessible_resources || []).forEach(rule => (rule.resources || []).forEach(add));
-    /* The pages the extension opens from its own UI, and the locales, which the manifest
-       names only through default_locale. */
+    /* The locales, which the manifest names only through default_locale, and whatever a
+       page it names loads from beside it — a page is not much use without its script. */
     listFiles(dir).forEach(name => {
-        if (name.startsWith('_locales/') || name.endsWith('.html')) named.add(name);
-        // A page's own script and stylesheet sit beside it and are reached only from it.
-        if (/^(?:permissions|recovery)\.(?:js|css)$/.test(name)) named.add(name);
+        if (name.startsWith('_locales/')) named.add(name);
     });
-    return [...named].filter(name => fs.existsSync(path.join(dir, name))).sort();
+    [...named].filter(name => name.endsWith('.html')).forEach(page => {
+        const markup = fs.readFileSync(path.join(dir, page), 'utf8');
+        [...markup.matchAll(/(?:src|href)="([^"?#:]+)"/g)].forEach(match => {
+            const asset = path.posix.join(path.posix.dirname(page), match[1]);
+            if (fs.existsSync(path.join(dir, asset))) named.add(asset);
+        });
+    });
+    /* Reported rather than quietly dropped. A manifest that names a file which is not
+       there is a broken package, and filtering it out here is how that ships. */
+    const wanted = [...named].sort();
+    const missing = wanted.filter(name => !fs.existsSync(path.join(dir, name)));
+    if (missing.length) {
+        throw new Error(`${path.basename(dir)} is missing ${missing.join(', ')}; run npm test first.`);
+    }
+    return wanted;
 }
 
 function packDirectory(dir, destination) {
     if (!fs.existsSync(dir)) throw new Error(`${path.basename(dir)} has not been built; run npm test first.`);
     const names = declaredFiles(dir);
     if (!names.length) throw new Error(`${path.basename(dir)} is empty.`);
-    const missing = names.filter(name => !fs.existsSync(path.join(dir, name)));
-    if (missing.length) throw new Error(`${path.basename(dir)} is missing ${missing.join(', ')}.`);
     const entries = names.map(name => ({ name, body:fs.readFileSync(path.join(dir, name)) }));
     return writeZip(entries, destination);
 }
@@ -180,7 +194,6 @@ const GENERATED_IN_SOURCE_DIRS = new Set([
     'extension/content.js',
     'extension/recovery.js',
     'extension/boot.css',
-    'extension/icons/icon-master.png',
 ]);
 
 function packSource(destination) {

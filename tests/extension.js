@@ -80,6 +80,26 @@ new Set([
 ]).forEach(iconPath => {
     assert(fs.existsSync(path.join(root, 'extension', iconPath)), `extension icon asset missing: ${iconPath}`);
 });
+/* Where the content script runs was the last list kept by hand beside the userscript's
+   own @match block, and the two had already parted company: the mobile host could be
+   deleted from the manifest with every test green and the feature dead in the shipped
+   package. Projected now, and compared here in both directions. */
+const userscriptMatches = [...source.matchAll(/^\/\/ @match\s+(\S+)$/gm)].map(match => match[1]);
+assert(userscriptMatches.length >= 15, 'the userscript should declare its pages');
+assert.deepStrictEqual(manifest.content_scripts[0].matches, userscriptMatches,
+    'the extension must run exactly where the userscript says it runs');
+assert(userscriptMatches.includes('https://m.imdb.com/*'),
+    'including IMDb\'s mobile host, which is where the desktop redirect has to run');
+
+/* And the script must not treat that host as one it styles: the boot rules hide the body
+   until real settings arrive, which on a page nothing will restyle is a blank screen for
+   anybody who turned the redirect off or is holding a phone. */
+assert(/__host === 'www\.imdb\.com'/.test(content.slice(0, 1200)),
+    'the boot blanking must be scoped to the host it actually restyles');
+assert(/html\[data-imdb-enhanced-booting\] body \{ visibility: hidden/.test(
+    fs.readFileSync(path.join(root, 'extension', 'boot.css'), 'utf8')),
+    'and the rule it gates should still be the one that hides the page');
+
 /* IE-75: the install prompt is what a user reads to decide whether to trust this, and it
    used to describe every score, ad, video and loopback origin whether or not the feature
    was on. IMDb is the only thing the extension cannot work without. */
@@ -662,6 +682,23 @@ test('an archive carries what the manifest declares and nothing else', () => {
     ['manifest.json', 'content.js', 'background.js', 'icons/icon128.png', '_locales/en/messages.json']
         .forEach(name => assert(names.includes(name), `${name} must be packed`));
 
+    /* The extension's own pages, and what they load. A package whose options page is
+       missing installs and then does nothing when somebody opens it, which is exactly the
+       state the recovery page exists to rescue people from. */
+    const storeManifest = JSON.parse(fs.readFileSync(path.join(store, 'manifest.json'), 'utf8'));
+    const optionsPage = storeManifest.options_ui?.page;
+    assert(optionsPage, 'the build should declare an options page');
+    assert(names.includes(optionsPage), `${optionsPage} must be packed`);
+    const pageScript = /<script src="([^"]+)"/.exec(fs.readFileSync(path.join(store, optionsPage), 'utf8'))?.[1];
+    assert(pageScript, 'the options page should load a script');
+    assert(names.includes(pageScript), `${pageScript} must be packed with the page that loads it`);
+
+    /* A manifest that names a file which is not there is a broken package. Filtering it
+       out quietly is how that ships. */
+    fs.rmSync(path.join(staging, 'background.js'));
+    assert.throws(() => pack.packDirectory(staging, target), /is missing background\.js/,
+        'a package missing a file the manifest names must fail the build, not ship');
+
     fs.unlinkSync(target);
     fs.rmSync(staging, { recursive:true, force:true });
 });
@@ -683,8 +720,15 @@ test('the source archive carries what a rebuild needs and no build output', () =
        produces, which is the one thing a source submission exists to rule out. */
     ['extension-store/manifest.json', 'extension-firefox/manifest.json',
         'extension/content.js', 'extension/recovery.js', 'extension/boot.css',
-        'extension/icons/icon-master.png', 'extension/_locales/en/messages.json']
+        'extension/_locales/en/messages.json']
         .forEach(name => assert(!names.includes(name), `${name} is generated and must not be in the source archive`));
+
+    /* The icon master is not one of them, which this test used to claim. Nothing writes it
+       and nothing reads it at build time: it is the artwork the four shipped PNGs were cut
+       from, so a source archive without it cannot produce them again. It stays out of the
+       installable package, where it would be most of the download and do nothing. */
+    assert(names.includes('extension/icons/icon-master.png'),
+        'the artwork the shipped icons came from is source, not build output');
     assert(!names.some(name => name.startsWith('node_modules/')), 'and neither are dependencies');
     assert(!names.some(name => name.startsWith('dist/')), 'nor the archives themselves');
 
