@@ -362,6 +362,12 @@
   "feature_collapsibleSections_name": {
     "message": "Collapsible sections"
   },
+  "feature_collectionPanel_detail": {
+    "message": "On a film that belongs to a series, lists the other films in it in order, with the one you are on marked. Off by default, and asks nothing on a title that is in no series."
+  },
+  "feature_collectionPanel_name": {
+    "message": "Franchise watch order"
+  },
   "feature_compactHeader_detail": {
     "message": "Slims the IMDb header while keeping it readable and stable."
   },
@@ -1769,6 +1775,12 @@
   "text_collapse_section": {
     "message": "Collapse section"
   },
+  "text_collection_entry": {
+    "message": "$1 ($2)"
+  },
+  "text_collection_source_note": {
+    "message": "From Wikidata. Order is the series own numbering where it has one, and release year otherwise."
+  },
   "text_confirm_clear_marks": {
     "message": "Confirm clear $1"
   },
@@ -2239,6 +2251,9 @@
   },
   "text_view_full_cast_crew": {
     "message": "View full cast & crew"
+  },
+  "text_watch_order": {
+    "message": "Watch order"
   },
   "toast_a_site_list_can_contain_up": {
     "message": "A site list can contain up to $1 destinations"

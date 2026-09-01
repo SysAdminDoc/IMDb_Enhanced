@@ -210,6 +210,61 @@ await runFixture('title', async (window, hooks) => {
     }
 });
 
+/* IE-26: a film that belongs to a series lists the rest of it in order. A film that
+   belongs to nothing, or whose "series" is only itself, has no watch order to show — and
+   that is the answer that has to produce no section at all. */
+await runFixture('title', async (window, hooks) => {
+    const observer = window.IntersectionObserver;
+    window.IntersectionObserver = class {
+        constructor(callback) { this.callback = callback; }
+        observe(element) { this.callback([{ isIntersecting:true, target:element }]); }
+        disconnect() {}
+        unobserve() {}
+    };
+    const answer = rows => {
+        window.GM_xmlhttpRequest = options => {
+            window.queueMicrotask(() => options.onload?.({
+                status: 200,
+                finalUrl: options.url,
+                responseText: JSON.stringify({ results:{ bindings:rows } }),
+            }));
+            return { abort() {} };
+        };
+    };
+    try {
+        window.GM_setValue('imdb_enh_collectionPanel', true);
+
+        // A series that is only this film is not a watch order.
+        answer([{ imdb:{ value:'tt0133093' }, label:{ value:'The Matrix' }, year:{ value:'1999' }, ordinal:{ value:'1' } }]);
+        await hooks.runFeature('collectionPanel');
+        assert.equal(window.document.getElementById('enh-collection'), null,
+            'a series of one must not render a watch order');
+
+        // A real series does, in its declared order, with the current film marked.
+        hooks.cacheSet('series_tt0133093', null, 1);
+        answer([
+            { imdb:{ value:'tt0234215' }, label:{ value:'The Matrix Reloaded' }, year:{ value:'2003' }, ordinal:{ value:'2' } },
+            { imdb:{ value:'tt0133093' }, label:{ value:'The Matrix' }, year:{ value:'1999' }, ordinal:{ value:'1' } },
+        ]);
+        await hooks.runFeature('collectionPanel');
+        const section = window.document.getElementById('enh-collection');
+        assert.ok(section, 'a series of more than one renders');
+        const items = [...section.querySelectorAll('.enh-collection__item')];
+        assert.deepEqual(items.map(item => item.textContent),
+            ['The Matrix (1999)', 'The Matrix Reloaded (2003)'], 'in the order the series declares');
+        assert.equal(items[0].getAttribute('aria-current'), 'true', 'the film you are on is marked');
+        assert.equal(items[0].querySelector('a'), null, 'and is not a link to itself');
+        assert.equal(items[1].querySelector('a').getAttribute('href'), '/title/tt0234215/');
+
+        hooks.stopFeature('collectionPanel');
+        assert.equal(window.document.getElementById('enh-collection'), null,
+            'switching it off takes the section away');
+    } finally {
+        window.GM_setValue('imdb_enh_collectionPanel', false);
+        window.IntersectionObserver = observer;
+    }
+});
+
 /* IE-123: the structured-data memo used to be cleared only by init(), which runs about
    600 ms after a pushState. Inside that window a title-to-title navigation served the
    previous title's year and media type to everything that asked — including the identity

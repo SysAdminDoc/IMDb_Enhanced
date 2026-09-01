@@ -203,6 +203,8 @@
         feature_castAges_name: 'Person age',
         feature_collapsibleSections_detail: 'Adds per-section collapse controls and remembers each state.',
         feature_collapsibleSections_name: 'Collapsible sections',
+        feature_collectionPanel_detail: 'On a film that belongs to a series, lists the other films in it in order, with the one you are on marked. Off by default, and asks nothing on a title that is in no series.',
+        feature_collectionPanel_name: 'Franchise watch order',
         feature_compactHeader_detail: 'Slims the IMDb header while keeping it readable and stable.',
         feature_compactHeader_name: 'Compact header',
         feature_dimLowRated_detail: 'Fades the artwork of titles rated below your threshold on lists, charts, and search results. Text and controls stay fully readable, and hovering restores the image.',
@@ -672,6 +674,8 @@
         text_click_or_press_enter_to_reveal_episode: 'Click or press Enter to reveal episode synopsis',
         text_click_or_press_enter_to_reveal_plot: 'Click or press Enter to reveal plot synopsis',
         text_collapse_section: 'Collapse section',
+        text_collection_entry: '$1 ($2)',
+        text_collection_source_note: 'From Wikidata. Order is the series own numbering where it has one, and release year otherwise.',
         text_confirm_clear_marks: 'Confirm clear $1',
         text_copy_all_links: 'Copy all links',
         text_copy_imdb_ids: 'Copy $1 IMDb IDs',
@@ -829,6 +833,7 @@
         text_user_score: 'User: $1',
         text_uses_light_for_os_light_mode_and: 'Uses Light for OS light mode and Dark for OS dark mode.',
         text_view_full_cast_crew: 'View full cast & crew',
+        text_watch_order: 'Watch order',
         toast_a_site_list_can_contain_up: 'A site list can contain up to $1 destinations',
         toast_all_imdb_watched_on_this_page_one: 'All $1 IMDb Watched title on this page already has a local mark',
         toast_all_imdb_watched_on_this_page_other: 'All $1 IMDb Watched titles on this page already have a local mark',
@@ -1186,6 +1191,7 @@
         inlineMetacriticScore: ['metacritic', 'omdb', 'wikidata'],
         inlineLetterboxdScore: ['letterboxd', 'wikidata'],
         inlineAnimeScore: ['anilist'],
+        collectionPanel: ['wikidata'],
         /* Both are declared so either can be granted, but only the chosen source is ever
            contacted; activeProvidersFor narrows this to what is actually in play. */
         streamAvailability: ['justWatch', 'tmdb'],
@@ -1539,6 +1545,8 @@
         imageZoom: false,
         // Off by default: it puts someone else's page inside this one.
         movieChatBoard: false,
+        // Off by default: it is a whole section of other films.
+        collectionPanel: false,
         streamAvailability: true,
         /* Which service answers "where can I watch this". JustWatch is read by parsing
            their page; TMDB is a documented API but needs a read token of your own. The
@@ -1617,6 +1625,7 @@
         inlineMetacriticScore: t('feature_inlineMetacriticScore_detail'),
         imageZoom: t('feature_imageZoom_detail'),
         movieChatBoard: t('feature_movieChatBoard_detail'),
+        collectionPanel: t('feature_collectionPanel_detail'),
         inlineAnimeScore: t('feature_inlineAnimeScore_detail'),
         streamAvailability: t('feature_streamAvailability_detail'),
         searchButtons: t('feature_searchButtons_detail'),
@@ -8300,6 +8309,134 @@ section[id*="quote" i] .ipc-list-card { padding: 4px 0 !important; margin: 2px 0
         return /^tt\d{7,10}$/.test(String(imdbId || '')) ? `${MOVIECHAT_ORIGIN}/${imdbId}` : '';
     }
 
+    /* Which films belong to the same series, in order. TMDB answers this through
+       find -> belongs_to_collection -> /collection/{id}, which needs a token of your own
+       and returns TMDB ids that then have to be turned back into IMDb ids. Wikidata
+       answers it in one query, keyless, and gives IMDb ids directly: P179 is "part of
+       the series" and P1545 is the ordinal within it. Verified live 2026-08-31 against
+       query.wikidata.org — tt0796366 returns fourteen Star Trek films with their ids,
+       English labels, years and ordinals.
+
+       So the keyless source is the one that ships, which also means the panel works
+       without asking anyone for a key, and the store build can have it. Entries without
+       an ordinal fall back to release year, which is the order people mean anyway when
+       a series has no declared numbering. */
+    const COLLECTION_ENTRY_LIMIT = 30;
+
+    function buildCollectionQuery(imdbId) {
+        if (!/^tt\d{7,10}$/.test(String(imdbId || ''))) return '';
+        const literal = JSON.stringify(String(imdbId));
+        return 'SELECT ?imdb ?label (MIN(YEAR(?date)) AS ?year) ?ordinal WHERE {'
+            + ` ?self wdt:P345 ${literal}.`
+            + ' ?self wdt:P179 ?series.'
+            + ' ?item wdt:P179 ?series; wdt:P345 ?imdb.'
+            + ' OPTIONAL { ?item wdt:P577 ?date. }'
+            + ' OPTIONAL { ?item p:P179 ?statement. ?statement ps:P179 ?series; pq:P1545 ?ordinal. }'
+            + ' ?item rdfs:label ?label. FILTER(LANG(?label) = "en")'
+            + ` } GROUP BY ?imdb ?label ?ordinal LIMIT ${COLLECTION_ENTRY_LIMIT}`;
+    }
+
+    function parseCollectionEntries(responseText) {
+        const source = toBoundedText(responseText, WIKIDATA_RESPONSE_LIMIT);
+        if (!source) return [];
+        let payload = null;
+        try { payload = JSON.parse(source); }
+        catch { return []; }
+        const rows = payload?.results?.bindings;
+        if (!Array.isArray(rows)) return [];
+        const seen = new Set();
+        const entries = [];
+        for (let index = 0; index < rows.length && index < COLLECTION_ENTRY_LIMIT; index++) {
+            const row = rows[index];
+            const imdbId = String(row?.imdb?.value || '');
+            // Their data is open, so an id that is not an id is a thing that happens.
+            if (!/^tt\d{7,10}$/.test(imdbId) || seen.has(imdbId)) continue;
+            const title = toBoundedText(row?.label?.value, USER_MARK_TITLE_LIMIT);
+            if (!title) continue;
+            seen.add(imdbId);
+            entries.push({
+                id: imdbId,
+                title,
+                year: Number(row?.year?.value) || 0,
+                ordinal: Number(row?.ordinal?.value) || 0,
+            });
+        }
+        /* By declared position where the series has one, and by year otherwise, which is
+           the order people mean when it does not. */
+        return entries.sort((a, b) => (a.ordinal || Infinity) - (b.ordinal || Infinity)
+            || (a.year || Infinity) - (b.year || Infinity)
+            || a.title.localeCompare(b.title));
+    }
+
+    reg({
+        key: 'collectionPanel', name: t('feature_collectionPanel_name'), group: 'Features',
+        async init() {
+            const isCurrent = createFeatureGuard(this);
+            if (getPageSurface() !== 'title') return;
+            const imdbId = getIMDbID();
+            const query = buildCollectionQuery(imdbId);
+            if (!query) return;
+            if (featureExcludedByProfile(this.key)) return;
+
+            const cacheKey = 'series_' + imdbId;
+            const cached = cacheGet(cacheKey);
+            if (cached) {
+                if (Array.isArray(cached.entries) && cached.entries.length > 1) this._render(cached.entries, imdbId);
+                return;
+            }
+
+            const host = document.querySelector('main') || document.body;
+            if (!host) return;
+            // Nothing is asked until someone has scrolled far enough to see an answer.
+            if (!await waitUntilVisible(host, isCurrent) || !isCurrent()) return;
+
+            let entries = [];
+            try {
+                const response = await httpGet(`${WIKIDATA_ENDPOINT}?format=json&query=${encodeURIComponent(query)}`, {
+                    headers: { Accept:'application/sparql-results+json' },
+                    cancelOnRouteChange: true,
+                });
+                if (!isCurrent()) return;
+                entries = parseCollectionEntries(response.responseText);
+            } catch (error) {
+                if (!isCurrent()) return;
+                recordLookupFailure(this, error);
+                return;
+            }
+            /* A title that is in no series answers with itself, or with nothing. Either
+               way there is no watch order to show, and that is cached too so the next
+               visit does not ask again. */
+            cacheSet(cacheKey, { entries }, CACHE_MAX_TTL);
+            if (entries.length > 1) this._render(entries, imdbId);
+        },
+        _render(entries, imdbId) {
+            document.getElementById('enh-collection')?.remove();
+            const host = document.querySelector('main') || document.body;
+            if (!host) return;
+            const list = makeEl('ol', { className:'enh-collection__list' });
+            entries.forEach(entry => {
+                const current = entry.id === imdbId;
+                const label = entry.year
+                    ? t('text_collection_entry', [entry.title, entry.year])
+                    : entry.title;
+                list.appendChild(makeEl('li', {
+                    className: current ? 'enh-collection__item enh-collection__item--current' : 'enh-collection__item',
+                    ...(current ? { 'aria-current':'true' } : {}),
+                }, current
+                    ? makeEl('span', {}, label)
+                    : makeEl('a', { href:`/title/${entry.id}/`, className:'enh-collection__link' }, label)));
+            });
+            host.appendChild(makeEl('section', { id:'enh-collection', className:'enh-collection' },
+                makeEl('div', { className:'enh-collection__header' },
+                    makeEl('h3', { className:'enh-collection__title' }, t('text_watch_order')),
+                    makeEl('span', { className:'enh-collection__note' }, t('text_collection_source_note'))
+                ),
+                list
+            ));
+        },
+        destroy() { document.getElementById('enh-collection')?.remove(); },
+    });
+
     reg({
         key: 'movieChatBoard', name: t('feature_movieChatBoard_name'), group: 'Features',
         async init() {
@@ -12808,6 +12945,27 @@ section[data-testid="hero-parent"].enh-editorial-native-hidden { display: none !
     font: 500 9px/1.2 -apple-system, BlinkMacSystemFont, 'Segoe UI', sans-serif;
     color: ${t.tx3};
 }
+.enh-collection {
+    margin: 20px 0;
+    padding: 14px 16px;
+    border: 1px solid ${t.bd};
+    border-radius: 12px;
+    background: ${t.sf};
+}
+.enh-collection__header {
+    display: flex;
+    flex-wrap: wrap;
+    align-items: baseline;
+    gap: 10px;
+    margin-bottom: 8px;
+}
+.enh-collection__title { margin: 0; font-size: 15px; color: ${t.tx}; }
+.enh-collection__note { font-size: 12px; color: ${t.tx3}; }
+.enh-collection__list { margin: 0; padding-left: 22px; color: ${t.tx2}; }
+.enh-collection__item { padding: 3px 0; }
+.enh-collection__item--current { color: ${t.tx}; font-weight: 700; }
+.enh-collection__link { color: ${t.tx2}; }
+.enh-collection__link:hover { color: ${t.accent}; }
 .enh-moviechat {
     margin: 20px 0;
     padding: 14px 16px;
@@ -15065,7 +15223,7 @@ section[data-testid="hero-parent"].enh-editorial-native-hidden { display: none !
         toolsPage.appendChild(makeEl('div', { className:'enh-settings-grid enh-settings-grid--three' },
             makeFeatureCard(t('settings_title_tools'), t('settings_actions_placed_near_a_movie_or_show'), t('settings_title_pages'), [
                 'searchButtons', 'externalLinks', 'trailerPopover', 'expandedLinkMenu', 'watchedMarking', 'titleNotes',
-                'movieChatBoard',
+                'movieChatBoard', 'collectionPanel',
             ]),
             makeFeatureCard(t('settings_tv_episodes'), t('settings_focused_tools_for_series_and_episode_lists'), 'TV', [
                 'tvEpisodeTools', 'tvShowEnhancements', 'subtitleLinks', 'episodeSubtitles',

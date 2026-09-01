@@ -283,6 +283,8 @@ function loadScriptTestHooks({ withoutDeleteValue = false, withheldCredentials =
         getAvailabilityCacheKey,
         getJustWatchSearchUrl,
         isTmdbConfigured,
+        buildCollectionQuery,
+        parseCollectionEntries,
         SECONDARY_PAGE_FEATURE_KEYS,
         collectAniListCandidates,
         getAniListIdFromUrl,
@@ -2945,6 +2947,79 @@ test('an AniList match can be corrected like every other source', () => {
         'and that path must look the entry up by id');
     assert(init.indexOf('ANILIST_BY_ID_QUERY') < init.indexOf('let lookupError'),
         'before the ordinary search, which it replaces rather than supplements');
+});
+
+/* IE-26: which films are in the same series, in order. Verified live 2026-08-31 against
+   query.wikidata.org: tt0796366 returns fourteen Star Trek films with their IMDb ids,
+   English labels, years and P1545 ordinals. Their data is open, so every field it hands
+   back is treated as something a stranger typed. */
+test('a franchise is ordered by its own numbering, then by year', () => {
+    const hooks = loadScriptTestHooks();
+
+    const query = hooks.buildCollectionQuery('tt0796366');
+    assert(query.includes('wdt:P179'), 'the series link is what makes them siblings');
+    assert(query.includes('pq:P1545'), 'and the ordinal is what puts them in order');
+    assert(query.includes('"tt0796366"'), 'the page id is the only input');
+    // A page with no IMDb id asks nothing at all.
+    ['', null, 'nm0000206', 'tt', '" } DELETE { ?s ?p ?o } WHERE {'].forEach(value =>
+        assert.strictEqual(hooks.buildCollectionQuery(value), '', `${value} must not become a query`));
+
+    const answer = JSON.stringify({ results:{ bindings:[
+        { imdb:{ value:'tt1408101' }, label:{ value:'Star Trek Into Darkness' }, year:{ value:'2013' }, ordinal:{ value:'12' } },
+        { imdb:{ value:'tt0079945' }, label:{ value:'Star Trek: The Motion Picture' }, year:{ value:'1979' }, ordinal:{ value:'1' } },
+        { imdb:{ value:'tt0084726' }, label:{ value:'Star Trek II: The Wrath of Khan' }, year:{ value:'1982' }, ordinal:{ value:'2' } },
+    ] } });
+    const ordered = hooks.parseCollectionEntries(answer);
+    assert.deepStrictEqual(Array.from(ordered.map(entry => entry.id)),
+        ['tt0079945', 'tt0084726', 'tt1408101'], 'declared order wins over the order they arrived in');
+
+    /* A series with no numbering is still a series, and release year is the order people
+       mean in that case. */
+    const undeclared = JSON.stringify({ results:{ bindings:[
+        { imdb:{ value:'tt0000003' }, label:{ value:'Third' }, year:{ value:'2003' } },
+        { imdb:{ value:'tt0000001' }, label:{ value:'First' }, year:{ value:'1999' } },
+    ] } });
+    assert.deepStrictEqual(Array.from(hooks.parseCollectionEntries(undeclared).map(entry => entry.id)),
+        ['tt0000001', 'tt0000003']);
+    // A numbered entry sorts ahead of an unnumbered one rather than behind an absent zero.
+    const mixed = JSON.stringify({ results:{ bindings:[
+        { imdb:{ value:'tt0000009' }, label:{ value:'Unnumbered' }, year:{ value:'1990' } },
+        { imdb:{ value:'tt0000008' }, label:{ value:'Numbered' }, year:{ value:'2020' }, ordinal:{ value:'2' } },
+    ] } });
+    assert.deepStrictEqual(Array.from(hooks.parseCollectionEntries(mixed).map(entry => entry.id)),
+        ['tt0000008', 'tt0000009']);
+
+    /* Anyone can edit Wikidata, so anything that is not an IMDb id is not one. */
+    const hostile = JSON.stringify({ results:{ bindings:[
+        { imdb:{ value:'javascript:alert(1)' }, label:{ value:'Bad' }, year:{ value:'2000' } },
+        { imdb:{ value:'../../evil' }, label:{ value:'Worse' } },
+        { imdb:{ value:'tt0084726' }, label:{ value:'' } },
+        { imdb:{ value:'tt0079945' }, label:{ value:'Fine' }, year:{ value:'1979' } },
+        { imdb:{ value:'tt0079945' }, label:{ value:'Duplicate' }, year:{ value:'1979' } },
+    ] } });
+    const cleaned = hooks.parseCollectionEntries(hostile);
+    assert.deepStrictEqual(Array.from(cleaned.map(entry => entry.id)), ['tt0079945'],
+        'only real ids, with a title, once each');
+
+    assert.strictEqual(hooks.parseCollectionEntries('not json').length, 0);
+    assert.strictEqual(hooks.parseCollectionEntries('').length, 0);
+    assert.strictEqual(hooks.parseCollectionEntries('{"results":{"bindings":"nope"}}').length, 0);
+
+    assert.strictEqual(hooks.DEFAULTS.collectionPanel, false, 'a whole section of other films is opt-in');
+    assert.deepStrictEqual(Array.from(hooks.FEATURE_PROVIDERS.collectionPanel), ['wikidata'],
+        'it asks Wikidata and nobody else');
+
+    /* A film in no series answers with itself or with nothing, and that answer is cached
+       too so the next visit does not ask again. */
+    const body = script.slice(script.indexOf("key: 'collectionPanel'"));
+    const init = body.slice(0, body.indexOf('        _render(entries, imdbId) {'));
+    assert(/cacheSet\(cacheKey, \{ entries \}, CACHE_MAX_TTL\)/.test(init),
+        'the answer is kept for the long TTL, including when it is empty');
+    assert(/entries\.length > 1/.test(init),
+        'a series of one is not a watch order');
+    const gateAt = init.indexOf('await waitUntilVisible(host, isCurrent)');
+    assert(gateAt >= 0 && gateAt < init.indexOf('httpGet('),
+        'and nothing is asked until there is somewhere to show the answer');
 });
 
 test('version strings match', () => {

@@ -24,6 +24,8 @@
 
 ### Added
 
+- A franchise watch order, off by default. On a film that belongs to a series, the other films in it are listed in order with the one you are on marked, using the series own numbering where it has one and release year where it does not. It comes from Wikidata, needs no key of any kind, and asks nothing on a film that is in no series.
+
 - A message board for the title, off by default. IMDb closed its boards in 2017; MovieChat keeps one per title, and this puts it at the bottom of the page with a line saying whose page it is. Nothing loads until you scroll to it, and if the board cannot be shown in place the section becomes a plain link to it.
 
 - Poster and cast photo zoom, off by default. Hovering a poster or a cast photo, or tabbing to it, shows a larger version beside it; Escape closes it. The larger picture is requested at a bounded size rather than as the original file, which for some posters runs to tens of megabytes.
