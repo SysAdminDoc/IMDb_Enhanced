@@ -709,8 +709,16 @@ test('the source archive carries what a rebuild needs and no build output', () =
     const names = readZipNames(fs.readFileSync(target));
 
     ['IMDb_Enhanced.user.js', 'package.json', 'package-lock.json', 'README.md', 'LICENSE',
-        'extension/manifest.json', 'extension/background.js', 'scripts/build-extension.js', 'scripts/pack.js']
+        'extension/manifest.json', 'extension/background.js', 'scripts/build-extension.js', 'scripts/pack.js',
+        'scripts/build-userscript.js']
         .forEach(name => assert(names.includes(name), `the source archive must carry ${name}`));
+
+    /* The userscript is assembled from src/, so an archive holding one without the other
+       cannot be rebuilt or checked. Every module travels, not a named subset of them. */
+    const modules = fs.readdirSync(path.join(__dirname, '..', 'src')).sort();
+    assert(modules.length > 1, 'src/ should hold the split source');
+    modules.forEach(name => assert(names.includes(`src/${name}`),
+        `the source archive must carry src/${name}`));
 
     /* The generated profiles are outputs. Shipping them would let a source archive
        disagree with what building it produces, which is the one thing a source

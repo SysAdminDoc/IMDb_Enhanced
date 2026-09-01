@@ -178,7 +178,12 @@ function packDirectory(dir, destination) {
 
 /* What somebody needs to rebuild the artifact and check it against what was submitted.
    Generated directories are deliberately absent: they are outputs, and shipping them
-   would let a source archive disagree with what its own build produces. */
+   would let a source archive disagree with what its own build produces.
+
+   IMDb_Enhanced.user.js is the exception, and deliberately so. It is assembled from
+   src/, so it is an output — but it is also the file people install, and shipping it
+   beside the modules is what lets `npm test` prove in the archive itself that the two
+   agree. An archive with only one of the pair could not make that check at all. */
 const SOURCE_FILES = [
     'IMDb_Enhanced.user.js',
     'package.json',
@@ -186,7 +191,7 @@ const SOURCE_FILES = [
     'README.md',
     'LICENSE',
 ];
-const SOURCE_DIRS = ['extension', 'scripts', 'tests'];
+const SOURCE_DIRS = ['src', 'extension', 'scripts', 'tests'];
 /* Written by scripts/build-extension.js into extension/. They are outputs of the build a
    reviewer is being asked to reproduce, so shipping them would let the archive disagree
    with what building it produces. */

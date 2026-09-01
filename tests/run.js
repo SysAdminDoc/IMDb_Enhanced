@@ -7635,6 +7635,72 @@ asyncTest('the Data page exposes both export paths and clears passphrases on clo
         'the ordinary export must never request credentials');
 });
 
+/* IE-88: the userscript is generated from src/ now, so the thing every other test in
+   this file reads is an artifact. These cover the join itself. */
+test('the shipped userscript is exactly what the modules assemble to', () => {
+    const builder = require(path.join(root, 'scripts', 'build-userscript.js'));
+    const modules = builder.readModules();
+    assert(modules.length > 1, 'the source is supposed to be more than one module by now');
+    const assembled = builder.assemble();
+    assert.strictEqual(builder.firstDifference(assembled, script), -1,
+        'IMDb_Enhanced.user.js has drifted from src/; run node scripts/build-userscript.js');
+
+    /* A gate nobody has watched fail is not a gate. Feed the comparison a byte that is
+       not there and check it both notices and names the module it happened in. */
+    const damaged = `${assembled.slice(0, 200)} ${assembled.slice(200)}`;
+    const offset = builder.firstDifference(assembled, damaged);
+    assert.strictEqual(offset, 200, 'the comparison must report where the two first differ');
+    assert.match(builder.locate(modules, offset), /^src\/00-metadata\.js:\d+$/,
+        'and point at a module and a line inside it, not at a byte offset');
+    const last = builder.locate(modules, assembled.length - 1);
+    assert.match(last, /^src\/\d{2}-[a-z0-9-]+\.js:\d+$/, 'the last byte belongs to a module too');
+});
+
+test('assembling twice writes the same bytes', () => {
+    const before = fs.readFileSync(scriptPath);
+    try {
+        execFileSync(process.execPath, [path.join(root, 'scripts', 'build-userscript.js')], { cwd: root });
+        const first = fs.readFileSync(scriptPath);
+        execFileSync(process.execPath, [path.join(root, 'scripts', 'build-userscript.js')], { cwd: root });
+        const second = fs.readFileSync(scriptPath);
+        assert(first.equals(second), 'two clean builds must be byte-identical');
+        assert(first.equals(before), 'and a build must not move the committed file');
+    } finally {
+        fs.writeFileSync(scriptPath, before);
+    }
+});
+
+test('the modules are pieces of one script, not a module graph', () => {
+    const srcDir = path.join(root, 'src');
+    const names = fs.readdirSync(srcDir);
+    assert(names.length > 1, 'src/ should hold the split source');
+    names.forEach(name => {
+        assert.match(name, /^\d{2}-[a-z0-9-]+\.js$/,
+            `src/${name} carries no position, so where it lands in the userscript is undefined`);
+        const text = fs.readFileSync(path.join(srcDir, name), 'utf8');
+        /* Column zero, because ES module syntax is only valid at the top level and the
+           whole body sits four spaces in. A prose line inside a comment that happens to
+           begin with the word "export" is not a declaration. */
+        assert(!/^(?:import|export)[\s{*]/m.test(text),
+            `src/${name} uses module syntax; the userscript is one script and a script manager loads no graph`);
+        assert(!/\bimport\s*\(/.test(text), `src/${name} loads code at runtime`);
+        assert(!/\brequire\s*\(/.test(text), `src/${name} loads code at runtime`);
+    });
+    const prefixes = names.map(name => name.slice(0, 2));
+    assert.strictEqual(new Set(prefixes).size, prefixes.length,
+        'two modules sharing a position would be ordered by the rest of their names');
+});
+
+test('the assembled userscript keeps its metadata first and its closing brace last', () => {
+    const modules = require(path.join(root, 'scripts', 'build-userscript.js')).readModules();
+    assert(modules[0].text.startsWith('// ==UserScript=='),
+        'a script manager reads the metadata block from the first bytes of the file');
+    assert(modules[0].text.trimEnd().endsWith('// ==/UserScript=='),
+        'the metadata module holds the whole block and nothing after it');
+    assert(modules[modules.length - 1].text.trimEnd().endsWith('})();'),
+        'the last module has to close the IIFE the first one after the metadata opens');
+});
+
 (async () => {
     for (const { name, fn } of asyncTests) {
         try {

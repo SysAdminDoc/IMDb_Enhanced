@@ -2,6 +2,10 @@
 
 ## 2.16.0 (2026-09-01)
 
+### Changed
+
+- The source now lives as a set of modules under `src/`, one per area, and `IMDb_Enhanced.user.js` is assembled from them. Nothing about the installed file changes: the build is a byte concatenation in filename order, so it is still the same readable script with no minifier or bundler anywhere near it, and it is still committed. What changes is that a storage fix and a theme change no longer land in the same 17,000-line file. `npm test` fails if the committed script and the modules disagree in either direction.
+
 ### Fixed
 
 - The pop-ups this script adds (the trailer window, the image preview, the extra links menu, the panel behind Wrong?) now render in the browser's top layer, which sits above everything on the page. IMDb keeps changing which of its own elements stack over which, and every time it did, one of these could end up half-covered. Where the browser can also anchor a pop-up to the control that opened it, the placement now comes from the browser instead of from arithmetic that a scroll or a resize can date. Browsers without either feature behave exactly as they did before, and closing, Escape, and focus work the same way everywhere.

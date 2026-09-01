@@ -175,17 +175,30 @@ Integration API keys and tokens are left out of an ordinary backup, which names 
 - **Local-only storage.** Preferences, private Seen/Skip marks, and cached lookups live in your userscript manager or `chrome.storage.local`. Integration credentials for Radarr, Sonarr, Overseerr, Plex, Jellyfin, and Emby are restricted to `localhost`/`127.0.0.1` and are sent only to those services, as request headers rather than in URLs. In the extension builds those keys stay in the background worker and are never handed to the IMDb tab. A request names the key it needs, and the worker attaches it only after checking the destination is a local address and the name is one of the six it recognizes. Nothing running in the page can read a stored key, which is why the settings field shows a saved key as configured instead of displaying it.
 - **What does leave your browser:** anonymous, cookie-free lookups to Rotten Tomatoes, Metacritic, Letterboxd, JustWatch, YouTube, AniList, and Wikidata, made only for the title you are looking at and only for the score sources you have enabled. Two more are contacted only if you store a key for them: TMDB, if you pick it as the availability source, and OMDb, if you save a key for the score fallback. Those two receive the IMDb id rather than the title text. Each one is cached locally so a repeat visit makes no request at all. Turn a source off and it is never contacted.
 
+### Where the source lives
+
+The source is the set of modules in `src/`, one per area: the metadata block, bootstrap and configuration, storage, the CSV mark importer, DOM helpers, encrypted backup, page data, the toast, the request layer, the feature registry, the design system, the feature groups, the injected stylesheet, the settings UI, and the router.
+
+`IMDb_Enhanced.user.js` is built from them and committed, because that is the file a script manager installs and the file Greasy Fork reads. The build is a byte concatenation in filename order, so nothing is minified, rewritten, or bundled on the way through: the file you install is the modules, in order, unchanged.
+
+```bash
+npm run build:userscript       # rebuild IMDb_Enhanced.user.js from src/
+npm run check:userscript       # fail if the committed file has drifted from src/
+```
+
+The two-digit prefix on each filename is its position in the output. `npm test` runs the check first, so an edit made to a module but never assembled, and an edit made straight to the generated userscript, both fail the suite rather than surviving in the tree.
+
 ### Verifying a build
 
-Both extension builds are generated deterministically from the userscript, so you can confirm that a build matches the source:
+Every build is generated deterministically from the modules, so you can confirm that a build matches the source:
 
 ```bash
 git checkout <commit>
-npm run build:extension        # regenerates extension/
+npm run build:extension        # reassembles the userscript, then regenerates extension/
 git status --short             # no output means the shipped build matches that commit
 ```
 
-`extension/content.js`, `extension/boot.css`, and `extension/manifest.json` are committed, so any difference between what ships and a rebuild from the same commit shows up as a diff.
+`IMDb_Enhanced.user.js`, `extension/content.js`, `extension/boot.css`, and `extension/manifest.json` are committed, so any difference between what ships and a rebuild from the same commit shows up as a diff.
 
 Install the development dependency once with `npm ci`, then run `npm test` to exercise the source checks, the offline IMDb DOM fixtures, both extension builds, the background worker, and both GM API implementations. `npm run test:dom` runs only the fixture suite. It covers title, ratings, episodes, person, and chart pages without contacting IMDb. A failed selector check names the selector and saves the DOM under `tests/artifacts/dom-fixtures/` for inspection.
 

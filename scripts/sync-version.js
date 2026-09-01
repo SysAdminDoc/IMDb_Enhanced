@@ -1,10 +1,11 @@
 const fs = require('fs');
 const path = require('path');
 
-const pkg = JSON.parse(fs.readFileSync(path.join(__dirname, '..', 'package.json'), 'utf8'));
+const root = path.join(__dirname, '..');
+const pkg = JSON.parse(fs.readFileSync(path.join(root, 'package.json'), 'utf8'));
 const version = pkg.version;
-const scriptPath = path.join(__dirname, '..', 'IMDb_Enhanced.user.js');
-const readmePath = path.join(__dirname, '..', 'README.md');
+const srcDir = path.join(root, 'src');
+const readmePath = path.join(root, 'README.md');
 
 /* String.replace is a silent no-op when its pattern stops matching, so a reformatted
    line or an unexpected version shape would leave a stale string behind while this
@@ -19,9 +20,27 @@ function substitute(label, text, pattern, replacement) {
     return text.replace(pattern, replacement);
 }
 
-let script = fs.readFileSync(scriptPath, 'utf8');
-script = substitute('userscript @version', script, /^(\/\/ @version\s+)\S+/m, `$1${version}`);
-script = substitute('userscript VERSION constant', script, /(const VERSION\s*=\s*')([^']+)'/, `$1${version}'`);
+/* Which module a version string lives in is not written down anywhere: naming the file
+   here is how the list would rot the next time src/ is reorganised. Every module is
+   offered each pattern instead, and a pattern that lands in none of them, or in more
+   than one, is reported rather than half-applied. */
+const modules = fs.readdirSync(srcDir).filter(name => name.endsWith('.js')).sort();
+const sourceEdits = [
+    ['userscript @version', /^(\/\/ @version\s+)\S+/m, `$1${version}`],
+    ['userscript VERSION constant', /(const VERSION\s*=\s*')([^']+)'/, `$1${version}'`],
+];
+const written = new Map();
+sourceEdits.forEach(([label, pattern, replacement]) => {
+    const matched = modules.filter(name => {
+        const text = written.get(name) ?? fs.readFileSync(path.join(srcDir, name), 'utf8');
+        if (!pattern.test(text)) return false;
+        written.set(name, text.replace(pattern, replacement));
+        return true;
+    });
+    if (matched.length !== 1) {
+        failures.push(`${label} (matched ${matched.length} modules${matched.length ? `: ${matched.join(', ')}` : ''})`);
+    }
+});
 
 // The README badge is a version string like any other; leaving it to a manual
 // step is how it drifted behind the manifest before. The value stops at the
@@ -36,6 +55,6 @@ if (failures.length) {
     process.exit(1);
 }
 
-fs.writeFileSync(scriptPath, script, 'utf8');
+written.forEach((text, name) => fs.writeFileSync(path.join(srcDir, name), text, 'utf8'));
 fs.writeFileSync(readmePath, readme, 'utf8');
-console.log(`Synced version to ${version}`);
+console.log(`Synced version to ${version} across ${written.size} module(s) and the README badge`);
