@@ -941,6 +941,9 @@
   "menu_reset_all_settings": {
     "message": "[!! Reset all settings (with undo) !!]"
   },
+  "notification_watchlist_title": {
+    "message": "[!! New on your watchlist !!]"
+  },
   "permissions_access_declined_note": {
     "message": "[!! Access was not granted. IMDb Enhanced stays inactive until you allow it to run on IMDb. !!]"
   },

@@ -35,6 +35,8 @@ function loadBackground({
     tabsCreateFailure = null,
     grantedPermissions = [],
     seed = {},
+    notificationFailure = null,
+    onStateWrite = null,
 } = {}) {
     const listeners = [];
     const alarmListeners = [];
@@ -133,6 +135,9 @@ function loadBackground({
                     version: shippedManifest.version,
                     host_permissions: shippedManifest.host_permissions,
                     optional_host_permissions: shippedManifest.optional_host_permissions,
+                    // The worker reads the icon it notifies with from here, so the stub
+                    // has to serve the real names or an unshipped file goes unnoticed.
+                    icons: shippedManifest.icons,
                 }),
                 onInstalled: { addListener: fn => lifecycle.push(fn) },
                 onStartup: { addListener: fn => lifecycle.push(fn) },
@@ -148,12 +153,16 @@ function loadBackground({
                         return out;
                     }),
                     set: api(items => {
-                        Object.entries(items || {}).forEach(([key, value]) => storage.set(key, value));
+                        Object.entries(items || {}).forEach(([key, value]) => {
+                            storage.set(key, value);
+                            if (key === 'imdb_enh_watchlistAlertState' && onStateWrite) onStateWrite(value);
+                        });
                         return undefined;
                     }),
                 },
                 onChanged: { addListener() {} },
             },
+            i18n: { getMessage: key => (key === 'notification_watchlist_title' ? 'New on your watchlist' : '') },
             declarativeNetRequest: { updateDynamicRules: api(() => undefined) },
             alarms: {
                 create: (name, options, done) => {
@@ -173,8 +182,16 @@ function loadBackground({
             notifications: {
                 create: (options, done) => {
                     calls.notifications.push(options);
-                    if (engine === 'chromium') return Promise.resolve('id');
-                    if (typeof done === 'function') queueMicrotask(() => done('id'));
+                    if (engine === 'chromium') {
+                        return notificationFailure ? Promise.reject(notificationFailure) : Promise.resolve('id');
+                    }
+                    if (typeof done === 'function') queueMicrotask(() => {
+                        runtimeLastError = notificationFailure
+                            ? { message:String(notificationFailure.message || notificationFailure) }
+                            : null;
+                        try { done('id'); }
+                        finally { runtimeLastError = null; }
+                    });
                     return undefined;
                 },
             },
@@ -195,16 +212,33 @@ function loadBackground({
         const handled = listeners.some(listener => listener(message, sender, sendResponse));
         if (!handled && !settled) resolve(undefined);
     });
+    /* Draining a fixed number of microtasks was both too little and too much: a
+       twenty-title run needed more turns than the count allowed, so it was silently cut
+       short, and a single macrotask anywhere in the handler would have made every
+       "nothing was requested" assertion true before the handler had even started.
+
+       This waits for the worker to go quiet instead: it keeps turning the loop, through
+       real macrotasks, until nothing has been recorded for several turns in a row. */
+    const settle = async () => {
+        let quiet = 0;
+        let seen = -1;
+        for (let turn = 0; turn < 5000 && quiet < 5; turn += 1) {
+            const activity = calls.fetches.length + calls.notifications.length
+                + calls.permissions.length + calls.alarms.length + storage.size;
+            quiet = activity === seen ? quiet + 1 : 0;
+            seen = activity;
+            await new Promise(resolve => setTimeout(resolve, 0));
+        }
+    };
     /* The alarm path is the one the browser actually takes, so tests drive it rather
        than reaching for the function it calls. */
     const fireAlarm = async name => {
         alarmListeners.forEach(listener => listener({ name }));
-        // Let the handler's awaits settle before anything is asserted.
-        for (let tick = 0; tick < 400; tick += 1) await Promise.resolve();
+        await settle();
     };
     const runLifecycle = async () => {
         lifecycle.forEach(listener => listener());
-        for (let tick = 0; tick < 400; tick += 1) await Promise.resolve();
+        await settle();
     };
     return { dispatch, calls, storage, grantedOrigins, fireAlarm, runLifecycle };
 }
@@ -970,8 +1004,194 @@ test('a service arriving on a watched title produces exactly one notification', 
     await worker.fireAlarm('imdb-enhanced:watchlist-alerts');
 
     assert.strictEqual(worker.calls.notifications.length, 1, 'one notification, not one per title');
-    assert.match(worker.calls.notifications[0].message, /The Matrix/,
-        'and it names the title rather than an id');
+    const shown = worker.calls.notifications[0];
+    assert.match(shown.message, /The Matrix/, 'and it names the title rather than an id');
+    /* An unresolvable iconUrl makes Chrome refuse the whole notification, so the file it
+       names has to be one the build actually ships. */
+    const iconRelative = String(shown.iconUrl).replace('chrome-extension://test/', '');
+    assert(Object.values(shippedManifest.icons).includes(iconRelative),
+        `the notification icon must be one the manifest ships, got ${iconRelative}`);
+    assert(fs.existsSync(path.join(root, 'extension', iconRelative)),
+        'and the file must exist');
+    assert(shown.title, 'a notification with no title is a notification about nothing');
+});
+
+test('a second run the same day is not a second notification', async () => {
+    /* The alarm alone does not space these out: it is re-created from onInstalled, from
+       onStartup and from every change to the setting, each with a one-minute delay. Four
+       browser restarts in a day used to be four checks and four notifications. */
+    const worker = loadBackground({
+        fetchImpl: tmdbFetch(['Netflix', 'Hulu']),
+        grantedPermissions: ['notifications'],
+        seed: {
+            ...ALERT_SEED,
+            imdb_enh_watchlistAlertState: { checkedAt: Date.now() - 1000, cursor:'', seen:{ tt0133093:['Hulu'] } },
+        },
+    });
+    await worker.fireAlarm('imdb-enhanced:watchlist-alerts');
+    assert.strictEqual(worker.calls.fetches.length, 0, 'a check an hour after the last one asks nothing');
+    assert.strictEqual(worker.calls.notifications.length, 0, 'and says nothing');
+});
+
+test('the scheduled run refuses to reach TMDB without the granted origin', async () => {
+    /* Every other request in this worker is gated on the origin being granted. A job that
+       runs on a timer, with the user's bearer token, is the last place that should be the
+       exception — and TMDB answers cross-origin requests from anywhere, so nothing else
+       would have stopped it. */
+    const worker = loadBackground({
+        fetchImpl: tmdbFetch(['Netflix']),
+        grantedPermissions: ['notifications'],
+        granted: [],
+        seed: {
+            ...ALERT_SEED,
+            imdb_enh_watchlistAlertState: { checkedAt:1, cursor:'', seen:{ tt0133093:[] } },
+        },
+    });
+    await worker.fireAlarm('imdb-enhanced:watchlist-alerts');
+    assert.strictEqual(worker.calls.fetches.length, 0,
+        'a revoked or never-granted TMDB origin means no request at all');
+    assert.strictEqual(worker.calls.notifications.length, 0);
+});
+
+test('an arrival nobody was shown is not written off as seen', async () => {
+    /* Once providers are in seen the arrival is not new again, so a notification that
+       failed to appear would be an arrival lost for good. */
+    const worker = loadBackground({
+        fetchImpl: tmdbFetch(['Netflix', 'Hulu']),
+        grantedPermissions: ['notifications'],
+        notificationFailure: new Error('Unable to download all specified images'),
+        seed: {
+            ...ALERT_SEED,
+            imdb_enh_watchlistAlertState: { checkedAt:1, cursor:'', seen:{ tt0133093:['Hulu'] } },
+        },
+    });
+    await worker.fireAlarm('imdb-enhanced:watchlist-alerts');
+    const state = worker.storage.get('imdb_enh_watchlistAlertState');
+    assert.strictEqual(state.seen.tt0133093, undefined,
+        'the title goes back to unseen so the next run says it again');
+});
+
+test('progress is written as the run goes, not only at the end', async () => {
+    /* A service worker is stopped when it looks idle, and nothing in the request loop is
+       an extension API call. A batch that is killed part-way used to lose the cursor with
+       everything else, so the same titles were checked forever and the rest never were. */
+    const titles = {};
+    for (let index = 0; index < 5; index += 1) titles[`tt000000${index}1`] = { title:`Title ${index}` };
+    const writes = [];
+    const worker = loadBackground({
+        fetchImpl: tmdbFetch(['Netflix']),
+        grantedPermissions: ['notifications'],
+        onStateWrite: value => writes.push(value.cursor),
+        seed: {
+            ...ALERT_SEED,
+            imdb_enh_watchlistSnapshot: { v:1, ts:1, titles },
+            imdb_enh_watchlistAlertState: { checkedAt:1, cursor:'', seen:{} },
+        },
+    });
+    await worker.fireAlarm('imdb-enhanced:watchlist-alerts');
+    assert(writes.length >= 5, `progress must be recorded per title, saw ${writes.length} writes`);
+    /* And the cursor is a title, not a position: the snapshot is rewritten in whatever
+       order the watchlist page rendered, so an index points at an unrelated title the
+       moment somebody re-sorts their list. */
+    writes.forEach(cursor => assert.match(String(cursor), /^tt\d+$/, 'the cursor names a title'));
+});
+
+test('a redirect is refused rather than followed with the token attached', async () => {
+    /* The request carries a bearer token, so it must not be sent anywhere but where it
+       was addressed. Under redirect:'manual' the platform yields an opaque redirect
+       instead of following, which is what this stub returns. */
+    const redirected = (url, init = {}) => {
+        if (init.redirect === 'manual') {
+            return Promise.resolve({ type:'opaqueredirect', url, status:0, ok:false, json: () => Promise.resolve({}) });
+        }
+        // Followed, from somewhere else, with the token already delivered.
+        return Promise.resolve({
+            type: 'basic',
+            url: 'https://elsewhere.example.com/3/find/tt0133093',
+            status: 200,
+            ok: true,
+            json: () => Promise.resolve({ movie_results:[{ id:603 }], results:{ US:{ flatrate:[{ provider_name:'Netflix' }] } } }),
+        });
+    };
+    const worker = loadBackground({
+        fetchImpl: redirected,
+        grantedPermissions: ['notifications'],
+        seed: { ...ALERT_SEED, imdb_enh_watchlistAlertState: { checkedAt:1, cursor:'', seen:{ tt0133093:['Hulu'] } } },
+    });
+    await worker.fireAlarm('imdb-enhanced:watchlist-alerts');
+    assert.strictEqual(worker.calls.notifications.length, 0, 'a redirect is not an answer');
+    const state = worker.storage.get('imdb_enh_watchlistAlertState');
+    assert.deepStrictEqual(Array.from(state.seen.tt0133093), ['Hulu'],
+        'and it must not overwrite what was known with nothing');
+});
+
+test('a run resumes at the title it stopped on, not at a position in the list', async () => {
+    /* The snapshot is rewritten in whatever order the watchlist page rendered, so an
+       index into it points at an unrelated title the moment somebody re-sorts their
+       list — and titles at the far end are starved across pass after pass. */
+    const many = {};
+    for (let index = 0; index < 25; index += 1) {
+        many[`tt${String(1000000 + index).padStart(7, '0')}`] = { title:`Title ${index}` };
+    }
+    const ids = Object.keys(many);
+    const worker = loadBackground({
+        fetchImpl: tmdbFetch(['Netflix']),
+        grantedPermissions: ['notifications'],
+        seed: {
+            ...ALERT_SEED,
+            imdb_enh_watchlistSnapshot: { v:1, ts:1, titles: many },
+            imdb_enh_watchlistAlertState: { checkedAt:1, cursor:'', seen:{} },
+        },
+    });
+    await worker.fireAlarm('imdb-enhanced:watchlist-alerts');
+    const first = worker.storage.get('imdb_enh_watchlistAlertState');
+    assert.strictEqual(first.cursor, ids[20], 'after twenty titles it stops on the twenty-first');
+
+    // The same titles, in a different order, which is what re-sorting a watchlist does.
+    const reordered = {};
+    [...ids].reverse().forEach(id => { reordered[id] = many[id]; });
+    const second = loadBackground({
+        fetchImpl: tmdbFetch(['Netflix']),
+        grantedPermissions: ['notifications'],
+        seed: {
+            ...ALERT_SEED,
+            imdb_enh_watchlistSnapshot: { v:1, ts:1, titles: reordered },
+            imdb_enh_watchlistAlertState: { checkedAt:1, cursor:first.cursor, seen:{} },
+        },
+        onStateWrite: () => {},
+    });
+    const asked = [];
+    second.calls.fetches.length = 0;
+    await second.fireAlarm('imdb-enhanced:watchlist-alerts');
+    second.calls.fetches.forEach(([url]) => {
+        const found = String(url).match(/find\/(tt\d+)/)?.[1];
+        if (found) asked.push(found);
+    });
+    assert.strictEqual(asked[0], first.cursor,
+        'the next run picks up the title it stopped on, wherever it now sits in the list');
+});
+
+test('the worker enforces the snapshot ceiling itself', async () => {
+    /* The 200-title bound decides how much of somebody else's API a schedule walks, so
+       it cannot depend on another context having written the file correctly. */
+    const huge = {};
+    for (let index = 0; index < 250; index += 1) {
+        huge[`tt${String(2000000 + index).padStart(7, '0')}`] = { title:`Title ${index}` };
+    }
+    const beyondTheBound = `tt${String(2000000 + 249).padStart(7, '0')}`;
+    const worker = loadBackground({
+        fetchImpl: tmdbFetch(['Netflix']),
+        grantedPermissions: ['notifications'],
+        seed: {
+            ...ALERT_SEED,
+            imdb_enh_watchlistSnapshot: { v:1, ts:1, titles: huge },
+            imdb_enh_watchlistAlertState: { checkedAt:1, cursor:'', seen:{ [beyondTheBound]:['Netflix'] } },
+        },
+    });
+    await worker.fireAlarm('imdb-enhanced:watchlist-alerts');
+    const state = worker.storage.get('imdb_enh_watchlistAlertState');
+    assert.strictEqual(state.seen[beyondTheBound], undefined,
+        'a title past the ceiling is not part of the list this walks');
 });
 
 test('two titles arriving on the same day are one notification, not two', async () => {

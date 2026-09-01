@@ -483,9 +483,15 @@ const WATCHLIST_STATE_KEY = `${STORAGE_PREFIX}watchlistAlertState`;
 const WATCHLIST_REGION_KEY = `${STORAGE_PREFIX}availabilityRegion`;
 const WATCHLIST_TOKEN_KEY = 'imdb_enh_tmdbReadToken';
 const WATCHLIST_BATCH = 20;
+// The same ceiling the page writes under, enforced again on the way out of storage.
+const WATCHLIST_SNAPSHOT_LIMIT = 200;
+// One digest a day. The alarm is re-created on every startup, so without this a person
+// who restarts their browser four times gets four checks and four notifications.
+const WATCHLIST_MIN_INTERVAL = 20 * 60 * 60 * 1000;
 const WATCHLIST_NOTIFICATION_TITLES = 3;
 
-const WATCHLIST_PROVIDER_NAME_LIMIT = 60;
+// How many service names the picker is offered, not how long one may be.
+const WATCHLIST_SERVICE_LIMIT = 60;
 
 function boundedProviderNames(value) {
     return [...new Set((Array.isArray(value) ? value : [])
@@ -493,12 +499,25 @@ function boundedProviderNames(value) {
         .filter(Boolean))].slice(0, 40);
 }
 
+const TMDB_ORIGIN = 'https://api.themoviedb.org/';
+
 async function tmdbJson(path, token) {
-    const response = await fetch(`https://api.themoviedb.org/3/${path}`, {
+    const url = `${TMDB_ORIGIN}3/${path}`;
+    /* The same gate every other request here passes. Somebody who declined TMDB, or
+       revoked it, must not have their watchlist sent there on a timer — and TMDB answers
+       cross-origin requests from anywhere, so nothing else would have stopped it. */
+    /* The gate takes a described URL, not a string: the same shape every other
+       request in this file is checked with. */
+    const target = describeRequestUrl(url);
+    if (!target || !await hasRequestOriginPermission(target)) throw new Error('TMDB access is not granted');
+    const response = await fetch(url, {
         credentials: 'omit',
         cache: 'no-cache',
+        // It carries a bearer token, so it refuses to be sent anywhere else.
+        redirect: 'manual',
         headers: { Authorization: `Bearer ${token}`, Accept: 'application/json' },
     });
+    if (response.type === 'opaqueredirect') throw new Error('TMDB redirected a request carrying a token');
     if (!response.ok) throw new Error(`HTTP ${response.status}`);
     return response.json();
 }
@@ -523,18 +542,34 @@ function describeArrivals(arrivals) {
 }
 
 async function notifyArrivals(arrivals) {
-    if (!arrivals.length) return;
+    if (!arrivals.length) return true;
     const allowed = await callApi(chrome.permissions, 'contains', { permissions:['notifications'] }).catch(() => false);
     /* Asking for the permission needs a user gesture, which an alarm does not have. The
        settings panel offers it; until it is granted the run still records what it saw, so
        switching notifications on later does not produce a flood of old news. */
-    if (allowed !== true || !chrome.notifications?.create) return;
-    await callApi(chrome.notifications, 'create', {
-        type: 'basic',
-        iconUrl: chrome.runtime.getURL('icons/icon-128.png'),
-        title: 'New on your watchlist',
-        message: describeArrivals(arrivals),
-    }).catch(() => { /* a notification that cannot be shown is not worth a retry */ });
+    /* Not shown and not lost: without the permission the run still records what it saw,
+       so granting it later does not replay months of old news. */
+    if (allowed !== true || !chrome.notifications?.create) return true;
+    const icons = chrome.runtime.getManifest().icons || {};
+    const iconPath = icons['128'] || icons['48'] || Object.values(icons)[0];
+    /* Its own words come from the same catalog as everything else. A worker cannot reach
+       the userscript's lookup, but chrome.i18n serves the generated _locales directly. */
+    const title = chrome.i18n?.getMessage?.('notification_watchlist_title') || 'New on your watchlist';
+    try {
+        await callApi(chrome.notifications, 'create', {
+            type: 'basic',
+            iconUrl: chrome.runtime.getURL(iconPath),
+            title,
+            message: describeArrivals(arrivals),
+        });
+        return true;
+    } catch (error) {
+        /* Reported rather than swallowed: the providers behind an arrival are about to be
+           written down as seen, and a notification nobody was shown is an arrival lost
+           for good. The caller keeps them unseen so the next run says it again. */
+        console.warn('[IMDb Enhanced] watchlist notification failed:', boundedApiError(error, 'Notification failed'));
+        return false;
+    }
 }
 
 async function runWatchlistCheck() {
@@ -551,26 +586,59 @@ async function runWatchlistCheck() {
     if (!token || !wanted.size) return;
     const titles = stored[WATCHLIST_SNAPSHOT_KEY]?.titles;
     if (!titles || typeof titles !== 'object') return;
-    const ids = Object.keys(titles).filter(id => /^tt\d{7,10}$/.test(id));
+    /* Bounded here as well as where it is written. This is the number that decides how
+       much of somebody else's API a schedule walks, so it cannot depend on another
+       context having written the file correctly. */
+    const ids = Object.keys(titles)
+        .filter(id => /^tt\d{7,10}$/.test(id))
+        .slice(0, WATCHLIST_SNAPSHOT_LIMIT);
     if (!ids.length) return;
 
     const region = /^[A-Z]{2}$/.test(String(stored[WATCHLIST_REGION_KEY] || ''))
         ? stored[WATCHLIST_REGION_KEY]
         : 'US';
     const previous = stored[WATCHLIST_STATE_KEY] || {};
+    /* The alarm alone does not space these out: it is re-created from onInstalled,
+       onStartup and every change to the setting, each with a one-minute delay. */
+    const since = Date.now() - (Number(previous.checkedAt) || 0);
+    if (since < WATCHLIST_MIN_INTERVAL) return;
     const seen = previous.seen && typeof previous.seen === 'object' ? { ...previous.seen } : {};
-    const start = Number.isInteger(previous.cursor) ? previous.cursor % ids.length : 0;
+    /* Where to resume, by title rather than by position. The snapshot is rewritten in
+       whatever order the watchlist page rendered, so an index into it points at an
+       unrelated title the moment somebody re-sorts their list, and titles get starved. */
+    const resumeAt = Math.max(0, ids.indexOf(String(previous.cursor || '')));
     const slice = [];
     for (let step = 0; step < WATCHLIST_BATCH && step < ids.length; step += 1) {
-        slice.push(ids[(start + step) % ids.length]);
+        slice.push(ids[(resumeAt + step) % ids.length]);
     }
 
     const arrivals = [];
-    for (const id of slice) {
+    /* Written as it goes rather than once at the end. A service worker is stopped when it
+       looks idle, and nothing in this loop is an extension API call, so a slow batch can
+       be killed mid-way — which used to lose the whole run's progress including the
+       cursor, so the same twenty titles were checked forever and the rest never were. */
+    const persist = async next => {
+        await callApi(chrome.storage.local, 'set', {
+            [WATCHLIST_STATE_KEY]: {
+                checkedAt: Date.now(),
+                cursor: next,
+                seen,
+                services: [...new Set([
+                    ...(Array.isArray(previous.services) ? previous.services : []),
+                    ...Object.values(seen).flat(),
+                ])].filter(name => typeof name === 'string' && name).sort().slice(0, WATCHLIST_SERVICE_LIMIT),
+            },
+        }).catch(() => { /* the next run re-reads whatever did land */ });
+    };
+
+    for (let step = 0; step < slice.length; step += 1) {
+        const id = slice[step];
         let providers = null;
         try { providers = await readAvailableProviders(id, region, token); }
         catch { continue; }
-        if (providers === null) continue;
+        /* Null means TMDB has no film for this id, which is every series on the list.
+           Recorded as nothing available so it stops consuming a slot on every pass. */
+        if (providers === null) providers = [];
         const before = Array.isArray(seen[id]) ? seen[id] : null;
         /* The first time a title is checked there is no "before", so everything it is
            already on would read as an arrival. That is a notification about nothing
@@ -580,29 +648,18 @@ async function runWatchlistCheck() {
             if (added.length) arrivals.push({ id, title: String(titles[id]?.title || id).slice(0, 80) });
         }
         seen[id] = providers;
+        await persist(ids[(resumeAt + step + 1) % ids.length]);
     }
 
     // Titles that have left the watchlist are forgotten, so the record cannot grow forever.
     const live = new Set(ids);
     Object.keys(seen).forEach(id => { if (!live.has(id)) delete seen[id]; });
 
-    /* Every service these runs have walked past, so the settings panel has a list to
-       offer without a second endpoint and without any service names written into this
-       file — which would be a list that is wrong in most of the world. */
-    const services = [...new Set([
-        ...(Array.isArray(previous.services) ? previous.services : []),
-        ...Object.values(seen).flat(),
-    ])].filter(name => typeof name === 'string' && name).slice(0, WATCHLIST_PROVIDER_NAME_LIMIT).sort();
-
-    await callApi(chrome.storage.local, 'set', {
-        [WATCHLIST_STATE_KEY]: {
-            checkedAt: Date.now(),
-            cursor: (start + slice.length) % ids.length,
-            seen,
-            services,
-        },
-    }).catch(() => { /* the next run re-reads whatever did land */ });
-    await notifyArrivals(arrivals);
+    /* Said before it is written down. Once an arrival is in seen it is not new again, so
+       a notification that failed to appear would be an arrival lost for good. */
+    const told = await notifyArrivals(arrivals);
+    if (!told) arrivals.forEach(arrival => { delete seen[arrival.id]; });
+    await persist(ids[(resumeAt + slice.length) % ids.length]);
 }
 
 async function ensureWatchlistAlarm() {

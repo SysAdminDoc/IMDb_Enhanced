@@ -29,6 +29,9 @@ const messageCatalog = (() => {
 const MESSAGE_CONSUMERS = [
     path.join(__dirname, '..', 'scripts', 'recovery-page.js'),
     path.join(__dirname, '..', 'extension', 'permissions.js'),
+    /* The worker shows one string of its own. It cannot reach the userscript's lookup,
+       but chrome.i18n serves the same generated _locales, so the key lives here too. */
+    path.join(__dirname, '..', 'extension', 'background.js'),
 ];
 
 /* The extension's own documents carry their English in the markup so they stay readable
@@ -36,6 +39,10 @@ const MESSAGE_CONSUMERS = [
 const MESSAGE_PAGES = [
     path.join(__dirname, '..', 'extension', 'recovery.html'),
     path.join(__dirname, '..', 'extension', 'permissions.html'),
+];
+const MESSAGE_PAGE_SCRIPTS = [
+    path.join(__dirname, '..', 'scripts', 'recovery-page.js'),
+    path.join(__dirname, '..', 'extension', 'permissions.js'),
 ];
 const taggedPageCopy = () => MESSAGE_PAGES.flatMap(file => {
     const markup = fs.readFileSync(file, 'utf8');
@@ -976,7 +983,6 @@ test('IMDb title data selection ignores unrelated or malformed structured data',
     assert.strictEqual(hooks.getStructuredMediaType({ '@type':'Movie', genre:genres }), 'short');
     genres[49] = 'Drama';
     assert.strictEqual(hooks.getStructuredMediaType({ '@type':'Movie', genre:genres }), 'movie', 'movie classification should bound genre arrays');
-    assert(script.includes('if (Object.keys(selected).length) _ldData = selected'), 'an early empty scan must not prevent a later structured-data retry');
 });
 
 test('rating histogram extraction is bounded and normalizes a 1-10 distribution', () => {
@@ -3021,8 +3027,13 @@ test('a franchise is ordered by its own numbering, then by year', () => {
         'the answer is kept for the long TTL, including when it is empty');
     assert(/entries\.length > 1/.test(init),
         'a series of one is not a watch order');
-    const gateAt = init.indexOf('await waitUntilVisible(host, isCurrent)');
-    assert(gateAt >= 0 && gateAt < init.indexOf('httpGet('),
+    /* Its own placeholder, not main: main is on screen the moment the page loads, so
+       observing that is not a gate at all. */
+    const gateAt = init.indexOf('await waitUntilVisible(placeholder, isCurrent)');
+    assert(gateAt >= 0, 'the panel must wait on something that is not already visible');
+    assert(!/waitUntilVisible\((?:host|document)/.test(init),
+        'and not on the page container, which is visible from the first paint');
+    assert(gateAt < init.indexOf('httpGet('),
         'and nothing is asked until there is somewhere to show the answer');
 });
 
@@ -5629,6 +5640,9 @@ test('a message resolves through the catalog and falls back to English', () => {
        as a literal, which is the whole reason this check can be exact. */
     const asking = [script, ...MESSAGE_CONSUMERS.map(file => fs.readFileSync(file, 'utf8'))].join('\n');
     const requested = new Set([...asking.matchAll(/\bt\('([A-Za-z0-9_@]+)'/g)].map(match => match[1]));
+    /* The worker has no t(): it goes straight to chrome.i18n, which reads the same
+       generated _locales, so a key it asks for that way is asked for. */
+    [...asking.matchAll(/getMessage\??\.?\('([A-Za-z0-9_@]+)'/g)].forEach(match => requested.add(match[1]));
     taggedPageCopy().forEach(entry => requested.add(entry.key));
     const declared = new Set(Object.keys(hooks.MESSAGES));
     const missing = [...requested].filter(key => !declared.has(key));
@@ -5684,11 +5698,13 @@ test('every feature and provider gets its words from the catalog', () => {
     const declared = new Set(Object.keys(hooks.MESSAGES));
     const expected = new Set();
 
-    /* FEATURE_DETAILS names every feature either build can register, which is not the
-       same set as the features registered in this one: the watchlist alerts need a
-       background worker, so the userscript does not register them at all. Their words
-       still ship in the catalog, because the extension shows them. */
-    Object.keys(hooks.FEATURE_DETAILS).forEach(key => {
+    /* One feature needs a background worker, so the userscript does not register it and
+       its words are still shipped for the build that does. Named, rather than excusing
+       everything in FEATURE_DETAILS: that seeded the set this check compares against and
+       left it unable to notice a feature that had stopped being registered at all. */
+    const EXTENSION_ONLY_FEATURES = ['watchlistAlerts'];
+    EXTENSION_ONLY_FEATURES.forEach(key => {
+        assert(hooks.FEATURE_DETAILS[key], `${key} is named here but has no description`);
         expected.add(`feature_${key}_name`);
         expected.add(`feature_${key}_detail`);
     });
@@ -5746,7 +5762,7 @@ test('the extension pages and the catalog carry the same words', () => {
             `${entry.file} and the catalog disagree about ${entry.key}`);
     });
 
-    MESSAGE_CONSUMERS.forEach(file => {
+    MESSAGE_PAGE_SCRIPTS.forEach(file => {
         assert(/document\.querySelectorAll\('\[data-i18n\]'\)/.test(fs.readFileSync(file, 'utf8')),
             `${path.basename(file)} has to refill its tagged copy from the catalog, or tagging it changes nothing`);
     });

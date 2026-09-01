@@ -33,6 +33,7 @@ const instrumented = userscript.replace(/\}\)\(\);\s*$/, `globalThis.__imdbEnhan
     getTitleText,
     getTitleYear,
     getMediaType,
+    getLDData,
     getIMDbRating,
     getUserMarks,
     getHistogramData,
@@ -340,6 +341,52 @@ await runFixture('title', async (window, hooks) => {
         'the year must come from the page that is on screen, not the one that was');
     assert.equal(hooks.getMediaType(), 'series',
         'and so must the media type, which decides which sources are asked at all');
+});
+
+/* The order IMDb actually uses: the address changes first and the page is swapped in
+   afterwards. Between the two the document still holds the previous title's data, and
+   re-parsing it under the new route key is how the old year gets pinned to the new
+   title — which is the defect the route key alone did not fix. */
+await runFixture('title', async (window, hooks) => {
+    const script = window.document.querySelector('script[type="application/ld+json"]');
+    assert.ok(script, 'the fixture should carry structured data');
+    assert.equal(hooks.getLDData().name, 'The Matrix');
+
+    window.happyDOM.setURL('https://www.imdb.com/title/tt0903747/');
+    /* The structured data is the thing that must not be believed here: it decides the
+       media type and the year that every score source validates its match against. The
+       visible DOM still shows the old page, and reading a year off it is honest — reading
+       the old title's data as though it described the new one is not. */
+    assert.equal(Object.keys(hooks.getLDData()).length, 0,
+        'data that names another title is no answer at all, not the previous answer');
+
+    script.textContent = JSON.stringify({
+        '@context':'https://schema.org',
+        '@type':'TVSeries',
+        url:'/title/tt0903747/',
+        name:'Breaking Bad',
+        datePublished:'2008-01-20',
+    });
+    assert.equal(hooks.getLDData().name, 'Breaking Bad', 'and the real one the moment it lands');
+    assert.equal(hooks.getTitleYear(), '2008');
+    assert.equal(hooks.getMediaType(), 'series',
+        'which is what decides whether a film source is asked about a series');
+});
+
+/* A page that has not rendered its structured data yet must not poison every later read:
+   nothing is remembered until there is something to remember. */
+await runFixture('title', async (window, hooks) => {
+    const script = window.document.querySelector('script[type="application/ld+json"]');
+    const original = script.textContent;
+    script.remove();
+    // The visible page still carries a year, so the structured read is what is checked.
+    assert.equal(Object.keys(hooks.getLDData()).length, 0, 'no data, no answer');
+
+    const replacement = window.document.createElement('script');
+    replacement.type = 'application/ld+json';
+    replacement.textContent = original;
+    window.document.body.appendChild(replacement);
+    assert.equal(hooks.getLDData().name, 'The Matrix', 'and the read that follows still works');
 });
 
 /* The half of the gate that costs nothing: a board nobody has scrolled to is a heading

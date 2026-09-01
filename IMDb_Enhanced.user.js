@@ -396,6 +396,7 @@
         label_wrong: 'Wrong?',
         menu_copy_settings_backup: 'Copy settings backup (no credentials)',
         menu_reset_all_settings: 'Reset all settings (with undo)',
+        notification_watchlist_title: 'New on your watchlist',
         permissions_access_declined_note: 'Access was not granted. IMDb Enhanced stays inactive until you allow it to run on IMDb.',
         permissions_access_granted_note: 'Access granted. Reload any IMDb tabs that were already open.',
         permissions_access_scope_note: 'Access covers IMDb, the score and trailer services the settings enable, and your own localhost media servers. Nothing else is requested.',
@@ -4151,6 +4152,24 @@
        title's year, media type and genres, and every score source validates its match
        against that year, so a wrong answer could be cached for a week under the new
        title's id. The route key is what changed first, so it is what this keys on. */
+    /* Keying on the route was necessary and not sufficient. IMDb changes the address
+       first and swaps the page in afterwards, so between the two the document still holds
+       the previous title's structured data — and re-parsing it under the new route key
+       pinned the old year and the old media type to the new title until init ran, which
+       is the same defect the memo key was meant to remove.
+
+       So the parse has to prove it belongs here. The data carries the title's own
+       address; when the id in it is not the id in the location bar, the page has not
+       arrived yet and there is no answer to give. Nothing is memoized in that state, so
+       the next reader parses again and gets the real thing the moment it lands. */
+    function structuredDataTitleId(ld) {
+        for (const candidate of [ld?.url, ld?.['@id']]) {
+            const found = String(candidate || '').match(/\/(tt\d+)/)?.[1];
+            if (found) return found;
+        }
+        return '';
+    }
+
     function getLDData() {
         const route = getRouteKey();
         if (_ldRoute !== route) {
@@ -4161,8 +4180,14 @@
         const scripts = Array.from(document.querySelectorAll('script[type="application/ld+json"]'))
             .slice(0, STRUCTURED_DATA_SCRIPT_LIMIT);
         const selected = parseIMDbTitleStructuredData(scripts.map(script => script.textContent));
-        if (Object.keys(selected).length) _ldData = selected;
-        return _ldData || {};
+        if (!Object.keys(selected).length) return {};
+        const wanted = getIMDbID();
+        const found = structuredDataTitleId(selected);
+        /* Only when both are known and disagree. A page that names no id in its data, or
+           a route with no id in it, is not evidence of anything and is read as before. */
+        if (wanted && found && wanted !== found) return {};
+        _ldData = selected;
+        return _ldData;
     }
 
     function yearFromText(text) {
@@ -8519,8 +8544,13 @@ section[id*="quote" i] .ipc-list-card { padding: 4px 0 !important; margin: 2px 0
 
             const host = document.querySelector('main') || document.body;
             if (!host) return;
-            // Nothing is asked until someone has scrolled far enough to see an answer.
-            if (!await waitUntilVisible(host, isCurrent) || !isCurrent()) return;
+            /* Its own placeholder, not main: main is on screen the moment the page loads,
+               so waiting for that to be visible is not waiting at all. */
+            const placeholder = makeEl('section', { id:'enh-collection', className:'enh-collection enh-collection--pending' });
+            host.appendChild(placeholder);
+            const visible = await waitUntilVisible(placeholder, isCurrent);
+            placeholder.remove();
+            if (!visible || !isCurrent()) return;
 
             let entries = [];
             try {
