@@ -48,6 +48,8 @@ const instrumented = userscript.replace(/\}\)\(\);\s*$/, `globalThis.__imdbEnhan
     getWatchlistServices,
     boundedImageVariant,
     createSettingsPanel,
+    createFAB,
+    showFirstRunNotice,
     createLocalStatsPanel,
     destroySettingsChrome,
     summarizeLocalStats,
@@ -559,6 +561,63 @@ await runFixture('title', async (window, hooks) => {
     image.dispatchEvent(after);
     assert.equal(suppressed, 6, 'switching it off gives all three handlers back over images too');
     gallery.remove();
+});
+
+/* IE-114: a fresh install says nothing about itself. Nothing on IMDb explains the gear
+   button, an unpacked extension has no store listing to explain it either, and a
+   userscript has no listing at all, so the first page a new install renders is the only
+   chance to point at where the settings live. Once, and then never again. */
+await runFixture('title', async (window, hooks) => {
+    const notice = () => window.document.getElementById('enh-first-run');
+    assert.equal(notice(), null, 'nothing is shown before the first init asks for it');
+
+    /* It points at the gear button, so it says nothing until there is one, and it must
+       not spend the one time it gets to say anything on a page with nothing to point at. */
+    hooks.showFirstRunNotice();
+    assert.equal(notice(), null, 'no gear button, nothing to point at');
+    assert.equal(window.GM_getValue('imdb_enh_firstRunSeen', false), false,
+        'and the one chance to say it is not spent on a page that could not');
+
+    hooks.createFAB();
+    hooks.showFirstRunNotice();
+    const shown = notice();
+    assert.ok(shown, 'a new install is told the extension is running');
+    assert.equal(shown.getAttribute('role'), 'status',
+        'announced politely rather than as an alert, and never as a dialog');
+    assert.match(shown.textContent, /gear/i, 'and told where the settings are');
+    assert.notEqual(window.document.activeElement, shown.querySelector('button'),
+        'reading a page must not have focus taken away from it');
+    assert.ok(window.document.getElementById('enh-settings-fab'),
+        'the thing it points at has to be on the page by the time it says so');
+
+    /* Dismissed by hand. The dismiss button is the whole reason this is not a toast: a
+       toast is click-through by design so it cannot swallow a click meant for IMDb. */
+    shown.querySelector('button').click();
+    assert.equal(notice(), null, 'clicking dismiss takes it away');
+
+    /* And it is recorded, so the second page load of an install that has already been
+       greeted says nothing. This is the whole feature: a welcome that repeats is worse
+       than no welcome. */
+    hooks.showFirstRunNotice();
+    assert.equal(notice(), null, 'once per install, not once per page');
+    assert.equal(window.GM_getValue('imdb_enh_firstRunSeen', false), true,
+        'the flag lives outside the defaults, so resetting settings cannot bring it back');
+
+    /* An update notice already occupies that corner and says something more useful. */
+    window.GM_setValue('imdb_enh_firstRunSeen', false);
+    const update = window.document.createElement('div');
+    update.id = 'enh-update-notice';
+    window.document.body.appendChild(update);
+    hooks.showFirstRunNotice();
+    assert.equal(notice(), null, 'the two never stack in the same corner');
+    update.remove();
+
+    /* Shown once more now the corner is free, which proves the check above was about the
+       update notice rather than the flag having quietly been set anyway. */
+    hooks.showFirstRunNotice();
+    assert.ok(notice(), 'and it is still owed to somebody who has not seen it');
+    notice().remove();
+    hooks.destroySettingsChrome();
 });
 
 /* IE-21: the preview has to appear for someone tabbing through the cast list, not only

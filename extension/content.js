@@ -356,6 +356,7 @@
         aria_destination_row_in_list: '$1 in $2',
         aria_dim_titles_rated_below: 'Dim titles rated below',
         aria_dismiss_the_update_notice: 'Dismiss the $1 update notice',
+        aria_dismiss_the_welcome_notice: 'Dismiss the welcome notice',
         aria_expand_named_section: 'Expand $1',
         aria_filter_by_private_marks: 'Filter by private marks',
         aria_filter_catalog_destinations: 'Filter catalog destinations',
@@ -990,6 +991,7 @@
         text_failure_journal_copied: 'Failure journal copied',
         text_filter_title_count_one: '$2: $1 title',
         text_filter_title_count_other: '$2: $1 titles',
+        text_first_run_active: 'IMDb Enhanced is running on this page. The gear button in the bottom corner opens its settings.',
         text_get_it: 'Get it',
         text_heatmap_legend: 'Colours: 8+ great · 7+ good · 6+ average · 5+ below · under 5 poor',
         text_imdb_enhanced_settings: 'IMDb Enhanced settings',
@@ -1116,7 +1118,7 @@
         text_undone: 'Undone.',
         text_unweighted_same_as_displayed: 'Unweighted $1 — same as the displayed rating.',
         text_unweighted_weighting_sits: 'Unweighted $1 · IMDb’s weighting sits $2 $3 it.',
-        text_update_available: 'IMDb Enhanced $1 is available — this build is $2.',
+        text_update_available: 'IMDb Enhanced $1 is available. This build is $2.',
         text_use_a_valid_title_url: 'Use a valid $1 title URL.',
         text_use_automatic: 'Use automatic',
         text_user_reviews: 'User reviews',
@@ -4830,6 +4832,56 @@
             }, t('label_dismiss'))
         );
         document.body.appendChild(notice);
+    }
+
+    /* IE-114: nothing on the page says this is installed. An unpacked extension has no
+       store listing to explain the gear button, and a userscript has none either, so the
+       first covered page a new install renders is the only chance to say where the
+       settings are. Once, then never again.
+
+       Deliberately not a toast: a toast cannot be clicked away (it sits over the page
+       with pointer-events off so it never swallows a click meant for IMDb) and 2.5
+       seconds is not long enough to read something you have never seen. This is the
+       shape the update notice already uses. */
+    const FIRST_RUN_KEY = 'firstRunSeen';
+    const FIRST_RUN_NOTICE_MS = 12000;
+
+    /* Kept out of DEFAULTS on purpose. Resetting settings restores every default, which
+       would make this a "reset your settings to see the welcome again" button; wiping
+       storage removes it along with everything else, which is a new install and should
+       greet somebody again. */
+    function firstRunNoticeSeen() {
+        try { return GM_getValue(PREFIX + FIRST_RUN_KEY, false) === true; }
+        catch { return true; }
+    }
+
+    function showFirstRunNotice() {
+        if (firstRunNoticeSeen()) return;
+        if (!document.body || document.getElementById('enh-first-run')) return;
+        /* It points at the gear button, so it waits for one. Ordering this after the
+           button is created in init would do the same thing until somebody moved a line;
+           asking for the thing being pointed at cannot be reordered wrong. */
+        if (!document.getElementById('enh-settings-fab')) return;
+        // One corner, one message: the update notice is already there and says more.
+        if (document.getElementById('enh-update-notice')) return;
+        /* Recorded before it is shown. A page closed while the notice was up has still
+           had the notice, and if the write cannot land there is nothing that remembers
+           anything, so saying it again is the honest result rather than a bug. */
+        try { GM_setValue(PREFIX + FIRST_RUN_KEY, true); }
+        catch (error) { console.warn('[IMDb Enhanced] could not record the first run:', error); }
+
+        const dismiss = () => document.getElementById('enh-first-run')?.remove();
+        const notice = makeEl('div', { id:'enh-first-run', role:'status' },
+            makeEl('span', {}, t('text_first_run_active')),
+            makeEl('button', {
+                type:'button', className:'enh-update-notice__dismiss',
+                'aria-label':t('aria_dismiss_the_welcome_notice'),
+                onClick: dismiss,
+            }, t('label_dismiss'))
+        );
+        document.body.appendChild(notice);
+        // Goes away on its own for anybody who read it and carried on scrolling.
+        setTimeout(dismiss, FIRST_RUN_NOTICE_MS);
     }
 
     function ensureScoreAnnouncer() {
@@ -13085,6 +13137,17 @@ section[id*="quote" i] .ipc-list-card { padding: 4px 0 !important; margin: 2px 0
     font: 600 12px/1.45 -apple-system, BlinkMacSystemFont, 'Segoe UI', sans-serif;
     box-shadow: 0 10px 30px rgba(0,0,0,.35);
 }
+/* The welcome notice wears the update notice's clothes: same corner, same shape, and
+   the two never appear together. */
+#enh-first-run {
+    position: fixed; right: 16px; bottom: 16px; z-index: 2147483000;
+    display: flex; align-items: center; gap: 12px;
+    max-width: min(420px, calc(100vw - 32px));
+    padding: 10px 14px; border-radius: 10px;
+    background: ${t.sf1}; border: 1px solid ${t.accentBorder}; color: ${t.tx1};
+    font: 600 12px/1.45 -apple-system, BlinkMacSystemFont, 'Segoe UI', sans-serif;
+    box-shadow: 0 10px 30px rgba(0,0,0,.35);
+}
 .enh-update-notice__link { color: ${t.accent}; text-decoration: underline; white-space: nowrap; }
 .enh-update-notice__dismiss {
     background: ${t.sf2}; border: 1px solid ${t.bd1}; color: ${t.tx2};
@@ -16802,6 +16865,8 @@ ${scopedRules('.enh-zoom', {
         enabledFeatures.forEach(feature => startFeature(feature, { context:'route' }));
         createSettingsPanel();
         createFAB();
+        // After the gear exists, because the notice points at it.
+        showFirstRunNotice();
         routeInitCount += 1;
         console.info(`[IMDb Enhanced] v${VERSION} — init #${routeInitCount}; ${enabledFeatures.length} features enabled`);
     }

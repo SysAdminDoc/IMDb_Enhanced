@@ -56,6 +56,9 @@
   "aria_dismiss_the_update_notice": {
     "message": "[!! Dismiss the $1 update notice !!]"
   },
+  "aria_dismiss_the_welcome_notice": {
+    "message": "[!! Dismiss the welcome notice !!]"
+  },
   "aria_expand_named_section": {
     "message": "[!! Expand $1 !!]"
   },
@@ -1958,6 +1961,9 @@
   "text_filter_title_count_other": {
     "message": "[!! $2: $1 titles !!]"
   },
+  "text_first_run_active": {
+    "message": "[!! IMDb Enhanced is running on this page. The gear button in the bottom corner opens its settings. !!]"
+  },
   "text_get_it": {
     "message": "[!! Get it !!]"
   },
@@ -2337,7 +2343,7 @@
     "message": "[!! Unweighted $1 · IMDb’s weighting sits $2 $3 it. !!]"
   },
   "text_update_available": {
-    "message": "[!! IMDb Enhanced $1 is available — this build is $2. !!]"
+    "message": "[!! IMDb Enhanced $1 is available. This build is $2. !!]"
   },
   "text_use_a_valid_title_url": {
     "message": "[!! Use a valid $1 title URL. !!]"

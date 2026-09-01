@@ -24,6 +24,8 @@
 
 ### Added
 
+- A new install says hello once. Nothing on IMDb explains where the settings are, and an extension you loaded yourself has no store page to explain it either, so the first IMDb page you open after installing carries a short note saying the extension is running and that the gear button in the corner opens its settings. Click Dismiss or leave it, and it goes on its own after a few seconds. You will not see it again, and resetting your settings will not bring it back.
+
 - A link shared from a phone opens the desktop site. IMDb mobile addresses land on a page this extension deliberately does not run on and that nobody chose, so opening one on a computer now takes you to the same page on the normal site, before anything is drawn. Never on a phone, where the mobile site is the right one, and there is a toggle if you prefer it left alone.
 
 - Right-click works on gallery images again. IMDb blocks the menu there, which is why Save image as does nothing; this lets the browser show its own menu, and only over pictures, so the rest of the page behaves as IMDb intends. On by default, because a right-click that does nothing reads as breakage rather than as a choice.
