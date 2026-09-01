@@ -3214,9 +3214,20 @@ test('exported marks quote awkward values and defuse formulas', () => {
 
     const csv = hooks.buildMarksCsv(entries);
     const lines = csv.split('\r\n');
-    assert.strictEqual(lines[0], 'Const,State,Timestamp,Title,Note', 'the header is the documented one');
-    assert.strictEqual(csv.split('\r\n')[1], 'tt0133093,watched,2024-01-15,The Matrix,"Rewatch, with commas"',
-        'a comma is quoted, and nothing else about the row changes');
+    assert.strictEqual(lines[0],
+        'Const,State,Title,Year,Genres,Your Rating,IMDb Rating,Runtime (mins),Watched Date,Marked On,Note',
+        'the header is the documented one');
+    /* Every column the store holds, not the five it used to write. Read back through the
+       parser rather than compared as a string, so the check is about the values. */
+    const headerCells = hooks.parseCsvTable(csv)[0];
+    const firstRow = hooks.parseCsvTable(csv)[1];
+    assert.strictEqual(headerCells.length, firstRow.length, 'a row has a cell per column');
+    const cell = name => firstRow[headerCells.indexOf(name)];
+    assert.strictEqual(cell('Const'), 'tt0133093');
+    assert.strictEqual(cell('State'), 'watched');
+    assert.strictEqual(cell('Title'), 'The Matrix');
+    assert.strictEqual(cell('Marked On'), '2024-01-15');
+    assert.strictEqual(cell('Note'), 'Rewatch, with commas', 'a comma is quoted and comes back whole');
 
     // A quote is doubled inside a quoted field, which is what RFC 4180 says.
     assert(csv.includes('"Say ""hello"""'), 'quotes are doubled, not escaped with a backslash');
@@ -3301,6 +3312,71 @@ test('an exported CSV reads back into the same marks', () => {
     assert.strictEqual(second.marks.tt0044337.title, '-30-', 'a second trip adds nothing');
     assert.strictEqual(second.marks.tt2395385.title, '+1');
     assert.strictEqual(second.marks.tt0133093.note, 'A note, with a comma');
+});
+
+/* "Everything the extension stores" wrote five of the eleven things a record holds, so a
+   person who exported and imported lost the year, the genres, the runtime, the rating and
+   every viewing but the last. The file said so on its own header row and nobody noticed,
+   because the round-trip test only ever put those five fields in. */
+test('an exported CSV carries every field a mark record holds', () => {
+    const hooks = loadScriptTestHooks();
+    const record = {
+        v:2, state:'watched', title:'Blade Runner', ts:Date.UTC(2024, 0, 15),
+        note:'Seen it twice', year:1982, genres:['Sci-Fi', 'Thriller'],
+        rating:9, imdbRating:8.1, runtime:117,
+        viewings:[{ date:'2019-04-02', rating:8 }, { date:'2024-01-15', rating:9 }],
+    };
+    const csv = hooks.buildMarksCsv([['tt0083658', record]]);
+
+    // A viewing is a row, which is the only way more than one of them survives a file.
+    assert.strictEqual(csv.split('\r\n').length, 3, 'two viewings are two rows');
+
+    const back = hooks.prepareCsvMarkImport(csv, {}).marks.tt0083658;
+    assert.strictEqual(back.title, 'Blade Runner');
+    assert.strictEqual(back.year, 1982, 'the year came back');
+    assert.deepStrictEqual(Array.from(back.genres), ['Sci-Fi', 'Thriller'], 'and the genres');
+    assert.strictEqual(back.imdbRating, 8.1);
+    assert.strictEqual(back.runtime, 117);
+    assert.strictEqual(back.note, 'Seen it twice');
+    assert.deepStrictEqual(Array.from(back.viewings, viewing => `${viewing.date}@${viewing.rating}`),
+        ['2019-04-02@8', '2024-01-15@9'], 'both viewings, each with the rating given that time');
+
+    /* A skip has a date it was decided on and no date it was watched on. Without a column
+       of its own that date became the moment of the import. */
+    const skip = hooks.prepareCsvMarkImport(
+        hooks.buildMarksCsv([['tt2395385', { state:'skip', title:'Passed', ts:Date.UTC(2022, 2, 3) }]]), {},
+    ).marks.tt2395385;
+    assert.strictEqual(skip.state, 'skip');
+    assert.strictEqual(new Date(skip.ts).toISOString().slice(0, 10), '2022-03-03',
+        'the day it was marked, not the day it was imported');
+    assert(!skip.viewings?.length, 'and a skip is still not something anybody watched');
+
+    /* A record can hold a note with no state at all. Read back as watched it would put a
+       film into somebody's history that they had only written a note against. */
+    const noteOnly = hooks.prepareCsvMarkImport(
+        hooks.buildMarksCsv([['tt0111161', { state:'', title:'Only a note', ts:Date.UTC(2023, 1, 1),
+            note:'Meant to watch this', viewings:[{ date:'2021-06-09' }] }]]), {},
+    ).marks.tt0111161;
+    assert.strictEqual(noteOnly.state, '', 'an empty State column means no state, not watched');
+    assert.strictEqual(noteOnly.note, 'Meant to watch this');
+    /* Clearing a Seen mark keeps the note and the dates it was watched on, so those rows
+       carry a viewing date under an empty state and have to be read as one. */
+    assert.strictEqual(noteOnly.viewings?.[0]?.date, '2021-06-09',
+        'and the history behind the note is not thrown away with the state');
+
+    /* A rating on the record with nothing logged against a particular viewing still has to
+       reach the file, or the only thing the person scored comes back blank. */
+    const rated = hooks.prepareCsvMarkImport(
+        hooks.buildMarksCsv([['tt0068646', { state:'watched', title:'Scored', ts:Date.UTC(2024, 4, 4),
+            rating:7.5 }]]), {},
+    ).marks.tt0068646;
+    assert.strictEqual(rated.rating, 7.5, 'the rating survives without a viewing to hang it on');
+
+    /* Letterboxd and IMDb export files with no State column at all, and every row in one
+       of those is something the person watched. That default has to stay. */
+    const letterboxd = hooks.prepareCsvMarkImport(
+        'imdbID,WatchedDate\r\ntt0133093,2024-01-15', {}).marks.tt0133093;
+    assert.strictEqual(letterboxd.state, 'watched', 'a file without the column is a list of what was seen');
 });
 
 /* The two hazards the export defends against, checked against values a spreadsheet

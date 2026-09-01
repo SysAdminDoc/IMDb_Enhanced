@@ -830,7 +830,7 @@
         settings_download_marks_letterboxd_hint: 'Save the Letterboxd import file',
         settings_edit_every_destination_directly_hide_categorize: 'Edit every destination directly. Hide, categorize, reorder, or remove links without changing the rest of IMDb Enhanced.',
         settings_export_marks_full: 'Copy as CSV',
-        settings_export_marks_full_hint: 'Every mark, with its state, date, title and note',
+        settings_export_marks_full_hint: 'Every mark, with its state, title, year, genres, ratings, runtime, dates and note',
         settings_export_marks_letterboxd: 'Copy for Letterboxd',
         settings_export_marks_letterboxd_hint: 'Seen titles only, in the two columns Letterboxd imports',
         settings_export_marks_note: 'A backup is for coming back here. This is for taking your list somewhere else.',
@@ -2772,17 +2772,41 @@
         return values.map(csvField).join(',');
     }
 
-    /* Everything the local store holds, one row per title. */
+    /* Everything the local store holds. A row per viewing rather than per title: a record
+       keeps every date something was watched on, and a file that carried only the most
+       recent one would quietly throw away the rest of somebody's history the first time
+       they exported and imported it. The column names are the ones this extension's own
+       importer reads, so a file it writes is a file it can read. */
+    const MARKS_CSV_HEADER = ['Const', 'State', 'Title', 'Year', 'Genres', 'Your Rating',
+        'IMDb Rating', 'Runtime (mins)', 'Watched Date', 'Marked On', 'Note'];
+
     function buildMarksCsv(entries = getUserMarkEntries()) {
-        const rows = [csvRow(['Const', 'State', 'Timestamp', 'Title', 'Note'])];
+        const rows = [csvRow(MARKS_CSV_HEADER)];
         entries.forEach(([id, record]) => {
-            rows.push(csvRow([
-                id,
-                record?.state || '',
-                viewingDateFromTimestamp(Number(record?.ts)),
-                record?.title || '',
-                record?.note || '',
-            ]));
+            const markedOn = viewingDateFromTimestamp(Number(record?.ts));
+            const viewings = Array.isArray(record?.viewings) ? record.viewings : [];
+            /* A Seen title with nothing logged against it still happened, and the day it
+               was marked is the best date there is. A Skip is a decision rather than a
+               viewing, so it gets a row with that column empty. */
+            const listed = viewings.length ? viewings
+                : record?.state === 'watched' && markedOn ? [{ date:markedOn }]
+                    : [null];
+            listed.forEach(viewing => {
+                rows.push(csvRow([
+                    id,
+                    record?.state || '',
+                    record?.title || '',
+                    record?.year ?? '',
+                    // Semicolons, so a genre list is not a quoted field in every row.
+                    (Array.isArray(record?.genres) ? record.genres : []).join('; '),
+                    viewing?.rating ?? record?.rating ?? '',
+                    record?.imdbRating ?? '',
+                    record?.runtime ?? '',
+                    viewing?.date || '',
+                    markedOn,
+                    record?.note || '',
+                ]));
+            });
         });
         return rows.join('\r\n');
     }
@@ -2931,6 +2955,10 @@
             year:findCsvColumn(headers, ['year', 'releaseyear']),
             rating,
             date:findCsvColumn(headers, ['daterated', 'watcheddate', 'datewatched', 'watchedon', 'date', 'timestamp']),
+            /* When the mark itself was made, which is not the same question as when the
+               title was watched. A Skip has the first and never the second, so without a
+               column of its own the date a skip was recorded is lost on every trip. */
+            marked:findCsvColumn(headers, ['markedon']),
             genres:findCsvColumn(headers, ['genres', 'genre']),
             imdbRating:findCsvColumn(headers, ['imdbrating']),
             runtime:findCsvColumn(headers, ['runtimemins', 'runtimeminutes', 'runtime']),
@@ -3003,8 +3031,15 @@
                 v:USER_MARK_RECORD_VERSION, state:'', title:'', ts:0,
             };
             const rawState = readCsvCell(row, columns.state).toLocaleLowerCase();
-            const state = rawState === 'skip' || rawState === 'skipped' ? 'skip' : 'watched';
-            const event = state === 'watched' && date
+            /* A file with a State column that leaves it empty is describing a title
+               carrying only a note, which is a thing this extension stores. Reading that
+               as watched invents a viewing nobody had. Files without the column at all,
+               which is IMDb's own export and Letterboxd's, are lists of what somebody
+               saw, so every row there is watched. */
+            const state = rawState === 'skip' || rawState === 'skipped' ? 'skip'
+                : rawState === 'watched' || rawState === 'seen' ? 'watched'
+                    : columns.state >= 0 ? '' : 'watched';
+            const event = state !== 'skip' && date
                 ? [{ date, ...(rating !== null ? { rating } : {}) }]
                 : [];
             if (event.length) {
@@ -3014,7 +3049,9 @@
                     `${viewing.date}\u0000${viewing.rating ?? ''}` === eventKey);
                 if (!alreadyStored && previousViewings.length >= USER_MARK_VIEWINGS_MAX) droppedViewings += 1;
             }
-            const viewingTimestamp = date ? Date.parse(`${date}T12:00:00.000Z`) : importedAt;
+            const markedOn = normalizeViewingDate(readCsvCell(row, columns.marked));
+            const viewingTimestamp = markedOn ? Date.parse(`${markedOn}T12:00:00.000Z`)
+                : date ? Date.parse(`${date}T12:00:00.000Z`) : importedAt;
             merged[imdbId] = {
                 ...previous,
                 v:USER_MARK_RECORD_VERSION,

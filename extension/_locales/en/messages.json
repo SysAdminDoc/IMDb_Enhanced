@@ -1470,7 +1470,7 @@
     "message": "Copy as CSV"
   },
   "settings_export_marks_full_hint": {
-    "message": "Every mark, with its state, date, title and note"
+    "message": "Every mark, with its state, title, year, genres, ratings, runtime, dates and note"
   },
   "settings_export_marks_letterboxd": {
     "message": "Copy for Letterboxd"
