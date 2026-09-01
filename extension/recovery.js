@@ -974,6 +974,8 @@
         text_csv_titles_over_limit: '$1 over the $2-title limit',
         text_csv_viewings_over_limit_one: '$1 viewing event over the $2-per-title limit not retained',
         text_csv_viewings_over_limit_other: '$1 viewing events over the $2-per-title limit not retained',
+        text_direction_above: 'above',
+        text_direction_below: 'below',
         text_encrypted_backup_with_credentials: 'Encrypted backup with credentials',
         text_ep_calendar: 'Ep Calendar',
         text_episode_guide: 'Episode guide',
@@ -1106,6 +1108,8 @@
         text_unavailable: 'Unavailable',
         text_undo_the_last_settings_reset: 'Undo the last settings reset',
         text_undone: 'Undone.',
+        text_unweighted_same_as_displayed: 'Unweighted $1 — same as the displayed rating.',
+        text_unweighted_weighting_sits: 'Unweighted $1 · IMDb’s weighting sits $2 $3 it.',
         text_update_available: 'IMDb Enhanced $1 is available — this build is $2.',
         text_use_a_valid_title_url: 'Use a valid $1 title URL.',
         text_use_automatic: 'Use automatic',
@@ -1114,6 +1118,7 @@
         text_uses_light_for_os_light_mode_and: 'Uses Light for OS light mode and Dark for OS dark mode.',
         text_view_full_cast_crew: 'View full cast & crew',
         text_watch_order: 'Watch order',
+        text_without_the_extremes: 'Without 1s and 10s: $1 (derived)',
         toast_a_site_list_can_contain_up: 'A site list can contain up to $1 destinations',
         toast_all_imdb_watched_on_this_page_one: 'All $1 IMDb Watched title on this page already has a local mark',
         toast_all_imdb_watched_on_this_page_other: 'All $1 IMDb Watched titles on this page already have a local mark',
@@ -7860,12 +7865,43 @@ section[id*="quote" i] .ipc-list-card { padding: 4px 0 !important; margin: 2px 0
         return Number.isFinite(parsed) && parsed > 0 && parsed <= 10 ? parsed : null;
     }
 
-    function describeRatingGap(unweighted, displayed) {
+    /* The same arithmetic with the two ends of the scale left out. A review-bombed title
+       is bombed at 1 and defended at 10, and both ends are where a handful of people can
+       move a mean furthest — so a mean without them says what the middle of the audience
+       thought. It is derived here from buckets IMDb publishes, not a rating anyone gave,
+       and it never replaces the score on the page. */
+    function computeTrimmedMean(buckets) {
+        if (!Array.isArray(buckets) || !buckets.length) return null;
+        let votes = 0;
+        let weighted = 0;
+        for (const bucket of buckets) {
+            const rating = Number(bucket?.rating);
+            const count = Number(bucket?.voteCount);
+            if (!Number.isFinite(rating) || !Number.isFinite(count) || count < 0) continue;
+            // Strictly inside the scale: 1 and 10 are the buckets being excluded.
+            if (rating <= 1 || rating >= 10) continue;
+            votes += count;
+            weighted += rating * count;
+        }
+        /* Every vote at one end or the other leaves nothing to average. That is a real
+           answer about a title, and a made-up number would be a worse one. */
+        if (!votes) return null;
+        return Math.round((weighted / votes) * 10) / 10;
+    }
+
+    function describeRatingGap(unweighted, displayed, trimmed = null) {
         if (unweighted === null || !Number.isFinite(displayed)) return null;
         const delta = Math.round((displayed - unweighted) * 10) / 10;
-        if (!delta) return `Unweighted ${unweighted.toFixed(1)} — same as the displayed rating.`;
-        const direction = delta > 0 ? 'above' : 'below';
-        return `Unweighted ${unweighted.toFixed(1)} · IMDb's weighting sits ${Math.abs(delta).toFixed(1)} ${direction} it.`;
+        const parts = [delta
+            ? t('text_unweighted_weighting_sits', [unweighted.toFixed(1), Math.abs(delta).toFixed(1),
+                delta > 0 ? t('text_direction_above') : t('text_direction_below')])
+            : t('text_unweighted_same_as_displayed', [unweighted.toFixed(1)])];
+        /* Only when it says something the line does not already: a title with no votes at
+           either end has the same two numbers, and printing both would be noise. */
+        if (trimmed !== null && trimmed !== unweighted) {
+            parts.push(t('text_without_the_extremes', [trimmed.toFixed(1)]));
+        }
+        return parts.join(t('text_summary_separator'));
     }
 
     function findHistogramData(root, maxNodes = 10000) {
@@ -11846,8 +11882,11 @@ section[id*="quote" i] .ipc-list-card { padding: 4px 0 !important; margin: 2px 0
             `, 'enh-ratingGap');
             waitFor('[data-testid="histogram-root"]').then(root => {
                 if (!isCurrent() || !root || document.getElementById('enh-rating-gap')) return;
-                const unweighted = computeUnweightedMean(getHistogramData());
-                const gap = describeRatingGap(unweighted, readDisplayedRating());
+                // Read once: both means come from the same buckets, and re-reading the
+                // page between them could describe two different distributions.
+                const buckets = getHistogramData();
+                const unweighted = computeUnweightedMean(buckets);
+                const gap = describeRatingGap(unweighted, readDisplayedRating(), computeTrimmedMean(buckets));
                 if (!gap) return;
                 root.parentElement?.insertBefore(makeEl('div', { id:'enh-rating-gap', role:'note' },
                     makeEl('strong', {}, gap),

@@ -290,6 +290,7 @@ function loadScriptTestHooks({ withoutDeleteValue = false, withheldCredentials =
         getAvailabilityCacheKey,
         getJustWatchSearchUrl,
         isTmdbConfigured,
+        computeTrimmedMean,
         buildMarksCsv,
         buildLetterboxdCsv,
         scopedRules,
@@ -3308,6 +3309,62 @@ test('the formula guard is not fooled by leading whitespace', () => {
     // A line separator that is not \n still ends a line for a reader, so it is quoted.
     const separated = hooks.buildMarksCsv([['tt0000002', { state:'watched', title:'a\u2028b', ts:0, note:'' }]]);
     assert(separated.includes('"a\u2028b"'), 'U+2028 is quoted like any other line break');
+});
+
+/* IE-111: a review-bombed title is bombed at 1 and defended at 10, and both ends are
+   where a handful of people move a mean furthest. The same arithmetic without those two
+   buckets says what the middle of the audience thought. It is derived from buckets IMDb
+   publishes, so it is labelled as derived and never replaces the score on the page. */
+test('the trimmed mean drops the two ends of the scale and says it is derived', () => {
+    const hooks = loadScriptTestHooks();
+    const bucket = (rating, voteCount) => ({ rating, voteCount });
+
+    /* A bombing: a thousand 1s under an otherwise well-liked film. The plain mean is
+       dragged down; the trimmed one is not. */
+    const bombed = [bucket(1, 1000), bucket(7, 500), bucket(8, 500)];
+    assert.strictEqual(hooks.computeUnweightedMean(bombed), 4.3);
+    assert.strictEqual(hooks.computeTrimmedMean(bombed), 7.5, 'the 1s are left out');
+
+    // And the defence at the other end is left out too, not only the attack.
+    const defended = [bucket(1, 1000), bucket(7, 500), bucket(10, 1000)];
+    assert.strictEqual(hooks.computeTrimmedMean(defended), 7,
+        'a 10 counts no more than a 1 does');
+
+    // A distribution with nothing at either end is unchanged by the trim.
+    const ordinary = [bucket(6, 100), bucket(7, 200), bucket(8, 100)];
+    assert.strictEqual(hooks.computeTrimmedMean(ordinary), hooks.computeUnweightedMean(ordinary));
+
+    /* The edges. Every vote at one end leaves nothing to average, and a made-up number
+       would be worse than saying nothing. */
+    assert.strictEqual(hooks.computeTrimmedMean([bucket(1, 5000)]), null, 'all 1s trims to nothing');
+    assert.strictEqual(hooks.computeTrimmedMean([bucket(10, 5000)]), null, 'and so does all 10s');
+    assert.strictEqual(hooks.computeTrimmedMean([bucket(1, 100), bucket(10, 100)]), null);
+    assert.strictEqual(hooks.computeTrimmedMean([]), null);
+    assert.strictEqual(hooks.computeTrimmedMean(null), null);
+    // Junk in a bucket is skipped rather than counted as a zero.
+    assert.strictEqual(hooks.computeTrimmedMean([bucket('x', 10), bucket(5, 10)]), 5);
+    assert.strictEqual(hooks.computeTrimmedMean([bucket(5, -10), bucket(5, 10)]), 5);
+
+    /* What the line says. The trimmed figure is additional, labelled, and the displayed
+       rating is still the thing being compared against. */
+    const line = hooks.describeRatingGap(4.3, 6.5, 7.5);
+    assert(/Unweighted 4\.3/.test(line), 'the unweighted mean is still there');
+    assert(/1s and 10s/.test(line), 'and the trim is described rather than implied');
+    assert(/7\.5/.test(line));
+    assert(/derived/i.test(line), 'and marked as derived, because nobody gave that score');
+
+    // Nothing extra when the two means agree: a second identical number is noise.
+    const same = hooks.describeRatingGap(7, 7, 7);
+    assert(!/1s and 10s/.test(same), 'an unchanged trim is not worth a clause');
+    // And nothing at all when there is no trimmed mean to report.
+    assert(!/1s and 10s/.test(hooks.describeRatingGap(4.3, 6.5, null)));
+
+    /* Both means come from one read of the page, or the line could describe two
+       different distributions. */
+    const feature = script.slice(script.indexOf("key: 'ratingGap'"));
+    const init = feature.slice(0, feature.indexOf('destroy()'));
+    assert.strictEqual((init.match(/getHistogramData\(\)/g) || []).length, 1,
+        'the buckets are read once and both means computed from them');
 });
 
 test('version strings match', () => {

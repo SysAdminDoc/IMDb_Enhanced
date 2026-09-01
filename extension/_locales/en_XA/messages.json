@@ -1922,6 +1922,12 @@
   "text_csv_viewings_over_limit_other": {
     "message": "[!! $1 viewing events over the $2-per-title limit not retained !!]"
   },
+  "text_direction_above": {
+    "message": "[!! above !!]"
+  },
+  "text_direction_below": {
+    "message": "[!! below !!]"
+  },
   "text_encrypted_backup_with_credentials": {
     "message": "[!! Encrypted backup with credentials !!]"
   },
@@ -2318,6 +2324,12 @@
   "text_undone": {
     "message": "[!! Undone. !!]"
   },
+  "text_unweighted_same_as_displayed": {
+    "message": "[!! Unweighted $1 — same as the displayed rating. !!]"
+  },
+  "text_unweighted_weighting_sits": {
+    "message": "[!! Unweighted $1 · IMDb’s weighting sits $2 $3 it. !!]"
+  },
   "text_update_available": {
     "message": "[!! IMDb Enhanced $1 is available — this build is $2. !!]"
   },
@@ -2341,6 +2353,9 @@
   },
   "text_watch_order": {
     "message": "[!! Watch order !!]"
+  },
+  "text_without_the_extremes": {
+    "message": "[!! Without 1s and 10s: $1 (derived) !!]"
   },
   "toast_a_site_list_can_contain_up": {
     "message": "[!! A site list can contain up to $1 destinations !!]"

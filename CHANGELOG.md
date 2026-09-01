@@ -24,6 +24,8 @@
 
 ### Added
 
+- On a title Ratings tab, the comparison line now also reports the average with the 1s and the 10s left out. A review-bombed film is bombed at one end and defended at the other, and both are where a few people move an average furthest, so the middle of the audience is worth seeing on its own. It is derived from the vote counts IMDb publishes, labelled as derived, and it never replaces the rating on the page.
+
 - Your marks can be exported as a spreadsheet, from the Data page, either to the clipboard or as a file. One pair of buttons gives you everything the extension stores, with the state, date, title and note; the other gives just the two columns Letterboxd imports, so the list can go with you. The downloaded file opens correctly in Excel, and anything exported reads back into the extension unchanged. Titles and notes that contain commas, quotes or line breaks survive the trip, and a title beginning with an equals sign is not handed to a spreadsheet as a formula.
 
 - `npm run pack` builds the archives a store listing needs: a Chromium package, a Firefox package, the web-store package, a source archive for AMO, and a file of SHA-256 sums for all four. The archives are deterministic, so building the same commit twice produces the same bytes and the checksums mean something. The zip writer is part of the repository rather than a dependency.
