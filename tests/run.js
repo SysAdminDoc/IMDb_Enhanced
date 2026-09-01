@@ -283,6 +283,9 @@ function loadScriptTestHooks({ withoutDeleteValue = false, withheldCredentials =
         getAvailabilityCacheKey,
         getJustWatchSearchUrl,
         isTmdbConfigured,
+        normalizeWatchlistSnapshot,
+        getWatchlistSnapshot,
+        collectWatchlistTitles,
         buildCollectionQuery,
         parseCollectionEntries,
         SECONDARY_PAGE_FEATURE_KEYS,
@@ -3022,6 +3025,62 @@ test('a franchise is ordered by its own numbering, then by year', () => {
         'and nothing is asked until there is somewhere to show the answer');
 });
 
+/* IE-25: the page's only job is to write down what is on the watchlist, because the
+   checking happens with every IMDb tab closed. A watchlist can be thousands of titles and
+   each one would be a scheduled request on somebody else's API, so what is written down
+   is bounded, and every id in it is checked on the way back out. */
+test('the watchlist snapshot is bounded, validated, and never emptied by an empty page', () => {
+    const hooks = loadScriptTestHooks();
+
+    const good = hooks.normalizeWatchlistSnapshot({
+        v:1, ts:1700000000000, titles:{ tt0133093:{ title:'The Matrix' }, tt0903747:{ title:'Breaking Bad' } },
+    });
+    assert.strictEqual(Object.keys(good.titles).length, 2);
+    assert.strictEqual(good.titles.tt0133093.title, 'The Matrix');
+
+    // Anything that is not an id, or has no title, is not a watchlist entry.
+    const dirty = hooks.normalizeWatchlistSnapshot({
+        v:1, ts:1, titles:{
+            'javascript:alert(1)':{ title:'Bad' },
+            '../../evil':{ title:'Worse' },
+            nm0000206:{ title:'A person' },
+            tt0133093:{ title:'' },
+            tt0903747:{ title:'Breaking Bad' },
+        },
+    });
+    assert.deepStrictEqual(Array.from(Object.keys(dirty.titles)), ['tt0903747']);
+
+    // A snapshot from a shape this build does not know is not read at all.
+    assert.strictEqual(hooks.normalizeWatchlistSnapshot({ v:99, titles:{} }), null);
+    assert.strictEqual(hooks.normalizeWatchlistSnapshot({ v:1, titles:'nope' }), null);
+    assert.strictEqual(hooks.normalizeWatchlistSnapshot(null), null);
+    assert.strictEqual(hooks.normalizeWatchlistSnapshot([]), null);
+    // And an unreadable one reads as empty rather than throwing at whoever asked.
+    assert.deepStrictEqual(Array.from(Object.keys(hooks.getWatchlistSnapshot().titles)), []);
+
+    /* The bound is the whole reason this is safe to check on a schedule. */
+    const huge = { v:1, ts:1, titles:{} };
+    for (let index = 0; index < 500; index += 1) {
+        huge.titles[`tt${String(1000000 + index).padStart(7, '0')}`] = { title:`Title ${index}` };
+    }
+    assert.strictEqual(Object.keys(hooks.normalizeWatchlistSnapshot(huge).titles).length, 200,
+        'a thousand-title watchlist must not become a thousand scheduled requests');
+
+    /* An empty read is far more likely to be a page that has not finished than a
+       watchlist someone emptied, and writing it would silence the alerts for good. */
+    const body = script.slice(script.indexOf("key: 'watchlistAlerts'"));
+    const feature = body.slice(0, body.indexOf('        destroy() {'));
+    assert(/if \(!Object\.keys\(titles\)\.length\) return;/.test(feature),
+        'an empty read must not overwrite the snapshot');
+
+    /* The userscript has no worker, so it must not offer a feature that needs one. */
+    assert(!hooks.getFeatureKeys().includes('watchlistAlerts'),
+        'the userscript build must not register it at all');
+    assert(script.includes('if (IS_EXTENSION_BUILD) {\n        reg({\n            key: \'watchlistAlerts\''),
+        'and the registration itself must be what is conditional');
+    assert.strictEqual(hooks.DEFAULTS.watchlistAlerts, false, 'a background job is opt-in');
+});
+
 test('version strings match', () => {
     const metaVersion = script.match(/@version\s+(\S+)/)?.[1];
     const constVersion = script.match(/const VERSION\s*=\s*'([^']+)'/)?.[1];
@@ -5623,6 +5682,14 @@ test('every feature and provider gets its words from the catalog', () => {
     const declared = new Set(Object.keys(hooks.MESSAGES));
     const expected = new Set();
 
+    /* FEATURE_DETAILS names every feature either build can register, which is not the
+       same set as the features registered in this one: the watchlist alerts need a
+       background worker, so the userscript does not register them at all. Their words
+       still ship in the catalog, because the extension shows them. */
+    Object.keys(hooks.FEATURE_DETAILS).forEach(key => {
+        expected.add(`feature_${key}_name`);
+        expected.add(`feature_${key}_detail`);
+    });
     hooks.getFeatureNames().forEach(([key, name]) => {
         expected.add(`feature_${key}_name`);
         expected.add(`feature_${key}_detail`);

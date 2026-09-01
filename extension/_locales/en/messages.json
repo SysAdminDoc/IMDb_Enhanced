@@ -632,6 +632,12 @@
   "feature_watchedMarking_name": {
     "message": "Private seen / skip marks"
   },
+  "feature_watchlistAlerts_detail": {
+    "message": "Notices when something on your watchlist becomes available on a service you picked, and tells you once a day. Needs a TMDB token, works only in the extension, and keeps a bounded list of the most recent watchlist page you opened."
+  },
+  "feature_watchlistAlerts_name": {
+    "message": "Watchlist streaming alerts"
+  },
   "feature_watchlistBatch_detail": {
     "message": "Adds a watchlist-page button that copies all visible IMDb title IDs."
   },

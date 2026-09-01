@@ -293,6 +293,8 @@
         feature_tvShowEnhancements_name: 'TV show quick links',
         feature_watchedMarking_detail: 'Adds private Seen and Skip marks on title cards across titles, charts, lists, watchlists, filmographies, and search results. Marks stay on this device and do not change IMDb Watched.',
         feature_watchedMarking_name: 'Private seen / skip marks',
+        feature_watchlistAlerts_detail: 'Notices when something on your watchlist becomes available on a service you picked, and tells you once a day. Needs a TMDB token, works only in the extension, and keeps a bounded list of the most recent watchlist page you opened.',
+        feature_watchlistAlerts_name: 'Watchlist streaming alerts',
         feature_watchlistBatch_detail: 'Adds a watchlist-page button that copies all visible IMDb title IDs.',
         feature_watchlistBatch_name: 'Watchlist batch ID copy',
         feature_widerLayout_detail: 'Uses more horizontal room across normal desktop window sizes.',
@@ -1547,6 +1549,10 @@
         movieChatBoard: false,
         // Off by default: it is a whole section of other films.
         collectionPanel: false,
+        /* Extension only, and off until asked for: it is a background job that keeps
+           checking after you have closed the tab. */
+        watchlistAlerts: false,
+        watchlistAlertServices: [],
         streamAvailability: true,
         /* Which service answers "where can I watch this". JustWatch is read by parsing
            their page; TMDB is a documented API but needs a read token of your own. The
@@ -1626,6 +1632,7 @@
         imageZoom: t('feature_imageZoom_detail'),
         movieChatBoard: t('feature_movieChatBoard_detail'),
         collectionPanel: t('feature_collectionPanel_detail'),
+        watchlistAlerts: t('feature_watchlistAlerts_detail'),
         inlineAnimeScore: t('feature_inlineAnimeScore_detail'),
         streamAvailability: t('feature_streamAvailability_detail'),
         searchButtons: t('feature_searchButtons_detail'),
@@ -8366,6 +8373,94 @@ section[id*="quote" i] .ipc-list-card { padding: 4px 0 !important; margin: 2px 0
         return entries.sort((a, b) => (a.ordinal || Infinity) - (b.ordinal || Infinity)
             || (a.year || Infinity) - (b.year || Infinity)
             || a.title.localeCompare(b.title));
+    }
+
+    /* Letterboxd charges for this, and it is the one thing here that has to keep working
+       with every IMDb tab closed — so it belongs to the extension, which has a worker,
+       and not to the userscript, which does not. The page's job is only to write down
+       what is on the watchlist; the checking happens elsewhere.
+
+       Bounded on purpose. A watchlist can be thousands of titles and every one of them
+       would be a request on somebody else's API on a schedule, so this keeps the most
+       recently seen page of them and no more. */
+    const WATCHLIST_SNAPSHOT_KEY = 'watchlistSnapshot';
+    const WATCHLIST_SNAPSHOT_MAX = 200;
+    const WATCHLIST_SNAPSHOT_VERSION = 1;
+
+    function normalizeWatchlistSnapshot(value) {
+        if (!value || typeof value !== 'object' || Array.isArray(value)) return null;
+        if (Number(value.v) !== WATCHLIST_SNAPSHOT_VERSION) return null;
+        const titles = value.titles;
+        if (!titles || typeof titles !== 'object' || Array.isArray(titles)) return null;
+        const normalized = {};
+        let kept = 0;
+        for (const [id, entry] of Object.entries(titles)) {
+            if (kept >= WATCHLIST_SNAPSHOT_MAX) break;
+            if (!/^tt\d{7,10}$/.test(id)) continue;
+            const title = toBoundedText(entry?.title, USER_MARK_TITLE_LIMIT);
+            if (!title) continue;
+            normalized[id] = { title };
+            kept += 1;
+        }
+        const ts = Number(value.ts);
+        return { v:WATCHLIST_SNAPSHOT_VERSION, ts: Number.isFinite(ts) && ts > 0 ? ts : 0, titles:normalized };
+    }
+
+    function getWatchlistSnapshot() {
+        return normalizeWatchlistSnapshot(get(WATCHLIST_SNAPSHOT_KEY))
+            || { v:WATCHLIST_SNAPSHOT_VERSION, ts:0, titles:{} };
+    }
+
+    /* Read from the cards the page has already rendered. No request, no IMDb API, and
+       nothing is written when the page turns out to hold no titles — an empty answer is
+       far more likely to be a page that has not finished than a watchlist someone
+       emptied, and overwriting the snapshot with it would silence the alerts. */
+    function collectWatchlistTitles(root = document) {
+        const found = {};
+        let seen = 0;
+        const cards = root.querySelectorAll('[data-testid="list-summary-item"], li.ipc-metadata-list-summary-item');
+        for (const card of cards) {
+            if (seen >= WATCHLIST_SNAPSHOT_MAX) break;
+            const link = card.querySelector('a[href*="/title/tt"]');
+            const id = getLinkedTitleId(link?.getAttribute('href') || '');
+            if (!id || found[id]) continue;
+            const title = toBoundedText(link.textContent, USER_MARK_TITLE_LIMIT);
+            if (!title) continue;
+            found[id] = { title };
+            seen += 1;
+        }
+        return found;
+    }
+
+    /* The userscript has no worker, so it does not get a feature that depends on one.
+       Registered only where it can actually run, rather than registered everywhere and
+       returning early, so the settings panel in a userscript build never lists it. */
+    if (IS_EXTENSION_BUILD) {
+        reg({
+            key: 'watchlistAlerts', name: t('feature_watchlistAlerts_name'), group: 'Utility',
+            init() {
+                if (!/\/user\/[^/]+\/watchlist/i.test(location.pathname)) return;
+                const record = () => {
+                    const titles = collectWatchlistTitles();
+                    if (!Object.keys(titles).length) return;
+                    set(WATCHLIST_SNAPSHOT_KEY, { v:WATCHLIST_SNAPSHOT_VERSION, ts:Date.now(), titles });
+                };
+                record();
+                /* The list pages in as you scroll, so what was on screen at init is not
+                   what is on the watchlist. Re-read on a settle rather than per mutation. */
+                this._observer = new MutationObserver(() => {
+                    clearTimeout(this._settle);
+                    this._settle = setTimeout(record, 800);
+                });
+                this._observer.observe(document.querySelector('main') || document.body,
+                    { childList:true, subtree:true });
+            },
+            destroy() {
+                clearTimeout(this._settle);
+                this._observer?.disconnect();
+                this._observer = null;
+            },
+        });
     }
 
     reg({
@@ -15231,7 +15326,7 @@ section[data-testid="hero-parent"].enh-editorial-native-hidden { display: none !
             ]),
             makeFeatureCard(t('settings_lists_shortcuts'), t('settings_batch_actions_and_quick_navigation'), 'Lists', [
                 'watchlistBatch', 'listMultiSearch', 'listRuntimeSummary', 'markFilters', 'listRoulette',
-                'quickCopyID', 'keyboardShortcuts',
+                'quickCopyID', 'keyboardShortcuts', 'watchlistAlerts',
             ]),
             makeFeatureCard(t('settings_heading_people'), t('settings_additions_to_cast_and_crew_pages'), t('settings_name_pages'), [
                 'castAges',
