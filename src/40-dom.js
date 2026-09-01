@@ -745,6 +745,91 @@
         } catch { return ''; }
     }
 
+    const WATCH_SEARCH_TEMPLATE_KEYS = new Set([
+        'TITLE', 'TITLE_RAW', 'TITLE_DASH', 'TITLE_SLUG', 'IMDB_ID', 'IMDB_NUM',
+    ]);
+    function hasWatchSearchTemplate(url) {
+        return Array.from(String(url || '').matchAll(/\{\{([^{}]+)\}\}/g))
+            .some(match => WATCH_SEARCH_TEMPLATE_KEYS.has(match[1]));
+    }
+
+    function siteIdentityKey(name, url) {
+        return `${String(name || '').trim().toLowerCase()}\n${String(url || '').trim()}`;
+    }
+
+    function staticSiteIdentityKey(name, url) {
+        let normalized = String(url || '').trim();
+        try { normalized = new URL(normalized).href; }
+        catch { /* invalid rows are rejected by normalizeSite after migration */ }
+        return siteIdentityKey(name, normalized);
+    }
+
+    /* v2.15 shipped fifteen URLs after checking only that they answered. The v2.19 live
+       pass proved that most ignored the query, opened a 404, or searched the wrong media
+       type. A saved site list is a snapshot, so changing the defaults alone would leave
+       every customized installation broken. Match the exact shipped name and template,
+       then preserve that row's order, color, category and visibility while replacing its
+       destination. */
+    const LEGACY_DEFAULT_WATCH_SITE_REPLACEMENTS = new Map([
+        [['Rive', 'https://www.rivestream.app/search?q={{TITLE}}'], DEFAULT_WATCH_SITES[0]],
+        [['Cinejoy', 'https://cinejoy.to/search?q={{TITLE}}'], DEFAULT_WATCH_SITES[1]],
+        [['Movy', 'https://www.movy.bz/browse?q={{TITLE}}'], DEFAULT_WATCH_SITES[2]],
+        [['Flixer', 'https://flixer.su/search?q={{TITLE}}'], DEFAULT_WATCH_SITES[4]],
+        [['CorsFlix', 'https://watch.corsflix.net/search?q={{TITLE}}'], DEFAULT_WATCH_SITES[5]],
+        [['ShuttleTV', 'https://shuttletv.su/search?q={{TITLE}}'], DEFAULT_WATCH_SITES[3]],
+        [['Z-Stream', 'https://zstream.mov/search?q={{TITLE}}'], DEFAULT_WATCH_SITES[6]],
+        [['Aether', 'https://aether.ist/search?q={{TITLE}}'], DEFAULT_WATCH_SITES[7]],
+        [['1Shows', 'https://www.1shows.org/search?q={{TITLE}}'], DEFAULT_WATCH_SITES[8]],
+        [['CinemaOS', 'https://cinemaos.live/search?q={{TITLE}}'], DEFAULT_WATCH_SITES[9]],
+        [['HydraHD', 'https://hydrahd.ws/search?q={{TITLE}}'], DEFAULT_WATCH_SITES[10]],
+        [['CineStream', 'https://cinestream.kje.us/search?q={{TITLE}}'], DEFAULT_WATCH_SITES[11]],
+        [['Bingr', 'https://bingr.one/search?q={{TITLE}}'], DEFAULT_WATCH_SITES[12]],
+        [['LookMovie2', 'https://www.lookmovie2.to/movies/search/?q={{TITLE}}'], DEFAULT_WATCH_SITES[13]],
+        [['Cine.su', 'https://cine.su/en/search'], DEFAULT_WATCH_SITES[14]],
+    ].map(([legacy, replacement]) => [siteIdentityKey(...legacy), replacement]));
+
+    const LEGACY_CATALOG_HOMEPAGES = [
+        ['PopcornMovies', 'https://popcornmovies.ac/'],
+        ['Hexa', 'https://hexa.su/'],
+        ['ARTE', 'https://www.arte.tv/en'],
+        ['ShuttleTV', 'https://shuttletv.su/'],
+        ['ArrowTV', 'https://arrowtv.net/'],
+        ['Cinezo', 'https://www.cinezo.org/'],
+        ['Movie Night', 'https://movienig.ht/'],
+        ['MeowTV', 'https://meowtv.ru/'],
+        ['Chillflix', 'https://chillflix.lol/'],
+        ['MovieBite', 'https://moviebite.org/'],
+        ['LatestMovies', 'https://latestmovies.net/'],
+        ['Plex', 'https://watch.plex.tv/'],
+        ['Tubi', 'https://tubitv.com/'],
+        ['Fandango at Home', 'https://athome.fandango.com/content/browse/free'],
+        ['hoopla', 'https://www.hoopladigital.com/'],
+        ['BBC iPlayer', 'https://www.bbc.co.uk/iplayer'],
+    ];
+    const CATALOG_HOMEPAGE_SITE_KEYS = new Set([
+        ...FMHY_WATCH_CATALOG.flatMap(group => group.sites)
+            .filter(site => !hasWatchSearchTemplate(site.url))
+            .map(site => [site.name, site.url]),
+        ...LEGACY_CATALOG_HOMEPAGES,
+    ].map(site => staticSiteIdentityKey(...site)));
+
+    function migrateWatchSiteList(value) {
+        const seen = new Set();
+        return (Array.isArray(value) ? value : []).flatMap(site => {
+            if (!site || typeof site !== 'object') return [site];
+            const replacement = LEGACY_DEFAULT_WATCH_SITE_REPLACEMENTS.get(siteIdentityKey(site.name, site.url));
+            if (!replacement && !hasWatchSearchTemplate(site.url)
+                && CATALOG_HOMEPAGE_SITE_KEYS.has(staticSiteIdentityKey(site.name, site.url))) return [];
+            const next = replacement
+                ? { ...replacement, ...site, name:replacement.name, url:replacement.url }
+                : site;
+            const identity = siteIdentityKey(next.name, next.url);
+            if (seen.has(identity)) return [];
+            seen.add(identity);
+            return [next];
+        });
+    }
+
     function normalizeTrustedUrl(value, rootDomain, fallback) {
         try {
             const parsed = new URL(String(value || ''));
@@ -1090,7 +1175,8 @@
                before v2.15 would fail whole-list validation instead of importing. The
                schema-3 migration removes these rows from storage; without this, restoring
                an older backup would put the dead destination back permanently. */
-            const limited = value.slice(0, SITE_LIST_LIMIT).filter(site => !isRetiredCinebyUrl(site?.url));
+            const current = key === 'watchSites' ? migrateWatchSiteList(value) : value;
+            const limited = current.slice(0, SITE_LIST_LIMIT).filter(site => !isRetiredCinebyUrl(site?.url));
             const fallbackCategory = key === 'watchSites' ? 'watch' : 'other';
             const normalized = limited.map(site => normalizeSite(site, '#6366f1', fallbackCategory)).filter(Boolean);
             if (normalized.length !== limited.length) return null;

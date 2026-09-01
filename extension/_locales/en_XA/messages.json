@@ -1788,7 +1788,7 @@
     "message": "[!! Watch & stream !!]"
   },
   "settings_watch_stream_includes_a_built_in_catalog": {
-    "message": "[!! Watch & stream includes a built-in catalog of every streaming destination from the FMHY video wiki. Open it below to add any of them with one click, then edit the row like any other destination. !!]"
+    "message": "[!! Watch & stream includes the FMHY video catalog. Sites with a verified title-search route can be added below. Other entries open their home page so a broken search link never reaches IMDb pages. !!]"
   },
   "settings_watchlist_alerts_note": {
     "message": "[!! Which services are worth telling you about. Checked once a day, in one notification, for the titles on the watchlist page you last opened. !!]"

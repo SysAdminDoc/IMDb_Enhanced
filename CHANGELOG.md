@@ -1,5 +1,25 @@
 # Changelog
 
+## 2.19.0 (2026-09-01)
+
+### Fixed
+
+- The 15 default watch buttons now use title-search routes that were exercised in a live browser with both a film and a TV series. Routes that ignored their query, opened an error page, or searched the wrong media type were removed from the defaults.
+
+- Existing installations migrate the exact legacy default rows to the verified replacements while preserving order, colour, category, and enabled state. Homepage entries previously added from the built-in catalog are removed from the watch-button list. Other custom destinations are left alone.
+
+- Episode pages now search for the parent series instead of an episode title that streaming catalogs rarely index. Titles with punctuation are encoded correctly for both query-string and path-based searches.
+
+- Settings only offers Add for catalog entries with a contextual search route. Browse-only entries offer Open instead, so a homepage can no longer masquerade as a working title search.
+
+- The destination checker now distinguishes verified search templates, browse-only destinations, and routes that answer without showing evidence that the sample title was applied.
+
+### Verified
+
+- The rebuilt menu produced all 15 resolved links on live IMDb pages for The Matrix, Breaking Bad, Dune: Part Two, and the Breaking Bad episode Ozymandias. Ozymandias correctly searched for Breaking Bad on every destination.
+
+- Every default destination accepted the selected title in a live browser. The complete source, DOM, extension, store-profile, and URL-template suites passed locally.
+
 ## 2.18.0 (2026-09-01)
 
 ### Fixed

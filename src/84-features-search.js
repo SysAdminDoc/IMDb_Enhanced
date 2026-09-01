@@ -14,7 +14,8 @@
                 if (document.getElementById('enh-search-buttons')) return;
                 const title = getTitleText();
                 if (!title) return;
-                const ctx = getLinkContext(title);
+                const ctx = getWatchLinkContext(title);
+                const searchTitle = ctx.TITLE_RAW || title;
                 const sites = getSiteList('watchSites', DEFAULT_WATCH_SITES).filter(site => site.enabled !== false);
                 if (!sites.length) return;
                 const wrap = makeEl('section', {
@@ -47,8 +48,8 @@
                         className,
                         dataset:{ url },
                         style:{ '--btn-color':site.color },
-                        title:t('text_search_site_for_title', [site.name, title]),
-                        'aria-label': t('aria_open_search_for', [site.name, title]),
+                        title:t('text_search_site_for_title', [site.name, searchTitle]),
+                        'aria-label': t('aria_open_search_for', [site.name, searchTitle]),
                     }, ...contents);
                 };
                 /* The dock may already exist and belong to the editorial surface; this

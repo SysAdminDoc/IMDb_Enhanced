@@ -933,7 +933,7 @@
         settings_tv_episodes: 'TV & episodes',
         settings_version: 'Version $1',
         settings_watch_stream: 'Watch & stream',
-        settings_watch_stream_includes_a_built_in_catalog: 'Watch & stream includes a built-in catalog of every streaming destination from the FMHY video wiki. Open it below to add any of them with one click, then edit the row like any other destination.',
+        settings_watch_stream_includes_a_built_in_catalog: 'Watch & stream includes the FMHY video catalog. Sites with a verified title-search route can be added below. Other entries open their home page so a broken search link never reaches IMDb pages.',
         settings_watchlist_alerts_note: 'Which services are worth telling you about. Checked once a day, in one notification, for the titles on the watchlist page you last opened.',
         settings_watchlist_alerts_pace: 'A large watchlist is worked through a slice at a time, so it can take a few days for every title to come round. Series are skipped: the source only answers for films.',
         settings_watchlist_services_pending: 'The services here are the ones the daily check has seen so far. Turn the alerts on and this fills in after the first check.',
@@ -1272,7 +1272,7 @@
 
     const STORAGE_HOST_LABEL = IS_EXTENSION_BUILD ? 'extension storage' : 'userscript storage';
     const COPY_FAILURE_MESSAGE = t('error_copy_failed');
-    const VERSION = '2.18.0';
+    const VERSION = '2.19.0';
     const PREFIX  = 'imdb_enh_';
     const CACHE_TTL = 7 * 24 * 60 * 60 * 1000; // 7 days — default for volatile score data
     /* Envelope ceiling, not the default. Stable cross-site identifiers are cached far
@@ -1609,28 +1609,25 @@
         titleNotes: 37,
         tvShowEnhancements: 40,
     };
-    /* Defaults are FMHY-starred destinations whose exact search route answered a live
-       check during the v2.15.0 release pass (2026-08-31). Everything else from the FMHY
-       streaming catalog below is one click away in Settings -> Sites. */
+    /* Every default below was exercised in a browser with a film and a TV title during
+       the v2.19.0 release pass (2026-09-01). A successful homepage status does not count:
+       each URL has to prefill the title or render matching results. */
     const DEFAULT_WATCH_SITES = [
-        { name:'Rive', color:'#6366f1', url:'https://www.rivestream.app/search?q={{TITLE}}', category:'watch' },
-        { name:'Cinejoy', color:'#10b981', url:'https://cinejoy.to/search?q={{TITLE}}', category:'watch' },
-        { name:'Movy', color:'#f59e0b', url:'https://www.movy.bz/browse?q={{TITLE}}', category:'watch' },
-        { name:'Flixer', color:'#06b6d4', url:'https://flixer.su/search?q={{TITLE}}', category:'watch' },
-        /* Two entries were replaced here after the destination health report found both
-           redirecting onto the retired domain scrubbed by the schema-3 migration. Both
-           answered 200, which is exactly why a status alone proves nothing. */
-        { name:'CorsFlix', color:'#f97316', url:'https://watch.corsflix.net/search?q={{TITLE}}', category:'watch' },
+        { name:'BBC iPlayer', color:'#ff4c98', url:'https://www.bbc.co.uk/iplayer/search?q={{TITLE}}', category:'watch' },
+        { name:'Hexa', color:'#8b5cf6', url:'https://hexa.su/search?q={{TITLE}}', category:'watch' },
+        { name:'ARTE', color:'#fa481c', url:'https://www.arte.tv/en/search/?q={{TITLE}}', category:'watch' },
         { name:'ShuttleTV', color:'#ef4444', url:'https://shuttletv.su/search?q={{TITLE}}', category:'watch' },
-        { name:'Z-Stream', color:'#8b5cf6', url:'https://zstream.mov/search?q={{TITLE}}', category:'watch' },
-        { name:'Aether', color:'#0ea5e9', url:'https://aether.ist/search?q={{TITLE}}', category:'watch' },
-        { name:'1Shows', color:'#e11d48', url:'https://www.1shows.org/search?q={{TITLE}}', category:'watch' },
-        { name:'CinemaOS', color:'#ec4899', url:'https://cinemaos.live/search?q={{TITLE}}', category:'watch' },
-        { name:'HydraHD', color:'#22c55e', url:'https://hydrahd.ws/search?q={{TITLE}}', category:'watch' },
-        { name:'CineStream', color:'#14b8a6', url:'https://cinestream.kje.us/search?q={{TITLE}}', category:'watch' },
-        { name:'Bingr', color:'#fb7185', url:'https://bingr.one/search?q={{TITLE}}', category:'watch' },
-        { name:'LookMovie2', color:'#a3e635', url:'https://www.lookmovie2.to/movies/search/?q={{TITLE}}', category:'watch' },
-        { name:'Cine.su', color:'#f43f5e', url:'https://cine.su/en/search', category:'watch' },
+        { name:'ArrowTV', color:'#22c55e', url:'https://arrowtv.net/search?q={{TITLE}}', category:'watch' },
+        { name:'Cinezo', color:'#06b6d4', url:'https://www.cinezo.org/search?q={{TITLE}}', category:'watch' },
+        { name:'Movie Night', color:'#ec4899', url:'https://movienig.ht/search?q={{TITLE}}', category:'watch' },
+        { name:'MeowTV', color:'#fb7185', url:'https://meowtv.ru/search?q={{TITLE}}', category:'watch' },
+        { name:'Chillflix', color:'#0ea5e9', url:'https://www.chillflix.lol/search?q={{TITLE}}', category:'watch' },
+        { name:'MovieBite', color:'#e11d48', url:'https://moviebite.org/search?q={{TITLE}}', category:'watch' },
+        { name:'LatestMovies', color:'#14b8a6', url:'https://latestmovies.net/search?q={{TITLE}}', category:'watch' },
+        { name:'Plex', color:'#e5a00d', url:'https://watch.plex.tv/search?query={{TITLE}}', category:'watch' },
+        { name:'Tubi', color:'#fa382f', url:'https://tubitv.com/search/{{TITLE}}', category:'watch' },
+        { name:'Fandango at Home', color:'#4f8cff', url:'https://athome.fandango.com/content/browse/search?searchString={{TITLE}}', category:'watch' },
+        { name:'hoopla', color:'#2f7ed8', url:'https://www.hoopladigital.com/search?q={{TITLE}}&scope=everything&type=direct', category:'watch' },
     ];
     const DEFAULT_EXTERNAL_SITES = [
         { name:'Rotten Tomatoes', color:'#fa320a', url:'https://www.rottentomatoes.com/search?search={{TITLE}}', category:'reviews' },
@@ -1645,9 +1642,9 @@
        (reddit.com/r/FREEMEDIAHECKYEAH/wiki/video, snapshot 2026-08-31), one entry per
        distinct site using its primary URL. Mirrors, desktop apps, CLI tools, and
        Discord-only entries are omitted; Cineby is omitted because it announced its
-       shutdown for the end of August 2026. URLs are homepages as listed — the wiki
-       does not publish search routes, so adding one from the catalog lands on the
-       site's own search. Rows are editable after adding, like any destination. */
+       shutdown for the end of August 2026. The wiki does not publish search routes.
+       Verified templates are stored where a site supports one; homepage-only entries
+       stay browse links in Settings and cannot become misleading search buttons. */
     const FMHY_WATCH_CATALOG = [
         { group:'Stream aggregators', sites:[
             { name:'Rive', url:'https://www.rivestream.app/' },
@@ -1660,31 +1657,31 @@
                domain the schema-3 migration scrubs, so offering them would hand people a
                destination this build has already removed. */
             { name:'Flixer', url:'https://flixer.gd/' },
-            { name:'Hexa', url:'https://hexa.su/' },
+            { name:'Hexa', url:'https://hexa.su/search?q={{TITLE}}' },
             { name:'67Movies', url:'https://67movies.nl/' },
             { name:'PhantomFlix', url:'https://phantomflix.net/' },
             { name:'bCine', url:'https://bcine.ru/' },
             { name:'Reelix', url:'https://reelix.ac/' },
             { name:'Coreflix', url:'https://coreflix.tv/' },
-            { name:'MeowTV', url:'https://meowtv.ru/' },
+            { name:'MeowTV', url:'https://meowtv.ru/search?q={{TITLE}}' },
             { name:'FlickyStream', url:'https://flickystream.dad/' },
-            { name:'ShuttleTV', url:'https://shuttletv.su/' },
+            { name:'ShuttleTV', url:'https://shuttletv.su/search?q={{TITLE}}' },
             { name:'TouStream', url:'https://toustream.xyz/' },
             { name:'7Movies', url:'https://7movies.in/' },
-            { name:'ArrowTV', url:'https://arrowtv.net/' },
-            { name:'Cinezo', url:'https://www.cinezo.org/' },
-            { name:'Movie Night', url:'https://movienig.ht/' },
-            { name:'Chillflix', url:'https://chillflix.lol/' },
+            { name:'ArrowTV', url:'https://arrowtv.net/search?q={{TITLE}}' },
+            { name:'Cinezo', url:'https://www.cinezo.org/search?q={{TITLE}}' },
+            { name:'Movie Night', url:'https://movienig.ht/search?q={{TITLE}}' },
+            { name:'Chillflix', url:'https://www.chillflix.lol/search?q={{TITLE}}' },
             { name:'Vivarium', url:'https://vivarium.wtf/' },
             { name:'Moovie', url:'https://moovie.fun/' },
             { name:'SpenFlix', url:'https://watch.spencerdevs.xyz/' },
-            { name:'MovieBite', url:'https://moviebite.org/' },
+            { name:'MovieBite', url:'https://moviebite.org/search?q={{TITLE}}' },
             { name:'Cinetaro', url:'https://cinetaro.to/' },
             { name:'Vuflix', url:'https://vuflix.co/' },
             { name:'Streamo', url:'https://streamo.pro/' },
             { name:'OpStream', url:'https://opstream.fun/' },
             { name:'Movish', url:'https://movish.to/' },
-            { name:'LatestMovies', url:'https://latestmovies.net/' },
+            { name:'LatestMovies', url:'https://latestmovies.net/search?q={{TITLE}}' },
             { name:'VidPlay', url:'https://vidplay.to/' },
             { name:'Moonflix', url:'https://moonflix.website/' },
             { name:'Cinegram', url:'https://cinegram.tv/' },
@@ -1842,8 +1839,8 @@
             { name:'Moviepire', url:'https://moviepire.org/' },
         ] },
         { group:'Free with ads (legal)', sites:[
-            { name:'Tubi', url:'https://tubitv.com/' },
-            { name:'Plex', url:'https://watch.plex.tv/' },
+            { name:'Tubi', url:'https://tubitv.com/search/{{TITLE}}' },
+            { name:'Plex', url:'https://watch.plex.tv/search?query={{TITLE}}' },
             { name:'Pluto', url:'https://pluto.tv/' },
             { name:'Video Dictionary', url:'https://videodictionary.kwebpia.net/?m=Full_Movies' },
             { name:'FreeGreatMovies', url:'https://www.freegreatmovies.com/' },
@@ -1857,17 +1854,17 @@
             { name:'DarkRoom', url:'https://www.darkroom.film/' },
             { name:'Fawesome', url:'https://fawesome.tv/' },
             { name:'Sling Freestream', url:'https://watch.sling.com/' },
-            { name:'Fandango at Home', url:'https://athome.fandango.com/content/browse/free' },
+            { name:'Fandango at Home', url:'https://athome.fandango.com/content/browse/search?searchString={{TITLE}}' },
             { name:'Shout! TV', url:'https://shout-tv.com/' },
             { name:'Kanopy', url:'https://kanopy.com/' },
-            { name:'hoopla', url:'https://www.hoopladigital.com/' },
+            { name:'hoopla', url:'https://www.hoopladigital.com/search?q={{TITLE}}&scope=everything&type=direct' },
             { name:'Found TV', url:'https://watch.foundtv.com/' },
             { name:'BYUtv', url:'https://www.byutv.org/' },
             { name:'7plus', url:'https://7plus.com.au/' },
             { name:'Playary', url:'https://www.playary.com/' },
             { name:'Filmzie', url:'https://filmzie.com/' },
-            { name:'ARTE', url:'https://www.arte.tv/en' },
-            { name:'BBC iPlayer', url:'https://www.bbc.co.uk/iplayer' },
+            { name:'ARTE', url:'https://www.arte.tv/en/search/?q={{TITLE}}' },
+            { name:'BBC iPlayer', url:'https://www.bbc.co.uk/iplayer/search?q={{TITLE}}' },
             { name:'FlixHouse', url:'https://flixhouse.com/' },
         ] },
     ];
@@ -2385,7 +2382,7 @@
         else GM_setValue(key, '');
     }
 
-    const SETTINGS_SCHEMA_VERSION = 4;
+    const SETTINGS_SCHEMA_VERSION = 5;
     const SETTINGS_SCHEMA_KEY = 'settingsSchemaVersion';
     /* Describes the export rather than being a setting, so import must skip it the way
        it skips the schema marker — otherwise a redacted backup reports its own manifest
@@ -2434,6 +2431,18 @@
                 const key = `${PREFIX}scoreCorrections`;
                 const stored = GM_getValue(key, null);
                 if (stored !== null) GM_setValue(key, normalizeScoreCorrections(stored));
+            },
+        },
+        {
+            /* v5: the original watch-site pass accepted a successful homepage response
+               as proof that a title query worked. Replace those exact shipped defaults
+               in saved lists, and remove catalog homepages that cannot carry any IMDb
+               context. Unrelated custom destinations are untouched. */
+            to: 5,
+            run() {
+                const key = `${PREFIX}watchSites`;
+                const stored = GM_getValue(key, null);
+                if (Array.isArray(stored)) GM_setValue(key, migrateWatchSiteList(stored));
             },
         },
     ];
@@ -2962,7 +2971,6 @@
         });
         return rows.join('\r\n');
     }
-
     // =========================================================================
     //  CSV MARK IMPORT
     // =========================================================================
@@ -4155,6 +4163,91 @@
         } catch { return ''; }
     }
 
+    const WATCH_SEARCH_TEMPLATE_KEYS = new Set([
+        'TITLE', 'TITLE_RAW', 'TITLE_DASH', 'TITLE_SLUG', 'IMDB_ID', 'IMDB_NUM',
+    ]);
+    function hasWatchSearchTemplate(url) {
+        return Array.from(String(url || '').matchAll(/\{\{([^{}]+)\}\}/g))
+            .some(match => WATCH_SEARCH_TEMPLATE_KEYS.has(match[1]));
+    }
+
+    function siteIdentityKey(name, url) {
+        return `${String(name || '').trim().toLowerCase()}\n${String(url || '').trim()}`;
+    }
+
+    function staticSiteIdentityKey(name, url) {
+        let normalized = String(url || '').trim();
+        try { normalized = new URL(normalized).href; }
+        catch { /* invalid rows are rejected by normalizeSite after migration */ }
+        return siteIdentityKey(name, normalized);
+    }
+
+    /* v2.15 shipped fifteen URLs after checking only that they answered. The v2.19 live
+       pass proved that most ignored the query, opened a 404, or searched the wrong media
+       type. A saved site list is a snapshot, so changing the defaults alone would leave
+       every customized installation broken. Match the exact shipped name and template,
+       then preserve that row's order, color, category and visibility while replacing its
+       destination. */
+    const LEGACY_DEFAULT_WATCH_SITE_REPLACEMENTS = new Map([
+        [['Rive', 'https://www.rivestream.app/search?q={{TITLE}}'], DEFAULT_WATCH_SITES[0]],
+        [['Cinejoy', 'https://cinejoy.to/search?q={{TITLE}}'], DEFAULT_WATCH_SITES[1]],
+        [['Movy', 'https://www.movy.bz/browse?q={{TITLE}}'], DEFAULT_WATCH_SITES[2]],
+        [['Flixer', 'https://flixer.su/search?q={{TITLE}}'], DEFAULT_WATCH_SITES[4]],
+        [['CorsFlix', 'https://watch.corsflix.net/search?q={{TITLE}}'], DEFAULT_WATCH_SITES[5]],
+        [['ShuttleTV', 'https://shuttletv.su/search?q={{TITLE}}'], DEFAULT_WATCH_SITES[3]],
+        [['Z-Stream', 'https://zstream.mov/search?q={{TITLE}}'], DEFAULT_WATCH_SITES[6]],
+        [['Aether', 'https://aether.ist/search?q={{TITLE}}'], DEFAULT_WATCH_SITES[7]],
+        [['1Shows', 'https://www.1shows.org/search?q={{TITLE}}'], DEFAULT_WATCH_SITES[8]],
+        [['CinemaOS', 'https://cinemaos.live/search?q={{TITLE}}'], DEFAULT_WATCH_SITES[9]],
+        [['HydraHD', 'https://hydrahd.ws/search?q={{TITLE}}'], DEFAULT_WATCH_SITES[10]],
+        [['CineStream', 'https://cinestream.kje.us/search?q={{TITLE}}'], DEFAULT_WATCH_SITES[11]],
+        [['Bingr', 'https://bingr.one/search?q={{TITLE}}'], DEFAULT_WATCH_SITES[12]],
+        [['LookMovie2', 'https://www.lookmovie2.to/movies/search/?q={{TITLE}}'], DEFAULT_WATCH_SITES[13]],
+        [['Cine.su', 'https://cine.su/en/search'], DEFAULT_WATCH_SITES[14]],
+    ].map(([legacy, replacement]) => [siteIdentityKey(...legacy), replacement]));
+
+    const LEGACY_CATALOG_HOMEPAGES = [
+        ['PopcornMovies', 'https://popcornmovies.ac/'],
+        ['Hexa', 'https://hexa.su/'],
+        ['ARTE', 'https://www.arte.tv/en'],
+        ['ShuttleTV', 'https://shuttletv.su/'],
+        ['ArrowTV', 'https://arrowtv.net/'],
+        ['Cinezo', 'https://www.cinezo.org/'],
+        ['Movie Night', 'https://movienig.ht/'],
+        ['MeowTV', 'https://meowtv.ru/'],
+        ['Chillflix', 'https://chillflix.lol/'],
+        ['MovieBite', 'https://moviebite.org/'],
+        ['LatestMovies', 'https://latestmovies.net/'],
+        ['Plex', 'https://watch.plex.tv/'],
+        ['Tubi', 'https://tubitv.com/'],
+        ['Fandango at Home', 'https://athome.fandango.com/content/browse/free'],
+        ['hoopla', 'https://www.hoopladigital.com/'],
+        ['BBC iPlayer', 'https://www.bbc.co.uk/iplayer'],
+    ];
+    const CATALOG_HOMEPAGE_SITE_KEYS = new Set([
+        ...FMHY_WATCH_CATALOG.flatMap(group => group.sites)
+            .filter(site => !hasWatchSearchTemplate(site.url))
+            .map(site => [site.name, site.url]),
+        ...LEGACY_CATALOG_HOMEPAGES,
+    ].map(site => staticSiteIdentityKey(...site)));
+
+    function migrateWatchSiteList(value) {
+        const seen = new Set();
+        return (Array.isArray(value) ? value : []).flatMap(site => {
+            if (!site || typeof site !== 'object') return [site];
+            const replacement = LEGACY_DEFAULT_WATCH_SITE_REPLACEMENTS.get(siteIdentityKey(site.name, site.url));
+            if (!replacement && !hasWatchSearchTemplate(site.url)
+                && CATALOG_HOMEPAGE_SITE_KEYS.has(staticSiteIdentityKey(site.name, site.url))) return [];
+            const next = replacement
+                ? { ...replacement, ...site, name:replacement.name, url:replacement.url }
+                : site;
+            const identity = siteIdentityKey(next.name, next.url);
+            if (seen.has(identity)) return [];
+            seen.add(identity);
+            return [next];
+        });
+    }
+
     function normalizeTrustedUrl(value, rootDomain, fallback) {
         try {
             const parsed = new URL(String(value || ''));
@@ -4500,7 +4593,8 @@
                before v2.15 would fail whole-list validation instead of importing. The
                schema-3 migration removes these rows from storage; without this, restoring
                an older backup would put the dead destination back permanently. */
-            const limited = value.slice(0, SITE_LIST_LIMIT).filter(site => !isRetiredCinebyUrl(site?.url));
+            const current = key === 'watchSites' ? migrateWatchSiteList(value) : value;
+            const limited = current.slice(0, SITE_LIST_LIMIT).filter(site => !isRetiredCinebyUrl(site?.url));
             const fallbackCategory = key === 'watchSites' ? 'watch' : 'other';
             const normalized = limited.map(site => normalizeSite(site, '#6366f1', fallbackCategory)).filter(Boolean);
             if (normalized.length !== limited.length) return null;
@@ -4761,7 +4855,10 @@
     function getSiteList(key, defaults) {
         const value = get(key);
         const fallbackCategory = key === 'watchSites' ? 'watch' : 'other';
-        if (Array.isArray(value)) return value.slice(0, SITE_LIST_LIMIT).map(site => normalizeSite(site, '#6366f1', fallbackCategory)).filter(Boolean);
+        if (Array.isArray(value)) {
+            const current = key === 'watchSites' ? migrateWatchSiteList(value) : value;
+            return current.slice(0, SITE_LIST_LIMIT).map(site => normalizeSite(site, '#6366f1', fallbackCategory)).filter(Boolean);
+        }
         return defaults.slice(0, SITE_LIST_LIMIT).map(site => normalizeSite(site, '#6366f1', fallbackCategory)).filter(Boolean);
     }
 
@@ -4785,10 +4882,26 @@
         };
     }
 
+    function getWatchSearchTitle(fallbackTitle = getTitleText(), ld = getLDData(), root = document) {
+        if (getStructuredMediaType(ld) !== 'episode') return fallbackTitle || '';
+        const structuredSeries = [
+            ld?.partOfSeries?.name,
+            ld?.partOfSeason?.partOfSeries?.name,
+        ].find(value => typeof value === 'string' && value.trim());
+        if (structuredSeries) return structuredSeries.trim();
+        const linkedSeries = root?.querySelector?.(
+            '[data-testid="hero-title-block__series-link"], a[data-testid*="series"][href*="/title/tt"]'
+        )?.textContent?.trim();
+        return linkedSeries || fallbackTitle || '';
+    }
+
+    function getWatchLinkContext(title = getTitleText(), imdbId = getIMDbID(), year = getTitleYear()) {
+        return getLinkContext(getWatchSearchTitle(title), imdbId, year);
+    }
+
     function applyLinkTemplate(template, ctx) {
         return String(template || '').replace(/\{\{([A-Z_]+)\}\}/g, (_, key) => ctx[key] ?? '');
     }
-
     // =========================================================================
     //  PAGE DATA EXTRACTION
     // =========================================================================
@@ -10899,7 +11012,8 @@ section[id*="quote" i] .ipc-list-card { padding: 4px 0 !important; margin: 2px 0
                 if (document.getElementById('enh-search-buttons')) return;
                 const title = getTitleText();
                 if (!title) return;
-                const ctx = getLinkContext(title);
+                const ctx = getWatchLinkContext(title);
+                const searchTitle = ctx.TITLE_RAW || title;
                 const sites = getSiteList('watchSites', DEFAULT_WATCH_SITES).filter(site => site.enabled !== false);
                 if (!sites.length) return;
                 const wrap = makeEl('section', {
@@ -10932,8 +11046,8 @@ section[id*="quote" i] .ipc-list-card { padding: 4px 0 !important; margin: 2px 0
                         className,
                         dataset:{ url },
                         style:{ '--btn-color':site.color },
-                        title:t('text_search_site_for_title', [site.name, title]),
-                        'aria-label': t('aria_open_search_for', [site.name, title]),
+                        title:t('text_search_site_for_title', [site.name, searchTitle]),
+                        'aria-label': t('aria_open_search_for', [site.name, searchTitle]),
                     }, ...contents);
                 };
                 /* The dock may already exist and belong to the editorial surface; this
@@ -16106,9 +16220,10 @@ ${scopedRules('.enh-zoom', {
         editor.appendChild(columns);
         editor.appendChild(rows);
 
-        /* Optional built-in catalog: every FMHY streaming destination, one click to add.
-           Rows are keyed by name (case-insensitive) so an entry already in the list —
-           whether it came from defaults, the catalog, or a manual edit — reads Added. */
+        /* Optional built-in catalog: verified title-search templates can be added, while
+           homepage-only entries remain useful browse links without becoming IMDb search
+           buttons that discard the title. Rows are keyed by name (case-insensitive) so
+           an entry already in the list reads Added. */
         if (Array.isArray(catalog) && catalog.length) {
             const catalogEntries = [];
             let addedCount = 0;
@@ -16134,6 +16249,7 @@ ${scopedRules('.enh-zoom', {
                 catalogEntries.forEach(entry => {
                     const matches = !query || entry.haystack.includes(query);
                     entry.row.hidden = !matches;
+                    if (!entry.searchable) return;
                     const listed = names.has(entry.lowerName);
                     entry.button.disabled = listed || atLimit;
                     entry.button.textContent = listed ? 'Added' : 'Add';
@@ -16158,38 +16274,47 @@ ${scopedRules('.enh-zoom', {
                     let host = site.url;
                     try { host = new URL(site.url).hostname.replace(/^www\./, ''); }
                     catch { /* catalog URLs are static and valid; keep the raw string */ }
-                    const button = makeEl('button', {
-                        type:'button',
-                        className:'enh-site-catalog__add',
-                        onClick: () => {
-                            if (rows.children.length >= SITE_LIST_LIMIT) {
-                                showToast(t('toast_a_site_list_can_contain_up', [SITE_LIST_LIMIT]));
-                                return;
-                            }
-                            const row = addRow({
-                                name: site.name,
-                                url: site.url,
-                                color: CATALOG_ROW_COLORS[addedCount % CATALOG_ROW_COLORS.length],
-                                category: defaultCategory,
-                                enabled: true,
-                            });
-                            if (!save()) {
-                                row.remove();
+                    const searchable = hasWatchSearchTemplate(site.url);
+                    const button = searchable
+                        ? makeEl('button', {
+                            type:'button',
+                            className:'enh-site-catalog__add',
+                            onClick: () => {
+                                if (rows.children.length >= SITE_LIST_LIMIT) {
+                                    showToast(t('toast_a_site_list_can_contain_up', [SITE_LIST_LIMIT]));
+                                    return;
+                                }
+                                const row = addRow({
+                                    name: site.name,
+                                    url: site.url,
+                                    color: CATALOG_ROW_COLORS[addedCount % CATALOG_ROW_COLORS.length],
+                                    category: defaultCategory,
+                                    enabled: true,
+                                });
+                                if (!save()) {
+                                    row.remove();
+                                    updateCount();
+                                    /* save() validates every row, so an incomplete row the
+                                       user left elsewhere in the editor fails this one too.
+                                       Telling them to check storage sends them after the
+                                       wrong thing entirely. */
+                                    showToast(lastSaveFailure === 'validation'
+                                        ? `Finish or remove the incomplete site row before adding ${site.name}`
+                                        : `Could not save ${site.name}. Check ${STORAGE_HOST_LABEL}.`, 4500);
+                                    return;
+                                }
+                                addedCount += 1;
                                 updateCount();
-                                /* save() validates every row, so an incomplete row the
-                                   user left elsewhere in the editor fails this one too.
-                                   Telling them to check storage sends them after the
-                                   wrong thing entirely. */
-                                showToast(lastSaveFailure === 'validation'
-                                    ? `Finish or remove the incomplete site row before adding ${site.name}`
-                                    : `Could not save ${site.name}. Check ${STORAGE_HOST_LABEL}.`, 4500);
-                                return;
-                            }
-                            addedCount += 1;
-                            updateCount();
-                            showToast(t('toast_destination_added_to_list', [site.name, title]));
-                        },
-                    }, t('label_add'));
+                                showToast(t('toast_destination_added_to_list', [site.name, title]));
+                            },
+                        }, t('label_add'))
+                        : makeEl('a', {
+                            href:site.url,
+                            target:'_blank',
+                            rel:'noopener noreferrer',
+                            className:'enh-site-catalog__add',
+                            'aria-label':t('aria_open_link', [site.name, host]),
+                        }, t('label_open'));
                     const row = makeEl('div', { className:'enh-site-catalog__entry' },
                         makeEl('span', { className:'enh-site-catalog__name' }, site.name),
                         makeEl('span', { className:'enh-site-catalog__host' }, host),
@@ -16199,6 +16324,7 @@ ${scopedRules('.enh-zoom', {
                         site,
                         row,
                         button,
+                        searchable,
                         groupIndex,
                         lowerName: site.name.toLowerCase(),
                         haystack: `${site.name} ${host}`.toLowerCase(),
@@ -17793,7 +17919,6 @@ ${scopedRules('.enh-zoom', {
         lastFocusedElement = null;
         previousDocumentOverflow = '';
     }
-
     // =========================================================================
     //  INIT
     // =========================================================================

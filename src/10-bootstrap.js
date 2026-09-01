@@ -630,7 +630,7 @@
         settings_tv_episodes: 'TV & episodes',
         settings_version: 'Version $1',
         settings_watch_stream: 'Watch & stream',
-        settings_watch_stream_includes_a_built_in_catalog: 'Watch & stream includes a built-in catalog of every streaming destination from the FMHY video wiki. Open it below to add any of them with one click, then edit the row like any other destination.',
+        settings_watch_stream_includes_a_built_in_catalog: 'Watch & stream includes the FMHY video catalog. Sites with a verified title-search route can be added below. Other entries open their home page so a broken search link never reaches IMDb pages.',
         settings_watchlist_alerts_note: 'Which services are worth telling you about. Checked once a day, in one notification, for the titles on the watchlist page you last opened.',
         settings_watchlist_alerts_pace: 'A large watchlist is worked through a slice at a time, so it can take a few days for every title to come round. Series are skipped: the source only answers for films.',
         settings_watchlist_services_pending: 'The services here are the ones the daily check has seen so far. Turn the alerts on and this fills in after the first check.',
@@ -969,7 +969,7 @@
 
     const STORAGE_HOST_LABEL = IS_EXTENSION_BUILD ? 'extension storage' : 'userscript storage';
     const COPY_FAILURE_MESSAGE = t('error_copy_failed');
-    const VERSION = '2.18.0';
+    const VERSION = '2.19.0';
     const PREFIX  = 'imdb_enh_';
     const CACHE_TTL = 7 * 24 * 60 * 60 * 1000; // 7 days — default for volatile score data
     /* Envelope ceiling, not the default. Stable cross-site identifiers are cached far
@@ -1306,28 +1306,25 @@
         titleNotes: 37,
         tvShowEnhancements: 40,
     };
-    /* Defaults are FMHY-starred destinations whose exact search route answered a live
-       check during the v2.15.0 release pass (2026-08-31). Everything else from the FMHY
-       streaming catalog below is one click away in Settings -> Sites. */
+    /* Every default below was exercised in a browser with a film and a TV title during
+       the v2.19.0 release pass (2026-09-01). A successful homepage status does not count:
+       each URL has to prefill the title or render matching results. */
     const DEFAULT_WATCH_SITES = [
-        { name:'Rive', color:'#6366f1', url:'https://www.rivestream.app/search?q={{TITLE}}', category:'watch' },
-        { name:'Cinejoy', color:'#10b981', url:'https://cinejoy.to/search?q={{TITLE}}', category:'watch' },
-        { name:'Movy', color:'#f59e0b', url:'https://www.movy.bz/browse?q={{TITLE}}', category:'watch' },
-        { name:'Flixer', color:'#06b6d4', url:'https://flixer.su/search?q={{TITLE}}', category:'watch' },
-        /* Two entries were replaced here after the destination health report found both
-           redirecting onto the retired domain scrubbed by the schema-3 migration. Both
-           answered 200, which is exactly why a status alone proves nothing. */
-        { name:'CorsFlix', color:'#f97316', url:'https://watch.corsflix.net/search?q={{TITLE}}', category:'watch' },
+        { name:'BBC iPlayer', color:'#ff4c98', url:'https://www.bbc.co.uk/iplayer/search?q={{TITLE}}', category:'watch' },
+        { name:'Hexa', color:'#8b5cf6', url:'https://hexa.su/search?q={{TITLE}}', category:'watch' },
+        { name:'ARTE', color:'#fa481c', url:'https://www.arte.tv/en/search/?q={{TITLE}}', category:'watch' },
         { name:'ShuttleTV', color:'#ef4444', url:'https://shuttletv.su/search?q={{TITLE}}', category:'watch' },
-        { name:'Z-Stream', color:'#8b5cf6', url:'https://zstream.mov/search?q={{TITLE}}', category:'watch' },
-        { name:'Aether', color:'#0ea5e9', url:'https://aether.ist/search?q={{TITLE}}', category:'watch' },
-        { name:'1Shows', color:'#e11d48', url:'https://www.1shows.org/search?q={{TITLE}}', category:'watch' },
-        { name:'CinemaOS', color:'#ec4899', url:'https://cinemaos.live/search?q={{TITLE}}', category:'watch' },
-        { name:'HydraHD', color:'#22c55e', url:'https://hydrahd.ws/search?q={{TITLE}}', category:'watch' },
-        { name:'CineStream', color:'#14b8a6', url:'https://cinestream.kje.us/search?q={{TITLE}}', category:'watch' },
-        { name:'Bingr', color:'#fb7185', url:'https://bingr.one/search?q={{TITLE}}', category:'watch' },
-        { name:'LookMovie2', color:'#a3e635', url:'https://www.lookmovie2.to/movies/search/?q={{TITLE}}', category:'watch' },
-        { name:'Cine.su', color:'#f43f5e', url:'https://cine.su/en/search', category:'watch' },
+        { name:'ArrowTV', color:'#22c55e', url:'https://arrowtv.net/search?q={{TITLE}}', category:'watch' },
+        { name:'Cinezo', color:'#06b6d4', url:'https://www.cinezo.org/search?q={{TITLE}}', category:'watch' },
+        { name:'Movie Night', color:'#ec4899', url:'https://movienig.ht/search?q={{TITLE}}', category:'watch' },
+        { name:'MeowTV', color:'#fb7185', url:'https://meowtv.ru/search?q={{TITLE}}', category:'watch' },
+        { name:'Chillflix', color:'#0ea5e9', url:'https://www.chillflix.lol/search?q={{TITLE}}', category:'watch' },
+        { name:'MovieBite', color:'#e11d48', url:'https://moviebite.org/search?q={{TITLE}}', category:'watch' },
+        { name:'LatestMovies', color:'#14b8a6', url:'https://latestmovies.net/search?q={{TITLE}}', category:'watch' },
+        { name:'Plex', color:'#e5a00d', url:'https://watch.plex.tv/search?query={{TITLE}}', category:'watch' },
+        { name:'Tubi', color:'#fa382f', url:'https://tubitv.com/search/{{TITLE}}', category:'watch' },
+        { name:'Fandango at Home', color:'#4f8cff', url:'https://athome.fandango.com/content/browse/search?searchString={{TITLE}}', category:'watch' },
+        { name:'hoopla', color:'#2f7ed8', url:'https://www.hoopladigital.com/search?q={{TITLE}}&scope=everything&type=direct', category:'watch' },
     ];
     const DEFAULT_EXTERNAL_SITES = [
         { name:'Rotten Tomatoes', color:'#fa320a', url:'https://www.rottentomatoes.com/search?search={{TITLE}}', category:'reviews' },
@@ -1342,9 +1339,9 @@
        (reddit.com/r/FREEMEDIAHECKYEAH/wiki/video, snapshot 2026-08-31), one entry per
        distinct site using its primary URL. Mirrors, desktop apps, CLI tools, and
        Discord-only entries are omitted; Cineby is omitted because it announced its
-       shutdown for the end of August 2026. URLs are homepages as listed — the wiki
-       does not publish search routes, so adding one from the catalog lands on the
-       site's own search. Rows are editable after adding, like any destination. */
+       shutdown for the end of August 2026. The wiki does not publish search routes.
+       Verified templates are stored where a site supports one; homepage-only entries
+       stay browse links in Settings and cannot become misleading search buttons. */
     const FMHY_WATCH_CATALOG = [
         { group:'Stream aggregators', sites:[
             { name:'Rive', url:'https://www.rivestream.app/' },
@@ -1357,31 +1354,31 @@
                domain the schema-3 migration scrubs, so offering them would hand people a
                destination this build has already removed. */
             { name:'Flixer', url:'https://flixer.gd/' },
-            { name:'Hexa', url:'https://hexa.su/' },
+            { name:'Hexa', url:'https://hexa.su/search?q={{TITLE}}' },
             { name:'67Movies', url:'https://67movies.nl/' },
             { name:'PhantomFlix', url:'https://phantomflix.net/' },
             { name:'bCine', url:'https://bcine.ru/' },
             { name:'Reelix', url:'https://reelix.ac/' },
             { name:'Coreflix', url:'https://coreflix.tv/' },
-            { name:'MeowTV', url:'https://meowtv.ru/' },
+            { name:'MeowTV', url:'https://meowtv.ru/search?q={{TITLE}}' },
             { name:'FlickyStream', url:'https://flickystream.dad/' },
-            { name:'ShuttleTV', url:'https://shuttletv.su/' },
+            { name:'ShuttleTV', url:'https://shuttletv.su/search?q={{TITLE}}' },
             { name:'TouStream', url:'https://toustream.xyz/' },
             { name:'7Movies', url:'https://7movies.in/' },
-            { name:'ArrowTV', url:'https://arrowtv.net/' },
-            { name:'Cinezo', url:'https://www.cinezo.org/' },
-            { name:'Movie Night', url:'https://movienig.ht/' },
-            { name:'Chillflix', url:'https://chillflix.lol/' },
+            { name:'ArrowTV', url:'https://arrowtv.net/search?q={{TITLE}}' },
+            { name:'Cinezo', url:'https://www.cinezo.org/search?q={{TITLE}}' },
+            { name:'Movie Night', url:'https://movienig.ht/search?q={{TITLE}}' },
+            { name:'Chillflix', url:'https://www.chillflix.lol/search?q={{TITLE}}' },
             { name:'Vivarium', url:'https://vivarium.wtf/' },
             { name:'Moovie', url:'https://moovie.fun/' },
             { name:'SpenFlix', url:'https://watch.spencerdevs.xyz/' },
-            { name:'MovieBite', url:'https://moviebite.org/' },
+            { name:'MovieBite', url:'https://moviebite.org/search?q={{TITLE}}' },
             { name:'Cinetaro', url:'https://cinetaro.to/' },
             { name:'Vuflix', url:'https://vuflix.co/' },
             { name:'Streamo', url:'https://streamo.pro/' },
             { name:'OpStream', url:'https://opstream.fun/' },
             { name:'Movish', url:'https://movish.to/' },
-            { name:'LatestMovies', url:'https://latestmovies.net/' },
+            { name:'LatestMovies', url:'https://latestmovies.net/search?q={{TITLE}}' },
             { name:'VidPlay', url:'https://vidplay.to/' },
             { name:'Moonflix', url:'https://moonflix.website/' },
             { name:'Cinegram', url:'https://cinegram.tv/' },
@@ -1539,8 +1536,8 @@
             { name:'Moviepire', url:'https://moviepire.org/' },
         ] },
         { group:'Free with ads (legal)', sites:[
-            { name:'Tubi', url:'https://tubitv.com/' },
-            { name:'Plex', url:'https://watch.plex.tv/' },
+            { name:'Tubi', url:'https://tubitv.com/search/{{TITLE}}' },
+            { name:'Plex', url:'https://watch.plex.tv/search?query={{TITLE}}' },
             { name:'Pluto', url:'https://pluto.tv/' },
             { name:'Video Dictionary', url:'https://videodictionary.kwebpia.net/?m=Full_Movies' },
             { name:'FreeGreatMovies', url:'https://www.freegreatmovies.com/' },
@@ -1554,17 +1551,17 @@
             { name:'DarkRoom', url:'https://www.darkroom.film/' },
             { name:'Fawesome', url:'https://fawesome.tv/' },
             { name:'Sling Freestream', url:'https://watch.sling.com/' },
-            { name:'Fandango at Home', url:'https://athome.fandango.com/content/browse/free' },
+            { name:'Fandango at Home', url:'https://athome.fandango.com/content/browse/search?searchString={{TITLE}}' },
             { name:'Shout! TV', url:'https://shout-tv.com/' },
             { name:'Kanopy', url:'https://kanopy.com/' },
-            { name:'hoopla', url:'https://www.hoopladigital.com/' },
+            { name:'hoopla', url:'https://www.hoopladigital.com/search?q={{TITLE}}&scope=everything&type=direct' },
             { name:'Found TV', url:'https://watch.foundtv.com/' },
             { name:'BYUtv', url:'https://www.byutv.org/' },
             { name:'7plus', url:'https://7plus.com.au/' },
             { name:'Playary', url:'https://www.playary.com/' },
             { name:'Filmzie', url:'https://filmzie.com/' },
-            { name:'ARTE', url:'https://www.arte.tv/en' },
-            { name:'BBC iPlayer', url:'https://www.bbc.co.uk/iplayer' },
+            { name:'ARTE', url:'https://www.arte.tv/en/search/?q={{TITLE}}' },
+            { name:'BBC iPlayer', url:'https://www.bbc.co.uk/iplayer/search?q={{TITLE}}' },
             { name:'FlixHouse', url:'https://flixhouse.com/' },
         ] },
     ];

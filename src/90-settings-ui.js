@@ -478,9 +478,10 @@
         editor.appendChild(columns);
         editor.appendChild(rows);
 
-        /* Optional built-in catalog: every FMHY streaming destination, one click to add.
-           Rows are keyed by name (case-insensitive) so an entry already in the list —
-           whether it came from defaults, the catalog, or a manual edit — reads Added. */
+        /* Optional built-in catalog: verified title-search templates can be added, while
+           homepage-only entries remain useful browse links without becoming IMDb search
+           buttons that discard the title. Rows are keyed by name (case-insensitive) so
+           an entry already in the list reads Added. */
         if (Array.isArray(catalog) && catalog.length) {
             const catalogEntries = [];
             let addedCount = 0;
@@ -506,6 +507,7 @@
                 catalogEntries.forEach(entry => {
                     const matches = !query || entry.haystack.includes(query);
                     entry.row.hidden = !matches;
+                    if (!entry.searchable) return;
                     const listed = names.has(entry.lowerName);
                     entry.button.disabled = listed || atLimit;
                     entry.button.textContent = listed ? 'Added' : 'Add';
@@ -530,38 +532,47 @@
                     let host = site.url;
                     try { host = new URL(site.url).hostname.replace(/^www\./, ''); }
                     catch { /* catalog URLs are static and valid; keep the raw string */ }
-                    const button = makeEl('button', {
-                        type:'button',
-                        className:'enh-site-catalog__add',
-                        onClick: () => {
-                            if (rows.children.length >= SITE_LIST_LIMIT) {
-                                showToast(t('toast_a_site_list_can_contain_up', [SITE_LIST_LIMIT]));
-                                return;
-                            }
-                            const row = addRow({
-                                name: site.name,
-                                url: site.url,
-                                color: CATALOG_ROW_COLORS[addedCount % CATALOG_ROW_COLORS.length],
-                                category: defaultCategory,
-                                enabled: true,
-                            });
-                            if (!save()) {
-                                row.remove();
+                    const searchable = hasWatchSearchTemplate(site.url);
+                    const button = searchable
+                        ? makeEl('button', {
+                            type:'button',
+                            className:'enh-site-catalog__add',
+                            onClick: () => {
+                                if (rows.children.length >= SITE_LIST_LIMIT) {
+                                    showToast(t('toast_a_site_list_can_contain_up', [SITE_LIST_LIMIT]));
+                                    return;
+                                }
+                                const row = addRow({
+                                    name: site.name,
+                                    url: site.url,
+                                    color: CATALOG_ROW_COLORS[addedCount % CATALOG_ROW_COLORS.length],
+                                    category: defaultCategory,
+                                    enabled: true,
+                                });
+                                if (!save()) {
+                                    row.remove();
+                                    updateCount();
+                                    /* save() validates every row, so an incomplete row the
+                                       user left elsewhere in the editor fails this one too.
+                                       Telling them to check storage sends them after the
+                                       wrong thing entirely. */
+                                    showToast(lastSaveFailure === 'validation'
+                                        ? `Finish or remove the incomplete site row before adding ${site.name}`
+                                        : `Could not save ${site.name}. Check ${STORAGE_HOST_LABEL}.`, 4500);
+                                    return;
+                                }
+                                addedCount += 1;
                                 updateCount();
-                                /* save() validates every row, so an incomplete row the
-                                   user left elsewhere in the editor fails this one too.
-                                   Telling them to check storage sends them after the
-                                   wrong thing entirely. */
-                                showToast(lastSaveFailure === 'validation'
-                                    ? `Finish or remove the incomplete site row before adding ${site.name}`
-                                    : `Could not save ${site.name}. Check ${STORAGE_HOST_LABEL}.`, 4500);
-                                return;
-                            }
-                            addedCount += 1;
-                            updateCount();
-                            showToast(t('toast_destination_added_to_list', [site.name, title]));
-                        },
-                    }, t('label_add'));
+                                showToast(t('toast_destination_added_to_list', [site.name, title]));
+                            },
+                        }, t('label_add'))
+                        : makeEl('a', {
+                            href:site.url,
+                            target:'_blank',
+                            rel:'noopener noreferrer',
+                            className:'enh-site-catalog__add',
+                            'aria-label':t('aria_open_link', [site.name, host]),
+                        }, t('label_open'));
                     const row = makeEl('div', { className:'enh-site-catalog__entry' },
                         makeEl('span', { className:'enh-site-catalog__name' }, site.name),
                         makeEl('span', { className:'enh-site-catalog__host' }, host),
@@ -571,6 +582,7 @@
                         site,
                         row,
                         button,
+                        searchable,
                         groupIndex,
                         lowerName: site.name.toLowerCase(),
                         haystack: `${site.name} ${host}`.toLowerCase(),
@@ -2165,4 +2177,3 @@
         lastFocusedElement = null;
         previousDocumentOverflow = '';
     }
-

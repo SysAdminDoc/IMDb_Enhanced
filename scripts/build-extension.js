@@ -142,6 +142,22 @@ function applyStoreProfile(body) {
         if (!pattern.test(out)) throw new Error(`${name} could not be found to omit.`);
         out = out.replace(pattern, `const ${name} = [];`);
     });
+    const migrationData = [
+        {
+            name:'LEGACY_DEFAULT_WATCH_SITE_REPLACEMENTS',
+            pattern:/const LEGACY_DEFAULT_WATCH_SITE_REPLACEMENTS = new Map\(\[[\s\S]*?\n    \]\.map\(\(\[legacy, replacement\]\) => \[siteIdentityKey\(\.\.\.legacy\), replacement\]\)\);/,
+            replacement:'const LEGACY_DEFAULT_WATCH_SITE_REPLACEMENTS = new Map();',
+        },
+        {
+            name:'LEGACY_CATALOG_HOMEPAGES',
+            pattern:/const LEGACY_CATALOG_HOMEPAGES = \[[\s\S]*?\n    \];/,
+            replacement:'const LEGACY_CATALOG_HOMEPAGES = [];',
+        },
+    ];
+    migrationData.forEach(({ name, pattern, replacement }) => {
+        if (!pattern.test(out)) throw new Error(`${name} could not be found to omit.`);
+        out = out.replace(pattern, replacement);
+    });
 
     /* Checked on the output, because the point is what ships. A destination that survived
        the cut would be exactly the thing a reviewer objects to. */

@@ -1,7 +1,7 @@
 // ==UserScript==
 // @name         IMDb Enhanced
 // @namespace    https://github.com/SysAdminDoc
-// @version      2.18.0
+// @version      2.19.0
 // @updateURL    https://raw.githubusercontent.com/SysAdminDoc/IMDb_Enhanced/main/IMDb_Enhanced.user.js
 // @downloadURL  https://raw.githubusercontent.com/SysAdminDoc/IMDb_Enhanced/main/IMDb_Enhanced.user.js
 // @description  Premium IMDb overhaul: cleaner pages, modern themes, refined score widgets, media library indicators, quick navigation, richer external links, TV tools, search shortcuts, and polished settings import/export

@@ -167,7 +167,10 @@
     function getSiteList(key, defaults) {
         const value = get(key);
         const fallbackCategory = key === 'watchSites' ? 'watch' : 'other';
-        if (Array.isArray(value)) return value.slice(0, SITE_LIST_LIMIT).map(site => normalizeSite(site, '#6366f1', fallbackCategory)).filter(Boolean);
+        if (Array.isArray(value)) {
+            const current = key === 'watchSites' ? migrateWatchSiteList(value) : value;
+            return current.slice(0, SITE_LIST_LIMIT).map(site => normalizeSite(site, '#6366f1', fallbackCategory)).filter(Boolean);
+        }
         return defaults.slice(0, SITE_LIST_LIMIT).map(site => normalizeSite(site, '#6366f1', fallbackCategory)).filter(Boolean);
     }
 
@@ -191,7 +194,23 @@
         };
     }
 
+    function getWatchSearchTitle(fallbackTitle = getTitleText(), ld = getLDData(), root = document) {
+        if (getStructuredMediaType(ld) !== 'episode') return fallbackTitle || '';
+        const structuredSeries = [
+            ld?.partOfSeries?.name,
+            ld?.partOfSeason?.partOfSeries?.name,
+        ].find(value => typeof value === 'string' && value.trim());
+        if (structuredSeries) return structuredSeries.trim();
+        const linkedSeries = root?.querySelector?.(
+            '[data-testid="hero-title-block__series-link"], a[data-testid*="series"][href*="/title/tt"]'
+        )?.textContent?.trim();
+        return linkedSeries || fallbackTitle || '';
+    }
+
+    function getWatchLinkContext(title = getTitleText(), imdbId = getIMDbID(), year = getTitleYear()) {
+        return getLinkContext(getWatchSearchTitle(title), imdbId, year);
+    }
+
     function applyLinkTemplate(template, ctx) {
         return String(template || '').replace(/\{\{([A-Z_]+)\}\}/g, (_, key) => ctx[key] ?? '');
     }
-

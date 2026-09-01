@@ -65,6 +65,14 @@ function expand(template) {
     return String(template).replace(/\{\{([A-Z_]+)\}\}/g, (_, key) => (key in SAMPLE ? SAMPLE[key] : ''));
 }
 
+const SEARCH_TEMPLATE_KEYS = new Set([
+    'TITLE', 'TITLE_RAW', 'TITLE_DASH', 'TITLE_SLUG', 'IMDB_ID', 'IMDB_NUM',
+]);
+function hasSearchTemplate(template) {
+    return Array.from(String(template || '').matchAll(/\{\{([^{}]+)\}\}/g))
+        .some(match => SEARCH_TEMPLATE_KEYS.has(match[1]));
+}
+
 /* Categories are deliberately distinct, because the action each implies is different:
    a bot block needs a human to open the page, an auth wall may be expected, a geo block
    is not the destination's fault, and a semantic mismatch is the only one that usually
@@ -76,6 +84,8 @@ const CATEGORY = {
     GEO_BLOCKED: 'geo-blocked',
     NOT_FOUND: 'not-found',
     SEMANTIC_MISMATCH: 'semantic-mismatch',
+    SEARCH_UNCONFIRMED: 'search-unconfirmed',
+    BROWSE_ONLY: 'browse-only',
     SERVER_ERROR: 'server-error',
     TLS_ERROR: 'tls-error',
     DNS_ERROR: 'dns-error',
@@ -111,6 +121,19 @@ function classifyBody(status, body) {
     if (status === 200 && EMPTY_RESULT.test(body)) return CATEGORY.SEMANTIC_MISMATCH;
     if (status === 200) return CATEGORY.OK;
     return CATEGORY.NETWORK_ERROR;
+}
+
+function classifyDestination(site, result) {
+    if (!hasSearchTemplate(site.url)) return CATEGORY.BROWSE_ONLY;
+    /* A licensed watch catalog can correctly apply a query and have no matching title,
+       while some client-rendered sites ship hidden "no results" copy in every response.
+       Static HTML cannot distinguish either case from a broken search contract. Keep the
+       result reviewable instead of calling the route wrong after the browser proved it. */
+    if (result.category === CATEGORY.SEMANTIC_MISMATCH && /watch/i.test(String(site.group || ''))) {
+        return CATEGORY.SEARCH_UNCONFIRMED;
+    }
+    if (result.category === CATEGORY.OK && !result.sampleMentioned) return CATEGORY.SEARCH_UNCONFIRMED;
+    return result.category;
 }
 
 function classifyNetworkError(error) {
@@ -162,6 +185,7 @@ async function probe(startUrl) {
             finalUrl: response.url || url,
             status: response.status,
             category: classifyBody(response.status, body),
+            sampleMentioned: /the\s+matrix/i.test(body),
             detail: '',
         };
     }
@@ -172,7 +196,9 @@ const NEEDS_REVIEW = {
     [CATEGORY.NOT_FOUND]: 'The exact URL this ships answered 404. Open it: the site may have changed its search path.',
     [CATEGORY.DNS_ERROR]: 'The host does not resolve. Usually a dead or renamed domain.',
     [CATEGORY.TLS_ERROR]: 'The certificate did not validate. Check before shipping it to anyone.',
-    [CATEGORY.SEMANTIC_MISMATCH]: 'Loaded, but the page reads as no results for a title every film site has.',
+    [CATEGORY.SEMANTIC_MISMATCH]: 'Loaded, but the rendered HTML reports no matching result. Verify the route in a browser.',
+    [CATEGORY.SEARCH_UNCONFIRMED]: 'The route answered, but its HTML did not contain the sample title. Verify the rendered page in a browser.',
+    [CATEGORY.BROWSE_ONLY]: 'No title or IMDb token is present. This is a browse link in Settings, not an addable search destination.',
     [CATEGORY.SERVER_ERROR]: 'The server errored. Re-run before concluding anything.',
     [CATEGORY.BOT_BLOCKED]: 'A bot wall answered this client. Says nothing about a real browser; open it by hand.',
     [CATEGORY.AUTH_REQUIRED]: 'Sign-in or an invite is required. Expected for some entries.',
@@ -220,15 +246,15 @@ function toMarkdown(rows, meta) {
         `- Checked: ${rows.length}`,
         ...Object.entries(meta.counts).map(([category, count]) => `- ${category}: ${count}`),
         '',
-        '| Destination | Group | Category | Status | Hops | Final host | Review |',
-        '| --- | --- | --- | ---: | ---: | --- | --- |',
+        '| Destination | Group | Search | Category | Status | Hops | Final host | Review |',
+        '| --- | --- | --- | --- | ---: | ---: | --- | --- |',
     ];
     rows.forEach(row => {
         const finalHost = (() => {
             try { return new URL(row.finalUrl).host; } catch { return '—'; }
         })();
         const movedHost = finalHost && row.startHost && finalHost !== row.startHost ? ` (from ${row.startHost})` : '';
-        lines.push(`| ${row.name} | ${row.group} | ${row.category} | ${row.status || '—'} | ${row.chain.length} | ${finalHost}${movedHost} | ${row.review || ''} |`);
+        lines.push(`| ${row.name} | ${row.group} | ${row.searchable ? 'search' : 'browse'} | ${row.category} | ${row.status || '—'} | ${row.chain.length} | ${finalHost}${movedHost} | ${row.review || ''} |`);
     });
     return `${lines.join('\n')}\n`;
 }
@@ -247,7 +273,8 @@ async function main() {
         let startHost = '';
         try { startHost = new URL(startUrl).host; } catch { /* reported as a bad template */ }
         const result = await probe(startUrl);
-        process.stderr.write(`  ${result.category.padEnd(18)} ${site.name}\n`);
+        const category = classifyDestination(site, result);
+        process.stderr.write(`  ${category.padEnd(18)} ${site.name}\n`);
         return {
             name: site.name,
             group: site.group,
@@ -255,9 +282,11 @@ async function main() {
             startUrl,
             startHost,
             ...result,
+            category,
+            searchable:hasSearchTemplate(site.url),
             // A retired-host redirect outranks the category note: the entry can be
             // perfectly healthy and still be pointing somewhere that is not.
-            review: retiredHostWarning(result.finalUrl) || NEEDS_REVIEW[result.category] || '',
+            review: retiredHostWarning(result.finalUrl) || NEEDS_REVIEW[category] || '',
         };
     });
 
@@ -285,4 +314,7 @@ if (require.main === module) {
     });
 }
 
-module.exports = { CATEGORY, classifyBody, classifyNetworkError, expand, collectDestinations, toMarkdown, SAMPLE, NEEDS_REVIEW };
+module.exports = {
+    CATEGORY, classifyBody, classifyDestination, classifyNetworkError, expand,
+    hasSearchTemplate, collectDestinations, toMarkdown, SAMPLE, NEEDS_REVIEW,
+};

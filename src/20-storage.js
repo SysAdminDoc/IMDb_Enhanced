@@ -350,7 +350,7 @@
         else GM_setValue(key, '');
     }
 
-    const SETTINGS_SCHEMA_VERSION = 4;
+    const SETTINGS_SCHEMA_VERSION = 5;
     const SETTINGS_SCHEMA_KEY = 'settingsSchemaVersion';
     /* Describes the export rather than being a setting, so import must skip it the way
        it skips the schema marker — otherwise a redacted backup reports its own manifest
@@ -399,6 +399,18 @@
                 const key = `${PREFIX}scoreCorrections`;
                 const stored = GM_getValue(key, null);
                 if (stored !== null) GM_setValue(key, normalizeScoreCorrections(stored));
+            },
+        },
+        {
+            /* v5: the original watch-site pass accepted a successful homepage response
+               as proof that a title query worked. Replace those exact shipped defaults
+               in saved lists, and remove catalog homepages that cannot carry any IMDb
+               context. Unrelated custom destinations are untouched. */
+            to: 5,
+            run() {
+                const key = `${PREFIX}watchSites`;
+                const stored = GM_getValue(key, null);
+                if (Array.isArray(stored)) GM_setValue(key, migrateWatchSiteList(stored));
             },
         },
     ];
@@ -927,4 +939,3 @@
         });
         return rows.join('\r\n');
     }
-

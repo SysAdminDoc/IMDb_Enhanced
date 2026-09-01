@@ -139,6 +139,8 @@ function loadScriptTestHooks({ withoutDeleteValue = false, withheldCredentials =
         advanceFeatureGeneration,
         startFeature,
         normalizeUrlTemplate,
+        hasWatchSearchTemplate,
+        migrateWatchSiteList,
         normalizeLocalServiceUrl,
         normalizeCredentialValue,
         isLocalServiceUrl,
@@ -148,6 +150,10 @@ function loadScriptTestHooks({ withoutDeleteValue = false, withheldCredentials =
         groupSitesByCategory,
         getSiteList,
         filterSitesForMediaType,
+        getLinkContext,
+        getWatchSearchTitle,
+        getWatchLinkContext,
+        applyLinkTemplate,
         boundedScore,
         parseRTSearchCandidates,
         parseRTSearchResult,
@@ -806,6 +812,39 @@ test('settings carry a schema version that gates migration and import', () => {
     // Its own export still round-trips, and the marker is not treated as a setting.
     const prepared = hooks.prepareSettingsImport(backup);
     assert.strictEqual(prepared.ignored, 0, 'the schema marker must not count as an unrecognized field');
+});
+
+test('schema 5 replaces shipped dead searches and removes catalog homepages', () => {
+    const hooks = loadScriptTestHooks();
+    hooks.seedStoredSetting('settingsSchemaVersion', 4);
+    hooks.seedStoredSetting('watchSites', [
+        {
+            name:'Rive',
+            url:'https://www.rivestream.app/search?q={{TITLE}}',
+            color:'#123456',
+            category:'watch',
+            enabled:false,
+        },
+        { name:'Cine.su', url:'https://cine.su/en/search', color:'#654321', category:'watch' },
+        { name:'BingeBox', url:'https://bingebox.ac/', color:'#abcdef', category:'watch' },
+        { name:'Custom home', url:'https://example.com/', color:'#fedcba', category:'watch' },
+    ]);
+    hooks.runSettingsMigrations();
+    const migrated = hooks.getStoredSetting('watchSites');
+    assert.deepStrictEqual(Array.from(migrated, site => site.name), ['BBC iPlayer', 'hoopla', 'Custom home']);
+    assert.strictEqual(migrated[0].color, '#123456', 'a replacement should preserve the configured color');
+    assert.strictEqual(migrated[0].enabled, false, 'a replacement should preserve visibility');
+    assert.strictEqual(migrated[2].url, 'https://example.com/', 'unrelated manual homepage destinations must remain untouched');
+
+    const imported = hooks.prepareSettingsImport({
+        settingsSchemaVersion:4,
+        watchSites:[
+            { name:'Rive', url:'https://www.rivestream.app/search?q={{TITLE}}', color:'#123456', category:'watch' },
+            { name:'BingeBox', url:'https://bingebox.ac/', color:'#abcdef', category:'watch' },
+        ],
+    }).entries.find(entry => entry.key === 'watchSites');
+    assert(imported, 'an old watch-site backup should remain importable');
+    assert.deepStrictEqual(Array.from(imported.value, site => site.name), ['BBC iPlayer']);
 });
 
 /* Forced colours drop box-shadow outright, so a ring drawn as a shadow vanishes; the
@@ -4275,23 +4314,24 @@ test('site destinations support purpose, visibility, and ordering metadata', () 
         JSON.stringify([['watch', ['Watch A', 'Watch B']], ['reviews', ['Review A']]]),
         'site grouping should preserve category and configured order'
     );
+    const defaultWatchBlock = script.match(/const DEFAULT_WATCH_SITES = \[[\s\S]*?\n    \];/)?.[0] || '';
     [
-        'https://www.rivestream.app/search?q={{TITLE}}',
-        'https://cinejoy.to/search?q={{TITLE}}',
-        'https://www.movy.bz/browse?q={{TITLE}}',
-        'https://flixer.su/search?q={{TITLE}}',
-        'https://watch.corsflix.net/search?q={{TITLE}}',
+        'https://www.bbc.co.uk/iplayer/search?q={{TITLE}}',
+        'https://hexa.su/search?q={{TITLE}}',
+        'https://www.arte.tv/en/search/?q={{TITLE}}',
         'https://shuttletv.su/search?q={{TITLE}}',
-        'https://zstream.mov/search?q={{TITLE}}',
-        'https://aether.ist/search?q={{TITLE}}',
-        'https://www.1shows.org/search?q={{TITLE}}',
-        'https://cinemaos.live/search?q={{TITLE}}',
-        'https://hydrahd.ws/search?q={{TITLE}}',
-        'https://cinestream.kje.us/search?q={{TITLE}}',
-        'https://bingr.one/search?q={{TITLE}}',
-        'https://www.lookmovie2.to/movies/search/?q={{TITLE}}',
-        'https://cine.su/en/search',
-    ].forEach(url => assert(script.includes(url), `${url} should be available in the default watch destinations`));
+        'https://arrowtv.net/search?q={{TITLE}}',
+        'https://www.cinezo.org/search?q={{TITLE}}',
+        'https://movienig.ht/search?q={{TITLE}}',
+        'https://meowtv.ru/search?q={{TITLE}}',
+        'https://www.chillflix.lol/search?q={{TITLE}}',
+        'https://moviebite.org/search?q={{TITLE}}',
+        'https://latestmovies.net/search?q={{TITLE}}',
+        'https://watch.plex.tv/search?query={{TITLE}}',
+        'https://tubitv.com/search/{{TITLE}}',
+        'https://athome.fandango.com/content/browse/search?searchString={{TITLE}}',
+        'https://www.hoopladigital.com/search?q={{TITLE}}&scope=everything&type=direct',
+    ].forEach(url => assert(defaultWatchBlock.includes(url), `${url} should be available in the default watch destinations`));
     /* Hiding a destination has to hide it everywhere it is offered — the control says
        "on IMDb pages", and collection pages are IMDb pages. Assert both consumers of
        watchSites filter, not just the title-page one. */
@@ -4900,7 +4940,7 @@ test('schema-3 migration scrubs Cineby leftovers from storage', () => {
     const lookalike = loadScriptTestHooks();
     lookalike.seedStoredSetting('settingsSchemaVersion', 2);
     lookalike.seedStoredSetting('watchSites', [
-        { name:'CinebyTV', url:'https://cinebytv.com/', color:'#6366f1', category:'watch' },
+        { name:'CinebyTV', url:'https://cinebytv.com/search?q={{TITLE}}', color:'#6366f1', category:'watch' },
         { name:'Not Cineby', url:'https://cineby.at.example.com/', color:'#6366f1', category:'watch' },
     ]);
     lookalike.runSettingsMigrations();
@@ -4933,12 +4973,14 @@ test('a manager without GM_deleteValue does not stall the migration chain', () =
     assert(!hooks.getStoredSetting('cinebyHost'), 'the retired preference must still be cleared');
 });
 
-test('the FMHY catalog offers valid, unique, addable destinations', () => {
+test('the FMHY catalog keeps homepage-only entries out of IMDb search buttons', () => {
     const hooks = loadScriptTestHooks();
     const catalog = hooks.FMHY_WATCH_CATALOG;
     assert(Array.isArray(catalog) && catalog.length >= 5, 'the catalog should ship its wiki section groups');
     const names = new Set();
     let total = 0;
+    let searchable = 0;
+    let browseOnly = 0;
     catalog.forEach(group => {
         assert(typeof group.group === 'string' && group.group.trim(), 'every catalog group needs a label');
         assert(Array.isArray(group.sites) && group.sites.length, 'every catalog group needs sites');
@@ -4947,13 +4989,20 @@ test('the FMHY catalog offers valid, unique, addable destinations', () => {
             const normalized = hooks.normalizeSite({ ...site, category:'watch' });
             assert(normalized, `catalog entry ${site.name} must survive site normalization`);
             assert.strictEqual(normalized.name, site.name, `catalog entry name ${site.name} must fit the stored length`);
+            if (hooks.hasWatchSearchTemplate(site.url)) searchable += 1;
+            else browseOnly += 1;
             const lower = site.name.toLowerCase();
             assert(!names.has(lower), `catalog entry ${site.name} is duplicated`);
             names.add(lower);
         });
     });
     assert(total >= 150, `the catalog should carry the full FMHY streaming list (got ${total})`);
-    assert(total <= hooks.SITE_LIST_LIMIT, 'every catalog entry must be addable within the site-list limit');
+    assert(total <= hooks.SITE_LIST_LIMIT, 'the editor limit should still cover the full catalog');
+    assert(searchable >= 15, 'the browser-verified search routes should be addable');
+    assert(browseOnly >= 100, 'unverified homepages should remain visible as browse links');
+    assert(script.includes("if (!entry.searchable) return;"), 'browse-only entries must bypass Add-button state');
+    assert(/searchable[\s\S]{0,2200}?href:site\.url[\s\S]{0,300}?t\('label_open'\)/.test(script),
+        'homepage-only entries should open the site instead of joining watchSites');
     /* save() validates every row, so an incomplete row left elsewhere in the editor also
        fails an Add. Blaming storage for that sends the user after the wrong thing. */
     const addHandler = script.slice(script.indexOf("className:'enh-site-catalog__add'"));
@@ -4966,16 +5015,40 @@ test('the FMHY catalog offers valid, unique, addable destinations', () => {
         'filtered catalog entries need a hidden rule that outranks their display value');
 });
 
-test('default watch sites resolve to catalog services with live-checked routes', () => {
+test('default watch sites resolve to browser-verified contextual search routes', () => {
     const hooks = loadScriptTestHooks();
     const defaults = hooks.getDefaultSettingsEntries().find(entry => entry.key === 'watchSites').value;
-    assert(defaults.length >= 12, 'a healthy default set should survive the FMHY refresh');
-    const catalogNames = new Set();
-    hooks.FMHY_WATCH_CATALOG.forEach(group => group.sites.forEach(site => catalogNames.add(site.name.toLowerCase())));
+    assert.strictEqual(defaults.length, 15, 'the verified default set should remain complete');
+    const catalogByName = new Map();
+    hooks.FMHY_WATCH_CATALOG.forEach(group => group.sites.forEach(site => catalogByName.set(site.name.toLowerCase(), site)));
     defaults.forEach(site => {
-        assert(catalogNames.has(site.name.toLowerCase()), `default ${site.name} should exist in the FMHY catalog`);
+        const catalogSite = catalogByName.get(site.name.toLowerCase());
+        assert(catalogSite, `default ${site.name} should exist in the FMHY catalog`);
+        assert.strictEqual(catalogSite.url, site.url, `catalog route for ${site.name} must match its verified default`);
         assert(hooks.normalizeSite(site), `default ${site.name} must normalize cleanly`);
+        assert(hooks.hasWatchSearchTemplate(site.url), `default ${site.name} must carry IMDb title context`);
     });
+    const punctuation = hooks.getLinkContext('Dune: Part Two & Friends', 'tt15239678', '2024');
+    assert.strictEqual(punctuation.TITLE, 'Dune%3A%20Part%20Two%20%26%20Friends');
+    defaults.forEach(site => {
+        const expanded = hooks.applyLinkTemplate(site.url, punctuation);
+        assert(!expanded.includes('{{'), `${site.name} left a template token unresolved`);
+        assert(expanded.includes(punctuation.TITLE), `${site.name} did not preserve the encoded title`);
+        assert.doesNotThrow(() => new URL(expanded), `${site.name} produced an invalid URL`);
+    });
+    assert.strictEqual(
+        hooks.getWatchSearchTitle('Ozymandias', {
+            '@type':'TVEpisode',
+            partOfSeries:{ '@type':'TVSeries', name:'Breaking Bad' },
+        }, null),
+        'Breaking Bad',
+        'episode watch searches should target the series that a streaming site indexes'
+    );
+    assert.strictEqual(
+        hooks.getWatchSearchTitle('Dune: Part Two', { '@type':'Movie' }, null),
+        'Dune: Part Two',
+        'movie searches should keep the page title'
+    );
 });
 
 test('settings preserve host scroll state and complete nested tab keyboard support', () => {
@@ -5791,6 +5864,32 @@ test('the destination health report classifies without guessing or leaking', () 
     assert.strictEqual(checker.classifyBody(403, '<html>forbidden</html>'), checker.CATEGORY.AUTH_REQUIRED);
     assert.strictEqual(checker.classifyBody(200, '<html>No results found</html>'), checker.CATEGORY.SEMANTIC_MISMATCH);
     assert.strictEqual(checker.classifyBody(200, '<html>not available in your country</html>'), checker.CATEGORY.GEO_BLOCKED);
+    assert(checker.hasSearchTemplate('https://x.test/search?q={{TITLE}}'));
+    assert(!checker.hasSearchTemplate('https://x.test/'));
+    assert.strictEqual(
+        checker.classifyDestination({ url:'https://x.test/' }, { category:checker.CATEGORY.OK, sampleMentioned:false }),
+        checker.CATEGORY.BROWSE_ONLY,
+        'a healthy homepage is not evidence of a working title search'
+    );
+    assert.strictEqual(
+        checker.classifyDestination({ url:'https://x.test/search?q={{TITLE}}' }, { category:checker.CATEGORY.OK, sampleMentioned:false }),
+        checker.CATEGORY.SEARCH_UNCONFIRMED,
+        'a query-shaped route without title evidence should still require a browser check'
+    );
+    assert.strictEqual(
+        checker.classifyDestination({ url:'https://x.test/search?q={{TITLE}}' }, { category:checker.CATEGORY.OK, sampleMentioned:true }),
+        checker.CATEGORY.OK
+    );
+    assert.strictEqual(
+        checker.classifyDestination(
+            { url:'https://x.test/search?q={{TITLE}}', group:'default watch' },
+            { category:checker.CATEGORY.SEMANTIC_MISMATCH, sampleMentioned:false }
+        ),
+        checker.CATEGORY.SEARCH_UNCONFIRMED,
+        'an empty licensed catalog result still needs a browser check, not a broken-route verdict'
+    );
+    assert(script.includes('NEEDS_REVIEW[category]'),
+        'the report explanation must follow the destination-level category');
     // The four review reasons the acceptance asks to keep distinct really are distinct.
     assert.strictEqual(new Set([
         checker.CATEGORY.BOT_BLOCKED, checker.CATEGORY.AUTH_REQUIRED,

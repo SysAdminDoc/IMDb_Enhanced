@@ -1,4 +1,4 @@
-[![Version](https://img.shields.io/badge/version-2.18.0-blue)](https://github.com/SysAdminDoc/IMDb_Enhanced)
+[![Version](https://img.shields.io/badge/version-2.19.0-blue)](https://github.com/SysAdminDoc/IMDb_Enhanced)
 [![License](https://img.shields.io/badge/license-MIT-green)](LICENSE)
 [![Platform](https://img.shields.io/badge/platform-Tampermonkey%20%7C%20Violentmonkey-yellow)](https://www.tampermonkey.net/)
 
@@ -20,7 +20,7 @@ A desktop IMDb overhaul delivered as a single userscript and a Chromium Manifest
 
 Third-party lookups omit destination cookies. Responses are rendered as text, outbound links suppress opener/referrer data, and response-provided URLs are restricted to the expected HTTPS service domains.
 
-**Watch Site Search**. Quick-search buttons for streaming sites. The defaults (Rive, Cinejoy, Movy, Flixer, CorsFlix, ShuttleTV, Z-Stream, Aether, 1Shows, CinemaOS, HydraHD, CineStream, Bingr, LookMovie2, Cine.su) come from the FMHY video wiki's starred picks, and a built-in catalog in settings offers every other streaming destination that wiki lists, grouped the way the wiki groups them, each one a single click to add. Destinations are contacted only when you open them; the userscript does not background-probe every site.
+**Watch Site Search**. Quick-search buttons for streaming sites. The defaults (BBC iPlayer, Hexa, ARTE, ShuttleTV, ArrowTV, Cinezo, Movie Night, MeowTV, Chillflix, MovieBite, LatestMovies, Plex, Tubi, Fandango at Home, hoopla) use direct routes tested with both film and TV titles. Episode pages search for the parent series instead of an episode name that streaming catalogs rarely index. The full FMHY catalog remains in settings. A verified title-search route shows Add; a homepage-only entry shows Open and cannot become a broken IMDb search button. Destinations are contacted only when you open them. The userscript never probes them in the background.
 
 **External Links**. One-click links grouped by purpose: Reviews & ratings (Rotten Tomatoes, Letterboxd, Trakt), Info & research (TMDB, Wikipedia), Trailers & video (YouTube), and Availability (JustWatch). Configurable.
 
@@ -136,7 +136,7 @@ The redesigned visual reference set covers every menu page: [Experience](design/
 
 **Failure journal**. The last 20 feature failures, kept across reloads so intermittent breakage is visible. Entries record the time, the feature, the kind of page, and a failure category. HTTP responses are kept separate from connection failures, and only server errors qualify for a bounded stale score. Entries never record the error text, so a title, a lookup address, or a token echoed back by a local service cannot end up in one. Copy it into a bug report or clear it from the same card.
 
-**Watch Sites**. Add, remove, reorder, show/hide, categorize, and customize streaming site buttons with name, URL template, and color. The FMHY streaming catalog sits under the editor: a filterable list of every streaming destination from that wiki, grouped by its sections (stream aggregators, P-Stream forks, dedicated server, multi-server, backups, and legal free-with-ads services). Adding one creates a normal editable row, and entries already in your list read as Added. A list holds up to 250 destinations, enough for the whole catalog at once.
+**Watch Sites**. Add, remove, reorder, show/hide, categorize, and customize streaming site buttons with name, URL template, and color. The FMHY streaming catalog sits under the editor as a filterable list grouped by the wiki's own sections. Sites with a tested contextual search route can be added as normal editable rows. Homepage-only entries open for browsing but are not added to IMDb pages. Entries already in your list read as Added. A list holds up to 250 destinations.
 
 **External Links**. Same customization as watch sites for review, availability, trailer, and research links; hidden destinations remain available to re-enable later.
 
