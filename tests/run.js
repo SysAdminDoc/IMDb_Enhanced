@@ -2758,6 +2758,8 @@ test('title page actions survive without any watch destination', () => {
         script.indexOf("key: 'compactHeader'"));
     assert(surface.includes('createTitlePageActions()'), 'the surface that hides the hero must mount the replacement actions');
     assert(surface.includes('enh-editorial-native-hidden'), 'this test should still be guarding the feature that hides the native hero');
+    assert(script.includes('[data-testid="hero-rating-bar__user-rating"]'),
+        'the replacement Rate action should delegate to IMDb\'s tagged user-rating control');
 
     const watchButtons = script.slice(
         script.indexOf("key: 'searchButtons'"),

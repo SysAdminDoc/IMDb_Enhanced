@@ -178,12 +178,20 @@ function installUserscriptGlobals(window) {
 await runFixture('title', async (window, hooks) => {
     const nativeRating = requireSelector(window.document,
         '[data-testid="hero-rating-bar__aggregate-rating"]');
+    const nativeRateButton = requireSelector(window.document,
+        '[data-testid="hero-rating-bar__user-rating"]');
+    let nativeRateClicks = 0;
+    nativeRateButton.addEventListener('click', () => { nativeRateClicks += 1; });
     const nativeHost = nativeRating.parentElement;
 
     await hooks.runFeature('editorialTitleSurface');
     const rail = await waitForSelector(window, '#enh-editorial-score-rail');
     assert.equal(nativeRating.parentElement, rail,
         'the editorial surface should adopt IMDb rating controls');
+    Array.from(window.document.querySelectorAll('.enh-title-page-actions button'))
+        .find(button => button.textContent === 'Rate').click();
+    assert.equal(nativeRateClicks, 1,
+        'the editorial Rate action must invoke IMDb\'s own rating control');
 
     const lateWidget = window.document.createElement('div');
     lateWidget.className = 'enh-score-widget';

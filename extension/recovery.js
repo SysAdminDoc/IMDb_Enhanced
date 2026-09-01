@@ -3862,9 +3862,19 @@
                 type:'button',
                 className:'enh-editorial-action',
                 onClick: () => {
-                    const rating = document.querySelector('[data-testid="hero-rating-bar__aggregate-rating"]');
-                    rating?.scrollIntoView({ behavior:getEnhancementScrollBehavior(), block:'center' });
-                    rating?.querySelector('button, a, [tabindex]:not([tabindex="-1"])')?.focus?.();
+                    const rating = findNativeTitleAction(
+                        ['rate'],
+                        ['[data-testid="hero-rating-bar__user-rating"]']
+                    );
+                    const control = rating?.matches?.('button, a, [role="button"]')
+                        ? rating
+                        : rating?.querySelector?.('button, a, [role="button"]');
+                    if (control) control.click();
+                    else {
+                        const aggregate = document.querySelector('[data-testid="hero-rating-bar__aggregate-rating"]');
+                        aggregate?.scrollIntoView({ behavior:getEnhancementScrollBehavior(), block:'center' });
+                        aggregate?.querySelector('button, a, [tabindex]:not([tabindex="-1"])')?.focus?.();
+                    }
                 },
             }, t('label_rate')),
             makeEl('button', {
