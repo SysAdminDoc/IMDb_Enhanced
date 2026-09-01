@@ -6883,6 +6883,7 @@ html[data-imdb-enhanced="active"] .ipc-page-background {
                 this._scoreRestoreHost = document.querySelector('[data-testid="hero-rating-bar__aggregate-rating"]')?.parentElement
                     || document.querySelector('[data-testid="hero-rating-bar__popularity"]')?.parentElement
                     || null;
+                this._scoreRestoreHost?.classList.add('enh-native-score-rail');
                 const sync = () => {
                     if (!isCurrent() || !rail.isConnected) return;
                     refreshEditorialSurface(surface, this._nativeHero || document);
@@ -8344,13 +8345,17 @@ section[id*="quote" i] .ipc-list-card { padding: 4px 0 !important; margin: 2px 0
         if (editorialRail) return editorialRail;
         const agg = document.querySelector('[data-testid="hero-rating-bar__aggregate-rating"]');
         if (!agg) return null;
+        const markNativeBar = bar => {
+            bar?.classList.add('enh-native-score-rail');
+            return bar;
+        };
         // Walk up to find the flex container holding all rating widgets
         let parent = agg.parentElement;
         for (let i = 0; i < 3 && parent; i++) {
-            if (parent.children.length >= 2) return parent;
+            if (parent.children.length >= 2) return markNativeBar(parent);
             parent = parent.parentElement;
         }
-        return agg.parentElement;
+        return markNativeBar(agg.parentElement);
     }
 
     async function waitForRatingBar(isCurrent) {
@@ -14295,6 +14300,44 @@ section[data-testid="hero-parent"].enh-editorial-native-hidden { display: none !
 #enh-title-stack #enh-servarr-actions,
 #enh-title-stack #enh-media-server-status {
     grid-column: 1 / -1;
+}
+
+/* IMDb keeps its title copy, title tools, and rating bar in one non-wrapping row.
+   Extra score sources otherwise take the whole row and collapse the title to one
+   character per line. Give the native layout two responsive rows while leaving the
+   editorial surface's own grid untouched. */
+section[data-testid="hero-parent"] :has(> #enh-title-stack) {
+    flex-wrap: wrap !important;
+    align-items: flex-start !important;
+    column-gap: 24px !important;
+}
+section[data-testid="hero-parent"] :has(> #enh-title-stack) > #enh-title-stack {
+    flex: 1 0 100% !important;
+    order: 3 !important;
+    width: 100% !important;
+}
+section[data-testid="hero-parent"] :has(> #enh-title-stack) > :has(> .enh-native-score-rail) {
+    flex: 1 1 640px !important;
+    min-width: 0 !important;
+}
+section[data-testid="hero-parent"] :has(> #enh-title-stack) > :has(> h1[data-testid="hero__pageTitle"]) {
+    flex: 1 1 220px !important;
+    min-width: 220px !important;
+}
+.enh-native-score-rail {
+    box-sizing: border-box !important;
+    display: flex !important;
+    flex-wrap: wrap !important;
+    justify-content: flex-end !important;
+    width: 100% !important;
+    min-width: 0 !important;
+}
+.enh-native-score-rail > [data-testid="hero-rating-bar__aggregate-rating"],
+.enh-native-score-rail > [data-testid="hero-rating-bar__popularity"],
+.enh-native-score-rail > .enh-score-widget {
+    flex: 1 1 130px !important;
+    min-width: 104px !important;
+    max-width: 190px !important;
 }
 #enh-title-stack #enh-search-buttons,
 #enh-title-stack #enh-external-links,

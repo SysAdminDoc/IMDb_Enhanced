@@ -50,6 +50,7 @@
                 this._scoreRestoreHost = document.querySelector('[data-testid="hero-rating-bar__aggregate-rating"]')?.parentElement
                     || document.querySelector('[data-testid="hero-rating-bar__popularity"]')?.parentElement
                     || null;
+                this._scoreRestoreHost?.classList.add('enh-native-score-rail');
                 const sync = () => {
                     if (!isCurrent() || !rail.isConnected) return;
                     refreshEditorialSurface(surface, this._nativeHero || document);

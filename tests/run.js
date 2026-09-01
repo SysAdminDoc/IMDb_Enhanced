@@ -2260,6 +2260,12 @@ test('editorial title layout owns a stable full-width title surface', () => {
         'score widgets created directly in the editorial rail must return to the native rating host');
     assert(script.includes('this._scoreRestoreHost.appendChild(widget)'),
         'disabling the editorial layout must preserve late score widgets');
+    assert(script.includes("bar?.classList.add('enh-native-score-rail')"),
+        'native score widgets need a stable layout hook outside the editorial surface');
+    assert(script.includes('section[data-testid="hero-parent"] :has(> #enh-title-stack) > #enh-title-stack'),
+        'native title tools must take their own row instead of crushing the title copy');
+    assert(script.includes('.enh-native-score-rail > .enh-score-widget'),
+        'the native score rail must wrap third-party widgets at audited widths');
     assert(/function findRatingBar\(\)[\s\S]*?const editorialRail = document\.getElementById\('enh-editorial-score-rail'\)[\s\S]*?if \(editorialRail\) return editorialRail/.test(script), 'rating features should target the editorial score rail');
     assert(script.includes('#enh-editorial-score-rail > :nth-child(3n + 1)'),
         'the responsive three-column score rail must clear the divider at the start of every row');

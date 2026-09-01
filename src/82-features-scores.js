@@ -34,13 +34,17 @@
         if (editorialRail) return editorialRail;
         const agg = document.querySelector('[data-testid="hero-rating-bar__aggregate-rating"]');
         if (!agg) return null;
+        const markNativeBar = bar => {
+            bar?.classList.add('enh-native-score-rail');
+            return bar;
+        };
         // Walk up to find the flex container holding all rating widgets
         let parent = agg.parentElement;
         for (let i = 0; i < 3 && parent; i++) {
-            if (parent.children.length >= 2) return parent;
+            if (parent.children.length >= 2) return markNativeBar(parent);
             parent = parent.parentElement;
         }
-        return agg.parentElement;
+        return markNativeBar(agg.parentElement);
     }
 
     async function waitForRatingBar(isCurrent) {

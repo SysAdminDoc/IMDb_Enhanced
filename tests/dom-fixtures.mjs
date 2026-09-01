@@ -194,6 +194,8 @@ await runFixture('title', async (window, hooks) => {
         'a score widget created after the editorial surface must stay connected');
     assert.equal(lateWidget.parentElement, nativeHost,
         'a late score widget must return to the native rating host');
+    assert.equal(nativeHost.classList.contains('enh-native-score-rail'), true,
+        'the restored native rating host must retain its responsive layout hook');
 });
 
 /* The store profile is a build, not a setting, so the only honest way to exercise it is
