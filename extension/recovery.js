@@ -1274,7 +1274,7 @@
 
     const STORAGE_HOST_LABEL = IS_EXTENSION_BUILD ? 'extension storage' : 'userscript storage';
     const COPY_FAILURE_MESSAGE = t('error_copy_failed');
-    const VERSION = '2.15.0';
+    const VERSION = '2.16.0';
     const PREFIX  = 'imdb_enh_';
     const CACHE_TTL = 7 * 24 * 60 * 60 * 1000; // 7 days — default for volatile score data
     /* Envelope ceiling, not the default. Stable cross-site identifiers are cached far
@@ -4003,6 +4003,78 @@
         const value = String(text ?? '');
         if (!node || node.textContent === value) return false;
         node.textContent = value;
+        return true;
+    }
+
+    /* ── Top layer ──────────────────────────────────────────────────────────────
+       IMDb's stacking contexts have swallowed injected surfaces more than once, and
+       z-index is a losing defence against a site that keeps changing them. A popover
+       renders in the top layer, which sits above every stacking context there is.
+
+       Two capabilities, not one. Promotion needs showPopover. An anchored surface
+       needs anchor positioning as well, because the top layer's containing block is
+       the viewport: a dropdown that positions itself against its offset parent would
+       land in the page corner. An engine missing either keeps the absolute placement
+       and the z-index it has always had.
+
+       CSS.supports is asked with the two-argument form so a parser that accepts any
+       declaration string cannot answer yes to a property it has never heard of. */
+    function supportsTopLayerPopovers(doc = document) {
+        return typeof doc?.defaultView?.HTMLElement?.prototype?.showPopover === 'function';
+    }
+
+    function supportsAnchorPositioning(doc = document) {
+        const css = doc?.defaultView?.CSS;
+        if (typeof css?.supports !== 'function') return false;
+        try { return css.supports('anchor-name', '--enh-anchor-probe') === true; }
+        catch { return false; }
+    }
+
+    let popoverAnchorSeq = 0;
+
+    /* One call rather than an attribute setter and a show, because a popover attribute
+       without a successful showPopover() is an element the UA stylesheet hides. Either
+       the element reaches the top layer or it never carries the attribute at all, and
+       every `[popover]` rule in the theme is written on that guarantee.
+
+       `manual` is deliberate: it neither light-dismisses nor answers Escape, so the
+       close handlers and focus containment each surface already owns keep working
+       exactly as they do without the top layer. */
+    function showInTopLayer(element, anchor = null) {
+        if (!element?.setAttribute) return false;
+        const doc = element.ownerDocument;
+        if (!supportsTopLayerPopovers(doc)) return false;
+        if (anchor && !supportsAnchorPositioning(doc)) return false;
+        if (element.hasAttribute('popover')) return true;
+        element.setAttribute('popover', 'manual');
+        if (anchor) {
+            const name = `--enh-anchor-${++popoverAnchorSeq}`;
+            anchor.style?.setProperty?.('anchor-name', name);
+            element.style.setProperty('position-anchor', name);
+        }
+        try {
+            element.showPopover();
+            return true;
+        } catch {
+            element.removeAttribute('popover');
+            releaseTopLayerAnchor(element, anchor);
+            return false;
+        }
+    }
+
+    /* The anchor is usually IMDb's own element, so the name this put on it comes back
+       off. Leaving it behind would make a later popover attach to a thumbnail the
+       reader has long since scrolled past. */
+    function releaseTopLayerAnchor(element, anchor = null) {
+        anchor?.style?.removeProperty?.('anchor-name');
+        element?.style?.removeProperty?.('position-anchor');
+    }
+
+    function hideFromTopLayer(element, anchor = null) {
+        if (!element?.hasAttribute?.('popover')) return false;
+        try { element.hidePopover(); } catch { /* already out of the top layer */ }
+        element.removeAttribute('popover');
+        releaseTopLayerAnchor(element, anchor);
         return true;
     }
 
@@ -8554,7 +8626,11 @@ section[id*="quote" i] .ipc-list-card { padding: 4px 0 !important; margin: 2px 0
             'aria-label':t('aria_correct_the_match_for_this_title', [config.label]),
         }, t('label_wrong'));
         const closePanel = (restoreFocus = false) => {
-            widget.querySelector?.('.enh-score-correction')?.remove();
+            const open = widget.querySelector?.('.enh-score-correction');
+            if (open) {
+                hideFromTopLayer(open, trigger);
+                open.remove();
+            }
             trigger.setAttribute('aria-expanded', 'false');
             if (restoreFocus && trigger.isConnected) trigger.focus();
         };
@@ -8570,9 +8646,16 @@ section[id*="quote" i] .ipc-list-card { padding: 4px 0 !important; margin: 2px 0
                 closePanel();
                 return;
             }
-            document.querySelector?.('.enh-score-correction')?.remove();
+            const otherPanel = document.querySelector?.('.enh-score-correction');
+            if (otherPanel) {
+                hideFromTopLayer(otherPanel);
+                otherPanel.remove();
+            }
             document.querySelectorAll?.('.enh-score-correction-trigger[aria-expanded="true"]')
-                .forEach(button => button.setAttribute('aria-expanded', 'false'));
+                .forEach(button => {
+                    button.setAttribute('aria-expanded', 'false');
+                    button.style?.removeProperty?.('anchor-name');
+                });
             trigger.setAttribute('aria-expanded', 'true');
             const current = getScoreCorrection(imdbId, provider);
             const status = makeEl('div', {
@@ -8634,6 +8717,7 @@ section[id*="quote" i] .ipc-list-card { padding: 4px 0 !important; margin: 2px 0
                 )
             );
             widget.appendChild(panel);
+            showInTopLayer(panel, trigger);
             panel.addEventListener('keydown', event => {
                 if (event.key !== 'Escape') return;
                 event.preventDefault();
@@ -9618,7 +9702,10 @@ section[id*="quote" i] .ipc-list-card { padding: 4px 0 !important; margin: 2px 0
                     role:'presentation',
                 }, image);
                 document.body.appendChild(this._overlay);
-                this.position(target);
+                /* Anchored, so the top layer only happens where the engine can also
+                   place it against the thumbnail; otherwise position() below keeps
+                   doing the arithmetic it always has. */
+                if (!showInTopLayer(this._overlay, target)) this.position(target);
             };
             this._onOver = event => {
                 const target = event.target?.closest?.(ZOOM_THUMBNAIL_SELECTOR);
@@ -9649,6 +9736,9 @@ section[id*="quote" i] .ipc-list-card { padding: 4px 0 !important; margin: 2px 0
         position(target) {
             const overlay = this._overlay;
             if (!overlay || !target?.getBoundingClientRect) return;
+            /* In the top layer the anchor rules own the placement, and an inline left
+               would win over them. */
+            if (overlay.hasAttribute('popover')) return;
             const box = target.getBoundingClientRect();
             const room = window.innerWidth - box.right;
             /* Whichever side has room. The width is only known once the image has loaded,
@@ -9660,7 +9750,10 @@ section[id*="quote" i] .ipc-list-card { padding: 4px 0 !important; margin: 2px 0
             overlay.style.top = `${Math.round(Math.max(12, box.top) + window.scrollY)}px`;
         },
         hide() {
-            this._overlay?.remove();
+            if (this._overlay) {
+                hideFromTopLayer(this._overlay, this._anchor);
+                this._overlay.remove();
+            }
             this._overlay = null;
             this._anchor = null;
         },
@@ -10873,6 +10966,12 @@ section[id*="quote" i] .ipc-list-card { padding: 4px 0 !important; margin: 2px 0
                     display: flex; align-items: center; justify-content: center;
                     padding: 24px; background: rgba(0,0,0,.82);
                 }
+                /* The UA popover box would shrink this to fit its content and centre
+                   it; the overlay IS the viewport, so it says so again here. */
+                #enh-trailer-overlay[popover] {
+                    width: 100%; height: 100%; max-width: none; max-height: none;
+                    margin: 0; border: 0; overflow: hidden; color: inherit;
+                }
                 #enh-trailer-dialog {
                     width: min(960px, calc(100vw - 32px));
                     background: ${t.sf0}; color: ${t.tx1};
@@ -11035,6 +11134,9 @@ section[id*="quote" i] .ipc-list-card { padding: 4px 0 !important; margin: 2px 0
                 makeSentinel('after')
             ));
             document.body.appendChild(overlay);
+            /* No anchor: this one already covers the viewport. The top layer only takes
+               it out of reach of whatever IMDb stacks over the hero next. */
+            showInTopLayer(overlay);
             setTimeout(() => overlay.querySelector('.enh-trailer-close')?.focus(), 20);
             return overlay;
         },
@@ -11150,12 +11252,14 @@ section[id*="quote" i] .ipc-list-card { padding: 4px 0 !important; margin: 2px 0
                 };
                 const closeMenu = (focusTrigger = false) => {
                     dropdown?.classList.remove('enh-visible');
+                    hideFromTopLayer(dropdown, trigger);
                     trigger.setAttribute('aria-expanded', 'false');
                     getItems().forEach(item => { item.tabIndex = -1; });
                     if (focusTrigger) trigger.focus();
                 };
                 const openMenu = (focusItem = 'none') => {
                     dropdown?.classList.add('enh-visible');
+                    showInTopLayer(dropdown, trigger);
                     trigger.setAttribute('aria-expanded', 'true');
                     const items = getItems();
                     const item = focusItem === 'last' ? items[items.length - 1] : items[0];
@@ -14350,6 +14454,17 @@ section[data-testid="hero-parent"].enh-editorial-native-hidden { display: none !
     box-shadow: ${t.sh3}; display: none;
 }
 .enh-link-dropdown.enh-visible { display: block; }
+/* min-width alone gave the absolutely positioned menu its 340px; a top-layer box
+   is measured against the viewport instead, so the ceiling has to be stated. */
+.enh-link-dropdown[popover] { margin: 0; max-width: 340px; overflow: visible; color: inherit; }
+@supports (anchor-name: --enh-anchor-probe) {
+    .enh-link-dropdown[popover] {
+        position: fixed; inset: auto;
+        top: anchor(bottom); right: anchor(right);
+        margin-top: 8px;
+        position-try-fallbacks: flip-block;
+    }
+}
 .enh-link-dropdown__cat {
     font-size: 10px; font-weight: 700; text-transform: uppercase;
     letter-spacing: .08em; color: ${t.tx3}; padding: 10px 0 4px;
@@ -14444,6 +14559,15 @@ section[data-testid="hero-parent"].enh-editorial-native-hidden { display: none !
     background: ${t.sf1}; color: ${t.tx1}; box-shadow: ${t.sh3};
     text-align: left; font: 500 11px/1.4 -apple-system, BlinkMacSystemFont, 'Segoe UI', sans-serif;
 }
+.enh-score-correction[popover] { margin: 0; overflow: visible; }
+@supports (anchor-name: --enh-anchor-probe) {
+    .enh-score-correction[popover] {
+        position: fixed; inset: auto;
+        top: anchor(bottom); right: anchor(right);
+        margin-top: 6px;
+        position-try-fallbacks: flip-block;
+    }
+}
 .enh-score-correction__header { display: flex; align-items: center; justify-content: space-between; gap: 10px; color: ${t.tx0}; }
 .enh-score-correction__close {
     width: 24px; height: 24px; padding: 0; border: 1px solid ${t.bd1}; border-radius: 6px;
@@ -14524,6 +14648,19 @@ ${scopedRules('.enh-zoom', {
 @media (prefers-reduced-motion: no-preference) {
     .enh-zoom { animation: enh-zoom-in .12s ease-out; }
     @keyframes enh-zoom-in { from { opacity: 0; } to { opacity: 1; } }
+}
+/* In the top layer the UA stylesheet supplies a box of its own — auto margins, a
+   solid border, its own colours. Everything the absolute placement got from the
+   cascade has to be said again here. */
+.enh-zoom[popover] { margin: 0; border-width: 1px; overflow: visible; color: inherit; }
+@supports (anchor-name: --enh-anchor-probe) {
+    .enh-zoom[popover] {
+        position: fixed; inset: auto;
+        left: anchor(right); top: anchor(top);
+        margin-left: 12px;
+        /* The side with room, decided by the engine rather than by measuring. */
+        position-try-fallbacks: flip-inline;
+    }
 }
 .enh-score-stale__retry {
     padding: 2px 6px; border-radius: 5px; cursor: pointer;

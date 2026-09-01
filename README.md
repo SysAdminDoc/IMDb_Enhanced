@@ -1,4 +1,4 @@
-[![Version](https://img.shields.io/badge/version-2.15.0-blue)](https://github.com/SysAdminDoc/IMDb_Enhanced)
+[![Version](https://img.shields.io/badge/version-2.16.0-blue)](https://github.com/SysAdminDoc/IMDb_Enhanced)
 [![License](https://img.shields.io/badge/license-MIT-green)](LICENSE)
 [![Platform](https://img.shields.io/badge/platform-Tampermonkey%20%7C%20Violentmonkey-yellow)](https://www.tampermonkey.net/)
 

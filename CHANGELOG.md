@@ -1,5 +1,11 @@
 # Changelog
 
+## 2.16.0 (2026-09-01)
+
+### Fixed
+
+- The pop-ups this script adds (the trailer window, the image preview, the extra links menu, the panel behind Wrong?) now render in the browser's top layer, which sits above everything on the page. IMDb keeps changing which of its own elements stack over which, and every time it did, one of these could end up half-covered. Where the browser can also anchor a pop-up to the control that opened it, the placement now comes from the browser instead of from arithmetic that a scroll or a resize can date. Browsers without either feature behave exactly as they did before, and closing, Escape, and focus work the same way everywhere.
+
 ## 2.15.0 (2026-08-31)
 
 ### Security

@@ -1134,6 +1134,45 @@ await runFixture('title', async (window, hooks) => {
     assert.ok(window.document.querySelector('.enh-zoom'), 'hovering the poster shows a preview too');
     poster.dispatchEvent(new window.MouseEvent('mouseout', { bubbles:true }));
 
+    /* IE-121: the same preview on the two engine shapes it has to serve. happy-dom
+       has no showPopover, so what runs first here is the fallback every engine
+       without the top layer gets — the absolute placement and the arithmetic. */
+    thumbnail.dispatchEvent(new window.MouseEvent('mouseover', { bubbles:true }));
+    const unpromoted = requireSelector(window.document, '.enh-zoom');
+    assert.equal(unpromoted.getAttribute('popover'), null,
+        'an engine without showPopover must not carry a popover attribute');
+    assert.ok(unpromoted.style.left && unpromoted.style.top,
+        'and it keeps positioning itself the way it always has');
+    assert.equal(thumbnail.style.getPropertyValue('anchor-name'), '',
+        "and leaves nothing behind on IMDb's own element");
+    thumbnail.dispatchEvent(new window.MouseEvent('mouseout', { bubbles:true }));
+
+    const shownPopovers = [];
+    const hiddenPopovers = [];
+    window.HTMLElement.prototype.showPopover = function showPopover() { shownPopovers.push(this); };
+    window.HTMLElement.prototype.hidePopover = function hidePopover() { hiddenPopovers.push(this); };
+    try {
+        thumbnail.dispatchEvent(new window.MouseEvent('mouseover', { bubbles:true }));
+        const promoted = requireSelector(window.document, '.enh-zoom');
+        assert.equal(promoted.getAttribute('popover'), 'manual',
+            'an engine with the top layer promotes the preview into it');
+        assert.equal(shownPopovers[0], promoted,
+            'and actually shows it, rather than labelling an element the UA sheet hides');
+        const anchorName = promoted.style.getPropertyValue('position-anchor');
+        assert.match(anchorName, /^--enh-anchor-\d+$/, 'the popover names the anchor it belongs to');
+        assert.equal(thumbnail.style.getPropertyValue('anchor-name'), anchorName,
+            'and the thumbnail carries the other half of the pair');
+        assert.equal(promoted.style.left, '',
+            'the anchor rules own the placement, so no inline left may override them');
+        thumbnail.dispatchEvent(new window.MouseEvent('mouseout', { bubbles:true }));
+        assert.equal(hiddenPopovers[0], promoted, 'and it leaves the top layer on the way out');
+        assert.equal(thumbnail.style.getPropertyValue('anchor-name'), '',
+            "and the name comes back off IMDb's element");
+    } finally {
+        delete window.HTMLElement.prototype.showPopover;
+        delete window.HTMLElement.prototype.hidePopover;
+    }
+
     /* An image IMDb serves from somewhere else, or under a name with no transform in it,
        is left alone rather than rewritten into an address that means something else. */
     thumbnail.setAttribute('src', 'https://example.test/poster.jpg');
@@ -1147,6 +1186,47 @@ await runFixture('title', async (window, hooks) => {
     assert.equal(window.document.querySelector('.enh-zoom'), null,
         'and a feature that is off listens to nothing');
     cast.remove();
+
+    /* IE-121: the expanded link menu is the anchored dropdown with a keyboard contract
+       of its own — arrow keys, Escape back to the trigger, Tab out. Promoting it into
+       the top layer must not change any of that. */
+    hooks.initFeature('expandedLinkMenu');
+    const menuTrigger = await waitForSelector(window, '#enh-link-menu-trigger');
+    const menuDropdown = requireSelector(window.document, '#enh-link-menu-dropdown');
+    menuTrigger.click();
+    assert.ok(menuDropdown.classList.contains('enh-visible'), 'the menu opens');
+    assert.equal(menuDropdown.getAttribute('popover'), null,
+        'without showPopover it stays a z-indexed absolute box');
+    menuTrigger.click();
+
+    const menuShown = [];
+    const menuHidden = [];
+    window.HTMLElement.prototype.showPopover = function showPopover() { menuShown.push(this); };
+    window.HTMLElement.prototype.hidePopover = function hidePopover() { menuHidden.push(this); };
+    try {
+        menuTrigger.click();
+        assert.equal(menuDropdown.getAttribute('popover'), 'manual', 'and the top layer where there is one');
+        assert.equal(menuShown[0], menuDropdown, 'shown, not merely labelled');
+        assert.equal(menuTrigger.style.getPropertyValue('anchor-name'),
+            menuDropdown.style.getPropertyValue('position-anchor'),
+            'anchored to the button that opened it');
+        assert.ok(menuDropdown.classList.contains('enh-visible'),
+            'the class that carries the display stays, so a fallback rule still applies');
+        /* Opening an already-open menu — what ArrowDown on the trigger does — must not
+           try to show a popover twice. */
+        menuTrigger.dispatchEvent(new window.KeyboardEvent('keydown', { key:'ArrowDown', bubbles:true }));
+        assert.equal(menuShown.length, 1, 'a second open does not show the same popover again');
+
+        menuDropdown.dispatchEvent(new window.KeyboardEvent('keydown', { key:'Escape', bubbles:true }));
+        assert.equal(menuHidden[0], menuDropdown, 'Escape takes it out of the top layer');
+        assert.equal(menuDropdown.getAttribute('popover'), null);
+        assert.equal(menuTrigger.getAttribute('aria-expanded'), 'false');
+        assert.equal(menuTrigger.style.getPropertyValue('anchor-name'), '');
+    } finally {
+        delete window.HTMLElement.prototype.showPopover;
+        delete window.HTMLElement.prototype.hidePopover;
+        hooks.stopFeature('expandedLinkMenu');
+    }
 });
 
 await runFixture('title', async (window, hooks) => {
@@ -1187,6 +1267,8 @@ await runFixture('title', async (window, hooks) => {
     assert.match(correctionTrigger.getAttribute('aria-controls') || '', /rottenTomatoes-tt0133093$/);
     correctionTrigger.click();
     await waitForSelector(window, '.enh-score-correction__choice');
+    assert.equal(requireSelector(correctionWidget, '.enh-score-correction').getAttribute('popover'), null,
+        'IE-121: without showPopover the panel stays where the absolute placement puts it');
     requireSelector(correctionWidget, '.enh-score-correction').dispatchEvent(
         new window.KeyboardEvent('keydown', { key:'Escape', bubbles:true }));
     assert.equal(correctionWidget.querySelector('.enh-score-correction'), null,
@@ -1213,6 +1295,31 @@ await runFixture('title', async (window, hooks) => {
     Array.from(correctionWidget.querySelectorAll('button'))
         .find(button => button.textContent === 'No entry').click();
     assert.equal(hooks.getScoreCorrection('tt0133093', 'rottenTomatoes').mode, 'none');
+
+    /* IE-121: the same panel on an engine that has the top layer. Escape and the focus
+       return are the panel's own, not the platform's, so both have to still work. */
+    const shownPanels = [];
+    window.HTMLElement.prototype.showPopover = function showPopover() { shownPanels.push(this); };
+    window.HTMLElement.prototype.hidePopover = function hidePopover() {};
+    try {
+        correctionTrigger.click();
+        const panel = await waitForSelector(window, '.enh-score-correction');
+        assert.equal(panel.getAttribute('popover'), 'manual', 'the panel is promoted into the top layer');
+        assert.equal(shownPanels[0], panel, 'and shown there');
+        const anchorName = panel.style.getPropertyValue('position-anchor');
+        assert.match(anchorName, /^--enh-anchor-\d+$/, 'anchored rather than left in the page corner');
+        assert.equal(correctionTrigger.style.getPropertyValue('anchor-name'), anchorName,
+            'and anchored to the Wrong? button that opened it');
+        panel.dispatchEvent(new window.KeyboardEvent('keydown', { key:'Escape', bubbles:true }));
+        assert.equal(correctionWidget.querySelector('.enh-score-correction'), null,
+            'Escape must still close a panel that lives in the top layer');
+        assert.equal(correctionTrigger.style.getPropertyValue('anchor-name'), '',
+            'and the anchor name must not outlive the panel');
+    } finally {
+        delete window.HTMLElement.prototype.showPopover;
+        delete window.HTMLElement.prototype.hidePopover;
+    }
+
     const requestsBeforeSuppression = window.__fixtureRequests.length;
     assert.equal(hooks.initFeature('inlineRTScore'), true);
     const suppressedWidget = await waitForSelector(window, '#enh-rt-widget');
