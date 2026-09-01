@@ -283,6 +283,10 @@ function loadScriptTestHooks({ withoutDeleteValue = false, withheldCredentials =
         getAvailabilityCacheKey,
         getJustWatchSearchUrl,
         isTmdbConfigured,
+        collectAniListCandidates,
+        getAniListIdFromUrl,
+        parseAniListEntry,
+        SCORE_CORRECTION_PROVIDERS,
         getMovieChatUrl,
         boundedImageVariant,
         parseAniListSearch,
@@ -2633,6 +2637,21 @@ test('anime is identified from the page, and animation alone is not enough', () 
         'a live-action Japanese film is not anime');
     assert.strictEqual(hooks.isAnimeTitle({ genre:['Documentary'], keywords:'anime industry' }, noLinks), false,
         'a documentary about anime is not anime');
+
+    /* IMDb joins keywords with commas, and plenty of Western animation carries a keyword
+       that merely mentions the word. A keyword has to BE one of these, not contain one:
+       an animated comedy keyworded "parody of anime" would otherwise fire a request to a
+       service that has never heard of it. */
+    assert.strictEqual(hooks.isAnimeTitle({ genre:['Animation', 'Comedy'], keywords:'parody of anime, satire' }, noLinks), false,
+        'a parody of anime is not anime');
+    assert.strictEqual(hooks.isAnimeTitle({ genre:['Animation', 'Documentary'], keywords:'manga artist, biography' }, noLinks), false,
+        'a film about a manga artist is not manga');
+    assert.strictEqual(hooks.isAnimeTitle({ genre:['Animation'], keywords:'anime convention' }, noLinks), false);
+    assert.strictEqual(hooks.isAnimeTitle({ genre:['Animation'], keywords:'anime style' }, noLinks), false);
+    // And the real ones still are, wherever they sit in the joined list.
+    assert.strictEqual(hooks.isAnimeTitle({ genre:['Animation'], keywords:'shounen, based on manga, school' }, noLinks), true);
+    assert.strictEqual(hooks.isAnimeTitle({ genre:['Animation'], keywords:'  ANIME  ' }, noLinks), true,
+        'their casing and padding are not meaning');
     assert.strictEqual(hooks.isAnimeTitle({}, japan), false, 'no genre is not a yes');
     assert.strictEqual(hooks.isAnimeTitle(null, noLinks), false);
 
@@ -2683,6 +2702,20 @@ test('an AniList answer is matched against the title on the page', () => {
     // A year the page does not know is not a reason to accept anything.
     assert.strictEqual(hooks.parseAniListSearch(akira, 'Akira', '').score, 79);
 
+    /* AniList leaves seasonYear null on titles it dates only through startDate — verified
+       live 2026-08-31: Belle to Kaijuu Ouji answers seasonYear null, startDate.year 1976.
+       Reading only the first threw the right entry away and cached the rejection. */
+    const datedByStart = { data:{ Page:{ media:[
+        { title:{ romaji:'Belle to Kaijuu Ouji' }, averageScore:47, seasonYear:null, startDate:{ year:1976 }, siteUrl:'https://anilist.co/anime/6301' },
+    ] } } };
+    assert.strictEqual(hooks.parseAniListSearch(datedByStart, 'Belle to Kaijuu Ouji', '1976').score, 47,
+        'a title dated only by startDate is still that title');
+    // And a genuinely undated entry still cannot satisfy a page that knows the year.
+    const undated = { data:{ Page:{ media:[
+        { title:{ romaji:'Akira' }, averageScore:79, seasonYear:null, startDate:{ year:null }, siteUrl:'https://anilist.co/anime/47' },
+    ] } } };
+    assert.strictEqual(hooks.parseAniListSearch(undated, 'Akira', '1988'), null);
+
     /* averageScore is null for anything unrated, which is normal for a title that has
        not aired. That is an absent answer, not a zero. */
     const unrated = { data:{ Page:{ media:[
@@ -2729,6 +2762,14 @@ test('the anime score asks nothing about a title that is not anime', () => {
         'the gate must come before the request');
     assert(gateAt < init.indexOf('_renderLoading()'),
         'and before anything is drawn, so a non-anime page is untouched');
+    /* But after the page has settled: the country link lives in the details block, which
+       is one of the last parts to arrive, and asking before it exists answers no for a
+       title that is one. Nothing between the two contacts anybody. */
+    const waitAt = init.indexOf('await waitForRatingBar(isCurrent)');
+    assert(waitAt >= 0 && waitAt < gateAt,
+        'the gate must be asked after the page has settled, not at the first tick');
+    assert(!/httpRequest\(|httpGet\(/.test(init.slice(0, gateAt)),
+        'and nothing before it may contact anyone');
 
     // AniList is declared as the provider, so its origin is asked for with the feature.
     assert.deepStrictEqual(Array.from(hooks.FEATURE_PROVIDERS.inlineAnimeScore), ['anilist']);
@@ -2811,6 +2852,63 @@ test('the message board is addressed by IMDb id and never guessed at', () => {
     assert(gateAt >= 0, 'the section must wait to be seen before it loads anything');
     assert(gateAt < feature.indexOf('src:url'),
         'the frame must be created after the section is visible, not before');
+});
+
+/* IE-12: a wrong match had no way back. Every other score source offers Wrong?, a pasted
+   URL and No entry; AniList now does too, and a saved choice is read by id rather than by
+   searching again, since the search's first answer is what was wrong to begin with. */
+test('an AniList match can be corrected like every other source', () => {
+    const hooks = loadScriptTestHooks();
+    assert(hooks.SCORE_CORRECTION_PROVIDERS.anilist, 'AniList must be a correctable source');
+
+    // The candidate list is the same search, kept whole instead of filtered to one answer.
+    const payload = { data:{ Page:{ media:[
+        { title:{ romaji:'AKIRA', english:'Akira' }, averageScore:79, seasonYear:1988, siteUrl:'https://anilist.co/anime/47' },
+        { title:{ romaji:'Yuuwaku Countdown', english:null }, averageScore:50, startDate:{ year:1997 }, siteUrl:'https://anilist.co/anime/4608' },
+        { title:{ romaji:'No link' }, averageScore:60, seasonYear:2000, siteUrl:'https://evil.example.com/anime/9' },
+    ] } } };
+    const candidates = hooks.collectAniListCandidates(payload);
+    assert.strictEqual(candidates.length, 2, 'an entry whose address is not theirs is not offerable');
+    assert.strictEqual(candidates[0].title, 'Akira');
+    assert.strictEqual(candidates[0].year, 1988);
+    assert.strictEqual(candidates[1].year, 1997, 'a title dated only by startDate still carries its year');
+    assert.strictEqual(hooks.collectAniListCandidates(null).length, 0);
+    assert.strictEqual(hooks.collectAniListCandidates({ data:{ Page:{ media:'nope' } } }).length, 0);
+
+    /* A pasted address is only accepted if it is an AniList anime page, and the id is
+       taken from the address rather than from anything the page said. */
+    assert.strictEqual(hooks.getAniListIdFromUrl('https://anilist.co/anime/47'), 47);
+    assert.strictEqual(hooks.getAniListIdFromUrl('https://anilist.co/anime/47/Akira'), 47);
+    ['https://anilist.co/user/someone', 'https://anilist.co/anime/', 'https://evil.example.com/anime/47',
+        'http://anilist.co/anime/47', '', null, 'javascript:alert(1)']
+        .forEach(value => {
+            assert.strictEqual(hooks.getAniListIdFromUrl(value), 0, `${value} is not an anime page`);
+            /* And it is refused as an address, not merely unreadable as an id: the
+               correction stores what is accepted here and renders it as a link. */
+            assert.strictEqual(hooks.normalizeScoreCorrectionUrl('anilist', value), '',
+                `${value} must not be storable as a corrected match`);
+        });
+    assert.strictEqual(hooks.normalizeScoreCorrectionUrl('anilist', 'https://anilist.co/anime/47/Akira'),
+        'https://anilist.co/anime/47/Akira', 'their own anime page is');
+
+    // A corrected entry is read whole, and an unrated one is still no answer.
+    const corrected = hooks.parseAniListEntry({ data:{ Media:{ averageScore:86, siteUrl:'https://anilist.co/anime/199' } } });
+    assert.strictEqual(corrected.score, 86);
+    assert.strictEqual(corrected.url, 'https://anilist.co/anime/199');
+    assert.strictEqual(hooks.parseAniListEntry({ data:{ Media:{ averageScore:null, siteUrl:'https://anilist.co/anime/1' } } }), null);
+    assert.strictEqual(hooks.parseAniListEntry({ data:{ Media:null } }), null);
+    assert.strictEqual(hooks.parseAniListEntry(null), null);
+
+    /* The saved choice must be honoured by reading that entry, not by running the search
+       whose first answer is what the correction exists to overrule. */
+    const body = script.slice(script.indexOf("key: 'inlineAnimeScore'"));
+    const init = body.slice(0, body.indexOf('        _render(data) {'));
+    const correctedAt = init.indexOf("correction?.mode === 'url'");
+    assert(correctedAt >= 0, 'a saved title URL must have its own path');
+    assert(init.indexOf('ANILIST_BY_ID_QUERY') > correctedAt,
+        'and that path must look the entry up by id');
+    assert(init.indexOf('ANILIST_BY_ID_QUERY') < init.indexOf('let lookupError'),
+        'before the ordinary search, which it replaces rather than supplements');
 });
 
 test('version strings match', () => {

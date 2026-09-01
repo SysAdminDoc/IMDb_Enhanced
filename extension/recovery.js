@@ -970,6 +970,7 @@
         text_manual_title_url: 'Manual title URL',
         text_mapped_by_imdb_enhanced_through_wikidata: 'Mapped by IMDb Enhanced through Wikidata',
         text_mark_loaded_season_seen: 'Mark loaded season seen',
+        text_marked_as_no_entry_on_anilist: 'Marked as no entry on AniList',
         text_marked_as_no_entry_on_justwatch: 'Marked as no entry on JustWatch',
         text_marked_as_no_entry_on_letterboxd: 'Marked as no entry on Letterboxd',
         text_marked_as_no_entry_on_metacritic: 'Marked as no entry on Metacritic',
@@ -1029,6 +1030,7 @@
         text_save_a_private_local_skip_mark: 'Save a private local Skip mark',
         text_save_failed: 'Save failed',
         text_save_url: 'Save URL',
+        text_saved_anilist_match_unavailable: 'Saved AniList match unavailable',
         text_saved_choice_no_entry_on_this_source: 'Saved choice: no entry on this source.',
         text_saved_justwatch_match_is_invalid: 'Saved JustWatch match is invalid',
         text_saved_justwatch_match_unavailable: 'Saved JustWatch match unavailable',
@@ -3675,15 +3677,17 @@
         letterboxd: { label:'Letterboxd', domain:'letterboxd.com', path:/^\/film\/[^/]+\/?$/ },
         metacritic: { label:'Metacritic', domain:'metacritic.com', path:/^\/(?:movie|tv)\/[^/]+\/?$/ },
         justWatch: { label:'JustWatch', domain:'justwatch.com', path:/^\/[a-z]{2}\/(?:movie|tv-show)\/[^/]+\/?$/i },
+        anilist: { label:'AniList', domain:'anilist.co', path:/^\/anime\/\d+(?:\/[^/]*)?\/?$/ },
     });
     const SCORE_CORRECTION_CACHE_PREFIXES = Object.freeze({
-        rottenTomatoes:'rt_', letterboxd:'lb_', metacritic:'mc_', justWatch:'jw_',
+        rottenTomatoes:'rt_', letterboxd:'lb_', metacritic:'mc_', justWatch:'jw_', anilist:'anilist_',
     });
     const SCORE_CORRECTION_FEATURE_KEYS = Object.freeze({
         rottenTomatoes:'inlineRTScore',
         letterboxd:'inlineLetterboxdScore',
         metacritic:'inlineMetacriticScore',
         justWatch:'streamAvailability',
+        anilist:'inlineAnimeScore',
     });
 
     function normalizeScoreCorrectionUrl(provider, value) {
@@ -4446,7 +4450,11 @@
        A keyword is accepted as the second half instead of the country, because IMDb
        carries "anime" and "based on manga" as keywords on titles whose country line is a
        co-production list. Keywords are structured data, not display text. */
-    const ANIME_KEYWORD_PATTERN = /\b(?:anime|manga|light novel)\b/i;
+    const ANIME_KEYWORDS = new Set([
+        'anime', 'manga', 'light novel',
+        'based on anime', 'based on manga', 'based on light novel',
+        'anime adaptation', 'manga adaptation',
+    ]);
     const JAPAN_ORIGIN_SELECTOR = 'a[href*="country_of_origin=JP"]';
 
     function isAnimatedTitle(ld) {
@@ -4461,8 +4469,14 @@
 
     function isAnimeTitle(ld = getLDData(), root = document) {
         if (!isAnimatedTitle(ld)) return false;
-        const keywords = getBoundedStructuredStrings(ld?.keywords, STRUCTURED_DATA_CLASSIFICATION_ITEM_LIMIT);
-        if (keywords.some(keyword => ANIME_KEYWORD_PATTERN.test(keyword))) return true;
+        /* IMDb joins keywords with commas into one string, so the list has to be split
+           back out before any of them can be compared. A keyword that merely contains
+           one of these words — "parody of anime", "manga artist" — is about anime, not
+           an instance of it. */
+        const keywords = getBoundedStructuredStrings(ld?.keywords, STRUCTURED_DATA_CLASSIFICATION_ITEM_LIMIT)
+            .flatMap(entry => String(entry).split(','))
+            .map(entry => entry.trim().toLowerCase());
+        if (keywords.some(keyword => ANIME_KEYWORDS.has(keyword))) return true;
         return hasJapaneseOrigin(root);
     }
 
@@ -6902,7 +6916,7 @@ section[id*="quote" i] .ipc-list-card { padding: 4px 0 !important; margin: 2px 0
             const entry = media[index];
             if (!entry || typeof entry !== 'object') continue;
             const names = [entry.title?.romaji, entry.title?.english];
-            const candidateYear = Number(entry.seasonYear) || 0;
+            const candidateYear = Number(entry.seasonYear) || Number(entry.startDate?.year) || 0;
             if (!names.some(name => name && isMatchingTitleIdentity({ title:name, year:candidateYear }, title, year))) continue;
             const score = boundedScore(entry.averageScore, 100);
             if (score === null) continue;
@@ -7753,7 +7767,47 @@ section[id*="quote" i] .ipc-list-card { padding: 4px 0 !important; margin: 2px 0
             });
             candidates = parseJustWatchSearchCandidates(response.responseText, typePath, getJustWatchRegionPath());
         }
+        else if (provider === 'anilist') {
+            const response = await httpRequest(ANILIST_ENDPOINT, {
+                method:'POST',
+                body: JSON.stringify({ query:ANILIST_QUERY, variables:{ s:title } }),
+                cancelOnRouteChange:true,
+            });
+            candidates = collectAniListCandidates(parseJSONResponse(response));
+        }
         return rankScoreCorrectionCandidates(provider, candidates, title, year);
+    }
+
+    /* Every entry the search returned, as something to pick from. parseAniListSearch
+       answers the one question "is this the title on the page"; this answers "which of
+       these did you mean", so it keeps the ones that failed that test. */
+    function collectAniListCandidates(payload) {
+        const media = payload?.data?.Page?.media;
+        if (!Array.isArray(media)) return [];
+        return media.slice(0, EXTERNAL_RESULT_SCAN_LIMIT).map(entry => ({
+            title: entry?.title?.english || entry?.title?.romaji || '',
+            year: Number(entry?.seasonYear) || Number(entry?.startDate?.year) || 0,
+            url: normalizeTrustedUrl(entry?.siteUrl, 'anilist.co', ''),
+        })).filter(candidate => candidate.title && candidate.url);
+    }
+
+    /* A corrected match is an AniList page, so the score comes from that entry by id
+       rather than from a search whose first answer is what went wrong in the first place. */
+    const ANILIST_BY_ID_QUERY = 'query($id:Int){Media(id:$id,type:ANIME){title{romaji english} averageScore seasonYear startDate{year} siteUrl}}';
+
+    function getAniListIdFromUrl(url) {
+        const normalized = normalizeScoreCorrectionUrl('anilist', url);
+        if (!normalized) return 0;
+        try { return Number(new URL(normalized).pathname.split('/')[2]) || 0; }
+        catch { return 0; }
+    }
+
+    function parseAniListEntry(payload) {
+        const entry = payload?.data?.Media;
+        if (!entry || typeof entry !== 'object') return null;
+        const score = boundedScore(entry.averageScore, 100);
+        if (score === null) return null;
+        return { score, url: normalizeTrustedUrl(entry.siteUrl, 'anilist.co', '') };
     }
 
     function readScoreCacheForCorrection(cacheKey, correction) {
@@ -8418,7 +8472,7 @@ section[id*="quote" i] .ipc-list-card { padding: 4px 0 !important; margin: 2px 0
        Nothing here runs unless the page is an anime title, which is decided from what the
        page already carries. A non-anime title makes no request at all. */
     const ANILIST_ENDPOINT = 'https://graphql.anilist.co';
-    const ANILIST_QUERY = 'query($s:String){Page(perPage:5){media(search:$s,type:ANIME){title{romaji english} averageScore seasonYear siteUrl}}}';
+    const ANILIST_QUERY = 'query($s:String){Page(perPage:5){media(search:$s,type:ANIME){title{romaji english} averageScore seasonYear startDate{year} siteUrl}}}';
 
     /* IMDb serves every image through one host and encodes the size it wants in the file
        name: everything between "._V1_" and the extension is a transform. Stripping it
@@ -8635,14 +8689,22 @@ section[id*="quote" i] .ipc-list-card { padding: 4px 0 !important; margin: 2px 0
             const isCurrent = createFeatureGuard(this);
             const imdbId = getIMDbID(), title = getTitleText(), year = getTitleYear();
             if (!imdbId || !title) return;
-            // The gate, before anything else: no request is made about a title that is not one.
-            if (!isAnimeTitle()) return;
 
             const cacheKey = 'anilist_' + imdbId;
+            const correction = getScoreCorrection(imdbId, 'anilist');
             if (featureExcludedByProfile(this.key)) { this._renderUnavailable('excluded'); return; }
-            const cached = cacheGet(cacheKey);
+            const cached = readScoreCacheForCorrection(cacheKey, correction);
             const bar = await waitForRatingBar(isCurrent);
             if (!bar || !isCurrent()) return;
+            if (correction?.mode === 'none') {
+                this._renderUnavailable('corrected-none');
+                return;
+            }
+            /* The gate, after the page has settled and before anything is drawn or
+               requested: the country link sits in the details block, which arrives late,
+               and asking before it exists answers no for a title that is one. Nothing
+               above this line contacts anyone. */
+            if (!isAnimeTitle()) return;
             if (cached) {
                 if (cached.unavailable) this._renderUnavailable();
                 else this._render(cached);
@@ -8650,6 +8712,30 @@ section[id*="quote" i] .ipc-list-card { padding: 4px 0 !important; margin: 2px 0
             }
             if (!await waitUntilVisible(bar, isCurrent) || !isCurrent()) return;
             this._renderLoading();
+
+            /* A saved choice is an AniList page, so it is read by id. Searching again
+               would return the same first answer that was wrong enough to be corrected. */
+            if (correction?.mode === 'url') {
+                const id = getAniListIdFromUrl(correction.url);
+                try {
+                    const response = await httpRequest(ANILIST_ENDPOINT, {
+                        method:'POST',
+                        body: JSON.stringify({ query:ANILIST_BY_ID_QUERY, variables:{ id } }),
+                        cancelOnRouteChange:true,
+                    });
+                    if (!isCurrent()) return;
+                    const corrected = id ? parseAniListEntry(parseJSONResponse(response)) : null;
+                    if (corrected) {
+                        const data = withScoreCorrection(corrected, correction);
+                        cacheSet(cacheKey, data);
+                        this._render(data);
+                        return;
+                    }
+                } catch { /* the saved choice stays visible and editable below */ }
+                if (!isCurrent()) return;
+                this._renderUnavailable('correction-failed');
+                return;
+            }
 
             let lookupError = null;
             try {
@@ -8696,6 +8782,7 @@ section[id*="quote" i] .ipc-list-card { padding: 4px 0 !important; margin: 2px 0
                     : makeEl('div', { className:'enh-score-widget__score', style:{ '--score-color':mcColor(score) } }, badge, value),
                 makeEl('div', { className:'enh-score-widget__sub' }, t('text_anilist_community_average'))
             );
+            appendScoreCorrectionAction(w, 'anilist', this.key);
             announceScore('AniList', `${score}%`);
             bar.appendChild(w);
         },
@@ -8722,8 +8809,12 @@ section[id*="quote" i] .ipc-list-card { padding: 4px 0 !important; margin: 2px 0
                     makeEl('span', { className:'enh-score-widget__value' }, t('text_score_unavailable'))
                 )
             );
-            const note = reason === 'excluded' ? describeProfileExclusion(this.key) : t('text_score_unavailable');
+            const note = reason === 'excluded' ? describeProfileExclusion(this.key)
+                : reason === 'corrected-none' ? t('text_marked_as_no_entry_on_anilist')
+                : reason === 'correction-failed' ? t('text_saved_anilist_match_unavailable')
+                : t('text_score_unavailable');
             appendUnavailableNote(w, reason, note);
+            if (reason !== 'excluded') appendScoreCorrectionAction(w, 'anilist', this.key);
             bar.appendChild(w);
         },
         destroy() { document.getElementById('enh-anilist-widget')?.remove(); },

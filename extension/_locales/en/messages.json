@@ -1910,6 +1910,9 @@
   "text_mark_loaded_season_seen": {
     "message": "Mark loaded season seen"
   },
+  "text_marked_as_no_entry_on_anilist": {
+    "message": "Marked as no entry on AniList"
+  },
   "text_marked_as_no_entry_on_justwatch": {
     "message": "Marked as no entry on JustWatch"
   },
@@ -2086,6 +2089,9 @@
   },
   "text_save_url": {
     "message": "Save URL"
+  },
+  "text_saved_anilist_match_unavailable": {
+    "message": "Saved AniList match unavailable"
   },
   "text_saved_choice_no_entry_on_this_source": {
     "message": "Saved choice: no entry on this source."
