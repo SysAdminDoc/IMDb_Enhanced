@@ -713,15 +713,11 @@ ${scopedRules('.enh-zoom', {
     .enh-zoom { animation: enh-zoom-in .12s ease-out; }
     @keyframes enh-zoom-in { from { opacity: 0; } to { opacity: 1; } }
 }
-@supports (anchor-name: --enh-anchor-probe) {
-    .enh-zoom[popover] {
-        position: fixed; inset: auto;
-        left: anchor(right); top: anchor(top);
-        width: auto; height: auto;
-        margin: 0 0 0 12px; border-width: 1px; overflow: visible; color: inherit;
-        /* The side with room, decided by the engine rather than by measuring. */
-        position-try-fallbacks: flip-inline, flip-block;
-    }
+.enh-zoom[popover] {
+    position: fixed; inset: auto;
+    left: auto; top: auto;
+    width: auto; height: auto;
+    margin: 0; border-width: 1px; overflow: visible; color: inherit;
 }
 .enh-score-stale__retry {
     padding: 2px 6px; border-radius: 5px; cursor: pointer;

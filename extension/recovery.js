@@ -9780,10 +9780,12 @@ section[id*="quote" i] .ipc-list-card { padding: 4px 0 !important; margin: 2px 0
                     role:'presentation',
                 }, image);
                 document.body.appendChild(this._overlay);
-                /* Anchored, so the top layer only happens where the engine can also
-                   place it against the thumbnail; otherwise position() below keeps
-                   doing the arithmetic it always has. */
-                if (!showInTopLayer(this._overlay, target)) this.position(target);
+                /* The preview still belongs in the top layer, but CSS anchor placement
+                   can follow a partly visible thumbnail past the viewport edge. The
+                   measured path below clamps both axes and works in either containing
+                   block, so it owns placement in every engine shape. */
+                showInTopLayer(this._overlay);
+                this.position(target);
             };
             this._onOver = event => {
                 const target = event.target?.closest?.(ZOOM_THUMBNAIL_SELECTOR);
@@ -9814,26 +9816,26 @@ section[id*="quote" i] .ipc-list-card { padding: 4px 0 !important; margin: 2px 0
         position(target) {
             const overlay = this._overlay;
             if (!overlay || !target?.getBoundingClientRect) return;
-            /* In the top layer the anchor rules own the placement, and an inline left
-               would win over them. */
-            if (overlay.hasAttribute('popover')) return;
             const box = target.getBoundingClientRect();
             const room = window.innerWidth - box.right;
             /* Whichever side has room. The width is only known once the image has loaded,
                so before that this assumes the widest the stylesheet allows rather than
                the few pixels of padding an empty box measures. */
             const width = overlay.offsetWidth > 40 ? overlay.offsetWidth : ZOOM_MAX_WIDTH;
-            const left = room > box.left ? box.right + 12 : Math.max(12, box.left - 12 - width);
+            const preferredLeft = room > box.left ? box.right + 12 : box.left - 12 - width;
+            const left = Math.max(12, Math.min(preferredLeft, window.innerWidth - width - 12));
             const height = overlay.offsetHeight > 40
                 ? overlay.offsetHeight
                 : Math.min(window.innerHeight * 0.78, ZOOM_IMAGE_HEIGHT);
             const top = Math.max(12, Math.min(box.top, window.innerHeight - height - 12));
-            overlay.style.left = `${Math.round(left + window.scrollX)}px`;
-            overlay.style.top = `${Math.round(top + window.scrollY)}px`;
+            const offsetX = overlay.hasAttribute('popover') ? 0 : window.scrollX;
+            const offsetY = overlay.hasAttribute('popover') ? 0 : window.scrollY;
+            overlay.style.left = `${Math.round(left + offsetX)}px`;
+            overlay.style.top = `${Math.round(top + offsetY)}px`;
         },
         hide() {
             if (this._overlay) {
-                hideFromTopLayer(this._overlay, this._anchor);
+                hideFromTopLayer(this._overlay);
                 this._overlay.remove();
             }
             this._overlay = null;
@@ -14823,15 +14825,11 @@ ${scopedRules('.enh-zoom', {
     .enh-zoom { animation: enh-zoom-in .12s ease-out; }
     @keyframes enh-zoom-in { from { opacity: 0; } to { opacity: 1; } }
 }
-@supports (anchor-name: --enh-anchor-probe) {
-    .enh-zoom[popover] {
-        position: fixed; inset: auto;
-        left: anchor(right); top: anchor(top);
-        width: auto; height: auto;
-        margin: 0 0 0 12px; border-width: 1px; overflow: visible; color: inherit;
-        /* The side with room, decided by the engine rather than by measuring. */
-        position-try-fallbacks: flip-inline, flip-block;
-    }
+.enh-zoom[popover] {
+    position: fixed; inset: auto;
+    left: auto; top: auto;
+    width: auto; height: auto;
+    margin: 0; border-width: 1px; overflow: visible; color: inherit;
 }
 .enh-score-stale__retry {
     padding: 2px 6px; border-radius: 5px; cursor: pointer;

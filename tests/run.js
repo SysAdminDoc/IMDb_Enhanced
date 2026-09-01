@@ -3032,9 +3032,11 @@ test('a zoomed image asks for a bounded variant, never the original', () => {
     assert(/scopedRules\('\.enh-zoom'[\s\S]{0,220}position: absolute;/.test(script),
         'the preview must not be positioned inside the card it came from');
     assert(script.includes('Math.min(box.top, window.innerHeight - height - 12)'),
-        'the fallback image preview should clamp its bottom edge inside the viewport');
-    assert(script.includes('position-try-fallbacks: flip-inline, flip-block;'),
-        'anchored image previews should be able to flip vertically as well as horizontally');
+        'the image preview should clamp its bottom edge inside the viewport');
+    assert(script.includes('showInTopLayer(this._overlay);\n                this.position(target);'),
+        'top-layer image previews should still use the measured viewport-clamped placement');
+    assert(script.includes("const offsetY = overlay.hasAttribute('popover') ? 0 : window.scrollY;"),
+        'fixed top-layer previews must not add the document scroll offset');
 });
 
 /* IE-23: IMDb closed its boards in 2017 and MovieChat keeps one per IMDb id. Checked live

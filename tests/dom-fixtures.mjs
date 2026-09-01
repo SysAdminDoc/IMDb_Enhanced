@@ -1194,12 +1194,12 @@ await runFixture('title', async (window, hooks) => {
             'an engine with the top layer promotes the preview into it');
         assert.equal(shownPopovers[0], promoted,
             'and actually shows it, rather than labelling an element the UA sheet hides');
-        const anchorName = promoted.style.getPropertyValue('position-anchor');
-        assert.match(anchorName, /^--enh-anchor-\d+$/, 'the popover names the anchor it belongs to');
-        assert.equal(thumbnail.style.getPropertyValue('anchor-name'), anchorName,
-            'and the thumbnail carries the other half of the pair');
-        assert.equal(promoted.style.left, '',
-            'the anchor rules own the placement, so no inline left may override them');
+        assert.equal(promoted.style.getPropertyValue('position-anchor'), '',
+            'the preview does not use an anchor that can carry it beyond the viewport');
+        assert.equal(thumbnail.style.getPropertyValue('anchor-name'), '',
+            "and never writes a temporary name onto IMDb's thumbnail");
+        assert.ok(promoted.style.left && promoted.style.top,
+            'the viewport-clamped placement also owns top-layer previews');
         thumbnail.dispatchEvent(new window.MouseEvent('mouseout', { bubbles:true }));
         assert.equal(hiddenPopovers[0], promoted, 'and it leaves the top layer on the way out');
         assert.equal(thumbnail.style.getPropertyValue('anchor-name'), '',
@@ -1223,11 +1223,11 @@ await runFixture('title', async (window, hooks) => {
         const shownBefore = shownPopovers.length;
         thumbnail.dispatchEvent(new window.MouseEvent('mouseover', { bubbles:true }));
         const unanchored = requireSelector(window.document, '.enh-zoom');
-        assert.equal(unanchored.getAttribute('popover'), null,
-            'an engine that cannot anchor must not put an anchored surface in the top layer');
-        assert.equal(shownPopovers.length, shownBefore, 'and must not have shown one either');
+        assert.equal(unanchored.getAttribute('popover'), 'manual',
+            'an engine that cannot anchor can still put the measured preview in the top layer');
+        assert.equal(shownPopovers.length, shownBefore + 1, 'and shows it there');
         assert.ok(unanchored.style.left && unanchored.style.top,
-            'it keeps positioning itself the way it always has');
+            'while keeping the same viewport-clamped placement');
         assert.equal(thumbnail.style.getPropertyValue('anchor-name'), '',
             'and nothing is written onto the thumbnail');
         thumbnail.dispatchEvent(new window.MouseEvent('mouseout', { bubbles:true }));
