@@ -1,4 +1,4 @@
-[![Version](https://img.shields.io/badge/version-2.17.0-blue)](https://github.com/SysAdminDoc/IMDb_Enhanced)
+[![Version](https://img.shields.io/badge/version-2.18.0-blue)](https://github.com/SysAdminDoc/IMDb_Enhanced)
 [![License](https://img.shields.io/badge/license-MIT-green)](LICENSE)
 [![Platform](https://img.shields.io/badge/platform-Tampermonkey%20%7C%20Violentmonkey-yellow)](https://www.tampermonkey.net/)
 
@@ -214,7 +214,7 @@ To rebuild an archive and check it against a published one: `npm ci`, then `npm 
 
 Every outside service the extension can reach is declared in one place, the `PROVIDERS` map near the top of `IMDb_Enhanced.user.js`. Each entry names the service, the origins it needs, what leaves your browser to reach it, how long its answers are cached, and the credit it requires. The origins in both manifests are generated from that map, so the permissions a build asks for cannot drift from the list you can read. The build refuses to run if an entry is incomplete, or if a manifest ends up asking for an origin no service accounts for.
 
-There are no git tags or GitHub releases yet, so check out a commit rather than a version tag. Packaged, checksummed release assets are planned but not published; until then the userscript at the install link above is the version of record.
+Tagged versions are published on the [GitHub Releases page](https://github.com/SysAdminDoc/IMDb_Enhanced/releases) with checksummed Chromium, Firefox, web-store, and source archives. The userscript at the install link above remains the direct install for script managers.
 
 ## Compatibility
 

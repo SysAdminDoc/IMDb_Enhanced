@@ -196,13 +196,45 @@ await runFixture('title', async (window, hooks) => {
     const lateWidget = window.document.createElement('div');
     lateWidget.className = 'enh-score-widget';
     rail.appendChild(lateWidget);
+
+    const makeReplacementHero = label => {
+        const hero = window.document.createElement('section');
+        hero.dataset.testid = 'hero-parent';
+        const rating = window.document.createElement('div');
+        rating.dataset.testid = 'hero-rating-bar__aggregate-rating';
+        rating.textContent = label;
+        const popularity = window.document.createElement('div');
+        popularity.dataset.testid = 'hero-rating-bar__popularity';
+        popularity.textContent = 'Popular';
+        hero.append(rating, popularity);
+        return { hero, rating };
+    };
+    const hydrated = makeReplacementHero('Hydrated rating');
+    nativeHost.replaceWith(hydrated.hero);
+    const hydrationStarted = Date.now();
+    while (hydrated.rating.parentElement !== rail && Date.now() - hydrationStarted < 500) {
+        await new Promise(resolve => window.setTimeout(resolve, 5));
+    }
+    assert.equal(hydrated.rating.parentElement, rail,
+        'a replacement IMDb rating control should be adopted into the editorial rail');
+    assert.equal(rail.querySelectorAll('[data-testid="hero-rating-bar__aggregate-rating"]').length, 1,
+        'replacing the IMDb hero must not duplicate its aggregate rating control');
+    assert.equal(rail.querySelectorAll('[data-testid="hero-rating-bar__popularity"]').length, 1,
+        'replacing the IMDb hero must not duplicate its popularity control');
+    assert.equal(hydrated.hero.classList.contains('enh-editorial-native-hidden'), true,
+        'a replacement IMDb hero should stay hidden while the editorial surface is active');
+
+    /* Replace the hero again and tear down before the mutation observer can run. The
+       destroy path must discover the live host instead of trusting its last snapshot. */
+    const final = makeReplacementHero('Final rating');
+    hydrated.hero.replaceWith(final.hero);
     hooks.stopFeature('editorialTitleSurface');
 
     assert.equal(lateWidget.isConnected, true,
         'a score widget created after the editorial surface must stay connected');
-    assert.equal(lateWidget.parentElement, nativeHost,
-        'a late score widget must return to the native rating host');
-    assert.equal(nativeHost.classList.contains('enh-native-score-rail'), true,
+    assert.equal(lateWidget.parentElement, final.hero,
+        'a late score widget must return to the current native rating host');
+    assert.equal(final.hero.classList.contains('enh-native-score-rail'), true,
         'the restored native rating host must retain its responsive layout hook');
 });
 

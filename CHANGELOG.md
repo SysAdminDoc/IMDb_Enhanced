@@ -1,5 +1,29 @@
 # Changelog
 
+## 2.18.0 (2026-09-01)
+
+### Fixed
+
+- Score widgets now stay attached when the editorial layout is toggled, when providers finish late, and when IMDb replaces its title header during hydration. Replacement controls do not duplicate the originals. Their native row can wrap cleanly at 1024, 1280, 1440, and 1920 pixels without colliding with the quick navigation.
+
+- Titles without artwork no longer turn the current page URL into an image request. Their empty poster slot collapses instead of leaving a blank column.
+
+- The Wrong? panel takes keyboard focus when it opens, keeps later rating rows clear, and restores the layout when it closes. Expanded link menus use the same predictable box model and focus treatment.
+
+- Cast and poster previews now measure their rendered size and stay inside the viewport, including near the bottom of a 1024-pixel-wide page.
+
+- High Contrast details stack at narrow widths, Light theme TVmaze text uses a readable theme colour, and branded status text keeps enough contrast on every theme.
+
+- The editorial Rate action now opens IMDb's own rating prompt. Showing the welcome notice clears the score rail so first-run guidance cannot overlap it.
+
+- Seen and Skip controls, status badges, and episode badges stay pinned to IMDb poster cards even when the site's direct-child rules would otherwise put them back into normal document flow.
+
+### Verified
+
+- Six live title pages were captured at four desktop widths under Dark, OLED, Midnight, Light, and High Contrast, with the editorial layout both on and off. The 240 viewport captures and 60 full-page captures completed without capture errors.
+
+- Loading, stale, unavailable, TMDB attribution, correction, trailer, link menu, image preview, first-run, marking, native rating, and unsigned watchlist handoff states were exercised in an offscreen Chromium session.
+
 ## 2.17.0 (2026-09-01)
 
 ### Fixed
@@ -528,7 +552,7 @@
 - Tightened trailer identity matching so short or shared titles such as “It” and “Alien” cannot autoplay a longer, different movie merely because its video title contains the IMDb title as a phrase.
 - Extended list, chart, and watchlist tools to IMDb's live locale-prefixed desktop routes instead of matching only their unprefixed English URLs.
 - Distinguished private Seen/Skip marks from IMDb's newer account-based Watched feature in settings, badges, accessible names, and save feedback without changing existing local mark data.
-- Raised secondary and tertiary text contrast across Dark, OLED, Midnight, and Light themes so settings help, status labels, metadata, and integration notes remain readable on elevated surfaces.
+- Raised secondary and tertiary text contrast across Dark, OLED, Midnight, and Light themes so settings help, status labels, metadata, and integration notes remain readable on raised surfaces.
 - Replaced fixed gray and whole-widget opacity on unavailable score links with the active theme's readable secondary text token.
 - Bounded IMDb JSON-LD traversal plus YouTube, Rotten Tomatoes, Letterboxd, Metacritic, and JustWatch response scans so unexpectedly large pages cannot grow parser queues or candidate work without limit.
 - Kept rating, private-mark, watch-site, and external-link labels readable by choosing contrast-safe badge foregrounds and using tested theme text tokens instead of deriving text from arbitrary brand colors.

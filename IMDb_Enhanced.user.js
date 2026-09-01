@@ -1,7 +1,7 @@
 // ==UserScript==
 // @name         IMDb Enhanced
 // @namespace    https://github.com/SysAdminDoc
-// @version      2.17.0
+// @version      2.18.0
 // @updateURL    https://raw.githubusercontent.com/SysAdminDoc/IMDb_Enhanced/main/IMDb_Enhanced.user.js
 // @downloadURL  https://raw.githubusercontent.com/SysAdminDoc/IMDb_Enhanced/main/IMDb_Enhanced.user.js
 // @description  Premium IMDb overhaul: cleaner pages, modern themes, refined score widgets, media library indicators, quick navigation, richer external links, TV tools, search shortcuts, and polished settings import/export
@@ -1021,7 +1021,7 @@
 
     const STORAGE_HOST_LABEL = IS_EXTENSION_BUILD ? 'extension storage' : 'userscript storage';
     const COPY_FAILURE_MESSAGE = t('error_copy_failed');
-    const VERSION = '2.17.0';
+    const VERSION = '2.18.0';
     const PREFIX  = 'imdb_enh_';
     const CACHE_TTL = 7 * 24 * 60 * 60 * 1000; // 7 days — default for volatile score data
     /* Envelope ceiling, not the default. Stable cross-site identifiers are cached far
@@ -6601,7 +6601,12 @@ html[data-imdb-enhanced="active"] .ipc-page-background {
 
     injectEarlyThemeShell();
     setupThemeAutoSync();
-    reg({
+    const EDITORIAL_NATIVE_SCORE_SELECTOR = [
+        '[data-testid="hero-rating-bar__aggregate-rating"]',
+        '[data-testid="hero-rating-bar__popularity"]',
+    ].join(', ');
+
+reg({
         key: 'modernUI', name: t('feature_modernUI_name'), group: 'Appearance',
         init() {
             injectEarlyThemeShell();
@@ -6650,12 +6655,16 @@ html[data-imdb-enhanced="active"] .ipc-page-background {
                 if (!surface || !rail) return false;
                 this._surface = surface;
                 this._nativeHero = document.querySelector('section[data-testid="hero-parent"]');
-                this._scoreRestoreHost = document.querySelector('[data-testid="hero-rating-bar__aggregate-rating"]')?.parentElement
-                    || document.querySelector('[data-testid="hero-rating-bar__popularity"]')?.parentElement
-                    || null;
+                this._scoreRestoreHost = document.querySelector(EDITORIAL_NATIVE_SCORE_SELECTOR)?.parentElement || null;
                 this._scoreRestoreHost?.classList.add('enh-native-score-rail');
                 const sync = () => {
                     if (!isCurrent() || !rail.isConnected) return;
+                    const currentNativeHero = document.querySelector('section[data-testid="hero-parent"]');
+                    if (currentNativeHero && currentNativeHero !== this._nativeHero) {
+                        this._nativeHero?.classList.remove('enh-editorial-native-hidden');
+                        this._nativeHero = currentNativeHero;
+                    }
+                    this._nativeHero?.classList.add('enh-editorial-native-hidden');
                     refreshEditorialSurface(surface, this._nativeHero || document);
                     /* This surface hides IMDb's hero, so it owns the replacements for
                        the controls it hid. They must not depend on any other feature. */
@@ -6688,16 +6697,31 @@ html[data-imdb-enhanced="active"] .ipc-page-background {
                     });
                     pruneTitleStack();
                     const adopt = (node, host) => {
-                        if (!node || !host || host.contains(node)) return;
+                        if (!node || !host) return;
+                        const parent = node.parentElement;
+                        if (host === rail && node.matches(EDITORIAL_NATIVE_SCORE_SELECTOR)
+                            && parent?.isConnected && !rail.contains(node)) {
+                            this._scoreRestoreHost = parent;
+                            parent.classList.add('enh-native-score-rail');
+                        }
+                        if (host.contains(node)) return;
                         if (!this._adoptedNodes.some(state => state.node === node)) {
                             this._adoptedNodes.push({ node, parent:node.parentElement });
                         }
                         host.appendChild(node);
                     };
-                    [
-                        document.querySelector('[data-testid="hero-rating-bar__aggregate-rating"]'),
-                        document.querySelector('[data-testid="hero-rating-bar__popularity"]'),
-                    ].forEach(node => adopt(node, rail));
+                    const replacementNativeScores = Array.from(
+                        this._nativeHero?.querySelectorAll(EDITORIAL_NATIVE_SCORE_SELECTOR) || []);
+                    replacementNativeScores.forEach(node => {
+                        const testId = node.getAttribute('data-testid');
+                        rail.querySelectorAll(EDITORIAL_NATIVE_SCORE_SELECTOR).forEach(staleNode => {
+                            if (staleNode === node || staleNode.getAttribute('data-testid') !== testId) return;
+                            this._adoptedNodes = this._adoptedNodes
+                                .filter(state => state.node !== staleNode);
+                            staleNode.remove();
+                        });
+                        adopt(node, rail);
+                    });
                     /* IMDb's own hero player is core media, not chrome — hiding the
                        native hero would take it off the page entirely, and the Trailer
                        popover is a separate opt-in that fetches a guessed match from
@@ -6718,7 +6742,6 @@ html[data-imdb-enhanced="active"] .ipc-page-background {
                     });
                 });
                 this._observer.observe(document.body, { childList:true, subtree:true });
-                this._nativeHero?.classList.add('enh-editorial-native-hidden');
                 return true;
             };
             if (!mount()) waitForTitleSurface().then(mount).catch(() => {});
@@ -6729,15 +6752,23 @@ html[data-imdb-enhanced="active"] .ipc-page-background {
             this._sync = null;
             this._syncQueued = false;
             this._nativeHero?.classList.remove('enh-editorial-native-hidden');
+            document.querySelector('section[data-testid="hero-parent"]')
+                ?.classList.remove('enh-editorial-native-hidden');
             this._adoptedNodes.forEach(({ node, parent }) => {
                 if (node?.isConnected && parent?.isConnected && !parent.contains(node)) parent.appendChild(node);
             });
             /* Score features can initialize after this surface and append directly to
                its rail. Those nodes have no adoption record, so return them to the
                native rating host before the surface is removed. */
-            if (this._scoreRestoreHost?.isConnected) {
+            const currentScoreHost = Array.from(document.querySelectorAll(EDITORIAL_NATIVE_SCORE_SELECTOR))
+                .map(node => node.parentElement)
+                .find(host => host?.isConnected && !this._surface?.contains(host));
+            const scoreRestoreHost = currentScoreHost
+                || (this._scoreRestoreHost?.isConnected ? this._scoreRestoreHost : null);
+            if (scoreRestoreHost) {
+                scoreRestoreHost.classList.add('enh-native-score-rail');
                 this._surface?.querySelectorAll('.enh-score-widget').forEach(widget => {
-                    this._scoreRestoreHost.appendChild(widget);
+                    scoreRestoreHost.appendChild(widget);
                 });
             }
 
