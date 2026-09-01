@@ -235,6 +235,8 @@ function loadScriptTestHooks({ withoutDeleteValue = false, withheldCredentials =
         getUserMarks,
         setUserMarks,
         setUserMark,
+        logAdditionalViewing,
+        countViewings,
         getUserMark,
         getUserNote,
         setUserNote,
@@ -1451,10 +1453,18 @@ test('watched marks only decorate canonical title links', () => {
     assert(Object.values(messageCatalog).some(text => text.includes('IMDb Watched was not changed')),
         'local mark feedback should distinguish itself from IMDb\'s native Watched state');
     /* Written through the guarded setter, since this runs from a document-wide observer,
-       and the two labels it chooses between both have to say the mark is local. */
-    const badge = /setTextIfChanged\(badge, mark === 'watched' \? t\('([A-Za-z0-9_@]+)'\) : t\('([A-Za-z0-9_@]+)'\)\)/.exec(script);
-    assert(badge, 'the badge label must be written through the guarded setter');
-    [badge[1], badge[2]].forEach(key => {
+       and the labels it chooses between both have to say the mark is local. Read from the
+       block rather than pinned as one expression: the previous version matched the exact
+       ternary and failed the moment a rewatch count was added beside the label, which is
+       a change to neither of the things it is here to protect. */
+    const badgeBlock = script.slice(script.indexOf('let badge = Array.from(card.children)'));
+    const badgeWrite = badgeBlock.slice(0, badgeBlock.indexOf("badge.classList.toggle('enh-mark-badge--skip'"));
+    assert(badgeWrite.includes('setTextIfChanged(badge,'),
+        'the badge label must be written through the guarded setter');
+    const badgeKeys = [...badgeWrite.matchAll(/t\('(settings_local_[a-z]+)'\)/g)].map(match => match[1]);
+    assert.deepStrictEqual([...new Set(badgeKeys)].sort(), ['settings_local_seen', 'settings_local_skip'],
+        'and it must choose between exactly the two local labels');
+    badgeKeys.forEach(key => {
         assert(/^local /i.test(messageCatalog[key] || ''),
             'visible local badges should not impersonate native IMDb Watched');
     });
@@ -3662,6 +3672,54 @@ test('a mobile IMDb address is rewritten to the desktop one, path and all', () =
     assert(/location\.replace\(desktop\)/.test(script), 'the history entry is replaced, not added to');
     assert(boot.indexOf('desktopUrlForMobile(location.href)') < boot.indexOf('installSPARouter()'),
         'and before the router or any feature starts');
+});
+
+/* IE-105: watching something twice is the ordinary case a Seen mark could not describe.
+   Marking it again only moved the single date it held, which is the complaint people write
+   to IMDb about their own check-ins. */
+test('a second viewing is added to a title rather than replacing the first', () => {
+    const hooks = loadScriptTestHooks();
+    hooks.setStoredSetting('userMarks', {});
+    assert.strictEqual(hooks.setUserMark('tt0133093', 'watched', 'The Matrix'), true);
+    assert.strictEqual(hooks.countViewings(hooks.getUserMarks(true).tt0133093), 1,
+        'marking it Seen logs the first viewing');
+
+    assert.strictEqual(hooks.logAdditionalViewing('tt0133093', '2019-04-02'), 2,
+        'a second date is a second viewing');
+    assert.deepStrictEqual(
+        Array.from(hooks.getUserMarks(true).tt0133093.viewings, viewing => viewing.date).slice(0, 1),
+        ['2019-04-02'], 'and the earlier one sorts first rather than overwriting anything');
+
+    /* Twice on the same day is once. Compared by date: the merge keeps a rated and an
+       unrated entry for one day as two, so counting them would let a second click on the
+       same day through. */
+    assert.strictEqual(hooks.logAdditionalViewing('tt0133093', '2019-04-02'), 0,
+        'the same date again is not another viewing');
+    assert.strictEqual(hooks.countViewings(hooks.getUserMarks(true).tt0133093), 2);
+
+    // Only against something already Seen. A first viewing is what the Seen button is.
+    assert.strictEqual(hooks.setUserMark('tt2395385', 'skip', 'Passed'), true);
+    assert.strictEqual(hooks.logAdditionalViewing('tt2395385', '2024-01-01'), 0,
+        'a skipped title has no viewing to add to');
+    assert.strictEqual(hooks.logAdditionalViewing('tt0000001', '2024-01-01'), 0,
+        'and neither has one that was never marked');
+    assert.strictEqual(hooks.logAdditionalViewing('tt0133093', 'not a date'), 0,
+        'a date that is not one is refused rather than stored');
+
+    /* At the ceiling the oldest makes room. The count stops moving there, so the caller
+       has to be able to tell that from "nothing happened" or it says the wrong thing. */
+    const dates = Array.from({ length:hooks.USER_MARK_VIEWINGS_MAX },
+        (_, index) => new Date(Date.UTC(2020, 0, index + 1)).toISOString().slice(0, 10));
+    hooks.setStoredSetting('userMarks', {
+        tt0111161:{ v:2, state:'watched', title:'Full', ts:1, viewings:dates.map(date => ({ date })) },
+    });
+    assert.strictEqual(hooks.getUserMarks(true).tt0111161.viewings.length, hooks.USER_MARK_VIEWINGS_MAX);
+    assert.strictEqual(hooks.logAdditionalViewing('tt0111161', '2026-06-06'), hooks.USER_MARK_VIEWINGS_MAX,
+        'the new date is stored and the count holds at the ceiling');
+    const kept = Array.from(hooks.getUserMarks(true).tt0111161.viewings, viewing => viewing.date);
+    assert(kept.includes('2026-06-06'), 'the new viewing is there');
+    assert(!kept.includes(dates[0]), 'and the oldest is the one that made room');
+    hooks.setStoredSetting('userMarks', {});
 });
 
 /* IE-114: the fixture exercises the notice by calling it, which says nothing about

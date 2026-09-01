@@ -14,6 +14,9 @@
   "aria_clear_mark_for": {
     "message": "[!! Clear mark for $1 !!]"
   },
+  "aria_log_another_viewing_of": {
+    "message": "[!! Log another viewing of $1 !!]"
+  },
   "aria_close_correction_panel": {
     "message": "[!! Close correction panel !!]"
   },
@@ -769,6 +772,9 @@
   },
   "label_choose_csv_file": {
     "message": "[!! Choose CSV file !!]"
+  },
+  "label_again": {
+    "message": "[!! Again !!]"
   },
   "label_clear": {
     "message": "[!! Clear !!]"
@@ -2204,6 +2210,9 @@
   "text_runtime_total": {
     "message": "[!! $1 total !!]"
   },
+  "text_log_another_viewing": {
+    "message": "[!! Log another viewing, dated today !!]"
+  },
   "text_save_a_private_local_seen_mark": {
     "message": "[!! Save a private local Seen mark !!]"
   },
@@ -2297,6 +2306,9 @@
   "text_title_added_to": {
     "message": "[!! $1 added to $2 !!]"
   },
+  "text_times_count": {
+    "message": "[!! x$1 !!]"
+  },
   "text_title_count_one": {
     "message": "[!! $1 title !!]"
   },
@@ -2339,6 +2351,18 @@
   "text_unavailable": {
     "message": "[!! Unavailable !!]"
   },
+  "text_viewings_logged_one": {
+    "message": "[!! Logged. $1 viewing of this title. !!]"
+  },
+  "text_viewings_logged_other": {
+    "message": "[!! Logged. $1 viewings of this title. !!]"
+  },
+  "text_viewings_logged_oldest_dropped_one": {
+    "message": "[!! Logged. This title holds $1 viewing, so the oldest date made room. !!]"
+  },
+  "text_viewings_logged_oldest_dropped_other": {
+    "message": "[!! Logged. This title holds $1 viewings, so the oldest date made room. !!]"
+  },
   "text_undo_the_last_settings_reset": {
     "message": "[!! Undo the last settings reset !!]"
   },
@@ -2380,6 +2404,9 @@
   },
   "toast_a_site_list_can_contain_up": {
     "message": "[!! A site list can contain up to $1 destinations !!]"
+  },
+  "toast_already_logged_a_viewing_today": {
+    "message": "[!! A viewing today is already logged for this title !!]"
   },
   "toast_all_imdb_watched_on_this_page_one": {
     "message": "[!! All $1 IMDb Watched title on this page already has a local mark !!]"

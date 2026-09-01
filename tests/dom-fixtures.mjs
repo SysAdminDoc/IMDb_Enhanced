@@ -36,6 +36,8 @@ const instrumented = userscript.replace(/\}\)\(\);\s*$/, `globalThis.__imdbEnhan
     getLDData,
     getIMDbRating,
     getUserMarks,
+    setUserMark,
+    logAdditionalViewing,
     getHistogramData,
     readLoadedEpisodes,
     readPersonBirthDate,
@@ -49,6 +51,7 @@ const instrumented = userscript.replace(/\}\)\(\);\s*$/, `globalThis.__imdbEnhan
     boundedImageVariant,
     createSettingsPanel,
     getStoredSetting: key => get(key),
+    setStoredSetting: (key, value) => set(key, value),
     createFAB,
     showFirstRunNotice,
     createLocalStatsPanel,
@@ -562,6 +565,53 @@ await runFixture('title', async (window, hooks) => {
     image.dispatchEvent(after);
     assert.equal(suppressed, 6, 'switching it off gives all three handlers back over images too');
     gallery.remove();
+});
+
+/* IE-105: a rewatch is a thing the store can hold and the page could not say. The button
+   for it belongs on something already Seen and nowhere else, and the count has to show up
+   where somebody would look for it. */
+await runFixture('title', async (window, hooks) => {
+    window.GM_setValue('imdb_enh_watchedMarking', true);
+    hooks.initFeature('watchedMarking');
+    const card = window.document.querySelector('.enh-markable-card[data-enh-mark-id]');
+    assert.ok(card, 'the feature decorates something on a title page');
+    const id = card.dataset.enhMarkId;
+    const again = card.querySelector('[data-enh-mark-action="again"]');
+    const shown = node => window.getComputedStyle(node).display !== 'none';
+
+    assert.ok(again, 'the control exists on every card it might apply to');
+    assert.ok(!shown(again), 'and stays out of the way until there is a viewing to add to');
+
+    card.querySelector('[data-enh-mark-action="watched"]').click();
+    assert.equal(hooks.getUserMarks(true)[id].state, 'watched');
+    assert.ok(shown(again), 'once it is Seen, logging another viewing is offered');
+    /* One viewing is what a Seen mark already says, so the badge stays a plain label
+       until there are two. */
+    const badge = card.querySelector('.enh-mark-badge');
+    assert.doesNotMatch(badge.textContent, /x\d/i, 'a single viewing is not a count of anything');
+
+    /* Today is already logged by the Seen mark, so the button has to say so rather than
+       silently doing nothing. */
+    again.click();
+    assert.equal(hooks.getUserMarks(true)[id].viewings.length, 1,
+        'a second click on the same day is not a second viewing');
+
+    /* A viewing on another day is. Seeded as an older date so the button's own "today"
+       is genuinely new, which is the path a person takes on a rewatch. */
+    hooks.setStoredSetting('userMarks', {
+        [id]:{ v:2, state:'watched', title:'Seen before', ts:1, viewings:[{ date:'2019-04-02' }] },
+    });
+    hooks.stopFeature('watchedMarking');
+    hooks.initFeature('watchedMarking');
+    const repainted = window.document.querySelector(`.enh-markable-card[data-enh-mark-id="${id}"]`);
+    repainted.querySelector('[data-enh-mark-action="again"]').click();
+    assert.equal(hooks.getUserMarks(true)[id].viewings.length, 2, 'today joins the older date');
+    assert.match(repainted.querySelector('.enh-mark-badge').textContent, /x2/i,
+        'and the badge carries the rewatch count without waiting for a reload');
+
+    hooks.stopFeature('watchedMarking');
+    window.GM_setValue('imdb_enh_watchedMarking', false);
+    hooks.setStoredSetting('userMarks', {});
 });
 
 /* IE-115: the featured review puts one stranger's opinion above the fold, and which one

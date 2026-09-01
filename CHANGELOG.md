@@ -24,6 +24,8 @@
 
 ### Added
 
+- Watching something again is now something you can record. A Seen mark used to hold one date and marking it again just moved that date, so a rewatch erased the first time you saw it. Hover a title you have marked Seen and there's an Again button; it logs today alongside the dates already there, and the badge on the card and the row in your marks list show how many times you have seen it. Clicking it twice in a day does not count twice. A title holds a hundred dates, and past that the oldest makes room and you are told so.
+
 - You can hide the reviews IMDb shows on a title page. It picks which ones and puts them above the fold, and that is not a choice you made, which is why IMDb has a help article for people who write in about it. Switch this on under Clean up and the review cards go; the "User reviews" heading, the count and the link through to all of them stay where they are. Off by default.
 
 - A new install says hello once. Nothing on IMDb explains where the settings are, and an extension you loaded yourself has no store page to explain it either, so the first IMDb page you open after installing carries a short note saying the extension is running and that the gear button in the corner opens its settings. Click Dismiss or leave it, and it goes on its own after a few seconds. You will not see it again, and resetting your settings will not bring it back.

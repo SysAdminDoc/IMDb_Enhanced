@@ -345,6 +345,7 @@
         aria_choose_an_imdb_or_letterboxd_csv: 'Choose an IMDb or Letterboxd CSV file',
         aria_clear_all_saved_title_marks: 'Clear all saved title marks',
         aria_clear_mark_for: 'Clear mark for $1',
+        aria_log_another_viewing_of: 'Log another viewing of $1',
         aria_close_correction_panel: 'Close correction panel',
         aria_close_settings: 'Close settings',
         aria_close_trailer: 'Close trailer',
@@ -597,6 +598,7 @@
         label_cast: 'Cast',
         label_checking: 'Checking',
         label_choose_csv_file: 'Choose CSV file',
+        label_again: 'Again',
         label_clear: 'Clear',
         label_clear_cache: 'Clear cache',
         label_clear_journal: 'Clear journal',
@@ -1075,6 +1077,7 @@
         text_runtime_none_listed: '$1 · no runtimes listed',
         text_runtime_partial: '$1 · $2 from $3 · $4 without a listed runtime',
         text_runtime_total: '$1 total',
+        text_log_another_viewing: 'Log another viewing, dated today',
         text_save_a_private_local_seen_mark: 'Save a private local Seen mark',
         text_save_a_private_local_skip_mark: 'Save a private local Skip mark',
         text_save_failed: 'Save failed',
@@ -1106,6 +1109,7 @@
         text_third_party_board_note: 'Hosted by MovieChat, not by IMDb or by this extension.',
         text_timed_out_waiting_for_page_content: 'Timed out waiting for page content',
         text_title_added_to: '$1 added to $2',
+        text_times_count: 'x$1',
         text_title_count_one: '$1 title',
         text_title_count_other: '$1 titles',
         text_title_has_already_been_requested: '$1 has already been requested',
@@ -1120,6 +1124,10 @@
         text_trailer_unavailable: 'Trailer unavailable',
         text_two_items_joined: '$1 and $2',
         text_unavailable: 'Unavailable',
+        text_viewings_logged_one: 'Logged. $1 viewing of this title.',
+        text_viewings_logged_other: 'Logged. $1 viewings of this title.',
+        text_viewings_logged_oldest_dropped_one: 'Logged. This title holds $1 viewing, so the oldest date made room.',
+        text_viewings_logged_oldest_dropped_other: 'Logged. This title holds $1 viewings, so the oldest date made room.',
         text_undo_the_last_settings_reset: 'Undo the last settings reset',
         text_undone: 'Undone.',
         text_unweighted_same_as_displayed: 'Unweighted $1 — same as the displayed rating.',
@@ -1134,6 +1142,7 @@
         text_watch_order: 'Watch order',
         text_without_the_extremes: 'Without 1s and 10s: $1 (derived)',
         toast_a_site_list_can_contain_up: 'A site list can contain up to $1 destinations',
+        toast_already_logged_a_viewing_today: 'A viewing today is already logged for this title',
         toast_all_imdb_watched_on_this_page_one: 'All $1 IMDb Watched title on this page already has a local mark',
         toast_all_imdb_watched_on_this_page_other: 'All $1 IMDb Watched titles on this page already have a local mark',
         toast_allow_notifications_there: 'Allow notifications on the page that just opened.',
@@ -2730,6 +2739,38 @@
         }
         return setUserMarks(marks, notifyFailure);
     }
+    /* IE-105: watching something twice is the ordinary case a Seen mark could not
+       describe. Marking it again only moved the one date it held, which is the complaint
+       people write to IMDb about their own check-ins. The record has carried a list of
+       viewing dates since v2; this is the way to add to it.
+
+       Returns the number of dates held afterwards, or 0 if nothing was stored, so a
+       caller can tell "logged" from "already logged today" from "the write failed"
+       without reading the record back. */
+    function countViewings(record) {
+        return normalizeViewingEvents(record?.viewings).length;
+    }
+
+    function logAdditionalViewing(imdbId, date = viewingDateFromTimestamp(Date.now()), notifyFailure = true) {
+        if (!/^tt\d+$/.test(imdbId || '')) return 0;
+        if (!normalizeViewingDate(date)) return 0;
+        const marks = { ...getUserMarks(true) };
+        const existing = normalizeUserMark(marks[imdbId]);
+        // Only against something already marked Seen: a first viewing is the Seen button.
+        if (!existing || existing.state !== 'watched') return 0;
+        const before = normalizeViewingEvents(existing.viewings);
+        /* A second click on the same day is not a second viewing. Compared by date rather
+           than by how many survive the merge: at the hundred-date ceiling the oldest is
+           dropped to make room, so counting would read a real new viewing as a duplicate.
+           Merging alone would not do either, because it keeps a rated and an unrated entry
+           for the same day as two. */
+        if (before.some(viewing => viewing.date === date)) return 0;
+        const viewings = mergeViewingEvents(before, [{ date }]);
+        marks[imdbId] = { ...existing, v:USER_MARK_RECORD_VERSION, viewings, ts:Date.now() };
+        if (!setUserMarks(marks, notifyFailure)) return 0;
+        return viewings.length;
+    }
+
     function getUserNote(imdbId) {
         return normalizeUserNote(getUserMarks()[imdbId]?.note);
     }
@@ -10858,6 +10899,12 @@ section[id*="quote" i] .ipc-list-card { padding: 4px 0 !important; margin: 2px 0
                 .enh-mark-btn:hover{border-color:${t.accentBorder};color:${t.accent}}
                 .enh-mark-btn[data-active="true"]{background:${t.accent};border-color:${t.accent};color:${readableTextColor(t.accent)}}
                 .enh-mark-btn--skip[data-active="true"]{background:${t.red};border-color:${t.red};color:${readableTextColor(t.red)}}
+                /* Logging a rewatch only makes sense against something already Seen.
+                   Hidden with display rather than the hidden attribute, because the rule
+                   above gives these buttons a display of their own and would win. */
+                .enh-mark-btn--again{display:none}
+                .enh-markable-card.enh-marked--watched .enh-mark-btn--again{display:inline-block}
+                .enh-mark-btn--again[hidden]{display:none}
                 .enh-mark-badge{
                     position:absolute;left:6px;bottom:6px;z-index:19;
                     padding:4px 7px;border-radius:6px;background:${t.accent};color:${readableTextColor(t.accent)};
@@ -10883,6 +10930,21 @@ section[id*="quote" i] .ipc-list-card { padding: 4px 0 !important; margin: 2px 0
                 e.stopPropagation();
                 e.stopImmediatePropagation?.();
                 const action = btn.dataset.enhMarkAction;
+                if (action === 'again') {
+                    const before = countViewings(getUserMarks()[imdbId]);
+                    const total = logAdditionalViewing(imdbId);
+                    if (!total) {
+                        showToast(t('toast_already_logged_a_viewing_today'));
+                        return;
+                    }
+                    this._syncAll();
+                    /* At the ceiling the oldest date makes room for the new one, which is
+                       a thing to say rather than a count that mysteriously stops moving. */
+                    showToast(total > before
+                        ? tCount('text_viewings_logged', total)
+                        : tCount('text_viewings_logged_oldest_dropped', USER_MARK_VIEWINGS_MAX));
+                    return;
+                }
                 const state = action === 'clear' || getUserMark(imdbId) === action ? '' : action;
                 if (!setUserMark(
                     imdbId,
@@ -10986,6 +11048,15 @@ section[id*="quote" i] .ipc-list-card { padding: 4px 0 !important; margin: 2px 0
                         title: t('text_save_a_private_local_skip_mark'),
                         'aria-label': t('aria_save_a_private_skip_mark_for', [title || imdbId]),
                     }, t('label_skip')),
+                    /* Only on something already Seen, so the row is two buttons wide
+                       until there is a viewing to add to. */
+                    makeEl('button', {
+                        type: 'button',
+                        className: 'enh-mark-btn enh-mark-btn--again',
+                        dataset: { enhMarkAction: 'again' },
+                        title: t('text_log_another_viewing'),
+                        'aria-label': t('aria_log_another_viewing_of', [title || imdbId]),
+                    }, t('label_again')),
                     makeEl('button', {
                         type: 'button',
                         className: 'enh-mark-btn enh-mark-btn--clear',
@@ -11029,7 +11100,12 @@ section[id*="quote" i] .ipc-list-card { padding: 4px 0 !important; margin: 2px 0
             /* Guarded for the same reason as the filter counts: this runs from a
                document-wide MutationObserver and writes into the subtree that observer
                watches, so an unconditional write is a self-sustaining repaint. */
-            setTextIfChanged(badge, mark === 'watched' ? t('settings_local_seen') : t('settings_local_skip'));
+            /* A rewatch count on the badge, because the whole point of logging a second
+               viewing is being able to see there was one. One viewing is what a Seen mark
+               already says, so only two or more are worth a number. */
+            const viewings = countViewings(getUserMarks()[card.dataset.enhMarkId]);
+            const label = mark === 'watched' ? t('settings_local_seen') : t('settings_local_skip');
+            setTextIfChanged(badge, viewings > 1 ? `${label} ${t('text_times_count', [viewings])}` : label);
             badge.classList.toggle('enh-mark-badge--skip', mark === 'skip');
         },
         _syncAll() {
@@ -15415,7 +15491,11 @@ ${scopedRules('.enh-zoom', {
                 /* A record can now exist for a note alone, with no Seen or Skip, so the
                    badge has to describe that rather than mislabel it as one of the two. */
                 const note = normalizeUserNote(record.note);
-                const state = record.state === 'watched' ? t('settings_local_seen')
+                const viewings = countViewings(record);
+                const state = record.state === 'watched'
+                    ? (viewings > 1
+                        ? `${t('settings_local_seen')} ${t('text_times_count', [viewings])}`
+                        : t('settings_local_seen'))
                     : record.state === 'skip' ? t('settings_local_skip')
                     : t('settings_note_only');
                 const titleEl = makeEl('div', { className:'enh-mark-row__title', title },
