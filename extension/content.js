@@ -517,6 +517,8 @@
         feature_removeAds_name: 'Hide ads and sponsored shells',
         feature_removeAppBanner_detail: 'Hides app-install prompts shown on desktop pages.',
         feature_removeAppBanner_name: 'Hide app banners',
+        feature_removeFeaturedReview_detail: 'Hides the featured user review on title pages. The heading, the count and the link to all reviews stay.',
+        feature_removeFeaturedReview_name: 'Hide the featured review',
         feature_removeContribution_detail: 'Removes contribution calls to action from detail pages.',
         feature_removeContribution_name: 'Hide contribution prompts',
         feature_removeNewsSection_detail: 'Keeps the page focused by removing IMDb news modules.',
@@ -1826,6 +1828,9 @@
         removeAds: true, removeProUpsell: true, removeNewsSection: true,
         removeRelatedInterests: true, removeContribution: true,
         removeSponsoredRecs: true, removeAppBanner: true,
+        // Off by default: a review nobody chose is an irritant to some people and the
+        // section as IMDb ships it to everyone else.
+        removeFeaturedReview: false,
         // Appearance
         modernUI: true, editorialTitleSurface: true, compactHeader: true, enhancedRatingDisplay: true,
         widerLayout: true, ratingColorCoding: true,
@@ -1922,6 +1927,7 @@
         removeContribution: t('feature_removeContribution_detail'),
         removeSponsoredRecs: t('feature_removeSponsoredRecs_detail'),
         removeAppBanner: t('feature_removeAppBanner_detail'),
+        removeFeaturedReview: t('feature_removeFeaturedReview_detail'),
         modernUI: t('feature_modernUI_detail'),
         editorialTitleSurface: t('feature_editorialTitleSurface_detail'),
         compactHeader: t('feature_compactHeader_detail'),
@@ -5754,6 +5760,21 @@
     reg({ key: 'removeSponsoredRecs', name: t('feature_removeSponsoredRecs_name'), group: 'Cleanup',
         css: `[cel_widget_id*="Sponsored"],[class*="Sponsored"]{display:none!important}`,
         init() { addCSS(this.css, 'enh-sponsRecs'); }, destroy() { removeCSS('enh-sponsRecs'); } });
+
+    /* IE-115: the featured review slot puts one stranger's opinion above the fold, and
+       which one is not a choice anybody made — IMDb has a help article about it because
+       people write in when it is a bad one. This hides the review cards and nothing else:
+       the "User reviews" heading, the count and the link through to all of them stay
+       exactly where they were, so the section is still a way into the reviews rather than
+       a hole where one used to be.
+
+       The cards are matched as review cards, by the element reviews are marked up with
+       and by IMDb's own testid for them. Neither is text matching, and either alone is
+       enough. */
+    reg({ key: 'removeFeaturedReview', name: t('feature_removeFeaturedReview_name'), group: 'Cleanup',
+        css: `section[data-testid="UserReviews"] article,`
+            + `section[data-testid="UserReviews"] [data-testid*="review-card"]{display:none!important}`,
+        init() { addCSS(this.css, 'enh-featuredReview'); }, destroy() { removeCSS('enh-featuredReview'); } });
 
     reg({ key: 'removeAppBanner', name: t('feature_removeAppBanner_name'), group: 'Cleanup',
         css: `.footer__app,.imdb-footer__open-in-app-button,[class*="AppBanner"]{display:none!important}`,
@@ -15822,7 +15843,7 @@ ${scopedRules('.enh-zoom', {
         const experienceGrid = makeEl('div', { className:'enh-settings-grid enh-settings-grid--experience', style:{ marginTop:'12px' } });
         experienceGrid.appendChild(makeFeatureCard(t('settings_clean_up'), t('settings_remove_noise_so_you_can_focus_on'), t('settings_all_pages'), [
             'removeAds', 'removeProUpsell', 'removeNewsSection', 'removeRelatedInterests',
-            'removeContribution', 'removeSponsoredRecs', 'removeAppBanner',
+            'removeContribution', 'removeSponsoredRecs', 'removeAppBanner', 'removeFeaturedReview',
         ], true));
         experienceGrid.appendChild(makeFeatureCard(t('settings_tune_the_interface'), t('settings_refine_how_content_looks_and_is_presented'), 'Desktop', [
             'modernUI', 'editorialTitleSurface', 'compactHeader', 'enhancedRatingDisplay', 'widerLayout', 'ratingColorCoding',

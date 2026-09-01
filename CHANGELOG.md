@@ -24,6 +24,8 @@
 
 ### Added
 
+- You can hide the featured review on a title page. IMDb picks one user review and puts it above the fold, and which one you get is not a choice you made, which is why IMDb has a help article about it. Switch this on under Clean up and the review cards go; the "User reviews" heading, the count and the link through to all of them stay where they are. Off by default.
+
 - A new install says hello once. Nothing on IMDb explains where the settings are, and an extension you loaded yourself has no store page to explain it either, so the first IMDb page you open after installing carries a short note saying the extension is running and that the gear button in the corner opens its settings. Click Dismiss or leave it, and it goes on its own after a few seconds. You will not see it again, and resetting your settings will not bring it back.
 
 - A link shared from a phone opens the desktop site. IMDb mobile addresses land on a page this extension deliberately does not run on and that nobody chose, so opening one on a computer now takes you to the same page on the normal site, before anything is drawn. Never on a phone, where the mobile site is the right one, and there is a toggle if you prefer it left alone.

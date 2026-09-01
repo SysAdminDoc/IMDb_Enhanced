@@ -48,6 +48,7 @@ const instrumented = userscript.replace(/\}\)\(\);\s*$/, `globalThis.__imdbEnhan
     getWatchlistServices,
     boundedImageVariant,
     createSettingsPanel,
+    getStoredSetting: key => get(key),
     createFAB,
     showFirstRunNotice,
     createLocalStatsPanel,
@@ -561,6 +562,41 @@ await runFixture('title', async (window, hooks) => {
     image.dispatchEvent(after);
     assert.equal(suppressed, 6, 'switching it off gives all three handlers back over images too');
     gallery.remove();
+});
+
+/* IE-115: the featured review puts one stranger's opinion above the fold, and which one
+   is not a choice anybody made. Hiding it must leave the way into the reviews intact, or
+   the toggle trades an irritation for a missing section. */
+await runFixture('title', async (window, hooks) => {
+    const section = window.document.querySelector('section[data-testid="UserReviews"]');
+    assert.ok(section, 'the fixture carries the reviews section');
+    /* The captured fixture holds the section and its heading; the cards themselves are
+       stripped by the sanitiser, so the two shapes IMDb has shipped them in are built
+       here. Either match alone is enough, so both are exercised. */
+    section.insertAdjacentHTML('beforeend',
+        '<div data-testid="reviews-header"><a href="/title/tt0133093/reviews/">1.2K reviews</a></div>'
+        + '<article class="user-review-item"><span>Semantic markup</span></article>'
+        + '<div data-testid="review-card-parent"><span>Testid markup</span></div>');
+    const cards = [...section.querySelectorAll('article, [data-testid="review-card-parent"]')];
+    assert.equal(cards.length, 2, 'both shapes are on the page before anything hides them');
+    const shown = node => window.getComputedStyle(node).display !== 'none';
+
+    assert.equal(hooks.getStoredSetting('removeFeaturedReview'), false,
+        'off by default: the section as IMDb ships it is what most people expect');
+    assert.ok(cards.every(shown), 'and nothing is hidden until it is switched on');
+
+    window.GM_setValue('imdb_enh_removeFeaturedReview', true);
+    hooks.initFeature('removeFeaturedReview');
+    assert.ok(!cards.some(shown), 'both shapes of review card go');
+    assert.ok(shown(section), 'the section itself stays');
+    assert.ok(shown(section.querySelector('h2, h3')), 'so does its heading');
+    const link = section.querySelector('a[href*="/reviews"]');
+    assert.ok(shown(link) && shown(link.parentElement),
+        'and the way through to all of them, which is the point of leaving the section');
+
+    hooks.stopFeature('removeFeaturedReview');
+    assert.ok(cards.every(shown), 'switching it off gives the reviews back');
+    window.GM_setValue('imdb_enh_removeFeaturedReview', false);
 });
 
 /* IE-114: a fresh install says nothing about itself. Nothing on IMDb explains the gear

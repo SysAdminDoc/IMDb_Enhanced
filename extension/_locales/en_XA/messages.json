@@ -539,6 +539,12 @@
   "feature_removeAppBanner_name": {
     "message": "[!! Hide app banners !!]"
   },
+  "feature_removeFeaturedReview_detail": {
+    "message": "[!! Hides the featured user review on title pages. The heading, the count and the link to all reviews stay. !!]"
+  },
+  "feature_removeFeaturedReview_name": {
+    "message": "[!! Hide the featured review !!]"
+  },
   "feature_removeContribution_detail": {
     "message": "[!! Removes contribution calls to action from detail pages. !!]"
   },
