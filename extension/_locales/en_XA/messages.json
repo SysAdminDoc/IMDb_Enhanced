@@ -1952,6 +1952,9 @@
   "text_csv_viewings_over_limit_other": {
     "message": "[!! $1 viewing events over the $2-per-title limit not retained !!]"
   },
+  "text_digital_release": {
+    "message": "[!! Digital release: $1 !!]"
+  },
   "text_direction_above": {
     "message": "[!! above !!]"
   },
@@ -2158,6 +2161,9 @@
   },
   "text_paste_exported_settings_json": {
     "message": "[!! Paste exported settings JSON !!]"
+  },
+  "text_physical_release": {
+    "message": "[!! On disc: $1 !!]"
   },
   "text_pick_something": {
     "message": "[!! Pick something !!]"

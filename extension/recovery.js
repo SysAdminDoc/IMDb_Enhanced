@@ -991,6 +991,7 @@
         text_csv_titles_over_limit: '$1 over the $2-title limit',
         text_csv_viewings_over_limit_one: '$1 viewing event over the $2-per-title limit not retained',
         text_csv_viewings_over_limit_other: '$1 viewing events over the $2-per-title limit not retained',
+        text_digital_release: 'Digital release: $1',
         text_direction_above: 'above',
         text_direction_below: 'below',
         text_encrypted_backup_with_credentials: 'Encrypted backup with credentials',
@@ -1060,6 +1061,7 @@
         text_parents_guide: 'Parents guide',
         text_partly_available: 'Partly available',
         text_paste_exported_settings_json: 'Paste exported settings JSON',
+        text_physical_release: 'On disc: $1',
         text_pick_something: 'Pick something',
         text_picked_nothing_opened: 'Picked $1. Nothing was opened.',
         text_preview_required_nothing_has_been_changed: 'Preview required. Nothing has been changed.',
@@ -7897,6 +7899,60 @@ section[id*="quote" i] .ipc-list-card { padding: 4px 0 !important; margin: 2px 0
         return parsed;
     }
 
+    /* IE-118: when a film reaches the shops is a question IMDb does not answer above the
+       fold, and TMDB does. The type codes are theirs and documented: 4 is digital, 5 is
+       physical. The earliest of each is the one worth reporting, because a re-release
+       years later is not the answer to "when can I watch this at home".
+
+       Movies only. There is no release_dates endpoint for a series, so nothing is asked
+       for one and nothing is claimed about it. */
+    const TMDB_RELEASE_DIGITAL = 4;
+    const TMDB_RELEASE_PHYSICAL = 5;
+    const TMDB_RELEASE_COUNTRY_LIMIT = 300;
+    const TMDB_RELEASE_ENTRY_LIMIT = 40;
+
+    /* Drawn on both the widget that lists offers and the one that says there are none.
+       "Nothing is streaming it, and it came out digitally in 2006" is the case where the
+       date is worth most, and it was the one branch that could not show it.
+
+       Each key is written out rather than looped over a pair, because a catalog key the
+       gate cannot see in the source is a key it reports as unused. */
+    function appendReleaseDates(widget, data) {
+        const releases = data?.releases && typeof data.releases === 'object' ? data.releases : null;
+        if (!releases) return;
+        if (normalizeViewingDate(releases.digital)) {
+            widget.appendChild(makeEl('div', { className: 'enh-score-widget__sub' },
+                t('text_digital_release', [releases.digital])));
+        }
+        if (normalizeViewingDate(releases.physical)) {
+            widget.appendChild(makeEl('div', { className: 'enh-score-widget__sub' },
+                t('text_physical_release', [releases.physical])));
+        }
+    }
+
+    function parseTmdbReleaseDates(json, region) {
+        if (!json || typeof json !== 'object') return null;
+        const wanted = String(region || '').trim().toUpperCase();
+        if (!AVAILABILITY_REGION_PATTERN.test(wanted)) return null;
+        const countries = Array.isArray(json.results) ? json.results : [];
+        const found = countries
+            .slice(0, TMDB_RELEASE_COUNTRY_LIMIT)
+            .find(entry => String(entry?.iso_3166_1 || '').toUpperCase() === wanted);
+        if (!found) return null;
+        const releases = {};
+        const entries = Array.isArray(found.release_dates) ? found.release_dates : [];
+        entries.slice(0, TMDB_RELEASE_ENTRY_LIMIT).forEach(entry => {
+            const kind = Number(entry?.type) === TMDB_RELEASE_DIGITAL ? 'digital'
+                : Number(entry?.type) === TMDB_RELEASE_PHYSICAL ? 'physical' : '';
+            if (!kind) return;
+            // Their dates carry a time and a zone; the day is the whole of the answer.
+            const date = normalizeViewingDate(String(entry?.release_date || '').slice(0, 10));
+            if (!date) return;
+            if (!releases[kind] || date < releases[kind]) releases[kind] = date;
+        });
+        return Object.keys(releases).length ? releases : null;
+    }
+
     async function fetchTmdbAvailability(imdbId, isCurrent) {
         const token = readTmdbToken();
         if (!token.configured) return { unconfigured:true };
@@ -7940,7 +7996,21 @@ section[id*="quote" i] .ipc-list-card { padding: 4px 0 !important; margin: 2px 0
             await ask(`/3/${found.type}/${found.id}/watch/providers`),
             EXTERNAL_RESPONSE_TEXT_LIMIT), region);
         if (!isCurrent()) return { cancelled:true };
-        return offers || { providers:[], url:'', region };
+        const answer = offers || { providers:[], url:'', region };
+
+        /* One more request, and only for a film: a series has no release_dates endpoint.
+           A failure here is not a failure of the answer above, so it is swallowed rather
+           than turning a working availability panel into an error. */
+        if (found.type === 'movie') {
+            try {
+                const releases = parseTmdbReleaseDates(parseJSONResponse(
+                    await ask(`/3/movie/${found.id}/release_dates`),
+                    EXTERNAL_RESPONSE_TEXT_LIMIT), region);
+                if (!isCurrent()) return { cancelled:true };
+                if (releases) answer.releases = releases;
+            } catch { /* the offers stand on their own */ }
+        }
+        return answer;
     }
 
     function parseJustWatchAvailability(html, url, expected, allowIdentityOverride = false) {
@@ -9885,6 +9955,7 @@ section[id*="quote" i] .ipc-list-card { padding: 4px 0 !important; margin: 2px 0
                         const data = {
                             providers:result.providers, offers, url:result.url,
                             source:'tmdb', region:result.region,
+                            ...(result.releases ? { releases:result.releases } : {}),
                         };
                         cacheSet(cacheKey, data);
                         this._render(data);
@@ -9899,6 +9970,10 @@ section[id*="quote" i] .ipc-list-card { padding: 4px 0 !important; margin: 2px 0
                         source:'tmdb',
                         region:result.region || availabilityRegion,
                         url:result.url || '',
+                        /* Carried onto the no-offer answer too. Nothing is streaming it and
+                           it came out digitally in 2006 is the case the date is worth most
+                           in, and it is cached with the rest of the answer. */
+                        ...(result.releases ? { releases:result.releases } : {}),
                     };
                     cacheSet(cacheKey, unavailable, CACHE_UNAVAILABLE_TTL);
                     if (!isCurrent()) return;
@@ -10047,6 +10122,10 @@ section[id*="quote" i] .ipc-list-card { padding: 4px 0 !important; margin: 2px 0
                 w.appendChild(makeEl('div', { className: 'enh-score-widget__sub' },
                     `${label}: ${formatProviderSummary(list)}`));
             });
+            /* IE-118: when it reached home, which is the question IMDb does not answer
+               above the fold. Only what TMDB actually holds for this region; a film with
+               no digital date says nothing rather than guessing from the theatrical one. */
+            appendReleaseDates(w, data);
             /* TMDB's terms require the endorsement disclaimer, and their watch-provider
                endpoint separately requires the data be credited to JustWatch. Rendered
                with the data, because that is where the terms put it. */
@@ -10103,6 +10182,9 @@ section[id*="quote" i] .ipc-list-card { padding: 4px 0 !important; margin: 2px 0
                 : reason === 'correction-failed' ? t('text_saved_justwatch_match_unavailable')
                 : t('text_availability_unavailable');
             appendUnavailableNote(w, reason, availabilityNote);
+            /* Nothing is streaming it and it came out digitally in 2006 is the case where
+               that date is worth most, so it is drawn here too. */
+            appendReleaseDates(w, detail);
             if (usingJustWatch && reason !== 'excluded') appendScoreCorrectionAction(w, 'justWatch', this.key);
             else if (!usingJustWatch && reason === 'region') appendProviderAttribution(w, 'tmdb');
             bar.appendChild(w);

@@ -1222,6 +1222,43 @@ await runFixture('title', async (window, hooks) => {
     assert.match(requireSelector(window.document, '#enh-jw-widget').textContent, /TMDB.*Via TMDB.*JustWatch/s,
         'TMDB data must keep its source label and required attribution');
 
+    /* IE-118: when it reached home. Only what TMDB holds for this region, and a film with
+       no digital date says nothing rather than borrowing the theatrical one. */
+    hooks.renderAvailability({
+        source:'tmdb',
+        region:'US',
+        providers:['Max'],
+        offers:{ stream:['Max'], rent:[], buy:[] },
+        url:'https://www.themoviedb.org/movie/603/watch?locale=US',
+        releases:{ digital:'2006-11-14', physical:'1999-09-21' },
+    });
+    let withReleases = requireSelector(window.document, '#enh-jw-widget').textContent;
+    assert.match(withReleases, /Digital release: 2006-11-14/);
+    assert.match(withReleases, /On disc: 1999-09-21/);
+
+    hooks.renderAvailability({
+        source:'tmdb',
+        region:'US',
+        providers:['Max'],
+        offers:{ stream:['Max'], rent:[], buy:[] },
+        url:'https://www.themoviedb.org/movie/603/watch?locale=US',
+        releases:{ physical:'1999-09-21' },
+    });
+    withReleases = requireSelector(window.document, '#enh-jw-widget').textContent;
+    assert.doesNotMatch(withReleases, /Digital release/, 'a date TMDB does not hold is not shown');
+    assert.match(withReleases, /On disc: 1999-09-21/, 'while the one it does hold still is');
+
+    hooks.renderAvailability({
+        source:'tmdb',
+        region:'US',
+        providers:['Max'],
+        offers:{ stream:['Max'], rent:[], buy:[] },
+        url:'https://www.themoviedb.org/movie/603/watch?locale=US',
+        releases:{ digital:'nonsense' },
+    });
+    assert.doesNotMatch(requireSelector(window.document, '#enh-jw-widget').textContent, /Digital release/,
+        'and a stored value that is not a date is not rendered as one');
+
     hooks.renderAvailability({
         source:'tmdb',
         region:'US',
@@ -1282,14 +1319,22 @@ await runFixture('title', async (window, hooks) => {
     window.GM_setValue('imdb_enh_availabilitySource', 'tmdb');
     window.GM_setValue('imdb_enh_availabilityRegion', 'GB');
     window.GM_setValue('imdb_enh_tmdbReadToken', 'fixture-token');
-    useFixtureResponse(options => ({
-        responseText:JSON.stringify(options.url.includes('/3/find/')
-            ? { movie_results:[{ id:603 }], tv_results:[], tv_episode_results:[] }
-            : { results:{ GB:{
-                link:'https://www.themoviedb.org/movie/603/watch?locale=GB',
-                flatrate:[], ads:[], rent:[], buy:[],
-            } } }),
-    }));
+    const tmdbStub = kind => options => ({
+        responseText:JSON.stringify(
+            options.url.includes('/3/find/')
+                ? (kind === 'tv'
+                    ? { movie_results:[], tv_results:[{ id:1396 }], tv_episode_results:[] }
+                    : { movie_results:[{ id:603 }], tv_results:[], tv_episode_results:[] })
+                : options.url.includes('/release_dates')
+                    ? { results:[{ iso_3166_1:'GB', release_dates:[
+                        { type:4, release_date:'2006-11-14T00:00:00.000Z' },
+                    ] }] }
+                    : { results:{ GB:{
+                        link:'https://www.themoviedb.org/movie/603/watch?locale=GB',
+                        flatrate:[], ads:[], rent:[], buy:[],
+                    } } }),
+    });
+    useFixtureResponse(tmdbStub('movie'));
     const requestsBeforeTmdbNoOffer = window.__fixtureRequests.length;
     await hooks.runFeature('streamAvailability');
     availabilityWidget = requireSelector(window.document, '#enh-jw-widget');
@@ -1298,14 +1343,45 @@ await runFixture('title', async (window, hooks) => {
     availabilityLink = requireSelector(window.document, '#enh-jw-widget a');
     assert.equal(availabilityLink.href, 'https://www.themoviedb.org/movie/603/watch?locale=GB',
         'a fresh TMDB no-offer answer must link back to TMDB');
-    assert.equal(window.__fixtureRequests.length - requestsBeforeTmdbNoOffer, 2,
-        'a fresh TMDB answer needs one identity request and one provider request');
-    assert.deepEqual({ ...hooks.cacheGet(tmdbGbKey) }, {
+    /* IE-118 adds the third: the identity, the providers, and when it reached home. Kept
+       exact, because this is the number that decides how much of somebody else's API a
+       page visit costs. */
+    const tmdbRequests = window.__fixtureRequests.slice(requestsBeforeTmdbNoOffer);
+    assert.equal(tmdbRequests.length, 3,
+        'a fresh TMDB answer needs an identity, a provider and a release-date request');
+    assert.equal(tmdbRequests.filter(request => request.url.includes('/release_dates')).length, 1,
+        'exactly one of them asks when it reached home');
+
+    /* And none for a series: TMDB has no release_dates endpoint for one, so asking would
+       be a request that can only fail. */
+    window.GM_deleteValue(`cache_${tmdbGbKey}`);
+    hooks.stopFeature('streamAvailability');
+    useFixtureResponse(tmdbStub('tv'));
+    const requestsBeforeSeries = window.__fixtureRequests.length;
+    await hooks.runFeature('streamAvailability');
+    const seriesRequests = window.__fixtureRequests.slice(requestsBeforeSeries);
+    assert.equal(seriesRequests.filter(request => request.url.includes('/release_dates')).length, 0,
+        'a series is never asked when it came out on disc');
+    assert.equal(seriesRequests.length, 2, 'and costs the two requests it always did');
+    window.GM_deleteValue(`cache_${tmdbGbKey}`);
+    hooks.stopFeature('streamAvailability');
+    useFixtureResponse(tmdbStub('movie'));
+    await hooks.runFeature('streamAvailability');
+    assert.match(requireSelector(window.document, '#enh-jw-widget').textContent,
+        /Digital release: 2006-11-14/,
+        'and the date the request went for is the one on the page');
+    /* Cached with the rest of the answer, so a second visit says the same thing without
+       asking again. */
+    const cachedTmdb = hooks.cacheGet(tmdbGbKey);
+    /* The nested object comes from the sandbox realm, so it is spread too: comparing it
+       by reference reports a structure that matches as a mismatch. */
+    assert.deepEqual({ ...cachedTmdb, releases:{ ...cachedTmdb.releases } }, {
         unavailable:true,
         reason:'region',
         source:'tmdb',
         region:'GB',
         url:'https://www.themoviedb.org/movie/603/watch?locale=GB',
+        releases:{ digital:'2006-11-14' },
     });
     hooks.stopFeature('streamAvailability');
 
@@ -1319,6 +1395,31 @@ await runFixture('title', async (window, hooks) => {
         'the cached TMDB no-offer answer must not fall back to JustWatch');
     assert.equal(window.__fixtureRequests.length, requestsBeforeCachedTmdb,
         'a fresh cached no-offer answer must not contact TMDB again');
+    hooks.stopFeature('streamAvailability');
+
+    /* And the same on the answer that does list offers, which is the common one. Cached
+       with it, so a second visit says when it reached home without asking again. */
+    window.GM_deleteValue(`cache_${tmdbGbKey}`);
+    useFixtureResponse(options => ({
+        responseText:JSON.stringify(
+            options.url.includes('/3/find/')
+                ? { movie_results:[{ id:603 }], tv_results:[], tv_episode_results:[] }
+                : options.url.includes('/release_dates')
+                    ? { results:[{ iso_3166_1:'GB', release_dates:[
+                        { type:5, release_date:'1999-09-21T00:00:00.000Z' },
+                    ] }] }
+                    : { results:{ GB:{
+                        link:'https://www.themoviedb.org/movie/603/watch?locale=GB',
+                        flatrate:[{ provider_name:'Max' }], ads:[], rent:[], buy:[],
+                    } } }),
+    }));
+    await hooks.runFeature('streamAvailability');
+    assert.match(requireSelector(window.document, '#enh-jw-widget').textContent,
+        /On Max[\s\S]*On disc: 1999-09-21/,
+        'an answer with offers carries the release date beside them');
+    const cachedOffers = hooks.cacheGet(tmdbGbKey);
+    assert.deepEqual({ ...cachedOffers.releases }, { physical:'1999-09-21' },
+        'and it is cached with them, so a second visit does not ask again');
     hooks.stopFeature('streamAvailability');
 
     const emptyStats = hooks.createLocalStatsPanel();

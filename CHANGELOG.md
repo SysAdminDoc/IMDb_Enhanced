@@ -24,6 +24,8 @@
 
 ### Added
 
+- The streaming panel now says when a film came out digitally and on disc, for your region. IMDb does not put that anywhere near the top of a page and it is usually the thing you actually want to know. It shows when TMDB is your availability source and TMDB holds a date for your country; a film with no digital date says nothing rather than guessing from the cinema release, and it appears even when nothing is streaming it, which is when it is worth most. Series are not asked, because TMDB has no such data for one.
+
 - Your marks can show on plain links to a title, not just on cards with a poster. Most links to a film on IMDb are ordinary text: in trivia, in plot summaries, in awards, in the body of a review. Switch this on under Features and a link to something you have marked gets a dotted underline in the mark's colour, with a tooltip saying whether you watched or skipped it, how many times, and whether you left a note. Links inside cards are left alone, because the card already says it, and a link IMDb gave its own tooltip keeps that tooltip. Off by default.
 
 - A series page now says how much of the show you have watched. If you have marked episodes Seen, the poster carries a count, and where IMDb's own page data says how many episodes there are it reads "Seen 12 of 62". Nothing is looked up for this: the count comes from your own marks and the total from what the page already carries. Marks made from an episode's page or from the episode list record which show they belong to; marks you made before this update do not, so the count starts from what it can see.

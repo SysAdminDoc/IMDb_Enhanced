@@ -283,6 +283,7 @@ function loadScriptTestHooks({ withoutDeleteValue = false, withheldCredentials =
         describeOriginHosts,
         parseTmdbFind,
         parseTmdbWatchProviders,
+        parseTmdbReleaseDates,
         fetchTmdbAvailability,
         parseOmdbRatings,
         fetchOmdbRatings,
@@ -6228,6 +6229,44 @@ test('TMDB availability resolves an IMDb id and reads only the chosen region', (
     assert.strictEqual(Array.from(hooks.parseTmdbWatchProviders(payload, 'FR').providers).join(', '), 'Canal+');
     assert.strictEqual(Array.from(hooks.parseTmdbWatchProviders(payload, 'DE').providers).length, 0,
         'a region TMDB knows nothing about is empty, not a fallback to another country');
+
+    /* IE-118: when a film reached home is a question IMDb does not answer above the fold
+       and TMDB does. Their type codes are documented: 4 digital, 5 physical. */
+    const releasePayload = {
+        id: 603,
+        results: [
+            { iso_3166_1:'US', release_dates: [
+                { type:3, release_date:'1999-03-31T00:00:00.000Z' },
+                { type:5, release_date:'1999-09-21T00:00:00.000Z' },
+                { type:4, release_date:'2006-11-14T00:00:00.000Z' },
+                // A re-release years later is not the answer to "when can I watch it".
+                { type:4, release_date:'2020-05-01T00:00:00.000Z' },
+            ] },
+            { iso_3166_1:'FR', release_dates: [{ type:4, release_date:'2007-02-02T00:00:00.000Z' }] },
+        ],
+    };
+    const usReleases = hooks.parseTmdbReleaseDates(releasePayload, 'US');
+    assert.strictEqual(usReleases.digital, '2006-11-14', 'the earliest digital date, not the latest');
+    assert.strictEqual(usReleases.physical, '1999-09-21');
+    assert.strictEqual(hooks.parseTmdbReleaseDates(releasePayload, 'FR').physical, undefined,
+        'a country with no disc date says nothing about one');
+    assert.strictEqual(hooks.parseTmdbReleaseDates(releasePayload, 'DE'), null,
+        'and a country TMDB knows nothing about is not answered from another one');
+    assert.strictEqual(hooks.parseTmdbReleaseDates(
+        { results:[{ iso_3166_1:'US', release_dates:[{ type:3, release_date:'1999-03-31' }] }] }, 'US'), null,
+        'a theatrical date is not a release at home');
+    assert.strictEqual(hooks.parseTmdbReleaseDates(
+        { results:[{ iso_3166_1:'US', release_dates:[{ type:4, release_date:'not a date' }] }] }, 'US'), null,
+        'and a date that is not one is dropped rather than rendered');
+    [null, {}, { results:'nonsense' }].forEach(value =>
+        assert.strictEqual(hooks.parseTmdbReleaseDates(value, 'US'), null, 'a broken payload is not an answer'));
+
+    /* Movies only. There is no release_dates endpoint for a series, so nothing is asked
+       for one, and the request rides on the same cached answer as the offers. */
+    assert(/if \(found\.type === 'movie'\) \{/.test(script),
+        'the release-date request must be asked only for a film');
+    assert(/answer\.releases = releases;/.test(script),
+        'and its answer must travel with the one that is already cached');
 
     /* IE-13: JustWatch keys its whole site by region, and every URL said /us whoever was
        asking. The same stored setting drives both sources; JustWatch wants it lowercase
