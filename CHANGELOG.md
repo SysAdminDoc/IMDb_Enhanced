@@ -24,6 +24,8 @@
 
 ### Added
 
+- `npm run pack` builds the archives a store listing needs: a Chromium package, a Firefox package, the web-store package, a source archive for AMO, and a file of SHA-256 sums for all four. The archives are deterministic, so building the same commit twice produces the same bytes and the checksums mean something. The zip writer is part of the repository rather than a dependency.
+
 - Watchlist streaming alerts, in the extension only and off by default. Once a day it checks part of your watchlist against the services you picked and sends one notification when something turns up. It needs a TMDB token, and the services to choose from are the ones the checks have actually seen where you are rather than a list written into the code, so the picker fills in after the first check. Notifications are asked for separately, from the extension own page, and until you allow them the check still runs quietly so that turning them on later does not bury you in months of old news.
 
 - A franchise watch order, off by default. On a film that belongs to a series, the other films in it are listed in order with the one you are on marked, using the series own numbering where it has one and release year where it does not. It comes from Wikidata, needs no key of any kind, and asks nothing on a film that is in no series.

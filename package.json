@@ -16,7 +16,8 @@
     "test:extension": "node scripts/build-extension.js --check && node scripts/build-extension.js --firefox --store && node tests/extension.js && node tests/background.js && node tests/gm-contract.js",
     "test": "node scripts/build-extension.js --firefox --store && node tests/run.js && node tests/dom-fixtures.mjs && node tests/extension.js && node tests/background.js && node tests/gm-contract.js",
     "version": "node scripts/sync-version.js && node scripts/build-extension.js && git add IMDb_Enhanced.user.js extension/content.js extension/manifest.json extension/boot.css README.md",
-    "build:store": "node scripts/build-extension.js --store"
+    "build:store": "node scripts/build-extension.js --store",
+    "pack": "node scripts/build-extension.js --firefox --store && node scripts/pack.js"
   },
   "license": "MIT",
   "repository": {

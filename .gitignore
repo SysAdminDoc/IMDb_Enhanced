@@ -25,3 +25,6 @@ extension-firefox/
 
 # Generated store profile (produced on demand by npm run build:store)
 extension-store/
+
+# Release archives, rebuilt by npm run pack.
+dist/

@@ -1,6 +1,33 @@
 const assert = require('assert');
 const fs = require('fs');
 const path = require('path');
+const os = require('os');
+
+/* The rest of this file asserts as it goes; the archive cases below are named so a
+   failure says which one, and so they cannot stop the file at the first problem. */
+let packFailures = 0;
+function test(name, fn) {
+    try { fn(); console.log(`ok - ${name}`); }
+    catch (error) { packFailures += 1; console.error(`not ok - ${name}`); console.error(error); }
+}
+
+/* Reads the entry names out of a finished archive using the central directory, which is
+   what a reader does — rather than trusting the writer to say what it wrote. */
+function readZipNames(archive) {
+    const end = archive.length - 22;
+    const count = archive.readUInt16LE(end + 10);
+    let offset = archive.readUInt32LE(end + 16);
+    const names = [];
+    for (let index = 0; index < count; index += 1) {
+        if (archive.readUInt32LE(offset) !== 0x02014b50) throw new Error('central directory entry expected');
+        const nameLength = archive.readUInt16LE(offset + 28);
+        const extraLength = archive.readUInt16LE(offset + 30);
+        const commentLength = archive.readUInt16LE(offset + 32);
+        names.push(archive.toString('utf8', offset + 46, offset + 46 + nameLength));
+        offset += 46 + nameLength + extraLength + commentLength;
+    }
+    return names;
+}
 
 const root = path.resolve(__dirname, '..');
 const pkg = JSON.parse(fs.readFileSync(path.join(root, 'package.json'), 'utf8'));
@@ -504,3 +531,84 @@ Object.entries(pseudo).forEach(([name, entry]) => {
 });
 
 console.log(`Extension manifest and generated content are valid at v${pkg.version}, for all three builds.`);
+
+/* ---- Release archives --------------------------------------------------------------
+   IE-27. The zip writer is in this repository rather than from a package, so it is the
+   repository's job to prove it writes zips: the format is checked against its own
+   structure, and the archives are opened again by an independent reader in the same
+   suite. */
+const pack = require('../scripts/pack.js');
+
+test('the zip writer produces something a reader can open', () => {
+    const target = path.join(os.tmpdir(), `imdb-enh-pack-${process.pid}.zip`);
+    const body = Buffer.from('hello '.repeat(200), 'utf8');
+    const archive = pack.writeZip([
+        { name:'a.txt', body },
+        { name:'nested/b.bin', body:Buffer.from([0, 1, 2, 3, 255]) },
+    ], target);
+
+    // Local header, central directory and end-of-central-directory, in that order.
+    assert.strictEqual(archive.readUInt32LE(0), 0x04034b50, 'it must start with a local file header');
+    const endOffset = archive.length - 22;
+    assert.strictEqual(archive.readUInt32LE(endOffset), 0x06054b50, 'and end with the central directory record');
+    assert.strictEqual(archive.readUInt16LE(endOffset + 10), 2, 'which counts every entry');
+
+    /* The offset in the end record has to point at the central directory, or a reader
+       finds nothing however well-formed the rest is. */
+    const directoryOffset = archive.readUInt32LE(endOffset + 16);
+    assert.strictEqual(archive.readUInt32LE(directoryOffset), 0x02014b50);
+
+    // A repeated string compresses; five random-ish bytes do not, and are stored instead.
+    assert.strictEqual(archive.readUInt16LE(8), 8, 'compressible content is deflated');
+    assert(archive.length < body.length, 'and the archive is smaller than the file it holds');
+
+    fs.unlinkSync(target);
+});
+
+test('the CRC matches what every other zip tool computes', () => {
+    /* The one value in the format that cannot be checked by reading the file back with
+       the same code that wrote it. These are the published check values. */
+    assert.strictEqual(pack.crc32(Buffer.from('', 'utf8')), 0);
+    assert.strictEqual(pack.crc32(Buffer.from('123456789', 'utf8')), 0xcbf43926);
+    assert.strictEqual(pack.crc32(Buffer.from('The quick brown fox jumps over the lazy dog', 'utf8')), 0x414fa339);
+});
+
+test('two packs of the same build are byte-identical', () => {
+    /* Checksums beside an archive are worth nothing if the archive changes every time it
+       is built. A zip records a timestamp per entry, so both are fixed. */
+    const dir = path.join(root, 'extension-store');
+    const first = path.join(os.tmpdir(), `imdb-enh-a-${process.pid}.zip`);
+    const second = path.join(os.tmpdir(), `imdb-enh-b-${process.pid}.zip`);
+    const a = pack.packDirectory(dir, first);
+    const b = pack.packDirectory(dir, second);
+    assert(a.equals(b), 'the same input must produce the same bytes');
+    fs.unlinkSync(first);
+    fs.unlinkSync(second);
+});
+
+test('the source archive carries what a rebuild needs and no build output', () => {
+    const target = path.join(os.tmpdir(), `imdb-enh-src-${process.pid}.zip`);
+    pack.packSource(target);
+    const names = readZipNames(fs.readFileSync(target));
+
+    ['IMDb_Enhanced.user.js', 'package.json', 'package-lock.json', 'README.md', 'LICENSE',
+        'extension/manifest.json', 'extension/background.js', 'scripts/build-extension.js', 'scripts/pack.js']
+        .forEach(name => assert(names.includes(name), `the source archive must carry ${name}`));
+
+    /* The generated profiles are outputs. Shipping them would let a source archive
+       disagree with what building it produces, which is the one thing a source
+       submission exists to rule out. */
+    ['extension-store/manifest.json', 'extension-firefox/manifest.json']
+        .forEach(name => assert(!names.includes(name), `${name} is generated and must not be in the source archive`));
+    assert(!names.some(name => name.startsWith('node_modules/')), 'and neither are dependencies');
+    assert(!names.some(name => name.startsWith('dist/')), 'nor the archives themselves');
+
+    // Sorted, because the order entries are written in is part of being deterministic.
+    assert.deepStrictEqual(names, [...names].sort(), 'entries are written in a fixed order');
+    fs.unlinkSync(target);
+});
+
+if (packFailures) {
+    console.error(`${packFailures} release-archive check(s) failed.`);
+    process.exit(1);
+}
