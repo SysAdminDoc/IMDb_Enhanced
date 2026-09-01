@@ -22,8 +22,8 @@
 // @match        https://www.imdb.com/*/search/*
 // @match        https://www.imdb.com/
 // @match        https://www.imdb.com/?*
-/* IMDb's own mobile host. Nothing here runs on it: the one thing this does there is send
-   a desktop browser to the page it was actually looking for. */
+// IMDb's own mobile host. Nothing here runs on it: the one thing this does there
+// is send a desktop browser to the page it was actually looking for.
 // @match        https://m.imdb.com/*
 // @grant        GM_getValue
 // @grant        GM_setValue

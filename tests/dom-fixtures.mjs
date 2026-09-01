@@ -528,6 +528,22 @@ await runFixture('title', async (window, hooks) => {
     assert.equal(event.defaultPrevented, false,
         'and nothing of ours may prevent it either, or the menu still will not open');
 
+    /* The other two things the selector names, which the img case never reaches. The
+       viewer draws its own surface around the photograph and a picture element wraps one,
+       so a right-click can land on either of them rather than on the img, and either arm
+       could be deleted with the check above still passing. */
+    const viewer = gallery.querySelector('[data-testid="media-viewer"]');
+    const onViewer = new window.MouseEvent('contextmenu', { bubbles:true, cancelable:true });
+    viewer.dispatchEvent(onViewer);
+    assert.equal(suppressed, 0, 'the viewer surface around a photograph counts as the photograph');
+
+    const responsive = window.document.createElement('picture');
+    responsive.innerHTML = '<source srcset="about:blank"><img alt="Still" src="about:blank">';
+    gallery.appendChild(responsive);
+    const onPicture = new window.MouseEvent('contextmenu', { bubbles:true, cancelable:true });
+    responsive.dispatchEvent(onPicture);
+    assert.equal(suppressed, 0, 'and so does a picture element wrapping one');
+
     /* Only over pictures. A page-wide swallow would take the context menu away from every
        link and every piece of text on IMDb, which is a much larger change than the one
        being asked for. */

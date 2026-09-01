@@ -3328,8 +3328,10 @@ test('an exported CSV carries every field a mark record holds', () => {
     };
     const csv = hooks.buildMarksCsv([['tt0083658', record]]);
 
-    // A viewing is a row, which is the only way more than one of them survives a file.
-    assert.strictEqual(csv.split('\r\n').length, 3, 'two viewings are two rows');
+    /* A viewing is a row, which is the only way more than one of them survives a file.
+       Counted through the parser: splitting on line breaks counts the ones inside a
+       quoted note as rows of their own, so the count would be about the notes. */
+    assert.strictEqual(hooks.parseCsvTable(csv).length, 3, 'a header and a row per viewing');
 
     const back = hooks.prepareCsvMarkImport(csv, {}).marks.tt0083658;
     assert.strictEqual(back.title, 'Blade Runner');
@@ -3377,6 +3379,18 @@ test('an exported CSV carries every field a mark record holds', () => {
     const letterboxd = hooks.prepareCsvMarkImport(
         'imdbID,WatchedDate\r\ntt0133093,2024-01-15', {}).marks.tt0133093;
     assert.strictEqual(letterboxd.state, 'watched', 'a file without the column is a list of what was seen');
+
+    /* A note with a line break in it is one row, and the count the import reports back has
+       to say so. Counting rows by looking for line breaks turns one imported title into
+       three and the person is told about work that never happened. */
+    const wrapped = hooks.prepareCsvMarkImport(hooks.buildMarksCsv([
+        ['tt0080684', { state:'watched', title:'Wrapped', ts:Date.UTC(2024, 0, 2),
+            note:'First line\nsecond line\nthird' }],
+    ]), {});
+    assert.strictEqual(wrapped.totalRows, 1, 'a note over three lines is still one row');
+    assert.strictEqual(wrapped.importedRows, 1);
+    assert.strictEqual(wrapped.marks.tt0080684.note, 'First line\nsecond line\nthird',
+        'and the note comes back with its line breaks');
 });
 
 /* The two hazards the export defends against, checked against values a spreadsheet
@@ -6074,6 +6088,15 @@ test('a store build names the source it cannot ship', () => {
    host that is declared must belong to something that contacts it. */
 test('the userscript declares exactly the hosts its providers contact', () => {
     const hooks = loadScriptTestHooks();
+    /* Every line in the block is a // line. A script manager reads the block as a run of
+       them and what it does with anything else is undefined: a block comment explaining a
+       @match line sat inside here, and a parser that stops at the first line it cannot
+       read would have dropped every declaration after it. */
+    const metadata = script.slice(script.indexOf('// ==UserScript=='),
+        script.indexOf('// ==/UserScript==') + '// ==/UserScript=='.length).split('\n');
+    assert(metadata.length > 40, 'the block should be the real one');
+    metadata.forEach(line => assert(/^\/\/(\s|$)/.test(line.replace(/\r$/, '')),
+        `the metadata block holds only // lines, not: ${line}`));
     const declared = [...script.matchAll(/^\/\/ @connect\s+(\S+)$/gm)].map(match => match[1]).sort();
     assert(declared.length >= 8, 'the metadata block must declare the hosts this script calls');
     const fromProviders = [...new Set(Object.values(hooks.PROVIDERS)
