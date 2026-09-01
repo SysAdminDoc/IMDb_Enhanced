@@ -3314,6 +3314,30 @@
         }
         return s;
     }
+    /* An injected widget lives inside IMDb's own cascade, and every rule here has to win
+       against theirs by specificity alone — which is how the same z-index and card-primitive
+       fights keep coming back. @scope gives rules written inside a widget proximity over
+       rules written further away, which is the cascade's own answer to that rather than
+       another !important.
+
+       It reached Baseline in December 2025 and the Firefox build's floor is older, so the
+       rules are emitted twice from one source: the plain form every engine reads, and the
+       scoped form behind a support query for the engines that have it. Written once, so
+       the two cannot come to say different things.
+
+       `blocks` maps a selector relative to the widget root to its declarations; a key of
+       '' is the root itself. */
+    function scopedRules(root, blocks) {
+        const entries = Object.entries(blocks);
+        const plain = entries
+            .map(([selector, body]) => `${selector ? `${root} ${selector}` : root} { ${body} }`)
+            .join('\n');
+        const scoped = entries
+            .map(([selector, body]) => `${selector ? `:scope ${selector}` : ':scope'} { ${body} }`)
+            .join('\n');
+        return `${plain}\n@supports at-rule(@scope) {\n@scope (${root}) {\n${scoped}\n}\n}`;
+    }
+
     function addThemedCSS(factory, id) {
         themedStyleFactories.set(id, factory);
         return addCSS(factory(getTheme()), id);
@@ -13125,27 +13149,18 @@ section[data-testid="hero-parent"].enh-editorial-native-hidden { display: none !
     font: 500 9px/1.2 -apple-system, BlinkMacSystemFont, 'Segoe UI', sans-serif;
     color: ${t.tx3};
 }
-.enh-collection {
-    margin: 20px 0;
-    padding: 14px 16px;
-    border: 1px solid ${t.bd};
-    border-radius: 12px;
-    background: ${t.sf};
-}
-.enh-collection__header {
-    display: flex;
-    flex-wrap: wrap;
-    align-items: baseline;
-    gap: 10px;
-    margin-bottom: 8px;
-}
-.enh-collection__title { margin: 0; font-size: 15px; color: ${t.tx}; }
-.enh-collection__note { font-size: 12px; color: ${t.tx3}; }
-.enh-collection__list { margin: 0; padding-left: 22px; color: ${t.tx2}; }
-.enh-collection__item { padding: 3px 0; }
-.enh-collection__item--current { color: ${t.tx}; font-weight: 700; }
-.enh-collection__link { color: ${t.tx2}; }
-.enh-collection__link:hover { color: ${t.accent}; }
+${scopedRules('.enh-collection', {
+    '': `margin: 20px 0; padding: 14px 16px; border: 1px solid ${t.bd};
+        border-radius: 12px; background: ${t.sf};`,
+    '.enh-collection__header': 'display: flex; flex-wrap: wrap; align-items: baseline; gap: 10px; margin-bottom: 8px;',
+    '.enh-collection__title': `margin: 0; font-size: 15px; color: ${t.tx};`,
+    '.enh-collection__note': `font-size: 12px; color: ${t.tx3};`,
+    '.enh-collection__list': `margin: 0; padding-left: 22px; color: ${t.tx2};`,
+    '.enh-collection__item': 'padding: 3px 0;',
+    '.enh-collection__item--current': `color: ${t.tx}; font-weight: 700;`,
+    '.enh-collection__link': `color: ${t.tx2};`,
+    '.enh-collection__link:hover': `color: ${t.accent};`,
+})}
 .enh-settings-inline-choice {
     display: inline-flex;
     align-items: center;
@@ -13154,49 +13169,23 @@ section[data-testid="hero-parent"].enh-editorial-native-hidden { display: none !
     color: ${t.tx2};
     font-size: 13px;
 }
-.enh-moviechat {
-    margin: 20px 0;
-    padding: 14px 16px;
-    border: 1px solid ${t.bd};
-    border-radius: 12px;
-    background: ${t.sf};
-}
-.enh-moviechat__header {
-    display: flex;
-    flex-wrap: wrap;
-    align-items: baseline;
-    gap: 10px;
-    margin-bottom: 10px;
-}
-.enh-moviechat__title { margin: 0; font-size: 15px; color: ${t.tx}; }
-.enh-moviechat__note { font-size: 12px; color: ${t.tx3}; }
-.enh-moviechat__link { margin-left: auto; font-size: 13px; color: ${t.accent}; }
-.enh-moviechat__frame {
-    display: block;
-    width: 100%;
-    height: 640px;
-    border: 0;
-    border-radius: 8px;
-    background: ${t.bg};
-}
-.enh-zoom {
-    position: absolute;
-    z-index: 2147483000;
-    pointer-events: none;
-    padding: 6px;
-    border-radius: 10px;
-    background: ${t.sf};
-    border: 1px solid ${t.bd};
-    box-shadow: 0 18px 44px rgba(0,0,0,.55);
-}
-.enh-zoom__image {
-    display: block;
-    max-width: min(46vw, 520px);
-    max-height: 78vh;
-    width: auto;
-    height: auto;
-    border-radius: 6px;
-}
+${scopedRules('.enh-moviechat', {
+    '': `margin: 20px 0; padding: 14px 16px; border: 1px solid ${t.bd};
+        border-radius: 12px; background: ${t.sf};`,
+    '.enh-moviechat__header': 'display: flex; flex-wrap: wrap; align-items: baseline; gap: 10px; margin-bottom: 10px;',
+    '.enh-moviechat__title': `margin: 0; font-size: 15px; color: ${t.tx};`,
+    '.enh-moviechat__note': `font-size: 12px; color: ${t.tx3};`,
+    '.enh-moviechat__link': `margin-left: auto; font-size: 13px; color: ${t.accent};`,
+    '.enh-moviechat__frame': `display: block; width: 100%; height: 640px; border: 0;
+        border-radius: 8px; background: ${t.bg};`,
+})}
+${scopedRules('.enh-zoom', {
+    '': `position: absolute; z-index: 2147483000; pointer-events: none; padding: 6px;
+        border-radius: 10px; background: ${t.sf}; border: 1px solid ${t.bd};
+        box-shadow: 0 18px 44px rgba(0,0,0,.55);`,
+    '.enh-zoom__image': `display: block; max-width: min(46vw, 520px); max-height: 78vh;
+        width: auto; height: auto; border-radius: 6px;`,
+})}
 @media (prefers-reduced-motion: no-preference) {
     .enh-zoom { animation: enh-zoom-in .12s ease-out; }
     @keyframes enh-zoom-in { from { opacity: 0; } to { opacity: 1; } }

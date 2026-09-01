@@ -290,6 +290,7 @@ function loadScriptTestHooks({ withoutDeleteValue = false, withheldCredentials =
         getAvailabilityCacheKey,
         getJustWatchSearchUrl,
         isTmdbConfigured,
+        scopedRules,
         setStoredSetting: (key, value) => set(key, value),
         readSettingsPanelText: () => document.getElementById('enh-settings-overlay')?.textContent || '',
         normalizeWatchlistSnapshot,
@@ -2867,7 +2868,9 @@ test('a zoomed image asks for a bounded variant, never the original', () => {
     assert.strictEqual(hooks.DEFAULTS.imageZoom, false);
     /* Positioned against the document, because IMDb's cards make their own stacking
        contexts and a z-index inside one cannot escape it. */
-    assert(/\.enh-zoom \{[\s\S]{0,200}position: absolute;/.test(script),
+    /* Its rules are written once and emitted in both a plain and a scoped form, so the
+       declaration is asserted where it is written rather than in one of the two outputs. */
+    assert(/scopedRules\('\.enh-zoom'[\s\S]{0,220}position: absolute;/.test(script),
         'the preview must not be positioned inside the card it came from');
 });
 
@@ -3134,6 +3137,55 @@ test('the watchlist record is reset and exported like every other stored thing',
     assert.strictEqual(Object.keys(importedState.value).length, 0,
         'and what a schedule saw is not something a backup puts back');
     assert.strictEqual(restored.ignored, 0, 'both are recognized fields');
+});
+
+/* IE-73: an injected widget lives inside IMDb's cascade and has to win by specificity
+   alone, which is how the same z-index and card-primitive fights keep coming back. @scope
+   gives rules written inside a widget proximity over rules written further away. It
+   reached Baseline in December 2025 and the Firefox build's floor is older, so the rules
+   ship in both forms — and the whole point is that the two cannot disagree. */
+test('scoped widget rules are emitted twice from one source and say the same thing', () => {
+    const hooks = loadScriptTestHooks();
+    const css = hooks.scopedRules('.enh-thing', {
+        '': 'color: red;',
+        '.enh-thing__part': 'display: block;',
+    });
+
+    // The plain form, which every engine reads.
+    assert(css.includes('.enh-thing { color: red; }'));
+    assert(css.includes('.enh-thing .enh-thing__part { display: block; }'));
+
+    /* And the scoped form, behind a support query, because the Firefox build's floor is
+       below the version that shipped @scope. Without the guard the whole block is
+       dropped on those engines — which is fine — but the guard is what makes it explicit. */
+    assert(/@supports at-rule\(@scope\) \{\s*@scope \(\.enh-thing\) \{/.test(css),
+        'the scoped form must be guarded, not assumed');
+    assert(css.includes(':scope { color: red; }'));
+    assert(css.includes(':scope .enh-thing__part { display: block; }'));
+
+    /* The two forms are generated from the same map, so every declaration appears in
+       both. A rule that exists in only one of them is the drift this shape exists to
+       prevent. */
+    const declarations = [...css.matchAll(/\{ ([^{}]+) \}/g)].map(match => match[1].trim());
+    const counted = new Map();
+    declarations.forEach(body => counted.set(body, (counted.get(body) || 0) + 1));
+    counted.forEach((count, body) => {
+        assert.strictEqual(count, 2, `"${body}" must appear in both the plain and the scoped form`);
+    });
+
+    /* The widgets that use it. The older ones keep their own selectors: converting them
+       is not this item, and a half-converted stylesheet is worse than either. */
+    ['.enh-collection', '.enh-moviechat', '.enh-zoom'].forEach(root => {
+        assert(script.includes(`scopedRules('${root}'`), `${root} should scope its rules`);
+    });
+
+    /* And the guard is required rather than decorative: the Firefox build declares a
+       floor older than the version that shipped @scope. */
+    const firefoxFloor = Number(/const FIREFOX_MIN_VERSION = '(\d+)/.exec(
+        fs.readFileSync(path.join(__dirname, '..', 'scripts', 'build-extension.js'), 'utf8'))?.[1]);
+    assert(Number.isFinite(firefoxFloor), 'the Firefox floor should be readable');
+    assert(firefoxFloor < 146,
+        'if the floor ever reaches 146 the support query is no longer needed and this should say so');
 });
 
 test('version strings match', () => {
