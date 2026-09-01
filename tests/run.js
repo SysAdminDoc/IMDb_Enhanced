@@ -288,6 +288,7 @@ function loadScriptTestHooks({ withoutDeleteValue = false, withheldCredentials =
         parseTmdbFind,
         parseTmdbWatchProviders,
         parseTmdbReleaseDates,
+        parseTvmazeShow,
         fetchTmdbAvailability,
         parseOmdbRatings,
         fetchOmdbRatings,
@@ -3904,6 +3905,70 @@ test('a second viewing is added to a title rather than replacing the first', () 
     hooks.setStoredSetting('userMarks', {});
 });
 
+/* IE-119: where a show airs is a question neither a score nor a streaming list answers.
+   TVmaze takes an IMDb id directly and needs no key, which is also what makes it safe for
+   a store build. The payload below is the shape their live answer for tt0903747 has. */
+test('a series says which network it airs on, and a film is never asked', () => {
+    const hooks = loadScriptTestHooks();
+    const breakingBad = {
+        id:169, name:'Breaking Bad', status:'Ended',
+        network:{ name:'AMC', country:{ name:'United States', code:'US', timezone:'America/New_York' } },
+        webChannel:null,
+        rating:{ average:9.2 },
+        externals:{ imdb:'tt0903747' },
+        url:'https://www.tvmaze.com/shows/169/breaking-bad',
+    };
+    const aired = hooks.parseTvmazeShow(breakingBad);
+    assert.strictEqual(aired.network, 'AMC');
+    assert.strictEqual(aired.country, 'US');
+    assert.strictEqual(aired.streaming, false, 'a broadcast network is not a streaming service');
+    assert.strictEqual(aired.url, 'https://www.tvmaze.com/shows/169/breaking-bad',
+        'and the link back, which is how their licence is honoured');
+
+    /* A streaming original has a webChannel and no network. TVmaze puts them in separate
+       fields and marks neither, so which one is set is the whole distinction. */
+    const streamed = hooks.parseTvmazeShow({
+        network:null,
+        webChannel:{ name:'Netflix', country:null },
+        url:'https://www.tvmaze.com/shows/1/stranger-things',
+    });
+    assert.strictEqual(streamed.network, 'Netflix');
+    assert.strictEqual(streamed.streaming, true);
+    assert.strictEqual(streamed.country, '', 'a web channel with no country claims none');
+
+    // A country code that is not one is left off rather than rendered.
+    assert.strictEqual(hooks.parseTvmazeShow({
+        network:{ name:'AMC', country:{ code:'United States' } }, url:'',
+    }).country, '');
+    // And a link outside TVmaze is not a link back to TVmaze.
+    assert.strictEqual(hooks.parseTvmazeShow({
+        network:{ name:'AMC' }, url:'https://example.com/shows/1',
+    }).url, '');
+    [null, {}, { network:null, webChannel:null }, { network:{ name:'   ' } }].forEach(value =>
+        assert.strictEqual(hooks.parseTvmazeShow(value), null, 'nothing to say is not an answer'));
+
+    /* Films never ask. The gate is the media type, checked before anything is requested,
+       so a film costs nobody a call to somebody else's API. */
+    const feature = script.slice(script.indexOf("key: 'airsOn'"));
+    const init = feature.slice(0, feature.indexOf('_render(data)'));
+    assert(/if \(type !== 'series' && type !== 'miniseries'\) return;/.test(init),
+        'a film is turned away before any request');
+    assert(init.indexOf("type !== 'series'") < init.indexOf('httpGet('),
+        'and turned away before it, not after');
+
+    /* Keyless and documented, so a store build may carry it, and the manifest origin has
+       to come from the registry rather than being written out beside it. */
+    const provider = hooks.PROVIDERS.tvmaze;
+    assert.deepStrictEqual(Array.from(provider.profiles).sort(), ['default', 'store']);
+    assert.deepStrictEqual(Array.from(provider.origins), ['https://api.tvmaze.com/*']);
+    assert(provider.attribution, 'their licence makes the credit a condition of use');
+    assert.deepStrictEqual(Array.from(hooks.FEATURE_ORIGIN_GROUPS.airsOn), ['https://api.tvmaze.com/*'],
+        'the feature asks for exactly the origin its provider declares');
+    assert(hooks.OPTIONAL_ORIGINS.includes('https://api.tvmaze.com/*'),
+        'and asks for it when the feature is switched on, not at install');
+    assert(!hooks.REQUIRED_ORIGINS.includes('https://api.tvmaze.com/*'));
+});
+
 /* IE-116: the point of marking plain links is the surfaces no card ever reaches, so this
    has to run on all of them. Left out of the universal set it would quietly become another
    card feature, which is the one thing it exists not to be. */
@@ -6811,7 +6876,8 @@ test('every sentence in the source comes from the catalog', () => {
     const BRANDS = new Set([
         'IMDb', 'IMDb Enhanced', 'Rotten Tomatoes', 'Metacritic', 'Letterboxd', 'JustWatch',
         'TMDB', 'OMDb', 'YouTube', 'Wikidata', 'Plex', 'Jellyfin', 'Emby', 'Radarr', 'Sonarr',
-        'Overseerr', 'AniList', 'ANILIST', 'RT', 'LB', 'MC', 'AL', 'TOMATOMETER', 'LETTERBOXD', 'METASCORE', 'SERVARR',
+        'Overseerr', 'AniList', 'ANILIST', 'TVmaze', 'RT', 'LB', 'MC', 'AL', 'TV',
+        'TOMATOMETER', 'LETTERBOXD', 'METASCORE', 'SERVARR',
         'Box Office Mojo', 'Ep Calendar', 'Box Office',
     ]);
     /* Named one at a time, because each is a reason rather than a rule. */

@@ -370,6 +370,7 @@
         aria_import_imdb_watched_titles_shown_on: 'Import IMDb Watched titles shown on this page into private Seen marks',
         aria_integration_service_tabs: '$1 services',
         aria_jump_to: 'Jump to $1',
+        aria_loading_broadcast_details: 'Loading broadcast details',
         aria_loading_anilist_score: 'Loading AniList score',
         aria_loading_letterboxd_score: 'Loading Letterboxd score',
         aria_loading_metacritic_score: 'Loading Metacritic score',
@@ -503,6 +504,8 @@
         feature_listRuntimeSummary_name: 'List runtime summary',
         feature_markLinkTint_detail: 'Underlines links to titles you have marked, in the mark colour, anywhere they appear on a page. Needs private marks.',
         feature_markLinkTint_name: 'Show marks on plain title links',
+        feature_airsOn_detail: 'Shows which network or streaming service a series airs on, from TVmaze. Series only, and nothing is requested for a film.',
+        feature_airsOn_name: 'Where a series airs',
         feature_markFilters_detail: 'Adds an All / Unseen / Seen / Skipped filter with counts to lists, charts, watchlists, search results, and filmographies. Needs private marks.',
         feature_markFilters_name: 'Filter by private marks',
         feature_mediaServerIntegration_detail: 'Checks configured local Plex, Jellyfin, and Emby servers and shows whether the title is already in your library.',
@@ -601,6 +604,7 @@
         label_checking: 'Checking',
         label_choose_csv_file: 'Choose CSV file',
         label_again: 'Again',
+        label_airs_on: 'AIRS ON',
         label_clear: 'Clear',
         label_clear_cache: 'Clear cache',
         label_clear_journal: 'Clear journal',
@@ -649,6 +653,7 @@
         label_skipped: 'Skipped',
         label_stars: 'Stars',
         label_stored_locally: 'Stored locally',
+        label_streams_on: 'STREAMS ON',
         label_streaming: 'STREAMING',
         label_subtitles: 'Subtitles:',
         label_templates: 'Templates',
@@ -689,6 +694,8 @@
         provider_rottenTomatoes_consent: 'Sends the title and year read from the page to Rotten Tomatoes to find its scores.',
         provider_tmdb_attribution: 'This extension uses TMDB and the TMDB APIs but is not endorsed, certified, or otherwise approved by TMDB. Streaming data provided by JustWatch.',
         provider_tmdb_consent: 'Sends the IMDb id to TMDB to look up where the title streams. Needs your own TMDB read token.',
+        provider_tvmaze_attribution: 'Broadcast data from TVmaze, used under CC BY-SA.',
+        provider_tvmaze_consent: 'Sends the IMDb id to TVmaze to find which network a show airs on.',
         provider_wikidata_consent: 'Sends the IMDb id to Wikidata to find the matching page on another site.',
         provider_youTube_consent: 'Loads the trailer from YouTube, which sees the video you opened.',
         recovery_a_score_or_availability_lookup_sends_the: 'A score or availability lookup sends the title and year from the page you are on to the service it is looking them up in.',
@@ -954,6 +961,7 @@
         text_availability_unavailable: 'Availability unavailable',
         text_available: 'Available',
         text_below_avg: 'Below Avg',
+        text_broadcast_details_unavailable: 'Broadcast details unavailable',
         text_board_could_not_be_shown: 'The board could not be shown here. Open it on MovieChat instead.',
         text_cache_remaining: '$1 cached entries · $2',
         text_cached_on: 'Cached $1',
@@ -1460,6 +1468,19 @@
             // A documented public API with no key and no page parsing, so a store listing can ship it.
             profiles: ['default', 'store'],
         },
+        tvmaze: {
+            label: 'TVmaze',
+            origins: ['https://api.tvmaze.com/*'],
+            // Only the IMDb id of the page you are on: their lookup takes it directly.
+            transmits: 'websiteContent',
+            consent: t('provider_tvmaze_consent'),
+            ttl: CACHE_TTL,
+            /* Their data is CC BY-SA and the credit is a condition of using it, satisfied
+               by linking back with the URL their own answer carries. */
+            attribution: t('provider_tvmaze_attribution'),
+            // Keyless, documented, and no page parsing, so a store listing can ship it.
+            profiles: ['default', 'store'],
+        },
         youTube: {
             label: 'YouTube',
             origins: ['https://www.youtube.com/*'],
@@ -1525,6 +1546,7 @@
         /* Both are declared so either can be granted, but only the chosen source is ever
            contacted; activeProvidersFor narrows this to what is actually in play. */
         streamAvailability: ['justWatch', 'tmdb'],
+        airsOn: ['tvmaze'],
         trailerPopover: ['youTube'],
         removeAds: ['amazonAds'],
         servarrIntegration: ['localServices'],
@@ -1925,6 +1947,7 @@
         // TV
         tvEpisodeTools: true, tvShowEnhancements: true, subtitleLinks: true,
         episodeHeatmap: true, ratingGap: true, seasonProgress: true, episodeSubtitles: true,
+        airsOn: true,
         castAges: true,
         // Utility
         quickCopyID: true, watchlistBatch: true, listMultiSearch: true, listRuntimeSummary: true,
@@ -2006,6 +2029,7 @@
         markLinkTint: t('feature_markLinkTint_detail'),
         titleNotes: t('feature_titleNotes_detail'),
         listRoulette: t('feature_listRoulette_detail'),
+        airsOn: t('feature_airsOn_detail'),
         seasonProgress: t('feature_seasonProgress_detail'),
         keyboardShortcuts: t('feature_keyboardShortcuts_detail'),
     };
@@ -8587,6 +8611,7 @@ section[id*="quote" i] .ipc-list-card { padding: 4px 0 !important; margin: 2px 0
         inlineMetacriticScore: 'enh-mc-widget',
         inlineAnimeScore: 'enh-anilist-widget',
         streamAvailability: 'enh-jw-widget',
+        airsOn: 'enh-tvmaze-widget',
     };
 
     /* Only a failure to reach the service qualifies. An identity mismatch or an
@@ -9574,6 +9599,133 @@ section[id*="quote" i] .ipc-list-card { padding: 4px 0 !important; margin: 2px 0
             window.removeEventListener('scroll', this._onScroll);
             this.hide();
         },
+    });
+
+    /* IE-119: where a show airs is a question neither a score nor a streaming list
+       answers, and TVmaze is the only source in this space that takes an IMDb id directly
+       and needs no key. Verified live 2026-09-01: /lookup/shows?imdb=tt0903747 returns the
+       network, its country and a link back in one request.
+
+       Their licence is CC BY-SA and the credit is a condition of use, satisfied by the
+       link their own answer carries. */
+    const TVMAZE_ORIGIN = 'https://api.tvmaze.com';
+    const TVMAZE_TEXT_LIMIT = 200;
+
+    function parseTvmazeShow(json) {
+        if (!json || typeof json !== 'object') return null;
+        /* The network for broadcast television, the web channel for a streaming original.
+           A show has one or the other, and TVmaze puts them in separate fields rather than
+           marking which one applies. */
+        const carrier = json.network || json.webChannel;
+        const name = toBoundedText(carrier?.name, TVMAZE_TEXT_LIMIT).trim();
+        if (!name) return null;
+        const code = String(carrier?.country?.code || '').trim().toUpperCase();
+        const url = normalizeTrustedUrl(json.url, 'tvmaze.com', '');
+        return {
+            network: name,
+            // Only a real country code, so a malformed one is left off rather than shown.
+            country: AVAILABILITY_REGION_PATTERN.test(code) ? code : '',
+            streaming: !json.network && Boolean(json.webChannel),
+            url,
+        };
+    }
+
+    reg({
+        key: 'airsOn', name: t('feature_airsOn_name'), group: 'TV',
+        async init() {
+            const isCurrent = createFeatureGuard(this);
+            const imdbId = getIMDbID();
+            if (!imdbId) return;
+            /* Series only. A film has no network, and asking about one is a request that
+               can only come back empty. */
+            const type = getMediaType();
+            if (type !== 'series' && type !== 'miniseries') return;
+            if (featureExcludedByProfile(this.key)) { this._renderUnavailable('excluded'); return; }
+
+            const cacheKey = `tvmaze_${imdbId}`;
+            const cached = cacheGet(cacheKey);
+            const bar = await waitForRatingBar(isCurrent);
+            if (!bar || !isCurrent()) return;
+            if (cached) {
+                if (cached.unavailable) this._renderUnavailable();
+                else this._render(cached);
+                return;
+            }
+            if (!await waitUntilVisible(bar, isCurrent) || !isCurrent()) return;
+            this._renderLoading();
+
+            let lookupError = null;
+            try {
+                const response = await httpGet(
+                    `${TVMAZE_ORIGIN}/lookup/shows?imdb=${encodeURIComponent(imdbId)}`,
+                    { headers:{ Accept:'application/json' }, timeout:12000, cancelOnRouteChange:true });
+                if (!isCurrent()) return;
+                const data = parseTvmazeShow(parseJSONResponse(response, EXTERNAL_RESPONSE_TEXT_LIMIT));
+                if (data) {
+                    cacheSet(cacheKey, data);
+                    this._render(data);
+                    return;
+                }
+            } catch (error) { lookupError = error; }
+
+            if (!isCurrent()) return;
+            recordLookupFailure(this, lookupError);
+            /* A network a show aired on does not change when TVmaze is unreachable, so a
+               dated cached answer beats an empty panel, on the same terms as every other
+               source here. */
+            if (await renderStaleScore(this, cacheKey, lookupError, isCurrent)) return;
+            const blocked = await cacheUnavailableUnlessBlocked(this.key, cacheKey, lookupError);
+            if (!isCurrent()) return;
+            this._renderUnavailable(blocked ? 'access' : 'unavailable');
+        },
+        _render(data) {
+            document.getElementById('enh-tvmaze-widget')?.remove();
+            const bar = findRatingBar();
+            if (!bar || !data?.network) return;
+            const where = data.country ? `${data.network} (${data.country})` : data.network;
+            const w = makeEl('div', { id:'enh-tvmaze-widget', className:'enh-score-widget' });
+            const badge = makeEl('span', { className:'enh-score-widget__badge enh-score-widget__badge--outline' }, 'TV');
+            const value = makeEl('span', { className:'enh-score-widget__value enh-score-widget__value--availability' }, where);
+            w.append(
+                makeEl('div', { className:'enh-score-widget__label' },
+                    data.streaming ? t('label_streams_on') : t('label_airs_on')),
+                data.url
+                    ? makeEl('a', {
+                        href:data.url, target:'_blank', rel:'noopener noreferrer',
+                        className:'enh-score-widget__score enh-score-widget__score--availability',
+                        style:{ '--score-color':'#3c948b' },
+                    }, badge, value)
+                    : makeEl('div', {
+                        className:'enh-score-widget__score enh-score-widget__score--availability',
+                        style:{ '--score-color':'#3c948b' },
+                    }, badge, value)
+            );
+            appendProviderAttribution(w, 'tvmaze');
+            bar.appendChild(w);
+        },
+        _renderLoading() {
+            if (document.getElementById('enh-tvmaze-widget')) return;
+            const bar = findRatingBar();
+            if (!bar) return;
+            const w = makeEl('div', { id:'enh-tvmaze-widget', className:'enh-score-widget enh-score-widget--loading', 'aria-busy':'true' });
+            w.innerHTML = `
+                <div class="enh-score-widget__label">${t('label_airs_on')}</div>
+                <div class="enh-score-widget__skeleton" aria-label="${t('aria_loading_broadcast_details')}"></div>
+            `;
+            bar.appendChild(w);
+        },
+        _renderUnavailable(reason = 'unavailable') {
+            document.getElementById('enh-tvmaze-widget')?.remove();
+            const bar = findRatingBar();
+            if (!bar) return;
+            const w = makeEl('div', { id:'enh-tvmaze-widget', className:'enh-score-widget enh-score-widget--unavailable' },
+                makeEl('div', { className:'enh-score-widget__label' }, t('label_airs_on')));
+            appendUnavailableNote(w, reason, reason === 'excluded'
+                ? describeProfileExclusion(this.key)
+                : t('text_broadcast_details_unavailable'));
+            bar.appendChild(w);
+        },
+        destroy() { document.getElementById('enh-tvmaze-widget')?.remove(); },
     });
 
     reg({
@@ -16514,7 +16666,7 @@ ${scopedRules('.enh-zoom', {
             ]),
             makeFeatureCard(t('settings_tv_episodes'), t('settings_focused_tools_for_series_and_episode_lists'), 'TV', [
                 'tvEpisodeTools', 'tvShowEnhancements', 'subtitleLinks', 'episodeSubtitles',
-                'episodeHeatmap', 'seasonProgress',
+                'episodeHeatmap', 'seasonProgress', 'airsOn',
             ]),
             makeFeatureCard(t('settings_lists_shortcuts'), t('settings_batch_actions_and_quick_navigation'), 'Lists', [
                 'watchlistBatch', 'listMultiSearch', 'listRuntimeSummary', 'markFilters', 'listRoulette',

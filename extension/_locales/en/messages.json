@@ -89,6 +89,9 @@
   "aria_jump_to": {
     "message": "Jump to $1"
   },
+  "aria_loading_broadcast_details": {
+    "message": "Loading broadcast details"
+  },
   "aria_loading_anilist_score": {
     "message": "Loading AniList score"
   },
@@ -488,6 +491,12 @@
   "feature_markLinkTint_name": {
     "message": "Show marks on plain title links"
   },
+  "feature_airsOn_detail": {
+    "message": "Shows which network or streaming service a series airs on, from TVmaze. Series only, and nothing is requested for a film."
+  },
+  "feature_airsOn_name": {
+    "message": "Where a series airs"
+  },
   "feature_markFilters_detail": {
     "message": "Adds an All / Unseen / Seen / Skipped filter with counts to lists, charts, watchlists, search results, and filmographies. Needs private marks."
   },
@@ -782,6 +791,9 @@
   "label_again": {
     "message": "Again"
   },
+  "label_airs_on": {
+    "message": "AIRS ON"
+  },
   "label_clear": {
     "message": "Clear"
   },
@@ -926,6 +938,9 @@
   "label_stored_locally": {
     "message": "Stored locally"
   },
+  "label_streams_on": {
+    "message": "STREAMS ON"
+  },
   "label_streaming": {
     "message": "STREAMING"
   },
@@ -1045,6 +1060,12 @@
   },
   "provider_tmdb_consent": {
     "message": "Sends the IMDb id to TMDB to look up where the title streams. Needs your own TMDB read token."
+  },
+  "provider_tvmaze_attribution": {
+    "message": "Broadcast data from TVmaze, used under CC BY-SA."
+  },
+  "provider_tvmaze_consent": {
+    "message": "Sends the IMDb id to TVmaze to find which network a show airs on."
   },
   "provider_wikidata_consent": {
     "message": "Sends the IMDb id to Wikidata to find the matching page on another site."
@@ -1840,6 +1861,9 @@
   },
   "text_below_avg": {
     "message": "Below Avg"
+  },
+  "text_broadcast_details_unavailable": {
+    "message": "Broadcast details unavailable"
   },
   "text_board_could_not_be_shown": {
     "message": "The board could not be shown here. Open it on MovieChat instead."

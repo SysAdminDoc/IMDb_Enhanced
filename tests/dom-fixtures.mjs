@@ -74,6 +74,10 @@ const instrumented = userscript.replace(/\}\)\(\);\s*$/, `globalThis.__imdbEnhan
     cacheSet,
     cacheGet,
     getAvailabilityCacheKey,
+    renderAirsOn: data => {
+        const feature = features.find(candidate => candidate.key === 'airsOn');
+        feature._render(data);
+    },
     renderAvailability: data => {
         const feature = features.find(candidate => candidate.key === 'streamAvailability');
         feature._render(data);
@@ -1294,6 +1298,28 @@ await runFixture('title', async (window, hooks) => {
         'a TMDB payload must retain its validated TMDB watch link');
     assert.match(requireSelector(window.document, '#enh-jw-widget').textContent, /TMDB.*Via TMDB.*JustWatch/s,
         'TMDB data must keep its source label and required attribution');
+
+    /* IE-119: where a show airs, with the link back their licence asks for. */
+    hooks.renderAirsOn({
+        network:'AMC', country:'US', streaming:false,
+        url:'https://www.tvmaze.com/shows/169/breaking-bad',
+    });
+    const airsWidget = requireSelector(window.document, '#enh-tvmaze-widget');
+    assert.match(airsWidget.textContent, /AIRS ON/, 'a broadcast network is where it airs');
+    assert.match(airsWidget.textContent, /AMC \(US\)/, 'named with the country it airs in');
+    assert.match(airsWidget.textContent, /TVmaze/, 'and credited, which their licence requires');
+    assert.equal(requireSelector(window.document, '#enh-tvmaze-widget a').href,
+        'https://www.tvmaze.com/shows/169/breaking-bad',
+        'with the link back that credit is satisfied by');
+
+    hooks.renderAirsOn({ network:'Netflix', country:'', streaming:true, url:'' });
+    const streamsWidget = requireSelector(window.document, '#enh-tvmaze-widget');
+    assert.match(streamsWidget.textContent, /STREAMS ON/,
+        'a streaming original does not air anywhere');
+    assert.doesNotMatch(streamsWidget.textContent, /\(\)/, 'and claims no country it does not have');
+    assert.equal(window.document.querySelector('#enh-tvmaze-widget a'), null,
+        'an answer with no usable link is still worth showing, without one');
+    requireSelector(window.document, '#enh-tvmaze-widget').remove();
 
     /* IE-118: when it reached home. Only what TMDB holds for this region, and a film with
        no digital date says nothing rather than borrowing the theatrical one. */
