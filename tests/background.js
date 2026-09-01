@@ -1017,6 +1017,8 @@ test('a service arriving on a watched title produces exactly one notification', 
 });
 
 test('a second run the same day is not a second notification', async () => {
+    /* Guarded the same way as the case above: a run that is merely slow would satisfy the
+       "asked nothing" half on its own. */
     /* The alarm alone does not space these out: it is re-created from onInstalled, from
        onStartup and from every change to the setting, each with a one-minute delay. Four
        browser restarts in a day used to be four checks and four notifications. */
@@ -1031,6 +1033,25 @@ test('a second run the same day is not a second notification', async () => {
     await worker.fireAlarm('imdb-enhanced:watchlist-alerts');
     assert.strictEqual(worker.calls.fetches.length, 0, 'a check an hour after the last one asks nothing');
     assert.strictEqual(worker.calls.notifications.length, 0, 'and says nothing');
+
+    // Move the last check back a day and the same worker asks again.
+    worker.storage.set('imdb_enh_watchlistAlertState', { checkedAt: Date.now() - (25 * 60 * 60 * 1000), cursor:'', seen:{ tt0133093:['Hulu'] } });
+    await worker.fireAlarm('imdb-enhanced:watchlist-alerts');
+    assert(worker.calls.fetches.length > 0, 'a day later it does ask, which is what makes the silence above mean something');
+
+    /* A stamp in the future is a broken clock or a restored backup, not a recent check.
+       Treating it as recent left the feature waiting for the wall clock to catch up. */
+    const skewed = loadBackground({
+        fetchImpl: tmdbFetch(['Netflix']),
+        grantedPermissions: ['notifications'],
+        seed: {
+            ...ALERT_SEED,
+            imdb_enh_watchlistAlertState: { checkedAt: Date.now() + (400 * 24 * 60 * 60 * 1000), cursor:'', seen:{} },
+        },
+    });
+    await skewed.fireAlarm('imdb-enhanced:watchlist-alerts');
+    assert(skewed.calls.fetches.length > 0,
+        'a timestamp in the future must not disable the feature until the clock catches up');
 });
 
 test('the scheduled run refuses to reach TMDB without the granted origin', async () => {
@@ -1051,12 +1072,27 @@ test('the scheduled run refuses to reach TMDB without the granted origin', async
     assert.strictEqual(worker.calls.fetches.length, 0,
         'a revoked or never-granted TMDB origin means no request at all');
     assert.strictEqual(worker.calls.notifications.length, 0);
+
+    // The same seed with the origin granted, so the silence above is about the grant.
+    const granted = loadBackground({
+        fetchImpl: tmdbFetch(['Netflix']),
+        grantedPermissions: ['notifications'],
+        seed: {
+            ...ALERT_SEED,
+            imdb_enh_watchlistAlertState: { checkedAt:1, cursor:'', seen:{ tt0133093:[] } },
+        },
+    });
+    await granted.fireAlarm('imdb-enhanced:watchlist-alerts');
+    assert(granted.calls.fetches.length > 0, 'with the origin granted the same run does ask');
 });
 
-test('an arrival nobody was shown is not written off as seen', async () => {
+test('an arrival nobody was shown is announced again on the next run', async () => {
     /* Once providers are in seen the arrival is not new again, so a notification that
-       failed to appear would be an arrival lost for good. */
-    const worker = loadBackground({
+       failed to appear is an arrival lost for good. Deleting the entry to compensate is
+       worse, not better: a title with no record is a FIRST sighting, and a first sighting
+       is deliberately silent, so the news is lost twice over. What has to hold is not a
+       shape in storage but that the next run says it. */
+    const failing = loadBackground({
         fetchImpl: tmdbFetch(['Netflix', 'Hulu']),
         grantedPermissions: ['notifications'],
         notificationFailure: new Error('Unable to download all specified images'),
@@ -1065,10 +1101,37 @@ test('an arrival nobody was shown is not written off as seen', async () => {
             imdb_enh_watchlistAlertState: { checkedAt:1, cursor:'', seen:{ tt0133093:['Hulu'] } },
         },
     });
-    await worker.fireAlarm('imdb-enhanced:watchlist-alerts');
-    const state = worker.storage.get('imdb_enh_watchlistAlertState');
-    assert.strictEqual(state.seen.tt0133093, undefined,
-        'the title goes back to unseen so the next run says it again');
+    await failing.fireAlarm('imdb-enhanced:watchlist-alerts');
+    assert.strictEqual(failing.calls.notifications.length, 1, 'it tried');
+    const carried = failing.storage.get('imdb_enh_watchlistAlertState');
+
+    // The very same state, handed to a run whose notification works.
+    const retry = loadBackground({
+        fetchImpl: tmdbFetch(['Netflix', 'Hulu']),
+        grantedPermissions: ['notifications'],
+        seed: { ...ALERT_SEED, imdb_enh_watchlistAlertState: { ...carried, checkedAt:1 } },
+    });
+    await retry.fireAlarm('imdb-enhanced:watchlist-alerts');
+    assert.strictEqual(retry.calls.notifications.length, 1,
+        'the arrival nobody saw is still news the next time round');
+    assert.match(retry.calls.notifications[0].message, /The Matrix/);
+
+    // And once it has been shown, it is not shown again.
+    const third = loadBackground({
+        fetchImpl: tmdbFetch(['Netflix', 'Hulu']),
+        grantedPermissions: ['notifications'],
+        seed: {
+            ...ALERT_SEED,
+            imdb_enh_watchlistAlertState: { ...retry.storage.get('imdb_enh_watchlistAlertState'), checkedAt:1 },
+        },
+    });
+    await third.fireAlarm('imdb-enhanced:watchlist-alerts');
+    assert.strictEqual(third.calls.notifications.length, 0, 'and not a third time');
+
+    /* The picker's list of services is derived from what the runs have seen, so a failed
+       notification must not empty it. */
+    assert(Array.from(carried.services).includes('Netflix'),
+        'a failed notification must not wipe the services the picker offers');
 });
 
 test('progress is written as the run goes, not only at the end', async () => {
@@ -1169,6 +1232,59 @@ test('a run resumes at the title it stopped on, not at a position in the list', 
     });
     assert.strictEqual(asked[0], first.cursor,
         'the next run picks up the title it stopped on, wherever it now sits in the list');
+});
+
+test('an arrival is not recorded until it has actually been shown', async () => {
+    /* Progress is written as the run goes so a terminated worker keeps its place, and a
+       title that has produced news must be exempt from that: once its new providers are
+       stored the arrival is not new again, and a worker stopped between the write and the
+       notification would lose it. What is asserted is the state at the moment it is
+       written, not the state at the end. */
+    const writes = [];
+    const worker = loadBackground({
+        fetchImpl: tmdbFetch(['Netflix', 'Hulu']),
+        grantedPermissions: ['notifications'],
+        onStateWrite: value => writes.push(JSON.parse(JSON.stringify(value.seen || {}))),
+        seed: {
+            ...ALERT_SEED,
+            imdb_enh_watchlistAlertState: { checkedAt:1, cursor:'', seen:{ tt0133093:['Hulu'] } },
+        },
+    });
+    await worker.fireAlarm('imdb-enhanced:watchlist-alerts');
+    assert(writes.length >= 2, 'the run writes as it goes and again at the end');
+    const duringLoop = writes[0];
+    assert.deepStrictEqual(Array.from(duringLoop.tt0133093 || []), ['Hulu'],
+        'the new provider must not be recorded before the notification was shown');
+    const atEnd = writes[writes.length - 1];
+    assert.deepStrictEqual(Array.from(atEnd.tt0133093), ['Netflix', 'Hulu'],
+        'and must be recorded once it has been');
+});
+
+test('a cursor title that has left the watchlist does not restart the walk', async () => {
+    /* Resuming by title is what stops a re-sorted watchlist scrambling the position. A
+       title can also be removed, and treating "not found" as position zero starves the
+       far end of the list exactly as an index did. */
+    const many = {};
+    for (let index = 0; index < 60; index += 1) {
+        many[`tt${String(3000000 + index).padStart(7, '0')}`] = { title:`Title ${index}` };
+    }
+    const ids = Object.keys(many);
+    const worker = loadBackground({
+        fetchImpl: tmdbFetch(['Netflix']),
+        grantedPermissions: ['notifications'],
+        seed: {
+            ...ALERT_SEED,
+            imdb_enh_watchlistSnapshot: { v:1, ts:1, titles: many },
+            // The title it stopped on is gone; the position it was at is remembered.
+            imdb_enh_watchlistAlertState: { checkedAt:1, cursor:'tt9999999', cursorIndex:20, seen:{} },
+        },
+    });
+    await worker.fireAlarm('imdb-enhanced:watchlist-alerts');
+    const asked = worker.calls.fetches
+        .map(([url]) => String(url).match(/find\/(tt\d+)/)?.[1])
+        .filter(Boolean);
+    assert.strictEqual(asked[0], ids[20],
+        'it picks up near where it was, rather than starting the list again');
 });
 
 test('the worker enforces the snapshot ceiling itself', async () => {
@@ -1280,6 +1396,22 @@ test('nothing is requested without a token, chosen services, or a recorded watch
         await worker.fireAlarm('imdb-enhanced:watchlist-alerts');
         assert.strictEqual(worker.calls.fetches.length, 0, `${name} must cost no request`);
         assert.strictEqual(worker.calls.notifications.length, 0, `${name} must say nothing`);
+
+        /* Every assertion above is also true of a run that never started, so the same
+           worker is asked to prove a request is observable at all: put the missing piece
+           back and fire again. Without this the whole case passes if anything ever makes
+           the run slower than the wait. */
+        /* A fresh worker rather than the same one: a run that was merely slow is still
+           in flight, and letting it see the restored settings would count its late
+           request as the control passing. */
+        const control = loadBackground({
+            fetchImpl: tmdbFetch(['Netflix']),
+            grantedPermissions: ['notifications'],
+            seed: { ...ALERT_SEED, imdb_enh_watchlistAlertState: { checkedAt:1, cursor:'', seen:{} } },
+        });
+        await control.fireAlarm('imdb-enhanced:watchlist-alerts');
+        assert(control.calls.fetches.length > 0,
+            `${name}: with the missing piece restored a request must appear, or this test proves nothing`);
     }
 });
 

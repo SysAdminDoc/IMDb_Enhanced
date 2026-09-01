@@ -3637,8 +3637,13 @@
 
        It reached Baseline in December 2025 and the Firefox build's floor is older, so the
        rules are emitted twice from one source: the plain form every engine reads, and the
-       scoped form behind a support query for the engines that have it. Written once, so
-       the two cannot come to say different things.
+       scoped form after it, which engines that do not know @scope discard by the ordinary
+       CSS error-handling rules. Written once, so the two cannot come to say different
+       things.
+
+       Deliberately not wrapped in @supports at-rule(@scope): Gecko implements @scope but
+       not that support query, so the wrapper hid the feature from the very engine whose
+       floor made a fallback necessary. Checked in a browser, not assumed.
 
        `blocks` maps a selector relative to the widget root to its declarations; a key of
        '' is the root itself. */
@@ -3650,7 +3655,7 @@
         const scoped = entries
             .map(([selector, body]) => `${selector ? `:scope ${selector}` : ':scope'} { ${body} }`)
             .join('\n');
-        return `${plain}\n@supports at-rule(@scope) {\n@scope (${root}) {\n${scoped}\n}\n}`;
+        return `${plain}\n@scope (${root}) {\n${scoped}\n}`;
     }
 
     function addThemedCSS(factory, id) {
@@ -8903,7 +8908,7 @@ section[id*="quote" i] .ipc-list-card { padding: 4px 0 !important; margin: 2px 0
             if (!host) return;
             /* Its own placeholder, not main: main is on screen the moment the page loads,
                so waiting for that to be visible is not waiting at all. */
-            const placeholder = makeEl('section', { id:'enh-collection', className:'enh-collection enh-collection--pending' });
+            const placeholder = makeEl('div', { id:'enh-collection', style:{ height:'1px' } });
             host.appendChild(placeholder);
             const visible = await waitUntilVisible(placeholder, isCurrent);
             placeholder.remove();

@@ -13,20 +13,51 @@ function test(name, fn) {
 
 /* Reads the entry names out of a finished archive using the central directory, which is
    what a reader does — rather than trusting the writer to say what it wrote. */
-function readZipNames(archive) {
+function readZipEntries(archive) {
+    const zlib = require('zlib');
     const end = archive.length - 22;
+    if (archive.readUInt32LE(end) !== 0x06054b50) throw new Error('end-of-central-directory record expected');
     const count = archive.readUInt16LE(end + 10);
     let offset = archive.readUInt32LE(end + 16);
-    const names = [];
+    const entries = [];
     for (let index = 0; index < count; index += 1) {
         if (archive.readUInt32LE(offset) !== 0x02014b50) throw new Error('central directory entry expected');
+        const method = archive.readUInt16LE(offset + 10);
+        const time = archive.readUInt16LE(offset + 12);
+        const date = archive.readUInt16LE(offset + 14);
+        const crc = archive.readUInt32LE(offset + 16);
+        const compressedSize = archive.readUInt32LE(offset + 20);
+        const size = archive.readUInt32LE(offset + 24);
         const nameLength = archive.readUInt16LE(offset + 28);
         const extraLength = archive.readUInt16LE(offset + 30);
         const commentLength = archive.readUInt16LE(offset + 32);
-        names.push(archive.toString('utf8', offset + 46, offset + 46 + nameLength));
+        const localOffset = archive.readUInt32LE(offset + 42);
+        const name = archive.toString('utf8', offset + 46, offset + 46 + nameLength);
+
+        /* Follow the offset the directory gives and read the file the way a reader does,
+           rather than trusting the directory to describe itself. */
+        if (archive.readUInt32LE(localOffset) !== 0x04034b50) throw new Error(`local header expected for ${name}`);
+        if (archive.readUInt16LE(localOffset + 8) !== method) throw new Error(`${name}: method disagrees with the directory`);
+        if (archive.readUInt32LE(localOffset + 14) !== crc) throw new Error(`${name}: CRC disagrees with the directory`);
+        if (archive.readUInt32LE(localOffset + 18) !== compressedSize) throw new Error(`${name}: compressed size disagrees`);
+        if (archive.readUInt32LE(localOffset + 22) !== size) throw new Error(`${name}: uncompressed size disagrees`);
+        const localNameLength = archive.readUInt16LE(localOffset + 26);
+        const localExtraLength = archive.readUInt16LE(localOffset + 28);
+        const dataAt = localOffset + 30 + localNameLength + localExtraLength;
+        const payload = archive.subarray(dataAt, dataAt + compressedSize);
+        const body = method === 8 ? zlib.inflateRawSync(payload) : Buffer.from(payload);
+        if (body.length !== size) throw new Error(`${name}: decompressed to ${body.length} bytes, not ${size}`);
+        const { crc32 } = require('../scripts/pack.js');
+        if (crc32(body) !== crc) throw new Error(`${name}: CRC does not match the bytes it describes`);
+
+        entries.push({ name, body, method, time, date });
         offset += 46 + nameLength + extraLength + commentLength;
     }
-    return names;
+    return entries;
+}
+
+function readZipNames(archive) {
+    return readZipEntries(archive).map(entry => entry.name);
 }
 
 const root = path.resolve(__dirname, '..');
@@ -562,6 +593,22 @@ test('the zip writer produces something a reader can open', () => {
     assert.strictEqual(archive.readUInt16LE(8), 8, 'compressible content is deflated');
     assert(archive.length < body.length, 'and the archive is smaller than the file it holds');
 
+    /* And what a reader gets back is what went in. This is the check the first version of
+       these tests was missing: everything above reads the writer's own description of
+       itself, and a size or a CRC that lies about the payload passes all of it. */
+    const readBack = readZipEntries(archive);
+    assert.deepStrictEqual(readBack.map(entry => entry.name), ['a.txt', 'nested/b.bin']);
+    assert(readBack[0].body.equals(body), 'the deflated entry decompresses to what it held');
+    assert(readBack[1].body.equals(Buffer.from([0, 1, 2, 3, 255])), 'and so does the stored one');
+
+    /* The timestamp is fixed rather than taken from the clock, which is what makes two
+       builds of the same source identical — and a same-tick comparison cannot see a
+       clock-derived one, so it is read out of the header instead. */
+    readBack.forEach(entry => {
+        assert.strictEqual(entry.time, 0, `${entry.name} must carry the fixed time`);
+        assert.strictEqual(entry.date, 0x21, `${entry.name} must carry the fixed date`);
+    });
+
     fs.unlinkSync(target);
 });
 
@@ -586,6 +633,36 @@ test('two packs of the same build are byte-identical', () => {
     fs.unlinkSync(second);
 });
 
+test('an archive carries what the manifest declares and nothing else', () => {
+    /* A build directory is not a package. extension/ is written into rather than emptied,
+       so it holds whatever has ever been put there — and packing the directory shipped
+       exactly that, including an 875 KB icon master the build's own comment says has no
+       business in a distributable. */
+    const staging = fs.mkdtempSync(path.join(os.tmpdir(), 'imdb-enh-pack-'));
+    const store = path.join(root, 'extension-store');
+    pack.listFiles(store).forEach(name => {
+        const destination = path.join(staging, name);
+        fs.mkdirSync(path.dirname(destination), { recursive:true });
+        fs.copyFileSync(path.join(store, name), destination);
+    });
+    fs.writeFileSync(path.join(staging, '.env.local'), 'TMDB_TOKEN=secret\n');
+    fs.writeFileSync(path.join(staging, 'notes.txt.bak'), 'scratch');
+    fs.mkdirSync(path.join(staging, 'icons'), { recursive:true });
+    fs.writeFileSync(path.join(staging, 'icons', 'icon-master.png'), Buffer.alloc(64, 7));
+
+    const target = path.join(os.tmpdir(), `imdb-enh-decl-${process.pid}.zip`);
+    const names = readZipNames(pack.packDirectory(staging, target));
+    ['.env.local', 'notes.txt.bak', 'icons/icon-master.png'].forEach(name => {
+        assert(!names.includes(name), `${name} must not reach a package`);
+    });
+    // And everything the manifest actually names is there.
+    ['manifest.json', 'content.js', 'background.js', 'icons/icon128.png', '_locales/en/messages.json']
+        .forEach(name => assert(names.includes(name), `${name} must be packed`));
+
+    fs.unlinkSync(target);
+    fs.rmSync(staging, { recursive:true, force:true });
+});
+
 test('the source archive carries what a rebuild needs and no build output', () => {
     const target = path.join(os.tmpdir(), `imdb-enh-src-${process.pid}.zip`);
     pack.packSource(target);
@@ -598,7 +675,12 @@ test('the source archive carries what a rebuild needs and no build output', () =
     /* The generated profiles are outputs. Shipping them would let a source archive
        disagree with what building it produces, which is the one thing a source
        submission exists to rule out. */
-    ['extension-store/manifest.json', 'extension-firefox/manifest.json']
+    /* Everything the build writes is an output of the very build a reviewer is being
+       asked to reproduce. An archive that carries them can disagree with what building it
+       produces, which is the one thing a source submission exists to rule out. */
+    ['extension-store/manifest.json', 'extension-firefox/manifest.json',
+        'extension/content.js', 'extension/recovery.js', 'extension/boot.css',
+        'extension/icons/icon-master.png', 'extension/_locales/en/messages.json']
         .forEach(name => assert(!names.includes(name), `${name} is generated and must not be in the source archive`));
     assert(!names.some(name => name.startsWith('node_modules/')), 'and neither are dependencies');
     assert(!names.some(name => name.startsWith('dist/')), 'nor the archives themselves');

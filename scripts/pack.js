@@ -127,10 +127,38 @@ function crc32(buffer) {
     return (crc ^ -1) >>> 0;
 }
 
+/* Everything the manifest says the extension is made of, and nothing else. */
+function declaredFiles(dir) {
+    const manifest = JSON.parse(fs.readFileSync(path.join(dir, 'manifest.json'), 'utf8'));
+    const named = new Set(['manifest.json']);
+    const add = value => { if (typeof value === 'string' && value) named.add(value); };
+    Object.values(manifest.icons || {}).forEach(add);
+    Object.values(manifest.action?.default_icon || {}).forEach(add);
+    add(manifest.action?.default_popup);
+    add(manifest.background?.service_worker);
+    (manifest.background?.scripts || []).forEach(add);
+    (manifest.content_scripts || []).forEach(script => {
+        (script.js || []).forEach(add);
+        (script.css || []).forEach(add);
+    });
+    (manifest.web_accessible_resources || []).forEach(rule => (rule.resources || []).forEach(add));
+    /* The pages the extension opens from its own UI, and the locales, which the manifest
+       names only through default_locale. */
+    listFiles(dir).forEach(name => {
+        if (name.startsWith('_locales/') || name.endsWith('.html')) named.add(name);
+        // A page's own script and stylesheet sit beside it and are reached only from it.
+        if (/^(?:permissions|recovery)\.(?:js|css)$/.test(name)) named.add(name);
+    });
+    return [...named].filter(name => fs.existsSync(path.join(dir, name))).sort();
+}
+
 function packDirectory(dir, destination) {
     if (!fs.existsSync(dir)) throw new Error(`${path.basename(dir)} has not been built; run npm test first.`);
-    const entries = listFiles(dir).map(name => ({ name, body:fs.readFileSync(path.join(dir, name)) }));
-    if (!entries.length) throw new Error(`${path.basename(dir)} is empty.`);
+    const names = declaredFiles(dir);
+    if (!names.length) throw new Error(`${path.basename(dir)} is empty.`);
+    const missing = names.filter(name => !fs.existsSync(path.join(dir, name)));
+    if (missing.length) throw new Error(`${path.basename(dir)} is missing ${missing.join(', ')}.`);
+    const entries = names.map(name => ({ name, body:fs.readFileSync(path.join(dir, name)) }));
     return writeZip(entries, destination);
 }
 
@@ -145,6 +173,15 @@ const SOURCE_FILES = [
     'LICENSE',
 ];
 const SOURCE_DIRS = ['extension', 'scripts', 'tests'];
+/* Written by scripts/build-extension.js into extension/. They are outputs of the build a
+   reviewer is being asked to reproduce, so shipping them would let the archive disagree
+   with what building it produces. */
+const GENERATED_IN_SOURCE_DIRS = new Set([
+    'extension/content.js',
+    'extension/recovery.js',
+    'extension/boot.css',
+    'extension/icons/icon-master.png',
+]);
 
 function packSource(destination) {
     const entries = [];
@@ -156,7 +193,9 @@ function packSource(destination) {
         const full = path.join(root, dir);
         if (!fs.existsSync(full)) return;
         listFiles(full).forEach(name => {
-            entries.push({ name:`${dir}/${name}`, body:fs.readFileSync(path.join(full, name)) });
+            const entryName = `${dir}/${name}`;
+            if (GENERATED_IN_SOURCE_DIRS.has(entryName) || entryName.includes('/_locales/')) return;
+            entries.push({ name:entryName, body:fs.readFileSync(path.join(full, name)) });
         });
     });
     entries.sort((a, b) => (a.name < b.name ? -1 : a.name > b.name ? 1 : 0));

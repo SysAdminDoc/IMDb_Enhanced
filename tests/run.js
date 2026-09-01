@@ -3157,11 +3157,14 @@ test('scoped widget rules are emitted twice from one source and say the same thi
     assert(css.includes('.enh-thing { color: red; }'));
     assert(css.includes('.enh-thing .enh-thing__part { display: block; }'));
 
-    /* And the scoped form, behind a support query, because the Firefox build's floor is
-       below the version that shipped @scope. Without the guard the whole block is
-       dropped on those engines — which is fine — but the guard is what makes it explicit. */
-    assert(/@supports at-rule\(@scope\) \{\s*@scope \(\.enh-thing\) \{/.test(css),
-        'the scoped form must be guarded, not assumed');
+    /* Deliberately not behind @supports at-rule(@scope): Gecko implements @scope but
+       not that support query, so the wrapper hid the feature from the one engine whose
+       floor made the fallback necessary. An engine that does not know the at-rule
+       discards it by the ordinary CSS error-handling rules, which is all the guard was
+       ever doing. Checked in a browser, not assumed. */
+    assert(/@scope \(\.enh-thing\) \{/.test(css), 'the scoped form is emitted');
+    assert(!/@supports/.test(css),
+        'and not behind a query that is false on an engine which supports @scope');
     assert(css.includes(':scope { color: red; }'));
     assert(css.includes(':scope .enh-thing__part { display: block; }'));
 

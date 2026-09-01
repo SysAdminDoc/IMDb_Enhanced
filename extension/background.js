@@ -601,18 +601,25 @@ async function runWatchlistCheck() {
     /* The alarm alone does not space these out: it is re-created from onInstalled,
        onStartup and every change to the setting, each with a one-minute delay. */
     const since = Date.now() - (Number(previous.checkedAt) || 0);
-    if (since < WATCHLIST_MIN_INTERVAL) return;
+    // A stamp in the future is not "checked recently", it is a broken stamp: run now.
+    if (since >= 0 && since < WATCHLIST_MIN_INTERVAL) return;
     const seen = previous.seen && typeof previous.seen === 'object' ? { ...previous.seen } : {};
     /* Where to resume, by title rather than by position. The snapshot is rewritten in
        whatever order the watchlist page rendered, so an index into it points at an
        unrelated title the moment somebody re-sorts their list, and titles get starved. */
-    const resumeAt = Math.max(0, ids.indexOf(String(previous.cursor || '')));
+    const found = ids.indexOf(String(previous.cursor || ''));
+    const hinted = Number.isInteger(previous.cursorIndex) ? previous.cursorIndex : 0;
+    const resumeAt = found >= 0 ? found : Math.min(Math.max(hinted, 0), Math.max(ids.length - 1, 0));
     const slice = [];
     for (let step = 0; step < WATCHLIST_BATCH && step < ids.length; step += 1) {
         slice.push(ids[(resumeAt + step) % ids.length]);
     }
 
     const arrivals = [];
+    /* Every service these runs walked past, kept separately from what has been reported.
+       A title whose arrival is being held back for a notification must still contribute
+       to the list the settings picker offers, or a failed notification empties it. */
+    const observed = new Set(Array.isArray(previous.services) ? previous.services : []);
     /* Written as it goes rather than once at the end. A service worker is stopped when it
        looks idle, and nothing in this loop is an extension API call, so a slow batch can
        be killed mid-way — which used to lose the whole run's progress including the
@@ -622,11 +629,13 @@ async function runWatchlistCheck() {
             [WATCHLIST_STATE_KEY]: {
                 checkedAt: Date.now(),
                 cursor: next,
+                // Only consulted when the title above has left the watchlist entirely.
+                cursorIndex: Math.max(0, ids.indexOf(next)),
                 seen,
-                services: [...new Set([
-                    ...(Array.isArray(previous.services) ? previous.services : []),
-                    ...Object.values(seen).flat(),
-                ])].filter(name => typeof name === 'string' && name).sort().slice(0, WATCHLIST_SERVICE_LIMIT),
+                services: [...observed, ...Object.values(seen).flat()]
+                    .filter(name => typeof name === 'string' && name)
+                    .filter((name, index, all) => all.indexOf(name) === index)
+                    .sort().slice(0, WATCHLIST_SERVICE_LIMIT),
             },
         }).catch(() => { /* the next run re-reads whatever did land */ });
     };
@@ -639,15 +648,21 @@ async function runWatchlistCheck() {
         /* Null means TMDB has no film for this id, which is every series on the list.
            Recorded as nothing available so it stops consuming a slot on every pass. */
         if (providers === null) providers = [];
+        providers.forEach(name => observed.add(name));
         const before = Array.isArray(seen[id]) ? seen[id] : null;
+        let arrived = false;
         /* The first time a title is checked there is no "before", so everything it is
            already on would read as an arrival. That is a notification about nothing
            having changed, so a first sighting only records. */
         if (before) {
             const added = providers.filter(provider => !before.includes(provider) && wanted.has(provider));
-            if (added.length) arrivals.push({ id, title: String(titles[id]?.title || id).slice(0, 80) });
+            if (added.length) {
+                arrived = true;
+                arrivals.push({ id, title: String(titles[id]?.title || id).slice(0, 80), before, providers });
+            }
         }
-        seen[id] = providers;
+        // Held back until the notification lands; everything else is recorded now.
+        if (!arrived) seen[id] = providers;
         await persist(ids[(resumeAt + step + 1) % ids.length]);
     }
 
@@ -655,10 +670,15 @@ async function runWatchlistCheck() {
     const live = new Set(ids);
     Object.keys(seen).forEach(id => { if (!live.has(id)) delete seen[id]; });
 
-    /* Said before it is written down. Once an arrival is in seen it is not new again, so
-       a notification that failed to appear would be an arrival lost for good. */
+    /* Said first, then written down. An arrival that was shown is recorded so it is not
+       announced twice; one that could not be shown keeps whatever was known before, so
+       the next run sees the same change and says it again. Deleting the entry instead
+       made it a first sighting, which says nothing at all. */
     const told = await notifyArrivals(arrivals);
-    if (!told) arrivals.forEach(arrival => { delete seen[arrival.id]; });
+    arrivals.forEach(arrival => {
+        if (told) seen[arrival.id] = arrival.providers;
+        else if (arrival.before) seen[arrival.id] = arrival.before;
+    });
     await persist(ids[(resumeAt + slice.length) % ids.length]);
 }
 
