@@ -20,6 +20,8 @@
 
 ### Added
 
+- A message board for the title, off by default. IMDb closed its boards in 2017; MovieChat keeps one per title, and this puts it at the bottom of the page with a line saying whose page it is. Nothing loads until you scroll to it, and if the board cannot be shown in place the section becomes a plain link to it.
+
 - Poster and cast photo zoom, off by default. Hovering a poster or a cast photo, or tabbing to it, shows a larger version beside it; Escape closes it. The larger picture is requested at a bounded size rather than as the original file, which for some posters runs to tens of megabytes.
 
 - Anime scores from AniList, off by default. On a title the page identifies as anime, the AniList community average appears beside the other scores. Nothing is requested for anything else: a title has to be animated and either made in Japan or keyworded as anime or manga before a lookup happens, so Pixar films and live-action Japanese films cost nothing. AniList is a public API with no key, so it works in every build including the web-store one.

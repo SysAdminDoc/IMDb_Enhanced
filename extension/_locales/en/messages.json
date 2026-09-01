@@ -488,6 +488,12 @@
   "feature_modernUI_name": {
     "message": "Modern IMDb skin"
   },
+  "feature_movieChatBoard_detail": {
+    "message": "Adds a message board for the title at the bottom of the page, hosted by MovieChat. Nothing is loaded until you scroll to it, and if the board cannot be shown the section becomes a plain link."
+  },
+  "feature_movieChatBoard_name": {
+    "message": "MovieChat message board"
+  },
   "feature_quickCopyID_detail": {
     "message": "Adds a visible IMDb ID copy button beside the title."
   },
@@ -1715,6 +1721,9 @@
   "text_below_avg": {
     "message": "Below Avg"
   },
+  "text_board_could_not_be_shown": {
+    "message": "The board could not be shown here. Open it on MovieChat instead."
+  },
   "text_cache_remaining": {
     "message": "$1 cached entries · $2"
   },
@@ -1913,6 +1922,9 @@
   "text_marked_as_no_entry_on_rotten_tomatoes": {
     "message": "Marked as no entry on Rotten Tomatoes"
   },
+  "text_message_board": {
+    "message": "Message board"
+  },
   "text_more_links": {
     "message": "More links"
   },
@@ -1987,6 +1999,9 @@
   },
   "text_open_next_of": {
     "message": "Open next ($1 of $2)"
+  },
+  "text_open_on_moviechat": {
+    "message": "Open on MovieChat"
   },
   "text_open_trailer_search_on_youtube": {
     "message": "Open trailer search on YouTube"
@@ -2140,6 +2155,9 @@
   },
   "text_the_selected_file_could_not_be": {
     "message": "The selected file could not be read."
+  },
+  "text_third_party_board_note": {
+    "message": "Hosted by MovieChat, not by IMDb or by this extension."
   },
   "text_timed_out_waiting_for_page_content": {
     "message": "Timed out waiting for page content"

@@ -493,6 +493,8 @@
         feature_mediaServerIntegration_name: 'Plex/Jellyfin/Emby indicator',
         feature_modernUI_detail: 'Applies the selected theme, typography, focus, and component treatment.',
         feature_modernUI_name: 'Modern IMDb skin',
+        feature_movieChatBoard_detail: 'Adds a message board for the title at the bottom of the page, hosted by MovieChat. Nothing is loaded until you scroll to it, and if the board cannot be shown the section becomes a plain link.',
+        feature_movieChatBoard_name: 'MovieChat message board',
         feature_quickCopyID_detail: 'Adds a visible IMDb ID copy button beside the title.',
         feature_quickCopyID_name: 'Quick copy IMDb ID',
         feature_quickNav_detail: 'Adds a right-side section navigator on wide screens.',
@@ -902,6 +904,7 @@
         text_availability_unavailable: 'Availability unavailable',
         text_available: 'Available',
         text_below_avg: 'Below Avg',
+        text_board_could_not_be_shown: 'The board could not be shown here. Open it on MovieChat instead.',
         text_cache_remaining: '$1 cached entries · $2',
         text_cached_on: 'Cached $1',
         text_candidate_matches_could_not_be_loaded: 'Candidate matches could not be loaded. Paste a title URL or mark no entry.',
@@ -968,6 +971,7 @@
         text_marked_as_no_entry_on_letterboxd: 'Marked as no entry on Letterboxd',
         text_marked_as_no_entry_on_metacritic: 'Marked as no entry on Metacritic',
         text_marked_as_no_entry_on_rotten_tomatoes: 'Marked as no entry on Rotten Tomatoes',
+        text_message_board: 'Message board',
         text_more_links: 'More links',
         text_more_watch_options: 'More watch options',
         text_movie_sites: 'Movie Sites',
@@ -993,6 +997,7 @@
         text_nothing_was_changed: 'Nothing was changed.',
         text_omdb_rejected_this_key: 'OMDb rejected this key',
         text_open_next_of: 'Open next ($1 of $2)',
+        text_open_on_moviechat: 'Open on MovieChat',
         text_open_trailer_search_on_youtube: 'Open trailer search on YouTube',
         text_parents_guide: 'Parents guide',
         text_partly_available: 'Partly available',
@@ -1044,6 +1049,7 @@
         text_the_overseerr_instance_did_not_recognize_this: 'The Overseerr instance did not recognize this IMDb title',
         text_the_overseerr_instance_returned_an_unusable_title: 'The Overseerr instance returned an unusable title id',
         text_the_selected_file_could_not_be: 'The selected file could not be read.',
+        text_third_party_board_note: 'Hosted by MovieChat, not by IMDb or by this extension.',
         text_timed_out_waiting_for_page_content: 'Timed out waiting for page content',
         text_title_added_to: '$1 added to $2',
         text_title_count_one: '$1 title',
@@ -1777,6 +1783,8 @@
         inlineAnimeScore: false,
         // Off by default: it changes what hovering a picture does.
         imageZoom: false,
+        // Off by default: it puts someone else's page inside this one.
+        movieChatBoard: false,
         streamAvailability: true,
         /* Which service answers "where can I watch this". JustWatch is read by parsing
            their page; TMDB is a documented API but needs a read token of your own. The
@@ -1854,6 +1862,7 @@
         inlineLetterboxdScore: t('feature_inlineLetterboxdScore_detail'),
         inlineMetacriticScore: t('feature_inlineMetacriticScore_detail'),
         imageZoom: t('feature_imageZoom_detail'),
+        movieChatBoard: t('feature_movieChatBoard_detail'),
         inlineAnimeScore: t('feature_inlineAnimeScore_detail'),
         streamAvailability: t('feature_streamAvailability_detail'),
         searchButtons: t('feature_searchButtons_detail'),
@@ -8441,6 +8450,88 @@ section[id*="quote" i] .ipc-list-card { padding: 4px 0 !important; margin: 2px 0
         '[data-testid="shoveler-item-poster"] img',
     ].join(', ');
 
+    /* IMDb closed its message boards in 2017 and the complaint has not stopped since.
+       MovieChat keeps a board per IMDb id and, checked live on 2026-08-31, serves
+       /tt{id} as a 301 to /tt{id}/{slug} with no X-Frame-Options and no CSP — so framing
+       works by omission rather than by their policy, and could stop working the day they
+       add either header. A frame that is refused fires no error event in any browser, so
+       nothing here waits for one: if the board has not reported itself loaded within the
+       timeout, the section replaces itself with a plain link.
+
+       No request of any kind is made until the section is scrolled to, and there is no
+       fetch at any point — the frame is the only thing that ever contacts them. */
+    const MOVIECHAT_ORIGIN = 'https://moviechat.org';
+    const MOVIECHAT_LOAD_TIMEOUT = 8000;
+
+    function getMovieChatUrl(imdbId) {
+        return /^tt\d{7,10}$/.test(String(imdbId || '')) ? `${MOVIECHAT_ORIGIN}/${imdbId}` : '';
+    }
+
+    reg({
+        key: 'movieChatBoard', name: t('feature_movieChatBoard_name'), group: 'Features',
+        async init() {
+            const isCurrent = createFeatureGuard(this);
+            if (getPageSurface() !== 'title') return;
+            const imdbId = getIMDbID();
+            const url = getMovieChatUrl(imdbId);
+            if (!url) return;
+            const host = document.querySelector('main') || document.body;
+            if (!host || document.getElementById('enh-moviechat')) return;
+
+            const openLink = makeEl('a', {
+                href:url, target:'_blank', rel:'noopener noreferrer', className:'enh-moviechat__link',
+            }, t('text_open_on_moviechat'));
+            const section = makeEl('section', { id:'enh-moviechat', className:'enh-moviechat' },
+                makeEl('div', { className:'enh-moviechat__header' },
+                    makeEl('h3', { className:'enh-moviechat__title' }, t('text_message_board')),
+                    // Said before anything loads: this is someone else's page, inside this one.
+                    makeEl('span', { className:'enh-moviechat__note' }, t('text_third_party_board_note')),
+                    openLink
+                )
+            );
+            host.appendChild(section);
+            this._section = section;
+
+            // Nothing is requested until someone actually scrolls to it.
+            if (!await waitUntilVisible(section, isCurrent) || !isCurrent()) return;
+            if (!section.isConnected) return;
+
+            const frame = makeEl('iframe', {
+                className:'enh-moviechat__frame',
+                src:url,
+                title:t('text_message_board'),
+                loading:'lazy',
+                referrerpolicy:'no-referrer',
+                sandbox:'allow-scripts allow-same-origin allow-popups allow-forms',
+            });
+            let settled = false;
+            const giveUp = () => {
+                if (settled) return;
+                settled = true;
+                frame.remove();
+                section.classList.add('enh-moviechat--unavailable');
+                section.appendChild(makeEl('div', { className:'enh-moviechat__note' },
+                    t('text_board_could_not_be_shown')));
+            };
+            frame.addEventListener('load', () => {
+                if (settled) return;
+                settled = true;
+                clearTimeout(this._timer);
+                section.classList.add('enh-moviechat--loaded');
+            }, { once:true });
+            /* A frame refused by a framing header loads nothing and reports nothing, so
+               the timeout is the only signal there is. */
+            this._timer = setTimeout(giveUp, MOVIECHAT_LOAD_TIMEOUT);
+            section.appendChild(frame);
+        },
+        destroy() {
+            clearTimeout(this._timer);
+            this._timer = null;
+            document.getElementById('enh-moviechat')?.remove();
+            this._section = null;
+        },
+    });
+
     reg({
         key: 'imageZoom', name: t('feature_imageZoom_name'), group: 'Appearance',
         _overlay: null,
@@ -12830,6 +12921,31 @@ section[data-testid="hero-parent"].enh-editorial-native-hidden { display: none !
     font: 500 9px/1.2 -apple-system, BlinkMacSystemFont, 'Segoe UI', sans-serif;
     color: ${t.tx3};
 }
+.enh-moviechat {
+    margin: 20px 0;
+    padding: 14px 16px;
+    border: 1px solid ${t.bd};
+    border-radius: 12px;
+    background: ${t.sf};
+}
+.enh-moviechat__header {
+    display: flex;
+    flex-wrap: wrap;
+    align-items: baseline;
+    gap: 10px;
+    margin-bottom: 10px;
+}
+.enh-moviechat__title { margin: 0; font-size: 15px; color: ${t.tx}; }
+.enh-moviechat__note { font-size: 12px; color: ${t.tx3}; }
+.enh-moviechat__link { margin-left: auto; font-size: 13px; color: ${t.accent}; }
+.enh-moviechat__frame {
+    display: block;
+    width: 100%;
+    height: 640px;
+    border: 0;
+    border-radius: 8px;
+    background: ${t.bg};
+}
 .enh-zoom {
     position: absolute;
     z-index: 2147483000;
@@ -15062,6 +15178,7 @@ section[data-testid="hero-parent"].enh-editorial-native-hidden { display: none !
         toolsPage.appendChild(makeEl('div', { className:'enh-settings-grid enh-settings-grid--three' },
             makeFeatureCard(t('settings_title_tools'), t('settings_actions_placed_near_a_movie_or_show'), t('settings_title_pages'), [
                 'searchButtons', 'externalLinks', 'trailerPopover', 'expandedLinkMenu', 'watchedMarking', 'titleNotes',
+                'movieChatBoard',
             ]),
             makeFeatureCard(t('settings_tv_episodes'), t('settings_focused_tools_for_series_and_episode_lists'), 'TV', [
                 'tvEpisodeTools', 'tvShowEnhancements', 'subtitleLinks', 'episodeSubtitles',

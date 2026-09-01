@@ -283,6 +283,7 @@ function loadScriptTestHooks({ withoutDeleteValue = false, withheldCredentials =
         getAvailabilityCacheKey,
         getJustWatchSearchUrl,
         isTmdbConfigured,
+        getMovieChatUrl,
         boundedImageVariant,
         parseAniListSearch,
         getFeature: key => features.find(feature => feature.key === key),
@@ -2778,6 +2779,38 @@ test('a zoomed image asks for a bounded variant, never the original', () => {
        contexts and a z-index inside one cannot escape it. */
     assert(/\.enh-zoom \{[\s\S]{0,200}position: absolute;/.test(script),
         'the preview must not be positioned inside the card it came from');
+});
+
+/* IE-23: IMDb closed its boards in 2017 and MovieChat keeps one per IMDb id. Checked live
+   2026-08-31: /tt0133093 answers 301 to /tt0133093/The-Matrix, and the final page carries
+   no X-Frame-Options and no Content-Security-Policy — framing works by their omission,
+   not by their policy, so the fallback is a requirement rather than polish. */
+test('the message board is addressed by IMDb id and never guessed at', () => {
+    const hooks = loadScriptTestHooks();
+    assert.strictEqual(hooks.getMovieChatUrl('tt0133093'), 'https://moviechat.org/tt0133093');
+
+    // Only an IMDb id. Anything else would be a URL assembled out of page text.
+    ['', null, 'nm0000206', 'tt', 'tt12', 'tt0133093/../evil', 'https://evil.example.com', '../../etc']
+        .forEach(value => assert.strictEqual(hooks.getMovieChatUrl(value), '', `${value} is not an IMDb id`));
+
+    assert.strictEqual(hooks.DEFAULTS.movieChatBoard, false, 'someone else\'s page inside this one is opt-in');
+
+    /* A refused frame fires no error event in any browser, so a timeout is the only
+       signal there is that the board did not appear. */
+    const body = script.slice(script.indexOf("key: 'movieChatBoard'"));
+    const feature = body.slice(0, body.indexOf('        destroy() {'));
+    assert(/setTimeout\(giveUp, MOVIECHAT_LOAD_TIMEOUT\)/.test(feature),
+        'the fallback must be driven by a timeout, not by an error event');
+    assert(!/addEventListener\('error'/.test(feature),
+        'an error event would never fire for a framing refusal, so nothing may depend on one');
+    // And the section must not fetch anything: the frame is the only thing that contacts them.
+    assert(!/httpGet|httpRequest|GM_xmlhttpRequest/.test(feature),
+        'the board is framed, never fetched');
+    // Nothing loads until it is scrolled to.
+    const gateAt = feature.indexOf('waitUntilVisible(section, isCurrent)');
+    assert(gateAt >= 0, 'the section must wait to be seen before it loads anything');
+    assert(gateAt < feature.indexOf('src:url'),
+        'the frame must be created after the section is visible, not before');
 });
 
 test('version strings match', () => {

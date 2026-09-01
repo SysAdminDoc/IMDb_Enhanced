@@ -182,6 +182,77 @@ async function runFixture(name, run, { source = instrumented, extension = null }
     }
 }
 
+/* The half of the gate that costs nothing: a board nobody has scrolled to is a heading
+   and a link, and contacts MovieChat not at all. */
+await runFixture('title', async (window, hooks) => {
+    const observer = window.IntersectionObserver;
+    window.IntersectionObserver = class {
+        constructor() {}
+        observe() {}
+        disconnect() {}
+        unobserve() {}
+    };
+    try {
+        window.GM_setValue('imdb_enh_movieChatBoard', true);
+        hooks.runFeature('movieChatBoard');
+        for (let tick = 0; tick < 5; tick += 1) await new Promise(resolve => window.setTimeout(resolve, 0));
+        assert.ok(window.document.getElementById('enh-moviechat'), 'the section itself is mounted');
+        assert.equal(window.document.querySelector('#enh-moviechat iframe'), null,
+            'and nothing is requested until it is scrolled to');
+    } finally {
+        hooks.stopFeature('movieChatBoard');
+        window.GM_setValue('imdb_enh_movieChatBoard', false);
+        window.IntersectionObserver = observer;
+    }
+});
+
+/* IE-23: the board is someone else's page inside this one, so it says so before anything
+   loads, and it has to survive the day MovieChat adds a framing header — which fires no
+   error event, only silence. happy-dom does not load iframes, so the frame here never
+   reports itself loaded, which is exactly the case the timeout exists for. */
+await runFixture('title', async (window, hooks) => {
+    /* happy-dom's IntersectionObserver never reports an intersection, so it is replaced
+       with one whose answer this test controls: the gate is what is being exercised, and
+       both of its answers matter. */
+    const observer = window.IntersectionObserver;
+    let intersects = false;
+    window.IntersectionObserver = class {
+        constructor(callback) { this.callback = callback; }
+        observe(element) { if (intersects) this.callback([{ isIntersecting:true, target:element }]); }
+        disconnect() {}
+        unobserve() {}
+    };
+    try {
+        // The feature is off by default, and its own guard checks the setting.
+        window.GM_setValue('imdb_enh_movieChatBoard', true);
+        intersects = true;
+        await hooks.runFeature('movieChatBoard');
+        // The visibility gate resolves on a microtask, so let it settle before looking.
+        for (let tick = 0; tick < 5; tick += 1) await new Promise(resolve => window.setTimeout(resolve, 0));
+        const section = window.document.getElementById('enh-moviechat');
+        assert.ok(section, 'the section should be mounted on a title page');
+        assert.match(section.textContent, /Hosted by MovieChat/,
+            'and say whose page it is before anything is loaded');
+
+        const link = section.querySelector('.enh-moviechat__link');
+        assert.equal(link.getAttribute('href'), 'https://moviechat.org/tt0133093');
+        assert.equal(link.getAttribute('rel'), 'noopener noreferrer');
+
+        const frame = section.querySelector('iframe');
+        assert.ok(frame, 'the frame is created once the section is visible');
+        assert.equal(frame.getAttribute('src'), 'https://moviechat.org/tt0133093');
+        assert.equal(frame.getAttribute('referrerpolicy'), 'no-referrer');
+        assert.match(frame.getAttribute('sandbox'), /allow-scripts/);
+
+        hooks.stopFeature('movieChatBoard');
+        window.GM_setValue('imdb_enh_movieChatBoard', false);
+        assert.equal(window.document.getElementById('enh-moviechat'), null,
+            'and switching it off takes the whole section away');
+    } finally {
+        window.IntersectionObserver = observer;
+    }
+});
+
 /* IE-21: the preview has to appear for someone tabbing through the cast list, not only
    for a mouse, and it has to come down again. A feature that only answers mouseover is
    the half of this that is easy to write and useless with a keyboard. */
