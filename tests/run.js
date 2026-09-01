@@ -283,6 +283,7 @@ function loadScriptTestHooks({ withoutDeleteValue = false, withheldCredentials =
         getAvailabilityCacheKey,
         getJustWatchSearchUrl,
         isTmdbConfigured,
+        SECONDARY_PAGE_FEATURE_KEYS,
         collectAniListCandidates,
         getAniListIdFromUrl,
         parseAniListEntry,
@@ -2813,6 +2814,41 @@ test('a zoomed image asks for a bounded variant, never the original', () => {
     assert.strictEqual(hooks.boundedImageVariant(''), '');
     assert.strictEqual(hooks.boundedImageVariant(null), '');
     assert.strictEqual(hooks.boundedImageVariant('not a url at all'), '');
+    /* Credentials in an address are refused everywhere else in this file, and this one
+       ends up as an img src like any other. */
+    assert.strictEqual(hooks.boundedImageVariant('https://user:pass@m.media-amazon.com/images/M/x._V1_QL75_UX140_.jpg'), '',
+        'an address carrying credentials is not rewritten, it is refused');
+
+    /* Never smaller than what is already on screen: on a HiDPI display currentSrc is
+       IMDb's 2x variant, and a flat 800 would hand back a worse picture than the
+       thumbnail it is meant to enlarge. */
+    assert(/_UY1200_/.test(hooks.boundedImageVariant('https://m.media-amazon.com/images/M/x._V1_UY1200_.jpg')),
+        'a source already larger than the default is not downgraded');
+    assert(/_UY1600_/.test(hooks.boundedImageVariant('https://m.media-amazon.com/images/M/x._V1_UY2000_.jpg')),
+        'though the ceiling still binds above it');
+    assert(/_UY1600_/.test(hooks.boundedImageVariant('https://m.media-amazon.com/images/M/x._V1_UY9000_.jpg')),
+        'and the ceiling still holds');
+    assert(/_UY800_/.test(hooks.boundedImageVariant('https://m.media-amazon.com/images/M/x._V1_UX140_.jpg')),
+        'a small source still gets the default');
+
+    /* Both surfaces the item names. Only one of them was covered. */
+    // The list itself contains ], so the capture has to run to the join that closes it.
+    const selector = /const ZOOM_THUMBNAIL_SELECTOR = \[([\s\S]*?)\]\.join/.exec(script)?.[1] || '';
+    assert(/hero-media__poster/.test(selector), 'the poster is half of what this is for');
+    assert(/title-cast-item__avatar/.test(selector), 'and the cast photos are the other half');
+    /* A cast list and a filmography are where the thumbnails are; the title page's
+       top-billed row is a fraction of them. */
+    assert(hooks.SECONDARY_PAGE_FEATURE_KEYS.has('imageZoom'),
+        'the zoom must reach full credits and person pages');
+
+    /* Every listener it installs must come off again, or they accumulate on every route
+       change for the life of the tab. */
+    const body = script.slice(script.indexOf("key: 'imageZoom'"));
+    const feature = body.slice(0, body.indexOf("    reg({", 10));
+    const added = [...feature.matchAll(/(?:document|window)\.addEventListener\('([a-z]+)'/g)].map(match => match[1]).sort();
+    const removed = [...feature.matchAll(/(?:document|window)\.removeEventListener\('([a-z]+)'/g)].map(match => match[1]).sort();
+    assert(added.length >= 6, 'the zoom listens on the document and the window');
+    assert.deepStrictEqual(removed, added, 'and every one of them is taken off again');
 
     // Off until asked for: it changes what hovering a picture does.
     assert.strictEqual(hooks.DEFAULTS.imageZoom, false);

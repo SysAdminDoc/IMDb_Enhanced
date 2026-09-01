@@ -334,6 +334,24 @@ await runFixture('title', async (window, hooks) => {
     window.document.dispatchEvent(new window.KeyboardEvent('keydown', { key:'Escape', bubbles:true }));
     assert.equal(window.document.querySelector('.enh-zoom'), null, 'and Escape should dismiss it');
 
+    /* A variant IMDb does not have answers with an error rather than a picture, and an
+       empty frame beside the thumbnail is worse than no feature at all. */
+    const broken = window.document.querySelector('.enh-zoom__image');
+    assert.equal(broken, null, 'nothing should be showing at this point');
+    thumbnail.dispatchEvent(new window.MouseEvent('mouseover', { bubbles:true }));
+    window.document.querySelector('.enh-zoom__image').dispatchEvent(new window.Event('error'));
+    assert.equal(window.document.querySelector('.enh-zoom'), null,
+        'an image that will not load takes its own overlay down');
+
+    /* The poster is the other half of what the item names, and it is reached by its own
+       test id rather than by being inside a cast row. */
+    const poster = window.document.querySelector('[data-testid="hero-media__poster"] img');
+    assert.ok(poster, 'the fixture should carry the hero poster');
+    poster.setAttribute('src', 'https://m.media-amazon.com/images/M/MV5BPOSTER._V1_QL75_UX190_.jpg');
+    poster.dispatchEvent(new window.MouseEvent('mouseover', { bubbles:true }));
+    assert.ok(window.document.querySelector('.enh-zoom'), 'hovering the poster shows a preview too');
+    poster.dispatchEvent(new window.MouseEvent('mouseout', { bubbles:true }));
+
     /* An image IMDb serves from somewhere else, or under a name with no transform in it,
        is left alone rather than rewritten into an address that means something else. */
     thumbnail.setAttribute('src', 'https://example.test/poster.jpg');

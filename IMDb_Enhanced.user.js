@@ -8233,18 +8233,28 @@ section[id*="quote" i] .ipc-list-card { padding: 4px 0 !important; margin: 2px 0
     const IMAGE_HOST = 'm.media-amazon.com';
     const IMAGE_VARIANT_PATTERN = /\._V1_[^./]*\.(jpg|jpeg|png)$/i;
     const ZOOM_IMAGE_HEIGHT = 800;
+    // Matches the max-width the stylesheet gives .enh-zoom__image.
+    const ZOOM_MAX_WIDTH = 520;
 
     function boundedImageVariant(url, height = ZOOM_IMAGE_HEIGHT) {
         let parsed;
         try { parsed = new URL(String(url || ''), location.href); }
         catch { return ''; }
         if (parsed.protocol !== 'https:') return '';
+        // The same rule normalizeTrustedUrl applies: an address carrying credentials is refused.
+        if (parsed.username || parsed.password) return '';
         const host = parsed.hostname.toLowerCase();
         if (host !== IMAGE_HOST && !host.endsWith('.media-amazon.com')) return '';
         if (!IMAGE_VARIANT_PATTERN.test(parsed.pathname)) return '';
-        const wanted = Math.max(200, Math.min(1600, Math.round(Number(height) || ZOOM_IMAGE_HEIGHT)));
+        /* Never smaller than what is already on screen. On a HiDPI display currentSrc is
+           IMDb's 2x variant, and asking for a flat 800 there hands back a worse picture
+           than the thumbnail it is meant to enlarge. */
+        const alreadyAsked = Number(/_U[XY](\d{2,4})_/i.exec(parsed.pathname)?.[1]) || 0;
+        const asked = Math.max(Number(height) || ZOOM_IMAGE_HEIGHT, alreadyAsked);
+        const wanted = Math.max(200, Math.min(1600, Math.round(asked)));
         parsed.pathname = parsed.pathname.replace(IMAGE_VARIANT_PATTERN, `._V1_QL90_UY${wanted}_.$1`);
         parsed.search = '';
+        parsed.hash = '';
         return parsed.href;
     }
 
@@ -8373,6 +8383,9 @@ section[id*="quote" i] .ipc-list-card { padding: 4px 0 !important; margin: 2px 0
                    picture, and an empty frame beside the thumbnail is worse than no
                    feature. The overlay takes itself down instead. */
                 image.addEventListener('error', () => this.hide(), { once:true });
+                image.addEventListener('load', () => {
+                    if (this._anchor === target) this.position(target);
+                }, { once:true });
                 this._overlay = makeEl('div', {
                     className:'enh-zoom',
                     role:'presentation',
@@ -8411,8 +8424,11 @@ section[id*="quote" i] .ipc-list-card { padding: 4px 0 !important; margin: 2px 0
             if (!overlay || !target?.getBoundingClientRect) return;
             const box = target.getBoundingClientRect();
             const room = window.innerWidth - box.right;
-            // Whichever side has room, so the preview never leaves the viewport.
-            const left = room > box.left ? box.right + 12 : Math.max(12, box.left - 12 - overlay.offsetWidth);
+            /* Whichever side has room. The width is only known once the image has loaded,
+               so before that this assumes the widest the stylesheet allows rather than
+               the few pixels of padding an empty box measures. */
+            const width = overlay.offsetWidth > 40 ? overlay.offsetWidth : ZOOM_MAX_WIDTH;
+            const left = room > box.left ? box.right + 12 : Math.max(12, box.left - 12 - width);
             overlay.style.left = `${Math.round(left + window.scrollX)}px`;
             overlay.style.top = `${Math.round(Math.max(12, box.top) + window.scrollY)}px`;
         },
@@ -15642,6 +15658,9 @@ section[data-testid="hero-parent"].enh-editorial-native-hidden { display: none !
         // Person pages carry a filmography, which is exactly the long card list marks
         // are useful for narrowing.
         'watchedMarking', 'markFilters', 'castAges',
+        /* A full cast list and a person's filmography are where the thumbnails are;
+           covering only the title page's top-billed row misses most of them. */
+        'imageZoom',
     ]);
     const EPISODE_LIST_FEATURE_KEYS = new Set([
         ...SECONDARY_PAGE_FEATURE_KEYS, 'tvEpisodeTools', 'seasonProgress', 'episodeSubtitles',
