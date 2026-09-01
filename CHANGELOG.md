@@ -24,7 +24,7 @@
 
 ### Added
 
-- You can hide the featured review on a title page. IMDb picks one user review and puts it above the fold, and which one you get is not a choice you made, which is why IMDb has a help article about it. Switch this on under Clean up and the review cards go; the "User reviews" heading, the count and the link through to all of them stay where they are. Off by default.
+- You can hide the reviews IMDb shows on a title page. It picks which ones and puts them above the fold, and that is not a choice you made, which is why IMDb has a help article for people who write in about it. Switch this on under Clean up and the review cards go; the "User reviews" heading, the count and the link through to all of them stay where they are. Off by default.
 
 - A new install says hello once. Nothing on IMDb explains where the settings are, and an extension you loaded yourself has no store page to explain it either, so the first IMDb page you open after installing carries a short note saying the extension is running and that the gear button in the corner opens its settings. Click Dismiss or leave it, and it goes on its own after a few seconds. You will not see it again, and resetting your settings will not bring it back.
 
@@ -34,7 +34,7 @@
 
 - On a title Ratings tab, the comparison line now also reports the average with the 1s and the 10s left out. A review-bombed film is bombed at one end and defended at the other, and both are where a few people move an average furthest, so the middle of the audience is worth seeing on its own. It is derived from the vote counts IMDb publishes, labelled as derived, and it never replaces the rating on the page.
 
-- Your marks can be exported as a spreadsheet, from the Data page, either to the clipboard or as a file. One pair of buttons gives you everything the extension stores against a title: the state, the title and year, genres, your rating, IMDb's rating, the runtime, the note, and a row for every date you watched it. The other pair gives just the two columns Letterboxd imports, so the list can go with you. The downloaded file opens correctly in Excel, and anything exported reads back into the extension unchanged. Titles and notes that contain commas, quotes or line breaks survive the trip, and a title beginning with an equals sign is not handed to a spreadsheet as a formula.
+- Your marks can be exported as a spreadsheet, from the Data page, either to the clipboard or as a file. One pair of buttons gives you everything the extension stores against a title: the state, the title and year, genres, your score for the title, IMDb's score, the runtime, the note, and a row for every date you watched it carrying whatever you gave it that time. The other pair gives just the two columns Letterboxd imports, so the list can go with you. The downloaded file opens correctly in Excel, and anything exported reads back into the extension unchanged. Titles and notes that contain commas, quotes or line breaks survive the trip, and a title beginning with an equals sign is not handed to a spreadsheet as a formula.
 
 - `npm run pack` builds the archives a store listing needs: a Chromium package, a Firefox package, the web-store package, a source archive for AMO, and a file of SHA-256 sums for all four. The archives are deterministic, so building the same commit twice produces the same bytes and the checksums mean something. The zip writer is part of the repository rather than a dependency.
 

@@ -517,8 +517,8 @@
         feature_removeAds_name: 'Hide ads and sponsored shells',
         feature_removeAppBanner_detail: 'Hides app-install prompts shown on desktop pages.',
         feature_removeAppBanner_name: 'Hide app banners',
-        feature_removeFeaturedReview_detail: 'Hides the featured user review on title pages. The heading, the count and the link to all reviews stay.',
-        feature_removeFeaturedReview_name: 'Hide the featured review',
+        feature_removeFeaturedReview_detail: 'Hides the user reviews shown on a title page. The heading, the count and the link through to all of them stay.',
+        feature_removeFeaturedReview_name: 'Hide reviews on title pages',
         feature_removeContribution_detail: 'Removes contribution calls to action from detail pages.',
         feature_removeContribution_name: 'Hide contribution prompts',
         feature_removeNewsSection_detail: 'Keeps the page focused by removing IMDb news modules.',
@@ -979,6 +979,7 @@
         text_csv_matched_existing: '$1 matched to titles already stored here',
         text_csv_rows_across_titles_one: '$2: $1 row across $3 titles',
         text_csv_rows_across_titles_other: '$2: $1 rows across $3 titles',
+        text_csv_rows_past_the_limit: '$1 rows past the limit were not read, so some titles are missing',
         text_csv_summary_nothing_changed_yet: '$1. Nothing has been changed yet.',
         text_csv_titles_over_limit: '$1 over the $2-title limit',
         text_csv_viewings_over_limit_one: '$1 viewing event over the $2-per-title limit not retained',
@@ -1310,7 +1311,13 @@
     const URL_TEMPLATE_TEXT_LIMIT = 4096;
     const SETTING_TEXT_LIMIT = 4096;
     const SETTINGS_IMPORT_TEXT_LIMIT = 4 * 1024 * 1024;
-    const CSV_IMPORT_ROW_LIMIT = 10000;
+    /* Big enough that a file this extension wrote always reads back. The export is a row
+       per viewing, so the worst case is every one of the 5,000 marks carrying its full
+       hundred dates, and a ten-thousand-row ceiling silently dropped a third of a large
+       library on restore while reporting the import a success. The real guard on a
+       pasted file is SETTINGS_IMPORT_TEXT_LIMIT above, which a file this long passes
+       only if its rows are short. */
+    const CSV_IMPORT_ROW_LIMIT = USER_MARKS_MAX * USER_MARK_VIEWINGS_MAX;
     const SITE_CATEGORY_OPTIONS = [
         { key:'watch', label:t('category_watch'), description:t('category_watch_detail') },
         { key:'reviews', label:t('category_reviews'), description:t('category_reviews_detail') },
@@ -2782,8 +2789,13 @@
        recent one would quietly throw away the rest of somebody's history the first time
        they exported and imported it. The column names are the ones this extension's own
        importer reads, so a file it writes is a file it can read. */
+    /* Two rating columns, because a record holds two different ratings and one column
+       cannot say which is which. Your Rating is the score given at a particular viewing,
+       so it is empty on a row for a viewing that was never scored; Title Rating is the
+       one score held against the title. Writing the title's score into every viewing row
+       invented a rating for each of them on the way back in. */
     const MARKS_CSV_HEADER = ['Const', 'State', 'Title', 'Year', 'Genres', 'Your Rating',
-        'IMDb Rating', 'Runtime (mins)', 'Watched Date', 'Marked On', 'Note'];
+        'Title Rating', 'IMDb Rating', 'Runtime (mins)', 'Watched Date', 'Marked On', 'Note'];
 
     function buildMarksCsv(entries = getUserMarkEntries()) {
         const rows = [csvRow(MARKS_CSV_HEADER)];
@@ -2791,8 +2803,9 @@
             const markedOn = viewingDateFromTimestamp(Number(record?.ts));
             const viewings = Array.isArray(record?.viewings) ? record.viewings : [];
             /* A Seen title with nothing logged against it still happened, and the day it
-               was marked is the best date there is. A Skip is a decision rather than a
-               viewing, so it gets a row with that column empty. */
+               was marked is the best date there is. Every other record gets one row, with
+               a row per viewing where there are any — including a Skip, which can hold the
+               dates it was watched on before somebody decided against a rewatch. */
             const listed = viewings.length ? viewings
                 : record?.state === 'watched' && markedOn ? [{ date:markedOn }]
                     : [null];
@@ -2804,7 +2817,8 @@
                     record?.year ?? '',
                     // Semicolons, so a genre list is not a quoted field in every row.
                     (Array.isArray(record?.genres) ? record.genres : []).join('; '),
-                    viewing?.rating ?? record?.rating ?? '',
+                    viewing?.rating ?? '',
+                    record?.rating ?? '',
                     record?.imdbRating ?? '',
                     record?.runtime ?? '',
                     viewing?.date || '',
@@ -2964,6 +2978,10 @@
                title was watched. A Skip has the first and never the second, so without a
                column of its own the date a skip was recorded is lost on every trip. */
             marked:findCsvColumn(headers, ['markedon']),
+            /* The score held against the title, as opposed to the one given at a
+               particular viewing. Files from anywhere else have only one rating column,
+               and it means both; this extension's own export separates them. */
+            titleRating:findCsvColumn(headers, ['titlerating']),
             genres:findCsvColumn(headers, ['genres', 'genre']),
             imdbRating:findCsvColumn(headers, ['imdbrating']),
             runtime:findCsvColumn(headers, ['runtimemins', 'runtimeminutes', 'runtime']),
@@ -2994,7 +3012,11 @@
         const merged = { ...existing };
         const resolver = buildStoredTitleResolver(existing);
         const dataRows = rows.slice(1, CSV_IMPORT_ROW_LIMIT + 1);
-        let skippedRows = Math.max(0, rows.length - 1 - dataRows.length);
+        /* Counted apart from the rows this could not make sense of. A file cut short is
+           an incomplete restore, and "skipped" alongside a success message read as a
+           handful of bad rows rather than as titles that are simply not there. */
+        const truncatedRows = Math.max(0, rows.length - 1 - dataRows.length);
+        let skippedRows = 0;
         let importedRows = 0;
         let resolvedRows = 0;
         let droppedViewings = 0;
@@ -3009,6 +3031,14 @@
             const date = normalizeViewingDate(rawDate);
             const rawRating = columns.rating ? readCsvCell(row, columns.rating.index) : '';
             const rating = columns.rating ? normalizeCsvRating(rawRating, columns.rating.scale) : null;
+            /* The score held against the title. A file from anywhere else carries one
+               rating column and it means both this and the viewing's, which is how it has
+               always been read; this extension's own export separates them so a viewing
+               that was never scored does not come back scored. */
+            const rawTitleRating = readCsvCell(row, columns.titleRating);
+            const titleRating = columns.titleRating >= 0
+                ? normalizeUserMarkRating(rawTitleRating)
+                : rating;
             const rawImdbRating = readCsvCell(row, columns.imdbRating);
             const imdbRating = normalizeUserMarkRating(rawImdbRating);
             const rawRuntime = readCsvCell(row, columns.runtime);
@@ -3017,6 +3047,7 @@
             // Written by this extension's own export, so a file it produced reads back whole.
             const note = normalizeUserNote(readCsvCell(row, columns.note));
             if ((rawYear && year === null) || (rawDate && !date) || (rawRating && rating === null)
+                || (rawTitleRating && titleRating === null)
                 || (rawImdbRating && imdbRating === null) || (rawRuntime && runtime === null)) {
                 skippedRows += 1;
                 return;
@@ -3041,12 +3072,17 @@
                as watched invents a viewing nobody had. Files without the column at all,
                which is IMDb's own export and Letterboxd's, are lists of what somebody
                saw, so every row there is watched. */
+            /* Only an empty cell means no state. A file whose State column says something
+               this does not recognise is still a file about titles somebody watched, and
+               reading "Completed" as no state at all would put the row in the store
+               showing as unmarked everywhere. */
             const state = rawState === 'skip' || rawState === 'skipped' ? 'skip'
-                : rawState === 'watched' || rawState === 'seen' ? 'watched'
-                    : columns.state >= 0 ? '' : 'watched';
-            const event = state !== 'skip' && date
-                ? [{ date, ...(rating !== null ? { rating } : {}) }]
-                : [];
+                : rawState || columns.state < 0 ? 'watched' : '';
+            /* A date is a date whatever the state says. A Skip can hold the dates
+               somebody watched a thing on before deciding against it again, and dropping
+               them here destroyed that history on the way back in from a file this
+               extension had just written. */
+            const event = date ? [{ date, ...(rating !== null ? { rating } : {}) }] : [];
             if (event.length) {
                 const previousViewings = normalizeViewingEvents(previous.viewings);
                 const eventKey = `${event[0].date}\u0000${event[0].rating ?? ''}`;
@@ -3067,7 +3103,7 @@
                     ? { viewings:mergeViewingEvents(previous.viewings, event) }
                     : {}),
                 ...(note ? { note } : {}),
-                ...(rating !== null ? { rating } : {}),
+                ...(titleRating !== null ? { rating:titleRating } : {}),
                 ...(year !== null ? { year } : {}),
                 ...(genres.length || previous.genres?.length
                     ? { genres:normalizeUserMarkGenres([...(previous.genres || []), ...genres]) }
@@ -3088,6 +3124,7 @@
             importedTitles,
             resolvedRows,
             skippedRows,
+            truncatedRows,
             droppedViewings,
             droppedTitles:touched.size - importedTitles,
             marks,
@@ -3095,13 +3132,14 @@
     }
     function describeCsvMarkImport(result) {
         if (!result?.importedRows) {
-            return tCount('text_no_importable_rows_skipped', result?.skippedRows || 0);
+            return tCount('text_no_importable_rows_skipped', (result?.skippedRows || 0) + (result?.truncatedRows || 0));
         }
         const parts = [
             tCount('text_csv_rows_across_titles', result.importedRows, [result.source, result.importedTitles]),
         ];
         if (result.resolvedRows) parts.push(t('text_csv_matched_existing', [result.resolvedRows]));
         if (result.skippedRows) parts.push(t('text_count_skipped', [result.skippedRows]));
+        if (result.truncatedRows) parts.push(t('text_csv_rows_past_the_limit', [result.truncatedRows]));
         if (result.droppedViewings) {
             parts.push(tCount('text_csv_viewings_over_limit', result.droppedViewings, [USER_MARK_VIEWINGS_MAX]));
         }
@@ -16663,6 +16701,9 @@ ${scopedRules('.enh-zoom', {
 
     const HANDHELD_MAX_EDGE = 820;
     const DESKTOP_REDIRECT_MARK = 'imdb_enh_desktop_redirect';
+    // Long enough to cover a bounce and a reload, short enough that a link clicked
+    // again later is a new journey rather than the same loop.
+    const DESKTOP_REDIRECT_LOOP_MS = 30000;
 
     /* The short edge, not the width. A phone held sideways is 844 CSS pixels across and
        would read as a computer measured on width alone, and a tablet would change its
@@ -16697,12 +16738,20 @@ ${scopedRules('.enh-zoom', {
 
     /* IMDb sends some visitors back to the mobile host, and two redirects that disagree
        with each other loop until the tab gives up. One rewrite per tab per address. */
-    function claimDesktopRedirect(target, view = window) {
+    function claimDesktopRedirect(target, view = window, now = Date.now()) {
         try {
             const store = view.sessionStorage;
             if (!store) return true;
-            if (store.getItem(DESKTOP_REDIRECT_MARK) === target) return false;
-            store.setItem(DESKTOP_REDIRECT_MARK, target);
+            /* A loop bounces back within a moment; somebody opening the same link again
+               half an hour later meant it. A permanent claim could not tell the two
+               apart and refused the second one for the rest of the session, so the
+               address the person deliberately clicked sat there doing nothing. */
+            const [when, claimed] = String(store.getItem(DESKTOP_REDIRECT_MARK) || '').split(' ');
+            const age = now - Number(when);
+            if (claimed === target && Number.isFinite(age) && age >= 0 && age < DESKTOP_REDIRECT_LOOP_MS) {
+                return false;
+            }
+            store.setItem(DESKTOP_REDIRECT_MARK, `${now} ${target}`);
             return true;
         } catch { return true; }
     }

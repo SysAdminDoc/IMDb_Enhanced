@@ -540,10 +540,10 @@
     "message": "Hide app banners"
   },
   "feature_removeFeaturedReview_detail": {
-    "message": "Hides the featured user review on title pages. The heading, the count and the link to all reviews stay."
+    "message": "Hides the user reviews shown on a title page. The heading, the count and the link through to all of them stay."
   },
   "feature_removeFeaturedReview_name": {
-    "message": "Hide the featured review"
+    "message": "Hide reviews on title pages"
   },
   "feature_removeContribution_detail": {
     "message": "Removes contribution calls to action from detail pages."
@@ -1924,6 +1924,9 @@
   },
   "text_csv_rows_across_titles_other": {
     "message": "$2: $1 rows across $3 titles"
+  },
+  "text_csv_rows_past_the_limit": {
+    "message": "$1 rows past the limit were not read, so some titles are missing"
   },
   "text_csv_summary_nothing_changed_yet": {
     "message": "$1. Nothing has been changed yet."

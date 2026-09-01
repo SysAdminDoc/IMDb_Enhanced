@@ -242,6 +242,7 @@ function loadScriptTestHooks({ withoutDeleteValue = false, withheldCredentials =
         normalizeUserNote,
         USER_MARK_RECORD_VERSION,
         USER_MARK_VIEWINGS_MAX,
+        USER_MARKS_MAX,
         USER_MARK_NOTE_LIMIT,
         readPersonBirthDate,
         isPersonDeceased,
@@ -1695,12 +1696,22 @@ test('CSV import reports every storage bound instead of silently dropping histor
     assert.strictEqual(bounded.droppedViewings, 1);
     assert.match(hooks.describeCsvMarkImport(bounded), /1 viewing event over the 100-per-title limit not retained/);
 
-    const rowLimited = hooks.prepareCsvMarkImport([
-        'Const,Title',
-        ...Array.from({ length:hooks.CSV_IMPORT_ROW_LIMIT + 2 }, () => 'tt0133093,The Matrix'),
-    ].join('\n'), {});
+    /* The export is a row per viewing, so the largest file it can write is every mark
+       carrying its full history. An importer that stops short of that reads back part of
+       a library and calls it a success, which is how a restore loses a third of somebody's
+       marks with a cheerful summary. */
+    assert(hooks.CSV_IMPORT_ROW_LIMIT >= hooks.USER_MARKS_MAX * hooks.USER_MARK_VIEWINGS_MAX,
+        'the importer must be able to read back the biggest file the exporter can write');
+
+    /* And when a file really is longer than that, the rows past the end are reported as
+       what they are. Rolled up with the rows that could not be parsed, "skipped" reads as
+       a few bad lines rather than as titles that are not in the store at all. */
+    const rowLimited = hooks.prepareCsvMarkImport(
+        'Const,Title\n' + 'tt1,x\n'.repeat(hooks.CSV_IMPORT_ROW_LIMIT + 2), {});
     assert.strictEqual(rowLimited.importedRows, hooks.CSV_IMPORT_ROW_LIMIT);
-    assert.strictEqual(rowLimited.skippedRows, 2);
+    assert.strictEqual(rowLimited.truncatedRows, 2);
+    assert.strictEqual(rowLimited.skippedRows, 0, 'nothing was wrong with those rows; there were too many');
+    assert.match(hooks.describeCsvMarkImport(rowLimited), /2 rows past the limit were not read/);
 
     assert.throws(
         () => hooks.parseCsvTable('Const,Title\n' + 'x'.repeat(hooks.SETTINGS_IMPORT_TEXT_LIMIT)),
@@ -3215,7 +3226,7 @@ test('exported marks quote awkward values and defuse formulas', () => {
     const csv = hooks.buildMarksCsv(entries);
     const lines = csv.split('\r\n');
     assert.strictEqual(lines[0],
-        'Const,State,Title,Year,Genres,Your Rating,IMDb Rating,Runtime (mins),Watched Date,Marked On,Note',
+        'Const,State,Title,Year,Genres,Your Rating,Title Rating,IMDb Rating,Runtime (mins),Watched Date,Marked On,Note',
         'the header is the documented one');
     /* Every column the store holds, not the five it used to write. Read back through the
        parser rather than compared as a string, so the check is about the values. */
@@ -3343,6 +3354,11 @@ test('an exported CSV carries every field a mark record holds', () => {
     assert.deepStrictEqual(Array.from(back.viewings, viewing => `${viewing.date}@${viewing.rating}`),
         ['2019-04-02@8', '2024-01-15@9'], 'both viewings, each with the rating given that time');
 
+    /* The state has to survive too, which is the one thing the list above does not check:
+       with the watched arm gone every row of this extension's own export came back with
+       no state at all, so nothing in the library read as Seen. */
+    assert.strictEqual(back.state, 'watched', 'and it is still something the person watched');
+
     /* A skip has a date it was decided on and no date it was watched on. Without a column
        of its own that date became the moment of the import. */
     const skip = hooks.prepareCsvMarkImport(
@@ -3351,7 +3367,21 @@ test('an exported CSV carries every field a mark record holds', () => {
     assert.strictEqual(skip.state, 'skip');
     assert.strictEqual(new Date(skip.ts).toISOString().slice(0, 10), '2022-03-03',
         'the day it was marked, not the day it was imported');
-    assert(!skip.viewings?.length, 'and a skip is still not something anybody watched');
+    assert(!skip.viewings?.length, 'and a skip with nothing watched stays that way');
+
+    /* A Skip can hold viewings: marking something Seen and later Skip keeps the dates it
+       was watched on. The export wrote them and the import threw every one away, so a
+       backup-and-restore destroyed the history behind any title somebody had since
+       decided against, and reported it as a complete success. */
+    const rewatched = hooks.prepareCsvMarkImport(hooks.buildMarksCsv([
+        ['tt0088763', { state:'skip', title:'Seen, then skipped', ts:Date.UTC(2024, 0, 2),
+            viewings:[{ date:'2018-07-07', rating:8 }, { date:'2021-03-01' }] }],
+    ]), {}).marks.tt0088763;
+    assert.strictEqual(rewatched.state, 'skip', 'the decision stands');
+    assert.deepStrictEqual(Array.from(rewatched.viewings, viewing => `${viewing.date}@${viewing.rating ?? ''}`),
+        ['2018-07-07@8', '2021-03-01@'], 'and every date behind it comes back');
+    assert.strictEqual(rewatched.rating, undefined,
+        'a rating given at one viewing is not promoted into a score for the title');
 
     /* A record can hold a note with no state at all. Read back as watched it would put a
        film into somebody's history that they had only written a note against. */
@@ -3373,6 +3403,31 @@ test('an exported CSV carries every field a mark record holds', () => {
             rating:7.5 }]]), {},
     ).marks.tt0068646;
     assert.strictEqual(rated.rating, 7.5, 'the rating survives without a viewing to hang it on');
+    /* And it stays the title's rating rather than being stamped onto viewings that were
+       never scored. Writing it into every row invented a score for each date, which is a
+       first-trip rewrite of somebody's history that a second trip cannot undo. */
+    const unscored = hooks.prepareCsvMarkImport(hooks.buildMarksCsv([
+        ['tt0071562', { state:'watched', title:'Unscored viewings', ts:Date.UTC(2024, 0, 2),
+            rating:7.5, viewings:[{ date:'2019-04-02' }, { date:'2024-01-02' }] }],
+    ]), {}).marks.tt0071562;
+    assert.strictEqual(unscored.rating, 7.5, 'the title keeps its score');
+    assert.deepStrictEqual(Array.from(unscored.viewings, viewing => viewing.rating), [undefined, undefined],
+        'and neither viewing gains one it never had');
+
+    /* A file from anywhere else has one rating column and it means both, which is how
+       IMDb's own ratings export has always been read. That must not change. */
+    const foreign = hooks.prepareCsvMarkImport(
+        'Const,Your Rating,Date Rated,Title\r\ntt0068646,9,2024-03-04,The Godfather', {}).marks.tt0068646;
+    assert.strictEqual(foreign.rating, 9, 'one rating column still sets the title score');
+    assert.strictEqual(foreign.viewings?.[0]?.rating, 9, 'and the viewing it describes');
+
+    /* A State column this does not recognise is still a file about titles somebody
+       watched. Reading "Completed" as no state put the row in the store showing as
+       unmarked everywhere, which is worse than the guess it replaced. */
+    const foreignState = hooks.prepareCsvMarkImport(
+        'Const,Status,Watched Date\r\ntt0110912,Completed,2024-01-15', {}).marks.tt0110912;
+    assert.strictEqual(foreignState.state, 'watched',
+        'only an empty cell means no state; an unfamiliar word is not a reason to forget the row');
 
     /* Letterboxd and IMDb export files with no State column at all, and every row in one
        of those is something the person watched. That default has to stay. */
@@ -3568,12 +3623,32 @@ test('a mobile IMDb address is rewritten to the desktop one, path and all', () =
         'the second one for the same address does not');
     assert.strictEqual(hooks.claimDesktopRedirect('https://www.imdb.com/title/tt2/', tab), true,
         'a different page is a different journey');
+
+    /* And the refusal expires. A claim that never lifts cannot tell "IMDb bounced me
+       back" from "the person opened that link again", so the same address clicked later
+       in the same tab sat on the mobile page doing nothing for the rest of the session. */
+    const later = Date.now() + 60000;
+    assert.strictEqual(hooks.claimDesktopRedirect('https://www.imdb.com/title/tt2/', tab, later), true,
+        'the same link a minute later is a fresh journey, not a loop');
+    assert.strictEqual(hooks.claimDesktopRedirect('https://www.imdb.com/title/tt2/', tab, later + 1000), false,
+        'and the loop guard still holds inside the window');
     // Private modes throw on the first touch of session storage; that must not stop the fix.
     assert.strictEqual(hooks.claimDesktopRedirect('https://www.imdb.com/title/tt1/',
         { get sessionStorage() { throw new Error('denied'); } }), true,
         'a browser that refuses session storage still gets the redirect');
     assert(/claimDesktopRedirect\(desktop\)/.test(script),
         'and the boot path must actually consult it');
+
+    /* A view that cannot answer the question at all is left alone. A browser that throws
+       on matchMedia or on screen tells you nothing about the device, and the cost of
+       guessing wrong is asymmetric: a computer left on the mobile page can navigate away,
+       a phone dropped on a layout built for a mouse cannot undo that. */
+    const hostile = {
+        get matchMedia() { throw new Error('blocked'); },
+        innerWidth: 1920, innerHeight: 1080,
+    };
+    assert.strictEqual(hooks.desktopUrlForMobile('https://m.imdb.com/title/tt1/', hostile), '',
+        'a view that throws is not read as a desktop');
 
     assert.strictEqual(hooks.DEFAULTS.desktopFromMobileLinks, true, 'on by default');
     /* And switchable off: somebody who wants the mobile layout on a desktop should keep
@@ -3587,6 +3662,18 @@ test('a mobile IMDb address is rewritten to the desktop one, path and all', () =
     assert(/location\.replace\(desktop\)/.test(script), 'the history entry is replaced, not added to');
     assert(boot.indexOf('desktopUrlForMobile(location.href)') < boot.indexOf('installSPARouter()'),
         'and before the router or any feature starts');
+});
+
+/* IE-114: the fixture exercises the notice by calling it, which says nothing about
+   whether anything on a real page ever does. Deleting the one call from init left the
+   feature completely dead with every test still passing. */
+test('the first-run notice is wired into the page setup', () => {
+    const start = script.indexOf('function init() {');
+    assert(start > 0, 'init must still be there to wire anything into');
+    const body = script.slice(start, script.indexOf('\n    }\n', start));
+    assert(/\bshowFirstRunNotice\(\)/.test(body),
+        'init has to call it, or nobody who installs this ever sees it');
+    assert(/\bcreateFAB\(\)/.test(body), 'and create the gear button it points at');
 });
 
 test('version strings match', () => {
