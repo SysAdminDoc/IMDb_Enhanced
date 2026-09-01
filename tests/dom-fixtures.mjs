@@ -175,6 +175,27 @@ function installUserscriptGlobals(window) {
     };
 }
 
+await runFixture('title', async (window, hooks) => {
+    const nativeRating = requireSelector(window.document,
+        '[data-testid="hero-rating-bar__aggregate-rating"]');
+    const nativeHost = nativeRating.parentElement;
+
+    await hooks.runFeature('editorialTitleSurface');
+    const rail = await waitForSelector(window, '#enh-editorial-score-rail');
+    assert.equal(nativeRating.parentElement, rail,
+        'the editorial surface should adopt IMDb rating controls');
+
+    const lateWidget = window.document.createElement('div');
+    lateWidget.className = 'enh-score-widget';
+    rail.appendChild(lateWidget);
+    hooks.stopFeature('editorialTitleSurface');
+
+    assert.equal(lateWidget.isConnected, true,
+        'a score widget created after the editorial surface must stay connected');
+    assert.equal(lateWidget.parentElement, nativeHost,
+        'a late score widget must return to the native rating host');
+});
+
 /* The store profile is a build, not a setting, so the only honest way to exercise it is
    to run the code the store build actually ships. `source` takes the transformed script;
    `extension` installs the chrome surface the userscript uses to decide it is an

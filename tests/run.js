@@ -2256,6 +2256,10 @@ test('editorial title layout owns a stable full-width title surface', () => {
     assert(script.includes("appendTitleStackItem(node, Number.isFinite(order) ? order : fallback)"), 'late title controls should be rehomed into the editorial surface');
     assert(script.includes("document.querySelectorAll('.enh-score-widget').forEach(widget => adopt(widget, rail))"),
         'score widgets must remember their native parent so disabling the editorial layout does not delete them');
+    assert(script.includes("this._surface?.querySelectorAll('.enh-score-widget').forEach(widget =>"),
+        'score widgets created directly in the editorial rail must return to the native rating host');
+    assert(script.includes('this._scoreRestoreHost.appendChild(widget)'),
+        'disabling the editorial layout must preserve late score widgets');
     assert(/function findRatingBar\(\)[\s\S]*?const editorialRail = document\.getElementById\('enh-editorial-score-rail'\)[\s\S]*?if \(editorialRail\) return editorialRail/.test(script), 'rating features should target the editorial score rail');
     assert(script.includes('#enh-editorial-score-rail > :nth-child(3n + 1)'),
         'the responsive three-column score rail must clear the divider at the start of every row');

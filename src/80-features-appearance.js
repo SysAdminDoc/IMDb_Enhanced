@@ -33,6 +33,7 @@
         _observer: null,
         _surface: null,
         _nativeHero: null,
+        _scoreRestoreHost: null,
         _adoptedNodes: [],
         _syncQueued: false,
         init() {
@@ -46,6 +47,9 @@
                 if (!surface || !rail) return false;
                 this._surface = surface;
                 this._nativeHero = document.querySelector('section[data-testid="hero-parent"]');
+                this._scoreRestoreHost = document.querySelector('[data-testid="hero-rating-bar__aggregate-rating"]')?.parentElement
+                    || document.querySelector('[data-testid="hero-rating-bar__popularity"]')?.parentElement
+                    || null;
                 const sync = () => {
                     if (!isCurrent() || !rail.isConnected) return;
                     refreshEditorialSurface(surface, this._nativeHero || document);
@@ -124,6 +128,14 @@
             this._adoptedNodes.forEach(({ node, parent }) => {
                 if (node?.isConnected && parent?.isConnected && !parent.contains(node)) parent.appendChild(node);
             });
+            /* Score features can initialize after this surface and append directly to
+               its rail. Those nodes have no adoption record, so return them to the
+               native rating host before the surface is removed. */
+            if (this._scoreRestoreHost?.isConnected) {
+                this._surface?.querySelectorAll('.enh-score-widget').forEach(widget => {
+                    this._scoreRestoreHost.appendChild(widget);
+                });
+            }
 
             /* The native hero returns with this surface, so the stand-ins for its own
                controls go with it; everything else in the dock belongs to other
@@ -148,6 +160,7 @@
             });
             this._surface = null;
             this._nativeHero = null;
+            this._scoreRestoreHost = null;
             this._adoptedNodes = [];
             pruneTitleStack();
         }
