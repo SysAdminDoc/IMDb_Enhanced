@@ -466,9 +466,166 @@ if (chrome.action?.onClicked) {
     });
 }
 
-chrome.runtime.onInstalled.addListener(() => { syncAdBlockingFromStorage(); checkForUpdate(); });
-chrome.runtime.onStartup.addListener(() => { syncAdBlockingFromStorage(); checkForUpdate(); });
+/* ---- Watchlist availability alerts -------------------------------------------------
+   The one thing here that has to keep working with every IMDb tab closed. The page
+   writes down what is on the watchlist; this checks it on a schedule and says something
+   once, in one notification, when a title turns up on a service that was asked about.
+
+   Deliberately slow. A watchlist is up to 200 titles in the snapshot and each check is
+   two calls to TMDB, so a run takes a slice and moves a cursor: the whole list comes
+   round over a few days rather than in one burst on somebody else's API. */
+const WATCHLIST_ALARM = 'imdb-enhanced:watchlist-alerts';
+const WATCHLIST_ALARM_MINUTES = 24 * 60;
+const WATCHLIST_SETTING_KEY = `${STORAGE_PREFIX}watchlistAlerts`;
+const WATCHLIST_SERVICES_KEY = `${STORAGE_PREFIX}watchlistAlertServices`;
+const WATCHLIST_SNAPSHOT_KEY = `${STORAGE_PREFIX}watchlistSnapshot`;
+const WATCHLIST_STATE_KEY = `${STORAGE_PREFIX}watchlistAlertState`;
+const WATCHLIST_REGION_KEY = `${STORAGE_PREFIX}availabilityRegion`;
+const WATCHLIST_TOKEN_KEY = 'imdb_enh_tmdbReadToken';
+const WATCHLIST_BATCH = 20;
+const WATCHLIST_NOTIFICATION_TITLES = 3;
+
+function boundedProviderIds(value) {
+    return [...new Set((Array.isArray(value) ? value : [])
+        .map(entry => Number(entry?.provider_id))
+        .filter(id => Number.isInteger(id) && id > 0))].slice(0, 40);
+}
+
+async function tmdbJson(path, token) {
+    const response = await fetch(`https://api.themoviedb.org/3/${path}`, {
+        credentials: 'omit',
+        cache: 'no-cache',
+        headers: { Authorization: `Bearer ${token}`, Accept: 'application/json' },
+    });
+    if (!response.ok) throw new Error(`HTTP ${response.status}`);
+    return response.json();
+}
+
+/* Which services carry it where you are, right now. Movies only: TMDB has no
+   watch/providers for a series episode, and answering "everywhere" for one would be a
+   notification about nothing. */
+async function readAvailableProviders(imdbId, region, token) {
+    const found = await tmdbJson(`find/${encodeURIComponent(imdbId)}?external_source=imdb_id`, token);
+    const movie = Array.isArray(found?.movie_results) ? found.movie_results[0] : null;
+    if (!movie?.id) return null;
+    const providers = await tmdbJson(`movie/${Number(movie.id)}/watch/providers`, token);
+    const regional = providers?.results?.[region];
+    if (!regional) return [];
+    return boundedProviderIds(regional.flatrate);
+}
+
+function describeArrivals(arrivals) {
+    const names = arrivals.slice(0, WATCHLIST_NOTIFICATION_TITLES).map(entry => entry.title);
+    const extra = arrivals.length - names.length;
+    return extra > 0 ? `${names.join(', ')} and ${extra} more` : names.join(', ');
+}
+
+async function notifyArrivals(arrivals) {
+    if (!arrivals.length) return;
+    const allowed = await callApi(chrome.permissions, 'contains', { permissions:['notifications'] }).catch(() => false);
+    /* Asking for the permission needs a user gesture, which an alarm does not have. The
+       settings panel offers it; until it is granted the run still records what it saw, so
+       switching notifications on later does not produce a flood of old news. */
+    if (allowed !== true || !chrome.notifications?.create) return;
+    await callApi(chrome.notifications, 'create', {
+        type: 'basic',
+        iconUrl: chrome.runtime.getURL('icons/icon-128.png'),
+        title: 'New on your watchlist',
+        message: describeArrivals(arrivals),
+    }).catch(() => { /* a notification that cannot be shown is not worth a retry */ });
+}
+
+async function runWatchlistCheck() {
+    const stored = await callApi(chrome.storage.local, 'get', [
+        WATCHLIST_SETTING_KEY, WATCHLIST_SERVICES_KEY, WATCHLIST_SNAPSHOT_KEY,
+        WATCHLIST_STATE_KEY, WATCHLIST_REGION_KEY, WATCHLIST_TOKEN_KEY,
+    ]).catch(() => null);
+    if (!stored || stored[WATCHLIST_SETTING_KEY] !== true) return;
+    const token = String(stored[WATCHLIST_TOKEN_KEY] || '');
+    const wanted = new Set(boundedProviderIds((stored[WATCHLIST_SERVICES_KEY] || [])
+        .map(id => ({ provider_id: id }))));
+    // No token or no chosen services: nothing to ask and nothing worth asking about.
+    if (!token || !wanted.size) return;
+    const titles = stored[WATCHLIST_SNAPSHOT_KEY]?.titles;
+    if (!titles || typeof titles !== 'object') return;
+    const ids = Object.keys(titles).filter(id => /^tt\d{7,10}$/.test(id));
+    if (!ids.length) return;
+
+    const region = /^[A-Z]{2}$/.test(String(stored[WATCHLIST_REGION_KEY] || ''))
+        ? stored[WATCHLIST_REGION_KEY]
+        : 'US';
+    const previous = stored[WATCHLIST_STATE_KEY] || {};
+    const seen = previous.seen && typeof previous.seen === 'object' ? { ...previous.seen } : {};
+    const start = Number.isInteger(previous.cursor) ? previous.cursor % ids.length : 0;
+    const slice = [];
+    for (let step = 0; step < WATCHLIST_BATCH && step < ids.length; step += 1) {
+        slice.push(ids[(start + step) % ids.length]);
+    }
+
+    const arrivals = [];
+    for (const id of slice) {
+        let providers = null;
+        try { providers = await readAvailableProviders(id, region, token); }
+        catch { continue; }
+        if (providers === null) continue;
+        const before = Array.isArray(seen[id]) ? seen[id] : null;
+        /* The first time a title is checked there is no "before", so everything it is
+           already on would read as an arrival. That is a notification about nothing
+           having changed, so a first sighting only records. */
+        if (before) {
+            const added = providers.filter(provider => !before.includes(provider) && wanted.has(provider));
+            if (added.length) arrivals.push({ id, title: String(titles[id]?.title || id).slice(0, 80) });
+        }
+        seen[id] = providers;
+    }
+
+    // Titles that have left the watchlist are forgotten, so the record cannot grow forever.
+    const live = new Set(ids);
+    Object.keys(seen).forEach(id => { if (!live.has(id)) delete seen[id]; });
+
+    await callApi(chrome.storage.local, 'set', {
+        [WATCHLIST_STATE_KEY]: { checkedAt: Date.now(), cursor: (start + slice.length) % ids.length, seen },
+    }).catch(() => { /* the next run re-reads whatever did land */ });
+    await notifyArrivals(arrivals);
+}
+
+async function ensureWatchlistAlarm() {
+    if (!chrome.alarms?.create) return;
+    const stored = await callApi(chrome.storage.local, 'get', [WATCHLIST_SETTING_KEY]).catch(() => null);
+    if (stored?.[WATCHLIST_SETTING_KEY] !== true) {
+        await callApi(chrome.alarms, 'clear', WATCHLIST_ALARM).catch(() => {});
+        return;
+    }
+    /* Re-created on every startup rather than trusted to persist: persistAcrossSessions
+       defaults to true only from Chrome 150, and an alarm that quietly stopped existing
+       is a feature that quietly stopped working. */
+    /* Not through callApi: it forwards exactly one argument, and alarms.create takes
+       the name and the schedule as two. Passing the schedule through it created an
+       alarm with no period at all, which is a feature that fires once and never again. */
+    try {
+        await chrome.alarms.create(WATCHLIST_ALARM, {
+            periodInMinutes: WATCHLIST_ALARM_MINUTES,
+            delayInMinutes: 1,
+        });
+    } catch { /* the next startup tries again */ }
+}
+
+if (chrome.alarms?.onAlarm) {
+    chrome.alarms.onAlarm.addListener(alarm => {
+        if (alarm?.name !== WATCHLIST_ALARM) return;
+        runWatchlistCheck().catch(error => {
+            console.warn('[IMDb Enhanced] watchlist check failed:', boundedApiError(error, 'Check failed'));
+        });
+    });
+}
+
+chrome.runtime.onInstalled.addListener(() => { syncAdBlockingFromStorage(); checkForUpdate(); ensureWatchlistAlarm(); });
+chrome.runtime.onStartup.addListener(() => { syncAdBlockingFromStorage(); checkForUpdate(); ensureWatchlistAlarm(); });
 chrome.storage.onChanged.addListener((changes, areaName) => {
+    // Switching the alerts on or off has to reach the schedule, not wait for a restart.
+    if (areaName === 'local' && Object.prototype.hasOwnProperty.call(changes, WATCHLIST_SETTING_KEY)) {
+        ensureWatchlistAlarm().catch(() => { /* the next startup re-creates it */ });
+    }
     if (areaName !== 'local' || !Object.prototype.hasOwnProperty.call(changes, `${STORAGE_PREFIX}removeAds`)) return;
     updateAdBlocking(changes[`${STORAGE_PREFIX}removeAds`].newValue !== false).catch(error => {
         console.warn('[IMDb Enhanced] extension ad rule update failed:', error);

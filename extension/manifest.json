@@ -13,7 +13,8 @@
   "permissions": [
     "storage",
     "clipboardWrite",
-    "declarativeNetRequestWithHostAccess"
+    "declarativeNetRequestWithHostAccess",
+    "alarms"
   ],
   "host_permissions": [
     "https://www.imdb.com/*"
@@ -85,5 +86,8 @@
     }
   ],
   "minimum_chrome_version": "110",
-  "default_locale": "en"
+  "default_locale": "en",
+  "optional_permissions": [
+    "notifications"
+  ]
 }

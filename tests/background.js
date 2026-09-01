@@ -33,10 +33,15 @@ function loadBackground({
     openOptionsFailure = null,
     omitOpenOptionsPage = false,
     tabsCreateFailure = null,
+    grantedPermissions = [],
+    seed = {},
 } = {}) {
     const listeners = [];
-    const calls = { fetches: [], permissions: [], tabs: [], openedOptions: 0 };
+    const alarmListeners = [];
+    const calls = { fetches: [], permissions: [], tabs: [], openedOptions: 0, alarms: [], notifications: [] };
+    const grantedApiPermissions = new Set(grantedPermissions);
     const storage = new Map();
+    const lifecycle = [];
     const grantedOrigins = new Set(granted || []);
     let runtimeLastError = null;
 
@@ -72,7 +77,18 @@ function loadBackground({
         },
         chrome: {
             permissions: {
-                contains: (arg, done) => { calls.permissions.push(['contains', arg.origins]); done(grantedOrigins.size > 0 && arg.origins.every(o => grantedOrigins.has(o))); },
+                contains: (arg, done) => {
+                    /* The worker asks about API permissions as well as origins, and the
+                       two are different sets: notifications is granted from a settings
+                       control, host access from the options page. */
+                    if (arg.permissions) {
+                        calls.permissions.push(['contains', arg.permissions]);
+                        done(arg.permissions.every(name => grantedApiPermissions.has(name)));
+                        return;
+                    }
+                    calls.permissions.push(['contains', arg.origins]);
+                    done(grantedOrigins.size > 0 && arg.origins.every(o => grantedOrigins.has(o)));
+                },
                 remove: (arg, done) => { calls.permissions.push(['remove', arg.origins]); arg.origins.forEach(o => grantedOrigins.delete(o)); done(true); },
                 request: (arg, done) => { calls.permissions.push(['request', arg.origins]); done(false); },
             },
@@ -118,8 +134,8 @@ function loadBackground({
                     host_permissions: shippedManifest.host_permissions,
                     optional_host_permissions: shippedManifest.optional_host_permissions,
                 }),
-                onInstalled: { addListener() {} },
-                onStartup: { addListener() {} },
+                onInstalled: { addListener: fn => lifecycle.push(fn) },
+                onStartup: { addListener: fn => lifecycle.push(fn) },
                 onMessage: { addListener: fn => listeners.push(fn) },
             },
             storage: {
@@ -139,8 +155,32 @@ function loadBackground({
                 onChanged: { addListener() {} },
             },
             declarativeNetRequest: { updateDynamicRules: api(() => undefined) },
+            alarms: {
+                create: (name, options, done) => {
+                    calls.alarms.push(['create', name, options]);
+                    if (engine === 'chromium') return Promise.resolve();
+                    if (typeof done === 'function') queueMicrotask(done);
+                    return undefined;
+                },
+                clear: (name, done) => {
+                    calls.alarms.push(['clear', name]);
+                    if (engine === 'chromium') return Promise.resolve(true);
+                    if (typeof done === 'function') queueMicrotask(() => done(true));
+                    return undefined;
+                },
+                onAlarm: { addListener: fn => alarmListeners.push(fn) },
+            },
+            notifications: {
+                create: (options, done) => {
+                    calls.notifications.push(options);
+                    if (engine === 'chromium') return Promise.resolve('id');
+                    if (typeof done === 'function') queueMicrotask(() => done('id'));
+                    return undefined;
+                },
+            },
         },
     };
+    Object.entries(seed).forEach(([key, value]) => storage.set(key, value));
     if (omitOpenOptionsPage) delete sandbox.chrome.runtime.openOptionsPage;
     sandbox.globalThis = sandbox;
     vm.runInNewContext(backgroundSource, sandbox, { filename: backgroundPath });
@@ -155,7 +195,18 @@ function loadBackground({
         const handled = listeners.some(listener => listener(message, sender, sendResponse));
         if (!handled && !settled) resolve(undefined);
     });
-    return { dispatch, calls, storage, grantedOrigins };
+    /* The alarm path is the one the browser actually takes, so tests drive it rather
+       than reaching for the function it calls. */
+    const fireAlarm = async name => {
+        alarmListeners.forEach(listener => listener({ name }));
+        // Let the handler's awaits settle before anything is asserted.
+        for (let tick = 0; tick < 400; tick += 1) await Promise.resolve();
+    };
+    const runLifecycle = async () => {
+        lifecycle.forEach(listener => listener());
+        for (let tick = 0; tick < 400; tick += 1) await Promise.resolve();
+    };
+    return { dispatch, calls, storage, grantedOrigins, fireAlarm, runLifecycle };
 }
 
 const IMDB_SENDER = { url: 'https://www.imdb.com/title/tt0133093/', tab: { id: 7 } };
@@ -839,6 +890,189 @@ for (const engine of ['chromium', 'gecko']) {
             'an abort that did not come from the timer must stay a cancellation');
     });
 }
+
+
+/* ---- Watchlist availability alerts -------------------------------------------------
+   Run against the real worker: the alarm is fired the way the browser fires it, TMDB is
+   stubbed, and what is asserted is what reaches the network, the storage and the
+   notification — not what the source says it will do. */
+
+const TMDB_FIND = 'https://api.themoviedb.org/3/find/tt0133093?external_source=imdb_id';
+const TMDB_PROVIDERS = 'https://api.themoviedb.org/3/movie/603/watch/providers';
+
+function tmdbFetch(providerIds, { region = 'US' } = {}) {
+    return url => {
+        if (url.startsWith('https://api.themoviedb.org/3/find/')) {
+            return Promise.resolve({ ok:true, json: () => Promise.resolve({ movie_results:[{ id:603 }] }) });
+        }
+        if (url.startsWith('https://api.themoviedb.org/3/movie/')) {
+            return Promise.resolve({
+                ok: true,
+                json: () => Promise.resolve({ results:{ [region]: { flatrate: providerIds.map(id => ({ provider_id:id })) } } }),
+            });
+        }
+        return Promise.resolve({ ok:false, status:404, json: () => Promise.resolve({}) });
+    };
+}
+
+const ALERT_SEED = {
+    imdb_enh_watchlistAlerts: true,
+    imdb_enh_watchlistAlertServices: [8],
+    imdb_enh_watchlistSnapshot: { v:1, ts:1, titles:{ tt0133093:{ title:'The Matrix' } } },
+    imdb_enh_availabilityRegion: 'US',
+    imdb_enh_tmdbReadToken: 'TMDB-TOKEN',
+};
+
+test('the alarm is only scheduled while the alerts are switched on', async () => {
+    const off = loadBackground({ fetchImpl: tmdbFetch([]), seed:{ imdb_enh_watchlistAlerts: false } });
+    await off.runLifecycle();
+    assert(off.calls.alarms.length > 0 && off.calls.alarms.every(entry => entry[0] === 'clear'),
+        'a feature that is off must not leave a schedule running');
+
+    const on = loadBackground({ fetchImpl: tmdbFetch([]), seed: ALERT_SEED });
+    await on.runLifecycle();
+    const created = on.calls.alarms.find(entry => entry[0] === 'create');
+    assert.ok(created, 'and one that is on must be scheduled');
+    /* Re-created on every startup rather than trusted to persist: persistAcrossSessions
+       defaults to true only from Chrome 150. */
+    assert.strictEqual(created[2].periodInMinutes, 1440, 'once a day, as the disclosure says');
+});
+
+test('a first check records what is already available and says nothing', async () => {
+    const worker = loadBackground({
+        fetchImpl: tmdbFetch([8, 9]),
+        seed: ALERT_SEED,
+        grantedPermissions: ['notifications'],
+    });
+    await worker.fireAlarm('imdb-enhanced:watchlist-alerts');
+
+    assert.strictEqual(worker.calls.notifications.length, 0,
+        'everything a title is already on is not news');
+    const state = worker.storage.get('imdb_enh_watchlistAlertState');
+    assert.deepStrictEqual(Array.from(state.seen.tt0133093), [8, 9], 'but it is remembered');
+    assert(worker.calls.fetches.length >= 2, 'the find and the providers call both happen');
+});
+
+test('a service arriving on a watched title produces exactly one notification', async () => {
+    const worker = loadBackground({
+        fetchImpl: tmdbFetch([8, 9]),
+        seed: {
+            ...ALERT_SEED,
+            imdb_enh_watchlistAlertState: { checkedAt:1, cursor:0, seen:{ tt0133093:[9] } },
+        },
+        grantedPermissions: ['notifications'],
+    });
+    await worker.fireAlarm('imdb-enhanced:watchlist-alerts');
+
+    assert.strictEqual(worker.calls.notifications.length, 1, 'one notification, not one per title');
+    assert.match(worker.calls.notifications[0].message, /The Matrix/,
+        'and it names the title rather than an id');
+});
+
+test('two titles arriving on the same day are one notification, not two', async () => {
+    /* The whole shape Letterboxd's version has, and the reason this runs on an alarm
+       rather than per title: one digest a day. With a single title in the list a batched
+       notification and a per-title one look identical, so this needs two. */
+    const twoTitles = url => {
+        if (url.includes('/find/tt0133093')) {
+            return Promise.resolve({ ok:true, json: () => Promise.resolve({ movie_results:[{ id:603 }] }) });
+        }
+        if (url.includes('/find/tt0234215')) {
+            return Promise.resolve({ ok:true, json: () => Promise.resolve({ movie_results:[{ id:604 }] }) });
+        }
+        if (url.includes('/movie/')) {
+            return Promise.resolve({
+                ok: true,
+                json: () => Promise.resolve({ results:{ US:{ flatrate:[{ provider_id:8 }] } } }),
+            });
+        }
+        return Promise.resolve({ ok:false, status:404, json: () => Promise.resolve({}) });
+    };
+    const worker = loadBackground({
+        fetchImpl: twoTitles,
+        grantedPermissions: ['notifications'],
+        seed: {
+            ...ALERT_SEED,
+            imdb_enh_watchlistSnapshot: { v:1, ts:1, titles:{
+                tt0133093:{ title:'The Matrix' },
+                tt0234215:{ title:'The Matrix Reloaded' },
+            } },
+            imdb_enh_watchlistAlertState: { checkedAt:1, cursor:0, seen:{ tt0133093:[], tt0234215:[] } },
+        },
+    });
+    await worker.fireAlarm('imdb-enhanced:watchlist-alerts');
+
+    assert.strictEqual(worker.calls.notifications.length, 1,
+        'a day with two arrivals is still one interruption');
+    assert.match(worker.calls.notifications[0].message, /The Matrix/);
+    assert.match(worker.calls.notifications[0].message, /The Matrix Reloaded/,
+        'and it names both rather than only the first');
+});
+
+test('an arrival on a service nobody asked about is not a notification', async () => {
+    const worker = loadBackground({
+        fetchImpl: tmdbFetch([9, 15]),
+        seed: {
+            ...ALERT_SEED,
+            imdb_enh_watchlistAlertState: { checkedAt:1, cursor:0, seen:{ tt0133093:[9] } },
+        },
+        grantedPermissions: ['notifications'],
+    });
+    await worker.fireAlarm('imdb-enhanced:watchlist-alerts');
+
+    assert.strictEqual(worker.calls.notifications.length, 0,
+        'service 15 was not one of the chosen ones');
+    assert.deepStrictEqual(Array.from(worker.storage.get('imdb_enh_watchlistAlertState').seen.tt0133093), [9, 15],
+        'though it is still recorded, so it is not news next time either');
+});
+
+test('without the notification permission the check still records what it saw', async () => {
+    const worker = loadBackground({
+        fetchImpl: tmdbFetch([8, 9]),
+        seed: {
+            ...ALERT_SEED,
+            imdb_enh_watchlistAlertState: { checkedAt:1, cursor:0, seen:{ tt0133093:[9] } },
+        },
+        grantedPermissions: [],
+    });
+    await worker.fireAlarm('imdb-enhanced:watchlist-alerts');
+
+    assert.strictEqual(worker.calls.notifications.length, 0, 'nothing is shown without permission');
+    /* And what it saw is kept, so granting the permission later does not produce a flood
+       of things that arrived months ago. */
+    assert.deepStrictEqual(Array.from(worker.storage.get('imdb_enh_watchlistAlertState').seen.tt0133093), [8, 9]);
+});
+
+test('nothing is requested without a token, chosen services, or a recorded watchlist', async () => {
+    const cases = [
+        ['no token', { ...ALERT_SEED, imdb_enh_tmdbReadToken: '' }],
+        ['no chosen services', { ...ALERT_SEED, imdb_enh_watchlistAlertServices: [] }],
+        ['nothing recorded', { ...ALERT_SEED, imdb_enh_watchlistSnapshot: { v:1, ts:1, titles:{} } }],
+        ['switched off', { ...ALERT_SEED, imdb_enh_watchlistAlerts: false }],
+    ];
+    for (const [name, seed] of cases) {
+        const worker = loadBackground({ fetchImpl: tmdbFetch([8]), seed, grantedPermissions: ['notifications'] });
+        await worker.fireAlarm('imdb-enhanced:watchlist-alerts');
+        assert.strictEqual(worker.calls.fetches.length, 0, `${name} must cost no request`);
+        assert.strictEqual(worker.calls.notifications.length, 0, `${name} must say nothing`);
+    }
+});
+
+test('a title that has left the watchlist is forgotten', async () => {
+    const worker = loadBackground({
+        fetchImpl: tmdbFetch([8]),
+        seed: {
+            ...ALERT_SEED,
+            imdb_enh_watchlistAlertState: { checkedAt:1, cursor:0, seen:{ tt0133093:[8], tt0000001:[8, 9] } },
+        },
+        grantedPermissions: ['notifications'],
+    });
+    await worker.fireAlarm('imdb-enhanced:watchlist-alerts');
+
+    const seen = worker.storage.get('imdb_enh_watchlistAlertState').seen;
+    assert.deepStrictEqual(Array.from(Object.keys(seen)), ['tt0133093'],
+        'the record cannot grow forever off titles nobody is waiting for');
+});
 
 (async () => {
     let failures = 0;
