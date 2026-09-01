@@ -2379,6 +2379,15 @@ test('branded controls keep readable text across themes and score states', () =>
     assert(!script.includes('color-mix(in srgb, var(--btn-color) 88%, #fff)'), 'brand colors must not define watch-button text contrast');
     assert(!script.includes('.enh-markable-card.enh-marked{opacity:'), 'mark state must not fade an entire interactive card');
     assert(script.includes('.enh-markable-card.enh-marked img{opacity:'), 'mark state may distinguish poster imagery without fading controls or text');
+    assert(script.includes('.enh-markable-card > .enh-mark-controls{'),
+        'mark controls need enough selector weight to beat IMDb poster-card child positioning');
+    assert(script.includes('.enh-markable-card > .enh-mark-badge{')
+        && script.includes('.enh-markable-card > .enh-episode-badge{'),
+    'card badges need the same direct-child weight as the controls');
+    assert(script.includes('display:flex;flex-wrap:wrap;gap:4px;'),
+        'marked cards should wrap four readable controls instead of crushing their labels');
+    assert(script.includes('.enh-mark-btn--clear:disabled{display:none}'),
+        'an unmarked card should not spend room on a disabled Clear button');
     assert(!script.includes('.enh-multi-search-queue__item--opened { opacity:'), 'opened queue links must remain readable and interactive');
     assert(script.includes('.enh-multi-search-queue__item--opened .enh-multi-search-queue__link { color: ${t.tx3} !important; }'), 'opened queue links should use a tested semantic text token');
     assert(!script.includes("'--score-color':'#3c948b'"), 'TV broadcast widgets should use a theme token rather than a fixed dark-theme color');

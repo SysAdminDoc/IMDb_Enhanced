@@ -11481,9 +11481,12 @@ section[id*="quote" i] .ipc-list-card { padding: 4px 0 !important; margin: 2px 0
                 .enh-markable-card{position:relative!important}
                 .enh-markable-card.enh-marked img{opacity:.72;filter:saturate(.58);transition:opacity .15s ease,filter .15s ease}
                 .enh-markable-card.enh-marked:hover img,.enh-markable-card.enh-marked:focus-within img{opacity:1;filter:none}
-                .enh-mark-controls{
+                /* IMDb gives every non-poster child of a poster card position:relative.
+                   Match that selector weight so these controls stay pinned over the
+                   poster instead of becoming a squeezed row at the bottom of the card. */
+                .enh-markable-card > .enh-mark-controls{
                     position:absolute;top:6px;left:6px;right:6px;z-index:20;
-                    display:flex;gap:4px;align-items:center;justify-content:center;
+                    display:flex;flex-wrap:wrap;gap:4px;align-items:center;align-content:flex-start;justify-content:center;
                     opacity:0;transform:translateY(-2px);pointer-events:none;
                     transition:opacity .12s ease,transform .12s ease;
                 }
@@ -11496,7 +11499,7 @@ section[id*="quote" i] .ipc-list-card { padding: 4px 0 !important; margin: 2px 0
                     min-width:0;height:24px;padding:0 7px;border-radius:6px;
                     border:1px solid ${t.bd1};background:${t.sf1};color:${t.tx1};
                     font:700 10px/1 -apple-system,BlinkMacSystemFont,'Segoe UI',sans-serif;
-                    cursor:pointer;box-shadow:${t.sh1};white-space:nowrap;
+                    flex:0 0 auto;cursor:pointer;box-shadow:${t.sh1};white-space:nowrap;
                 }
                 .enh-mark-btn:hover{border-color:${t.accentBorder};color:${t.accent}}
                 .enh-mark-btn[data-active="true"]{background:${t.accent};border-color:${t.accent};color:${readableTextColor(t.accent)}}
@@ -11505,8 +11508,9 @@ section[id*="quote" i] .ipc-list-card { padding: 4px 0 !important; margin: 2px 0
                    Hidden with display rather than the hidden attribute, because the rule
                    above gives these buttons a display of their own and would win. */
                 .enh-mark-btn--again{display:none}
+                .enh-mark-btn--clear:disabled{display:none}
                 .enh-markable-card.enh-marked--watched .enh-mark-btn--again{display:inline-block}
-                .enh-mark-badge{
+                .enh-markable-card > .enh-mark-badge{
                     position:absolute;left:6px;bottom:6px;z-index:19;
                     padding:4px 7px;border-radius:6px;background:${t.accent};color:${readableTextColor(t.accent)};
                     font:800 10px/1 -apple-system,BlinkMacSystemFont,'Segoe UI',sans-serif;
@@ -11517,7 +11521,7 @@ section[id*="quote" i] .ipc-list-card { padding: 4px 0 !important; margin: 2px 0
                 /* Above the Seen/Skip badge, in the surface colours rather than the
                    accent: it reports progress through a show rather than saying this
                    title carries a mark of its own. */
-                .enh-episode-badge{
+                .enh-markable-card > .enh-episode-badge{
                     position:absolute;left:6px;bottom:34px;z-index:19;
                     padding:4px 7px;border-radius:6px;background:${t.sf1};color:${t.tx1};
                     border:1px solid ${t.bd1};box-shadow:${t.sh1};
