@@ -1287,6 +1287,54 @@ test('a cursor title that has left the watchlist does not restart the walk', asy
         'it picks up near where it was, rather than starting the list again');
 });
 
+test('the position it stopped at is written down, not only read', async () => {
+    /* The hint above was seeded by hand, so the run that has to produce it was never
+       checked: writing a constant zero there left every test green and quietly turned the
+       fallback back into "start from the top". */
+    const many = {};
+    for (let index = 0; index < 60; index += 1) {
+        many[`tt${String(4000000 + index).padStart(7, '0')}`] = { title:`Title ${index}` };
+    }
+    const ids = Object.keys(many);
+    const snapshot = { v:1, ts:1, titles: many };
+    const first = loadBackground({
+        fetchImpl: tmdbFetch(['Netflix']),
+        grantedPermissions: ['notifications'],
+        seed: {
+            ...ALERT_SEED,
+            imdb_enh_watchlistSnapshot: snapshot,
+            imdb_enh_watchlistAlertState: { checkedAt:1, cursor:'', seen:{} },
+        },
+    });
+    await first.fireAlarm('imdb-enhanced:watchlist-alerts');
+    const state = first.storage.get('imdb_enh_watchlistAlertState');
+    assert.strictEqual(state.cursor, ids[20], 'twenty titles in, it stops on the twenty-first');
+    assert.strictEqual(state.cursorIndex, 20, 'and records where that was');
+
+    /* And the number has to be that title's position rather than any number: put the run
+       back with the title it stopped on removed, and it must carry on from there instead
+       of walking the first twenty again. */
+    const shorter = { ...many };
+    delete shorter[ids[20]];
+    const remaining = Object.keys(shorter);
+    const second = loadBackground({
+        fetchImpl: tmdbFetch(['Netflix']),
+        grantedPermissions: ['notifications'],
+        seed: {
+            ...ALERT_SEED,
+            imdb_enh_watchlistSnapshot: { v:1, ts:1, titles: shorter },
+            imdb_enh_watchlistAlertState: { ...state, checkedAt:1 },
+        },
+    });
+    await second.fireAlarm('imdb-enhanced:watchlist-alerts');
+    const asked = second.calls.fetches
+        .map(([url]) => String(url).match(/find\/(tt\d+)/)?.[1])
+        .filter(Boolean);
+    assert.strictEqual(asked[0], remaining[20],
+        'the walk continues from the recorded position, not from the start');
+    assert(!asked.includes(ids[0]), 'the titles it already checked are not checked again');
+});
+
 test('the worker enforces the snapshot ceiling itself', async () => {
     /* The 200-title bound decides how much of somebody else's API a schedule walks, so
        it cannot depend on another context having written the file correctly. */
