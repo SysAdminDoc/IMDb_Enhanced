@@ -20,6 +20,8 @@
 
 ### Added
 
+- Poster and cast photo zoom, off by default. Hovering a poster or a cast photo, or tabbing to it, shows a larger version beside it; Escape closes it. The larger picture is requested at a bounded size rather than as the original file, which for some posters runs to tens of megabytes.
+
 - Anime scores from AniList, off by default. On a title the page identifies as anime, the AniList community average appears beside the other scores. Nothing is requested for anything else: a title has to be animated and either made in Japan or keyworded as anime or manga before a lookup happens, so Pixar films and live-action Japanese films cost nothing. AniList is a public API with no key, so it works in every build including the web-store one.
 
 - Ready for translation. Every word either build shows you now comes from one catalog: feature names and descriptions, settings copy, buttons and column headers, toasts, error messages, screen-reader labels, and the extension's own recovery and permissions pages. The extension packages carry it as a standard `_locales` file, so a translated locale installed in the browser is used, and anything a translation does not cover falls back to English. Counts have a singular and a plural form rather than a noun pasted into a sentence. Service names stay as they are, and so does the diagnostics report, which is meant to be read by whoever receives your bug report. Nothing reads differently in English today.

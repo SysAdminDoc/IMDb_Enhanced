@@ -472,6 +472,8 @@
         feature_expandedLinkMenu_name: 'Expanded link menu',
         feature_externalLinks_detail: 'Adds trusted research and trailer links near the title.',
         feature_externalLinks_name: 'External links bar',
+        feature_imageZoom_detail: 'Hovering or tabbing to a poster or a cast photo shows a larger version beside it, requested at a bounded size rather than the full original. Escape closes it.',
+        feature_imageZoom_name: 'Poster and cast photo zoom',
         feature_inlineAnimeScore_detail: 'On anime titles, shows the AniList community average beside the other scores. Off by default, and nothing is requested for a title that is not anime.',
         feature_inlineAnimeScore_name: 'AniList anime scores',
         feature_inlineLetterboxdScore_detail: 'Shows Letterboxd average ratings inline for films when available.',
@@ -1776,6 +1778,8 @@
         // Scores
         inlineRTScore: true, inlineLetterboxdScore: true, inlineMetacriticScore: true,
         inlineAnimeScore: false,
+        // Off by default: it changes what hovering a picture does.
+        imageZoom: false,
         streamAvailability: true,
         /* Which service answers "where can I watch this". JustWatch is read by parsing
            their page; TMDB is a documented API but needs a read token of your own. The
@@ -1852,6 +1856,7 @@
         inlineRTScore: t('feature_inlineRTScore_detail'),
         inlineLetterboxdScore: t('feature_inlineLetterboxdScore_detail'),
         inlineMetacriticScore: t('feature_inlineMetacriticScore_detail'),
+        imageZoom: t('feature_imageZoom_detail'),
         inlineAnimeScore: t('feature_inlineAnimeScore_detail'),
         streamAvailability: t('feature_streamAvailability_detail'),
         searchButtons: t('feature_searchButtons_detail'),
@@ -8406,6 +8411,118 @@ section[id*="quote" i] .ipc-list-card { padding: 4px 0 !important; margin: 2px 0
     const ANILIST_ENDPOINT = 'https://graphql.anilist.co';
     const ANILIST_QUERY = 'query($s:String){Page(perPage:5){media(search:$s,type:ANIME){title{romaji english} averageScore seasonYear siteUrl}}}';
 
+    /* IMDb serves every image through one host and encodes the size it wants in the file
+       name: everything between "._V1_" and the extension is a transform. Stripping it
+       yields the original, which readers have measured at 7644px and 32 MB — one hover
+       would cost more than the rest of the page. A bounded variant is requested instead,
+       and the grammar is the only thing this relies on: no request is made to ask what
+       sizes exist, and a URL that does not carry the marker is left alone rather than
+       guessed at. */
+    const IMAGE_HOST = 'm.media-amazon.com';
+    const IMAGE_VARIANT_PATTERN = /\._V1_[^./]*\.(jpg|jpeg|png)$/i;
+    const ZOOM_IMAGE_HEIGHT = 800;
+
+    function boundedImageVariant(url, height = ZOOM_IMAGE_HEIGHT) {
+        let parsed;
+        try { parsed = new URL(String(url || ''), location.href); }
+        catch { return ''; }
+        if (parsed.protocol !== 'https:') return '';
+        const host = parsed.hostname.toLowerCase();
+        if (host !== IMAGE_HOST && !host.endsWith('.media-amazon.com')) return '';
+        if (!IMAGE_VARIANT_PATTERN.test(parsed.pathname)) return '';
+        const wanted = Math.max(200, Math.min(1600, Math.round(Number(height) || ZOOM_IMAGE_HEIGHT)));
+        parsed.pathname = parsed.pathname.replace(IMAGE_VARIANT_PATTERN, `._V1_QL90_UY${wanted}_.$1`);
+        parsed.search = '';
+        return parsed.href;
+    }
+
+    /* Poster and cast thumbnails, by IMDb's own test ids. Nothing here reads a caption or
+       a label, so the surfaces are the same on a translated page. */
+    const ZOOM_THUMBNAIL_SELECTOR = [
+        '[data-testid="hero-media__poster"] img',
+        '[data-testid="title-cast-item__avatar"] img',
+        '[data-testid="shoveler-item-poster"] img',
+    ].join(', ');
+
+    reg({
+        key: 'imageZoom', name: t('feature_imageZoom_name'), group: 'Appearance',
+        _overlay: null,
+        _anchor: null,
+        init() {
+            const show = target => {
+                const href = boundedImageVariant(target?.currentSrc || target?.src);
+                if (!href || this._anchor === target) return;
+                this.hide();
+                this._anchor = target;
+                const image = makeEl('img', {
+                    className:'enh-zoom__image',
+                    src:href,
+                    alt:target.alt || '',
+                    decoding:'async',
+                });
+                /* A variant IMDb does not have comes back as an error rather than a
+                   picture, and an empty frame beside the thumbnail is worse than no
+                   feature. The overlay takes itself down instead. */
+                image.addEventListener('error', () => this.hide(), { once:true });
+                this._overlay = makeEl('div', {
+                    className:'enh-zoom',
+                    role:'presentation',
+                }, image);
+                document.body.appendChild(this._overlay);
+                this.position(target);
+            };
+            this._onOver = event => {
+                const target = event.target?.closest?.(ZOOM_THUMBNAIL_SELECTOR);
+                if (target) show(target);
+            };
+            /* Focus, not only hover: these thumbnails sit inside links, so tabbing
+               through the cast list is how this works without a mouse. */
+            this._onFocus = event => {
+                const link = event.target?.closest?.('a');
+                const target = link?.querySelector?.(ZOOM_THUMBNAIL_SELECTOR) || event.target?.closest?.(ZOOM_THUMBNAIL_SELECTOR);
+                if (target) show(target);
+            };
+            this._onOut = event => {
+                if (!this._anchor) return;
+                const next = event.relatedTarget;
+                if (next && this._anchor.contains?.(next)) return;
+                this.hide();
+            };
+            this._onKey = event => { if (event.key === 'Escape') this.hide(); };
+            this._onScroll = () => this.hide();
+            document.addEventListener('mouseover', this._onOver, true);
+            document.addEventListener('mouseout', this._onOut, true);
+            document.addEventListener('focusin', this._onFocus, true);
+            document.addEventListener('focusout', this._onOut, true);
+            document.addEventListener('keydown', this._onKey, true);
+            window.addEventListener('scroll', this._onScroll, { passive:true });
+        },
+        position(target) {
+            const overlay = this._overlay;
+            if (!overlay || !target?.getBoundingClientRect) return;
+            const box = target.getBoundingClientRect();
+            const room = window.innerWidth - box.right;
+            // Whichever side has room, so the preview never leaves the viewport.
+            const left = room > box.left ? box.right + 12 : Math.max(12, box.left - 12 - overlay.offsetWidth);
+            overlay.style.left = `${Math.round(left + window.scrollX)}px`;
+            overlay.style.top = `${Math.round(Math.max(12, box.top) + window.scrollY)}px`;
+        },
+        hide() {
+            this._overlay?.remove();
+            this._overlay = null;
+            this._anchor = null;
+        },
+        destroy() {
+            document.removeEventListener('mouseover', this._onOver, true);
+            document.removeEventListener('mouseout', this._onOut, true);
+            document.removeEventListener('focusin', this._onFocus, true);
+            document.removeEventListener('focusout', this._onOut, true);
+            document.removeEventListener('keydown', this._onKey, true);
+            window.removeEventListener('scroll', this._onScroll);
+            this.hide();
+        },
+    });
+
     reg({
         key: 'inlineAnimeScore', name: t('feature_inlineAnimeScore_name'), group: 'Scores',
         async init() {
@@ -12716,6 +12833,28 @@ section[data-testid="hero-parent"].enh-editorial-native-hidden { display: none !
     font: 500 9px/1.2 -apple-system, BlinkMacSystemFont, 'Segoe UI', sans-serif;
     color: ${t.tx3};
 }
+.enh-zoom {
+    position: absolute;
+    z-index: 2147483000;
+    pointer-events: none;
+    padding: 6px;
+    border-radius: 10px;
+    background: ${t.sf};
+    border: 1px solid ${t.bd};
+    box-shadow: 0 18px 44px rgba(0,0,0,.55);
+}
+.enh-zoom__image {
+    display: block;
+    max-width: min(46vw, 520px);
+    max-height: 78vh;
+    width: auto;
+    height: auto;
+    border-radius: 6px;
+}
+@media (prefers-reduced-motion: no-preference) {
+    .enh-zoom { animation: enh-zoom-in .12s ease-out; }
+    @keyframes enh-zoom-in { from { opacity: 0; } to { opacity: 1; } }
+}
 .enh-score-stale__retry {
     padding: 2px 6px; border-radius: 5px; cursor: pointer;
     border: 1px solid ${t.bd1}; background: ${t.sf0}; color: ${t.tx2};
@@ -14813,7 +14952,7 @@ section[data-testid="hero-parent"].enh-editorial-native-hidden { display: none !
         ], true));
         experienceGrid.appendChild(makeFeatureCard(t('settings_tune_the_interface'), t('settings_refine_how_content_looks_and_is_presented'), 'Desktop', [
             'modernUI', 'editorialTitleSurface', 'compactHeader', 'enhancedRatingDisplay', 'widerLayout', 'ratingColorCoding',
-            'collapsibleSections', 'expandSummaries', 'spoilerBlur', 'quickNav', 'dimLowRated',
+            'collapsibleSections', 'expandSummaries', 'spoilerBlur', 'quickNav', 'dimLowRated', 'imageZoom',
         ], true));
         experiencePage.appendChild(experienceGrid);
         /* The threshold belongs with the toggle it qualifies. Changing it restarts the

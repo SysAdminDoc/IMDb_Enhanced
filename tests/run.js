@@ -283,6 +283,7 @@ function loadScriptTestHooks({ withoutDeleteValue = false, withheldCredentials =
         getAvailabilityCacheKey,
         getJustWatchSearchUrl,
         isTmdbConfigured,
+        boundedImageVariant,
         parseAniListSearch,
         getFeature: key => features.find(feature => feature.key === key),
         FEATURE_PROVIDERS,
@@ -2733,6 +2734,50 @@ test('the anime score asks nothing about a title that is not anime', () => {
     assert.deepStrictEqual(Array.from(hooks.PROVIDERS.anilist.origins), ['https://graphql.anilist.co/*']);
     assert(hooks.PROVIDERS.anilist.profiles.includes('store'),
         'a keyless documented API with no page parsing can ship in a store build');
+});
+
+/* IE-21: IMDb encodes the size it wants into the file name, so a larger picture costs one
+   string rewrite and no request to ask what exists. Stripping the transform entirely
+   yields the original, which readers have measured at 7644px and 32 MB — the thing this
+   must never do. */
+test('a zoomed image asks for a bounded variant, never the original', () => {
+    const hooks = loadScriptTestHooks();
+    const thumb = 'https://m.media-amazon.com/images/M/MV5BABC._V1_QL75_UX140_CR0,1,140,207_.jpg';
+
+    const zoomed = hooks.boundedImageVariant(thumb);
+    assert.strictEqual(zoomed, 'https://m.media-amazon.com/images/M/MV5BABC._V1_QL90_UY800_.jpg');
+    assert(/_UY\d+_/.test(zoomed), 'the request must name a height, or it is the original');
+    assert(!/\._V1_\./.test(zoomed), 'an empty transform is the original, which is tens of megabytes');
+
+    // The bound holds whatever it is asked for.
+    assert(/_UY1600_/.test(hooks.boundedImageVariant(thumb, 99999)), 'an absurd height is clamped, not honoured');
+    assert(/_UY200_/.test(hooks.boundedImageVariant(thumb, 1)), 'and so is a useless one');
+    assert(/_UY800_/.test(hooks.boundedImageVariant(thumb, 'not a number')));
+
+    // A query string on the original is not carried into the request.
+    assert.strictEqual(hooks.boundedImageVariant(`${thumb}?tracking=1`),
+        'https://m.media-amazon.com/images/M/MV5BABC._V1_QL90_UY800_.jpg');
+
+    /* Only their host, only their grammar. Anything else is left alone rather than
+       rewritten into a URL that means something different. */
+    assert.strictEqual(hooks.boundedImageVariant('https://evil.example.com/images/M/x._V1_QL75_.jpg'), '',
+        'the rewrite belongs to one host');
+    assert.strictEqual(hooks.boundedImageVariant('http://m.media-amazon.com/images/M/x._V1_QL75_.jpg'), '',
+        'and to https');
+    assert.strictEqual(hooks.boundedImageVariant('https://m.media-amazon.com/images/M/plain.jpg'), '',
+        'a name without the transform marker is not guessed at');
+    assert.strictEqual(hooks.boundedImageVariant('https://m.media-amazon.com/images/M/x._V1_.svg'), '',
+        'and neither is a type their transform does not serve');
+    assert.strictEqual(hooks.boundedImageVariant(''), '');
+    assert.strictEqual(hooks.boundedImageVariant(null), '');
+    assert.strictEqual(hooks.boundedImageVariant('not a url at all'), '');
+
+    // Off until asked for: it changes what hovering a picture does.
+    assert.strictEqual(hooks.DEFAULTS.imageZoom, false);
+    /* Positioned against the document, because IMDb's cards make their own stacking
+       contexts and a z-index inside one cannot escape it. */
+    assert(/\.enh-zoom \{[\s\S]{0,200}position: absolute;/.test(script),
+        'the preview must not be positioned inside the card it came from');
 });
 
 test('version strings match', () => {

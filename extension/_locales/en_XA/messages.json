@@ -416,6 +416,12 @@
   "feature_externalLinks_name": {
     "message": "[!! External links bar !!]"
   },
+  "feature_imageZoom_detail": {
+    "message": "[!! Hovering or tabbing to a poster or a cast photo shows a larger version beside it, requested at a bounded size rather than the full original. Escape closes it. !!]"
+  },
+  "feature_imageZoom_name": {
+    "message": "[!! Poster and cast photo zoom !!]"
+  },
   "feature_inlineAnimeScore_detail": {
     "message": "[!! On anime titles, shows the AniList community average beside the other scores. Off by default, and nothing is requested for a title that is not anime. !!]"
   },

@@ -43,6 +43,7 @@ const instrumented = userscript.replace(/\}\)\(\);\s*$/, `globalThis.__imdbEnhan
     summarizeCollectionRuntime,
     describeCollectionRuntime,
     getPageSurface,
+    boundedImageVariant,
     createSettingsPanel,
     createLocalStatsPanel,
     destroySettingsChrome,
@@ -180,6 +181,54 @@ async function runFixture(name, run, { source = instrumented, extension = null }
         await abortWindow(window);
     }
 }
+
+/* IE-21: the preview has to appear for someone tabbing through the cast list, not only
+   for a mouse, and it has to come down again. A feature that only answers mouseover is
+   the half of this that is easy to write and useless with a keyboard. */
+await runFixture('title', async (window, hooks) => {
+    const cast = window.document.createElement('div');
+    cast.innerHTML = '<a href="/name/nm0000206/"><div data-testid="title-cast-item__avatar">'
+        + '<img alt="Keanu Reeves" src="https://m.media-amazon.com/images/M/MV5BCAST._V1_QL75_UX140_.jpg">'
+        + '</div></a>';
+    window.document.body.appendChild(cast);
+    const thumbnail = cast.querySelector('img');
+    const link = cast.querySelector('a');
+
+    hooks.initFeature('imageZoom');
+
+    // Hover.
+    thumbnail.dispatchEvent(new window.MouseEvent('mouseover', { bubbles:true }));
+    let overlay = window.document.querySelector('.enh-zoom');
+    assert.ok(overlay, 'hovering a cast thumbnail should show a preview');
+    assert.equal(overlay.querySelector('img').getAttribute('src'),
+        'https://m.media-amazon.com/images/M/MV5BCAST._V1_QL90_UY800_.jpg',
+        'and it should ask for a bounded variant, not the original');
+
+    thumbnail.dispatchEvent(new window.MouseEvent('mouseout', { bubbles:true }));
+    assert.equal(window.document.querySelector('.enh-zoom'), null, 'and take it down again');
+
+    // Keyboard: focus reaches the link, not the image inside it.
+    link.dispatchEvent(new window.FocusEvent('focusin', { bubbles:true }));
+    overlay = window.document.querySelector('.enh-zoom');
+    assert.ok(overlay, 'tabbing to the cast link should show the same preview');
+
+    window.document.dispatchEvent(new window.KeyboardEvent('keydown', { key:'Escape', bubbles:true }));
+    assert.equal(window.document.querySelector('.enh-zoom'), null, 'and Escape should dismiss it');
+
+    /* An image IMDb serves from somewhere else, or under a name with no transform in it,
+       is left alone rather than rewritten into an address that means something else. */
+    thumbnail.setAttribute('src', 'https://example.test/poster.jpg');
+    thumbnail.dispatchEvent(new window.MouseEvent('mouseover', { bubbles:true }));
+    assert.equal(window.document.querySelector('.enh-zoom'), null,
+        'an image that is not theirs gets no preview');
+
+    hooks.stopFeature('imageZoom');
+    thumbnail.setAttribute('src', 'https://m.media-amazon.com/images/M/MV5BCAST._V1_QL75_UX140_.jpg');
+    thumbnail.dispatchEvent(new window.MouseEvent('mouseover', { bubbles:true }));
+    assert.equal(window.document.querySelector('.enh-zoom'), null,
+        'and a feature that is off listens to nothing');
+    cast.remove();
+});
 
 await runFixture('title', async (window, hooks) => {
     assert.equal(hooks.getPageSurface(), 'title');
