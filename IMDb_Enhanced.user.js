@@ -798,7 +798,7 @@
         text_no_external_sites: 'no external sites',
         text_no_importable_rows_skipped_one: 'No importable rows found. $1 row was skipped.',
         text_no_importable_rows_skipped_other: 'No importable rows found. $1 rows were skipped.',
-        text_no_local_title_marks_yet: 'No local title marks yet.',
+        text_no_local_title_marks_yet: 'No local title marks yet. Mark a title Seen or Skip from any card or title page and it shows up here.',
         text_no_matching_title_found: 'No matching title found',
         text_no_titles_on_this_page_to_pick: 'No titles on this page to pick from.',
         text_none_of_count_opened: '0 of $1 opened',
@@ -14803,7 +14803,8 @@ ${scopedRules('.enh-zoom', {
 .enh-stats-row__track { height: 5px; overflow: hidden; border-radius: 999px; background: ${t.bd1}; }
 .enh-stats-row__fill { height: 100%; border-radius: inherit; background: ${t.accent}; }
 .enh-stats-row__count { color: ${t.tx1}; font-variant-numeric: tabular-nums; }
-.enh-stats-empty { padding: 18px; border: 1px dashed ${t.bd1}; border-radius: 9px; color: ${t.tx2}; font: 500 12px/1.5 -apple-system, sans-serif; background: ${t.sf0}; }
+.enh-stats-empty,
+.enh-marks-empty { padding: 18px; border: 1px dashed ${t.bd1}; border-radius: 9px; color: ${t.tx2}; font: 500 12px/1.5 -apple-system, BlinkMacSystemFont, 'Segoe UI', sans-serif; background: ${t.sf0}; }
 .enh-stats-insights { margin-top: 10px; color: ${t.tx2}; font: 500 11px/1.45 -apple-system, sans-serif; }
 .enh-stats-insights strong { color: ${t.tx1}; }
 @media (max-width: 1000px) {
@@ -15105,7 +15106,6 @@ ${scopedRules('.enh-zoom', {
     font: 400 11px/1.5 -apple-system, BlinkMacSystemFont, 'Segoe UI', sans-serif;
     white-space: pre-wrap; overflow-wrap: anywhere;
 }
-.enh-marks-empty { color: ${t.tx3}; font: 500 11px/1.4 -apple-system, BlinkMacSystemFont, 'Segoe UI', sans-serif; }
 
 /* ════ Servarr Settings ════ */
 .enh-integration-summary { display: grid; grid-template-columns: repeat(2, minmax(0, 1fr)); gap: 14px; }

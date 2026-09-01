@@ -2136,7 +2136,7 @@
     "message": "No importable rows found. $1 rows were skipped."
   },
   "text_no_local_title_marks_yet": {
-    "message": "No local title marks yet."
+    "message": "No local title marks yet. Mark a title Seen or Skip from any card or title page and it shows up here."
   },
   "text_no_matching_title_found": {
     "message": "No matching title found"

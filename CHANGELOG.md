@@ -34,6 +34,8 @@
 
 - The streaming widget drew JustWatch's brand yellow as text, which is about 1.6:1 against the light theme's white. It uses the theme's accent now, the same gold on dark themes and a readable amber on light.
 
+- The two empty panels on the Data page share one treatment, and the marks panel's empty state says how to get a first mark rather than only that there are none.
+
 - Settings buttons share one font stack and line height with the rest of the panel, show a press state, and use one disabled opacity. The CSV file picker and the notice's Dismiss button gained focus rings. The header subtitle was the last 10px line in the chrome.
 
 ### Changed

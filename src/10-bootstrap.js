@@ -746,7 +746,7 @@
         text_no_external_sites: 'no external sites',
         text_no_importable_rows_skipped_one: 'No importable rows found. $1 row was skipped.',
         text_no_importable_rows_skipped_other: 'No importable rows found. $1 rows were skipped.',
-        text_no_local_title_marks_yet: 'No local title marks yet.',
+        text_no_local_title_marks_yet: 'No local title marks yet. Mark a title Seen or Skip from any card or title page and it shows up here.',
         text_no_matching_title_found: 'No matching title found',
         text_no_titles_on_this_page_to_pick: 'No titles on this page to pick from.',
         text_none_of_count_opened: '0 of $1 opened',
