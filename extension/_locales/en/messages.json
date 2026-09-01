@@ -1448,6 +1448,21 @@
   "settings_edit_every_destination_directly_hide_categorize": {
     "message": "Edit every destination directly. Hide, categorize, reorder, or remove links without changing the rest of IMDb Enhanced."
   },
+  "settings_export_marks_full": {
+    "message": "Copy as CSV"
+  },
+  "settings_export_marks_full_hint": {
+    "message": "Every mark, with its state, date, title and note"
+  },
+  "settings_export_marks_letterboxd": {
+    "message": "Copy for Letterboxd"
+  },
+  "settings_export_marks_letterboxd_hint": {
+    "message": "Seen titles only, in the two columns Letterboxd imports"
+  },
+  "settings_export_marks_note": {
+    "message": "A backup is for coming back here. This is for taking your list somewhere else."
+  },
   "settings_export_with_credentials": {
     "message": "Export with credentials"
   },
@@ -1477,6 +1492,9 @@
   },
   "settings_heading_diagnostics": {
     "message": "Diagnostics"
+  },
+  "settings_heading_export_marks": {
+    "message": "Export your marks"
   },
   "settings_heading_people": {
     "message": "People"
@@ -2426,6 +2444,9 @@
   "toast_is_full_so_lookups_are_not": {
     "message": "$1 is full, so lookups are not being cached. Settings → Data → Clear cache frees it."
   },
+  "toast_marks_copied": {
+    "message": "$1: $2 titles copied"
+  },
   "toast_no_episodes_are_loaded_to_export": {
     "message": "No episodes are loaded to export"
   },
@@ -2434,6 +2455,9 @@
   },
   "toast_no_imdb_watched_titles_found_on": {
     "message": "No IMDb Watched titles found on this page. Sign in and open a list, chart, or title that shows the Watched control."
+  },
+  "toast_no_marks_to_export": {
+    "message": "There are no marks to export yet."
   },
   "toast_no_titles_found_on_this_page": {
     "message": "No titles found on this page"

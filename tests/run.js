@@ -290,6 +290,8 @@ function loadScriptTestHooks({ withoutDeleteValue = false, withheldCredentials =
         getAvailabilityCacheKey,
         getJustWatchSearchUrl,
         isTmdbConfigured,
+        buildMarksCsv,
+        buildLetterboxdCsv,
         scopedRules,
         setStoredSetting: (key, value) => set(key, value),
         readSettingsPanelText: () => document.getElementById('enh-settings-overlay')?.textContent || '',
@@ -3186,6 +3188,73 @@ test('scoped widget rules are emitted twice from one source and say the same thi
     assert(Number.isFinite(firefoxFloor), 'the Firefox floor should be readable');
     assert(firefoxFloor < 146,
         'if the floor ever reaches 146 the support query is no longer needed and this should say so');
+});
+
+/* IE-106: a spreadsheet is the shape people asked for, and two things have to be right
+   before it is safe to hand someone a file: a field that contains a comma, a quote or a
+   newline has to survive the trip, and a field that starts with = + - or @ is a formula
+   to a spreadsheet rather than text. Somebody else's film title should not run when the
+   file is opened. */
+test('exported marks quote awkward values and defuse formulas', () => {
+    const hooks = loadScriptTestHooks();
+    const entries = [
+        ['tt0133093', { state:'watched', title:'The Matrix', ts:Date.UTC(2024, 0, 15), note:'Rewatch, with commas' }],
+        ['tt0903747', { state:'skip', title:'Say "hello"', ts:Date.UTC(2023, 5, 2), note:'A note\nover two lines' }],
+        ['tt0111161', { state:'watched', title:'=cmd|calc', ts:0, note:'+1' }],
+    ];
+
+    const csv = hooks.buildMarksCsv(entries);
+    const lines = csv.split('\r\n');
+    assert.strictEqual(lines[0], 'Const,State,Timestamp,Title,Note', 'the header is the documented one');
+    assert.strictEqual(csv.split('\r\n')[1], 'tt0133093,watched,2024-01-15,The Matrix,"Rewatch, with commas"',
+        'a comma is quoted, and nothing else about the row changes');
+
+    // A quote is doubled inside a quoted field, which is what RFC 4180 says.
+    assert(csv.includes('"Say ""hello"""'), 'quotes are doubled, not escaped with a backslash');
+    // A newline stays inside its field rather than becoming a new record.
+    assert(csv.includes('"A note\nover two lines"'), 'a newline is quoted rather than breaking the row');
+
+    /* The formula cases. A tab is what spreadsheets read as "this is text" and what
+       importers strip, so the value is not mangled for anything that is not a
+       spreadsheet. */
+    assert(csv.includes('\t=cmd|calc'), 'a title beginning with = is not handed over as a formula');
+    assert(csv.includes('\t+1'), 'and neither is a note beginning with +');
+    assert(!csv.includes(',=cmd'), 'the raw formula must not appear unprefixed');
+
+    ['=1+1', '+1', '-1', '@SUM(A1)'].forEach(value => {
+        const row = hooks.buildMarksCsv([['tt0000001', { state:'watched', title:value, ts:0, note:'' }]]);
+        assert(row.includes(`\t${value}`), `${value} must be defused`);
+    });
+    // And an ordinary value is left exactly as it is.
+    assert(hooks.buildMarksCsv([['tt0000001', { state:'watched', title:'Alien', ts:0, note:'' }]])
+        .includes(',Alien,'), 'a plain title is not decorated');
+});
+
+/* The other half: the two columns Letterboxd's importer reads. */
+test('the Letterboxd export carries seen titles and their viewing dates', () => {
+    const hooks = loadScriptTestHooks();
+    const csv = hooks.buildLetterboxdCsv([
+        ['tt0133093', { state:'watched', title:'The Matrix', ts:Date.UTC(2024, 0, 15),
+            viewings:[{ date:'2020-05-01' }, { date:'2024-01-15' }] }],
+        ['tt0903747', { state:'skip', title:'Skipped', ts:Date.UTC(2023, 5, 2) }],
+        ['tt0111161', { state:'watched', title:'No viewings', ts:Date.UTC(2022, 2, 3) }],
+    ]);
+    const lines = csv.split('\r\n');
+    assert.strictEqual(lines[0], 'imdbID,WatchedDate', 'the header Letterboxd reads');
+
+    /* A rewatch is a row each, which is how Letterboxd records one. */
+    assert(lines.includes('tt0133093,2020-05-01'));
+    assert(lines.includes('tt0133093,2024-01-15'));
+
+    /* A Skip is a decision not to watch something. Importing it as watched would be a
+       lie about somebody's history. */
+    assert(!csv.includes('tt0903747'), 'a skipped title is not something you have seen');
+
+    // A Seen title with no logged viewing falls back to when it was marked.
+    assert(lines.includes('tt0111161,2022-03-03'));
+
+    // Nothing to export is a header and nothing else, rather than a malformed file.
+    assert.strictEqual(hooks.buildLetterboxdCsv([]), 'imdbID,WatchedDate');
 });
 
 test('version strings match', () => {

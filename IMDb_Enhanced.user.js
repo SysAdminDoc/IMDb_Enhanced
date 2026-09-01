@@ -565,6 +565,11 @@
         settings_dated_viewings: 'Dated viewings',
         settings_diagnostics_copied_paste_it_into_your_report: 'Diagnostics copied. Paste it into your report.',
         settings_edit_every_destination_directly_hide_categorize: 'Edit every destination directly. Hide, categorize, reorder, or remove links without changing the rest of IMDb Enhanced.',
+        settings_export_marks_full: 'Copy as CSV',
+        settings_export_marks_full_hint: 'Every mark, with its state, date, title and note',
+        settings_export_marks_letterboxd: 'Copy for Letterboxd',
+        settings_export_marks_letterboxd_hint: 'Seen titles only, in the two columns Letterboxd imports',
+        settings_export_marks_note: 'A backup is for coming back here. This is for taking your list somewhere else.',
         settings_export_with_credentials: 'Export with credentials',
         settings_failure_journal: 'Failure journal',
         settings_fetched_only_on_imdb_title_pages_responses: 'Fetched only on IMDb title pages. Responses are cached locally.',
@@ -575,6 +580,7 @@
         settings_grant_access: 'Grant access',
         settings_heading_appearance: 'Appearance',
         settings_heading_diagnostics: 'Diagnostics',
+        settings_heading_export_marks: 'Export your marks',
         settings_heading_people: 'People',
         settings_heading_preview: 'Preview',
         settings_heading_score_sources: 'Score sources',
@@ -891,9 +897,11 @@
         toast_imported_watched_titles_one: 'Imported $1 IMDb Watched title as local Seen',
         toast_imported_watched_titles_other: 'Imported $1 IMDb Watched titles as local Seen',
         toast_is_full_so_lookups_are_not: '$1 is full, so lookups are not being cached. Settings → Data → Clear cache frees it.',
+        toast_marks_copied: '$1: $2 titles copied',
         toast_no_episodes_are_loaded_to_export: 'No episodes are loaded to export',
         toast_no_imdb_title_ids_found: 'No IMDb title IDs found',
         toast_no_imdb_watched_titles_found_on: 'No IMDb Watched titles found on this page. Sign in and open a list, chart, or title that shows the Watched control.',
+        toast_no_marks_to_export: 'There are no marks to export yet.',
         toast_no_titles_found_on_this_page: 'No titles found on this page',
         toast_paste_settings_json_before_importing: 'Paste settings JSON before importing',
         toast_plot_synopsis_revealed: 'Plot synopsis revealed',
@@ -2455,6 +2463,62 @@
     }
     function getUserMarkEntries() {
         return Object.entries(getUserMarks()).sort((a, b) => (b[1].ts || 0) - (a[1].ts || 0));
+    }
+
+    /* ---- CSV mark export ------------------------------------------------------------
+       Asked for verbatim under IMDb's own Watched announcement and absent from the site.
+       Two shapes: everything this stores, and the columns Letterboxd's importer reads, so
+       the local list is portable to the tracker people move to.
+
+       Two hazards, both handled here rather than left to whoever opens the file. A field
+       holding a comma, a quote or a newline is quoted and its quotes doubled, which is
+       what RFC 4180 says and what every reader expects. And a field whose first character
+       is = + - or @ is a formula to a spreadsheet, not text: someone else's film title
+       should not run when the file is opened, so those are prefixed with a tab, which
+       spreadsheets treat as text and importers strip. */
+    const CSV_FORMULA_LEAD = /^[=+\-@\t\r]/;
+
+    function csvField(value) {
+        let text = String(value ?? '');
+        if (CSV_FORMULA_LEAD.test(text)) text = `\t${text}`;
+        return /[",\n\r]/.test(text) ? `"${text.replace(/"/g, '""')}"` : text;
+    }
+
+    function csvRow(values) {
+        return values.map(csvField).join(',');
+    }
+
+    /* Everything the local store holds, one row per title. */
+    function buildMarksCsv(entries = getUserMarkEntries()) {
+        const rows = [csvRow(['Const', 'State', 'Timestamp', 'Title', 'Note'])];
+        entries.forEach(([id, record]) => {
+            rows.push(csvRow([
+                id,
+                record?.state || '',
+                viewingDateFromTimestamp(Number(record?.ts)),
+                record?.title || '',
+                record?.note || '',
+            ]));
+        });
+        return rows.join('\r\n');
+    }
+
+    /* The two columns Letterboxd's importer reads. Only Seen titles: a Skip mark is a
+       decision not to watch something, and importing it as watched would be a lie about
+       somebody's history. A title with several logged viewings gets a row each, which is
+       how Letterboxd records a rewatch. */
+    function buildLetterboxdCsv(entries = getUserMarkEntries()) {
+        const rows = [csvRow(['imdbID', 'WatchedDate'])];
+        entries.forEach(([id, record]) => {
+            if (record?.state !== 'watched') return;
+            const dates = (Array.isArray(record.viewings) ? record.viewings : [])
+                .map(viewing => String(viewing?.date || ''))
+                .filter(date => /^\d{4}-\d{2}-\d{2}$/.test(date));
+            const fallback = viewingDateFromTimestamp(Number(record?.ts));
+            const listed = dates.length ? dates : (fallback ? [fallback] : ['']);
+            [...new Set(listed)].forEach(date => rows.push(csvRow([id, date])));
+        });
+        return rows.join('\r\n');
     }
 
     // =========================================================================
@@ -15657,6 +15721,30 @@ ${scopedRules('.enh-zoom', {
             csvPreview,
             makeEl('div', { className:'enh-import-actions' }, csvPreviewButton, csvApply)
         );
+        /* The marks as a spreadsheet, and as the two columns Letterboxd's importer
+           reads. A backup is for coming back here; this is for leaving, which is a
+           different thing and the one people actually asked for. */
+        const marksCsvCard = makeCard(t('settings_heading_export_marks'), t('settings_export_marks_note'));
+        const copyCsv = (build, label) => async () => {
+            const entries = getUserMarkEntries();
+            if (!entries.length) { showToast(t('toast_no_marks_to_export'), 3000); return; }
+            if (!copyTextToClipboard(build(entries))) { showToast(COPY_FAILURE_MESSAGE, 4500); return; }
+            showToast(t('toast_marks_copied', [label, entries.length]), 3000);
+        };
+        marksCsvCard.appendChild(makeEl('div', { className:'enh-data-actions' },
+            makeEl('button', {
+                type:'button', className:'enh-settings-footer-btn', id:'enh-export-marks-csv',
+                title:t('settings_export_marks_full_hint'),
+                onClick: copyCsv(buildMarksCsv, t('settings_export_marks_full')),
+            }, t('settings_export_marks_full')),
+            makeEl('button', {
+                type:'button', className:'enh-settings-footer-btn', id:'enh-export-marks-letterboxd',
+                title:t('settings_export_marks_letterboxd_hint'),
+                onClick: copyCsv(buildLetterboxdCsv, t('settings_export_marks_letterboxd')),
+            }, t('settings_export_marks_letterboxd'))
+        ));
+        dataPage.appendChild(marksCsvCard);
+
         const backupCard = makeCard(t('settings_backup_restore'), t('settings_a_backup_covers_preferences_sites_and_title'));
         backupCard.appendChild(makeEl('div', { className:'enh-data-actions' },
             makeEl('button', { type:'button', className:'enh-settings-footer-btn', id:'enh-export-btn', title:t('text_copy_settings_to_the_clipboard_without_integration') }, t('label_export_settings')),
