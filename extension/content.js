@@ -6175,9 +6175,9 @@
             tx1:    '#334155',
             tx2:    '#475569',
             tx3:    '#536175',
-            accent: '#a76500',
-            accentMuted: 'rgba(167,101,0,0.12)',
-            accentBorder: 'rgba(167,101,0,0.28)',
+            accent: '#8f5500',
+            accentMuted: 'rgba(143,85,0,0.12)',
+            accentBorder: 'rgba(143,85,0,0.28)',
             blue:   '#0f6fbf',
             blueHi: '#07599c',
             blueMuted: 'rgba(15,111,191,0.10)',
@@ -6435,7 +6435,7 @@ section[data-testid="hero-parent"] [data-testid="hero-media__poster"] {
 }
 section[data-testid="hero-parent"] [data-testid="hero-media__poster"] img {
     border-radius: 12px !important;
-    box-shadow: 0 18px 42px rgba(0,0,0,.34) !important;
+    box-shadow: ${t.sh2} !important;
 }
 
 /* Transparent base sections (prevent double-backgrounds) */
@@ -6527,7 +6527,7 @@ div.ipc-page-section--baseAlt {
     color: ${t.blue} !important;
 }
 [data-testid="title-cast-item"] [data-testid*="eps-toggle"],
-[data-testid="title-cast-item"] > div:last-child span {
+[data-testid="title-cast-item"] > div:last-child span:not(.title-cast-item__characters-list *) {
     color: ${t.tx2} !important;
 }
 
@@ -6828,7 +6828,6 @@ html[data-imdb-enhanced="active"] .ipc-page-background {
 
     injectEarlyThemeShell();
     setupThemeAutoSync();
-
     reg({
         key: 'modernUI', name: t('feature_modernUI_name'), group: 'Appearance',
         init() {
@@ -8680,6 +8679,10 @@ section[id*="quote" i] .ipc-list-card { padding: 4px 0 !important; margin: 2px 0
                 maxlength:String(SCORE_CORRECTION_URL_LIMIT),
                 value:current?.mode === 'url' ? current.url : '',
             });
+            const closeButton = makeEl('button', {
+                type:'button', className:'enh-score-correction__close', 'aria-label':t('aria_close_correction_panel'),
+                onClick:() => closePanel(true),
+            }, '×');
             const panel = makeEl('div', {
                 id:panelId,
                 className:'enh-score-correction',
@@ -8688,10 +8691,7 @@ section[id*="quote" i] .ipc-list-card { padding: 4px 0 !important; margin: 2px 0
             },
                 makeEl('div', { className:'enh-score-correction__header' },
                     makeEl('strong', {}, t('text_correct_source_match', [config.label])),
-                    makeEl('button', {
-                        type:'button', className:'enh-score-correction__close', 'aria-label':t('aria_close_correction_panel'),
-                        onClick:() => closePanel(true),
-                    }, '×')
+                    closeButton
                 ),
                 makeEl('div', { className:'enh-score-correction__current' },
                     current?.mode === 'none'
@@ -8728,15 +8728,14 @@ section[id*="quote" i] .ipc-list-card { padding: 4px 0 !important; margin: 2px 0
             );
             widget.appendChild(panel);
             showInTopLayer(panel, trigger);
+            requestAnimationFrame(() => { if (panel.isConnected) closeButton.focus(); });
             panel.addEventListener('keydown', event => {
                 if (event.key !== 'Escape') return;
                 event.preventDefault();
                 event.stopPropagation();
                 closePanel(true);
             });
-            /* A click anywhere else puts it away, as the link menu already does. Escape
-               alone only works while focus is inside, and the panel opens without
-               taking focus, so a mouse user had the close button and nothing else. */
+            /* A click anywhere else puts it away, as the link menu already does. */
             const onOutsideClick = event => {
                 if (!panel.isConnected) { document.removeEventListener('click', onOutsideClick, true); return; }
                 if (panel.contains(event.target) || trigger.contains(event.target)) return;
@@ -9766,8 +9765,12 @@ section[id*="quote" i] .ipc-list-card { padding: 4px 0 !important; margin: 2px 0
                the few pixels of padding an empty box measures. */
             const width = overlay.offsetWidth > 40 ? overlay.offsetWidth : ZOOM_MAX_WIDTH;
             const left = room > box.left ? box.right + 12 : Math.max(12, box.left - 12 - width);
+            const height = overlay.offsetHeight > 40
+                ? overlay.offsetHeight
+                : Math.min(window.innerHeight * 0.78, ZOOM_IMAGE_HEIGHT);
+            const top = Math.max(12, Math.min(box.top, window.innerHeight - height - 12));
             overlay.style.left = `${Math.round(left + window.scrollX)}px`;
-            overlay.style.top = `${Math.round(Math.max(12, box.top) + window.scrollY)}px`;
+            overlay.style.top = `${Math.round(top + window.scrollY)}px`;
         },
         hide() {
             if (this._overlay) {
@@ -9880,11 +9883,11 @@ section[id*="quote" i] .ipc-list-card { padding: 4px 0 !important; margin: 2px 0
                     ? makeEl('a', {
                         href:data.url, target:'_blank', rel:'noopener noreferrer',
                         className:'enh-score-widget__score enh-score-widget__score--availability',
-                        style:{ '--score-color':'#3c948b' },
+                        style:{ '--score-color':getTheme().green },
                     }, badge, value)
                     : makeEl('div', {
                         className:'enh-score-widget__score enh-score-widget__score--availability',
-                        style:{ '--score-color':'#3c948b' },
+                        style:{ '--score-color':getTheme().green },
                     }, badge, value)
             );
             appendProviderAttribution(w, 'tvmaze');
@@ -10531,7 +10534,6 @@ section[id*="quote" i] .ipc-list-card { padding: 4px 0 !important; margin: 2px 0
         },
         destroy() { document.getElementById('enh-jw-widget')?.remove(); }
     });
-
     // #########################################################################
     //
     //  LAYOUT FEATURES
@@ -12028,7 +12030,10 @@ section[id*="quote" i] .ipc-list-card { padding: 4px 0 !important; margin: 2px 0
                     border: 1px solid ${t.bd1}; border-radius: 8px; background: ${t.bg}; color: ${t.tx1};
                     padding: 8px 10px; font: 400 13px/1.5 -apple-system, BlinkMacSystemFont, 'Segoe UI', sans-serif;
                 }
-                #enh-title-note textarea:focus { outline: none; border-color: ${t.accentBorder}; box-shadow: 0 0 0 2px ${t.accentMuted}; }
+                #enh-title-note textarea:focus-visible {
+                    outline: 2px solid ${t.accent}; outline-offset: 2px;
+                    border-color: ${t.accentBorder}; box-shadow: 0 0 0 2px ${t.accentMuted};
+                }
                 .enh-title-note__count { font: 500 10px/1.3 -apple-system, BlinkMacSystemFont, 'Segoe UI', sans-serif; color: ${t.tx3}; align-self: flex-end; }
             `, 'enh-title-note-css');
 
@@ -12644,7 +12649,6 @@ section[id*="quote" i] .ipc-list-card { padding: 4px 0 !important; margin: 2px 0
             pruneTitleStack();
         }
     });
-
     // #########################################################################
     //
     //  TV SHOW FEATURES
@@ -14511,7 +14515,7 @@ section[data-testid="hero-parent"].enh-editorial-native-hidden { display: none !
 
 /* ════ Expanded Link Dropdown ════ */
 .enh-link-dropdown {
-    position: absolute; top: calc(100% + 8px); left: 0; min-width: 340px;
+    box-sizing: border-box; position: absolute; top: calc(100% + 8px); left: 0; min-width: 340px;
     background: ${t.sf1}; border: 1px solid ${t.bd1};
     border-radius: 12px; padding: 14px 16px; z-index: 100000;
     box-shadow: ${t.sh3}; display: none;
@@ -14621,7 +14625,7 @@ section[data-testid="hero-parent"].enh-editorial-native-hidden { display: none !
 .enh-score-correction__choice:focus-visible,
 .enh-score-correction__input:focus-visible { outline: 2px solid ${t.accent}; outline-offset: 2px; }
 .enh-score-correction {
-    position: absolute; top: calc(100% + 6px); right: 0; z-index: 100020;
+    box-sizing: border-box; position: absolute; top: calc(100% + 6px); right: 0; z-index: 100020;
     width: min(340px, calc(100vw - 28px)); padding: 12px;
     border: 1px solid ${t.bd1}; border-radius: 10px;
     background: ${t.sf1}; color: ${t.tx1}; box-shadow: ${t.sh3};
@@ -14653,7 +14657,7 @@ section[data-testid="hero-parent"].enh-editorial-native-hidden { display: none !
 .enh-score-correction__choice:hover { border-color: ${t.accentBorder}; color: ${t.accent}; }
 .enh-score-correction__label { display: grid; gap: 4px; margin-top: 10px; color: ${t.tx2}; font-weight: 650; }
 .enh-score-correction__input {
-    width: 100%; min-width: 0; padding: 7px 8px; border: 1px solid ${t.bd1}; border-radius: 7px;
+    box-sizing: border-box; width: 100%; min-width: 0; padding: 7px 8px; border: 1px solid ${t.bd1}; border-radius: 7px;
     background: ${t.sf0}; color: ${t.tx0}; font: 500 10px/1.35 ui-monospace, monospace;
 }
 .enh-score-correction__input[aria-invalid="true"] { border-color: ${t.red}; }
@@ -14725,7 +14729,7 @@ ${scopedRules('.enh-zoom', {
         width: auto; height: auto;
         margin: 0 0 0 12px; border-width: 1px; overflow: visible; color: inherit;
         /* The side with room, decided by the engine rather than by measuring. */
-        position-try-fallbacks: flip-inline;
+        position-try-fallbacks: flip-inline, flip-block;
     }
 }
 .enh-score-stale__retry {

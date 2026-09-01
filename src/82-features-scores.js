@@ -385,6 +385,10 @@
                 maxlength:String(SCORE_CORRECTION_URL_LIMIT),
                 value:current?.mode === 'url' ? current.url : '',
             });
+            const closeButton = makeEl('button', {
+                type:'button', className:'enh-score-correction__close', 'aria-label':t('aria_close_correction_panel'),
+                onClick:() => closePanel(true),
+            }, '×');
             const panel = makeEl('div', {
                 id:panelId,
                 className:'enh-score-correction',
@@ -393,10 +397,7 @@
             },
                 makeEl('div', { className:'enh-score-correction__header' },
                     makeEl('strong', {}, t('text_correct_source_match', [config.label])),
-                    makeEl('button', {
-                        type:'button', className:'enh-score-correction__close', 'aria-label':t('aria_close_correction_panel'),
-                        onClick:() => closePanel(true),
-                    }, '×')
+                    closeButton
                 ),
                 makeEl('div', { className:'enh-score-correction__current' },
                     current?.mode === 'none'
@@ -433,15 +434,14 @@
             );
             widget.appendChild(panel);
             showInTopLayer(panel, trigger);
+            requestAnimationFrame(() => { if (panel.isConnected) closeButton.focus(); });
             panel.addEventListener('keydown', event => {
                 if (event.key !== 'Escape') return;
                 event.preventDefault();
                 event.stopPropagation();
                 closePanel(true);
             });
-            /* A click anywhere else puts it away, as the link menu already does. Escape
-               alone only works while focus is inside, and the panel opens without
-               taking focus, so a mouse user had the close button and nothing else. */
+            /* A click anywhere else puts it away, as the link menu already does. */
             const onOutsideClick = event => {
                 if (!panel.isConnected) { document.removeEventListener('click', onOutsideClick, true); return; }
                 if (panel.contains(event.target) || trigger.contains(event.target)) return;
@@ -1471,8 +1471,12 @@
                the few pixels of padding an empty box measures. */
             const width = overlay.offsetWidth > 40 ? overlay.offsetWidth : ZOOM_MAX_WIDTH;
             const left = room > box.left ? box.right + 12 : Math.max(12, box.left - 12 - width);
+            const height = overlay.offsetHeight > 40
+                ? overlay.offsetHeight
+                : Math.min(window.innerHeight * 0.78, ZOOM_IMAGE_HEIGHT);
+            const top = Math.max(12, Math.min(box.top, window.innerHeight - height - 12));
             overlay.style.left = `${Math.round(left + window.scrollX)}px`;
-            overlay.style.top = `${Math.round(Math.max(12, box.top) + window.scrollY)}px`;
+            overlay.style.top = `${Math.round(top + window.scrollY)}px`;
         },
         hide() {
             if (this._overlay) {
@@ -1585,11 +1589,11 @@
                     ? makeEl('a', {
                         href:data.url, target:'_blank', rel:'noopener noreferrer',
                         className:'enh-score-widget__score enh-score-widget__score--availability',
-                        style:{ '--score-color':'#3c948b' },
+                        style:{ '--score-color':getTheme().green },
                     }, badge, value)
                     : makeEl('div', {
                         className:'enh-score-widget__score enh-score-widget__score--availability',
-                        style:{ '--score-color':'#3c948b' },
+                        style:{ '--score-color':getTheme().green },
                     }, badge, value)
             );
             appendProviderAttribution(w, 'tvmaze');
@@ -2236,4 +2240,3 @@
         },
         destroy() { document.getElementById('enh-jw-widget')?.remove(); }
     });
-

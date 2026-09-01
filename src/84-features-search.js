@@ -1248,7 +1248,10 @@
                     border: 1px solid ${t.bd1}; border-radius: 8px; background: ${t.bg}; color: ${t.tx1};
                     padding: 8px 10px; font: 400 13px/1.5 -apple-system, BlinkMacSystemFont, 'Segoe UI', sans-serif;
                 }
-                #enh-title-note textarea:focus { outline: none; border-color: ${t.accentBorder}; box-shadow: 0 0 0 2px ${t.accentMuted}; }
+                #enh-title-note textarea:focus-visible {
+                    outline: 2px solid ${t.accent}; outline-offset: 2px;
+                    border-color: ${t.accentBorder}; box-shadow: 0 0 0 2px ${t.accentMuted};
+                }
                 .enh-title-note__count { font: 500 10px/1.3 -apple-system, BlinkMacSystemFont, 'Segoe UI', sans-serif; color: ${t.tx3}; align-self: flex-end; }
             `, 'enh-title-note-css');
 
@@ -1864,4 +1867,3 @@
             pruneTitleStack();
         }
     });
-

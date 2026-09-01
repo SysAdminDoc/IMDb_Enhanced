@@ -121,9 +121,9 @@
             tx1:    '#334155',
             tx2:    '#475569',
             tx3:    '#536175',
-            accent: '#a76500',
-            accentMuted: 'rgba(167,101,0,0.12)',
-            accentBorder: 'rgba(167,101,0,0.28)',
+            accent: '#8f5500',
+            accentMuted: 'rgba(143,85,0,0.12)',
+            accentBorder: 'rgba(143,85,0,0.28)',
             blue:   '#0f6fbf',
             blueHi: '#07599c',
             blueMuted: 'rgba(15,111,191,0.10)',
@@ -381,7 +381,7 @@ section[data-testid="hero-parent"] [data-testid="hero-media__poster"] {
 }
 section[data-testid="hero-parent"] [data-testid="hero-media__poster"] img {
     border-radius: 12px !important;
-    box-shadow: 0 18px 42px rgba(0,0,0,.34) !important;
+    box-shadow: ${t.sh2} !important;
 }
 
 /* Transparent base sections (prevent double-backgrounds) */
@@ -473,7 +473,7 @@ div.ipc-page-section--baseAlt {
     color: ${t.blue} !important;
 }
 [data-testid="title-cast-item"] [data-testid*="eps-toggle"],
-[data-testid="title-cast-item"] > div:last-child span {
+[data-testid="title-cast-item"] > div:last-child span:not(.title-cast-item__characters-list *) {
     color: ${t.tx2} !important;
 }
 
@@ -774,4 +774,3 @@ html[data-imdb-enhanced="active"] .ipc-page-background {
 
     injectEarlyThemeShell();
     setupThemeAutoSync();
-

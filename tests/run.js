@@ -2199,6 +2199,14 @@ test('secondary interactions expose complete keyboard and toggle semantics', () 
     assert(script.includes(`makeEl('nav', { id:'enh-quicknav', 'aria-label':t('${messageKeyFor('On this page')}') })`),
         'quick navigation should expose a named navigation landmark');
     assert(script.includes("className:'enh-qn-dot', type:'button'"), 'scripted section jumps should use button semantics rather than fake hash links');
+    assert(script.includes('if (panel.isConnected) closeButton.focus()'),
+        'score correction dialogs should take focus so Escape works as soon as they open');
+    assert(script.includes('.enh-score-correction {\n    box-sizing: border-box;'),
+        'score correction popovers should own their border-box width instead of inheriting IMDb reset styles');
+    assert(script.includes('.enh-link-dropdown {\n    box-sizing: border-box;'),
+        'expanded link popovers should own their border-box width instead of inheriting IMDb reset styles');
+    assert(script.includes('#enh-title-note textarea:focus-visible'),
+        'the private note should retain an explicit keyboard focus ring');
 });
 
 test('independent title tools survive external-link toggles', () => {
@@ -2304,6 +2312,7 @@ test('theme text tokens remain readable on elevated surfaces', () => {
     Object.entries(hooks.THEMES).forEach(([id, theme]) => {
         assert(contrast(theme.tx2, theme.sf2) >= 4.5, `${id} secondary text is too faint on elevated surfaces`);
         assert(contrast(theme.tx3, theme.sf2) >= 4.5, `${id} tertiary text is too faint on elevated surfaces`);
+        assert(contrast(theme.accent, theme.sf2) >= 4.5, `${id} accent text is too faint on active surfaces`);
         assert(theme.heroScrim, `${id} needs an explicit hero scrim`);
     });
     ['dark', 'oled', 'midnight'].forEach(id => {
@@ -2325,6 +2334,9 @@ test('theme overrides native IMDb surfaces and generated card text', () => {
     assert(/\.ipc-list-card,\s*\.ipc-slate-card,\s*\.ipc-poster-card/.test(script), 'shared native card surfaces need an explicit dark-theme override');
     assert(script.includes('.ipc-primary-image-list-card__title'), 'image list card titles need a theme-aware foreground');
     assert(script.includes('[data-testid="title-cast-item__actor"]'), 'cast actor names need a stable theme-aware foreground');
+    assert(script.includes('span:not(.title-cast-item__characters-list *)'), 'cast character links must not be overwritten by the muted metadata rule');
+    assert(script.includes('section[data-testid="hero-parent"] [data-testid="hero-media__poster"] img {\n    border-radius: 12px !important;\n    box-shadow: ${t.sh2} !important;'),
+        'the native hero poster shadow should follow the active theme');
     assert(script.includes('.text-on-light'), 'native light-surface utility classes need to be remapped inside themed cards');
 });
 
@@ -2351,6 +2363,7 @@ test('branded controls keep readable text across themes and score states', () =>
     assert(script.includes('.enh-markable-card.enh-marked img{opacity:'), 'mark state may distinguish poster imagery without fading controls or text');
     assert(!script.includes('.enh-multi-search-queue__item--opened { opacity:'), 'opened queue links must remain readable and interactive');
     assert(script.includes('.enh-multi-search-queue__item--opened .enh-multi-search-queue__link { color: ${t.tx3} !important; }'), 'opened queue links should use a tested semantic text token');
+    assert(!script.includes("'--score-color':'#3c948b'"), 'TV broadcast widgets should use a theme token rather than a fixed dark-theme color');
 });
 
 test('optional keyboard shortcuts do not collide with browser or modal commands', () => {
@@ -3000,6 +3013,10 @@ test('a zoomed image asks for a bounded variant, never the original', () => {
        declaration is asserted where it is written rather than in one of the two outputs. */
     assert(/scopedRules\('\.enh-zoom'[\s\S]{0,220}position: absolute;/.test(script),
         'the preview must not be positioned inside the card it came from');
+    assert(script.includes('Math.min(box.top, window.innerHeight - height - 12)'),
+        'the fallback image preview should clamp its bottom edge inside the viewport');
+    assert(script.includes('position-try-fallbacks: flip-inline, flip-block;'),
+        'anchored image previews should be able to flip vertically as well as horizontally');
 });
 
 /* IE-23: IMDb closed its boards in 2017 and MovieChat keeps one per IMDb id. Checked live

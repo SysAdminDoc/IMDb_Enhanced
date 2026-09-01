@@ -464,7 +464,7 @@ section[data-testid="hero-parent"].enh-editorial-native-hidden { display: none !
 
 /* ════ Expanded Link Dropdown ════ */
 .enh-link-dropdown {
-    position: absolute; top: calc(100% + 8px); left: 0; min-width: 340px;
+    box-sizing: border-box; position: absolute; top: calc(100% + 8px); left: 0; min-width: 340px;
     background: ${t.sf1}; border: 1px solid ${t.bd1};
     border-radius: 12px; padding: 14px 16px; z-index: 100000;
     box-shadow: ${t.sh3}; display: none;
@@ -574,7 +574,7 @@ section[data-testid="hero-parent"].enh-editorial-native-hidden { display: none !
 .enh-score-correction__choice:focus-visible,
 .enh-score-correction__input:focus-visible { outline: 2px solid ${t.accent}; outline-offset: 2px; }
 .enh-score-correction {
-    position: absolute; top: calc(100% + 6px); right: 0; z-index: 100020;
+    box-sizing: border-box; position: absolute; top: calc(100% + 6px); right: 0; z-index: 100020;
     width: min(340px, calc(100vw - 28px)); padding: 12px;
     border: 1px solid ${t.bd1}; border-radius: 10px;
     background: ${t.sf1}; color: ${t.tx1}; box-shadow: ${t.sh3};
@@ -606,7 +606,7 @@ section[data-testid="hero-parent"].enh-editorial-native-hidden { display: none !
 .enh-score-correction__choice:hover { border-color: ${t.accentBorder}; color: ${t.accent}; }
 .enh-score-correction__label { display: grid; gap: 4px; margin-top: 10px; color: ${t.tx2}; font-weight: 650; }
 .enh-score-correction__input {
-    width: 100%; min-width: 0; padding: 7px 8px; border: 1px solid ${t.bd1}; border-radius: 7px;
+    box-sizing: border-box; width: 100%; min-width: 0; padding: 7px 8px; border: 1px solid ${t.bd1}; border-radius: 7px;
     background: ${t.sf0}; color: ${t.tx0}; font: 500 10px/1.35 ui-monospace, monospace;
 }
 .enh-score-correction__input[aria-invalid="true"] { border-color: ${t.red}; }
@@ -678,7 +678,7 @@ ${scopedRules('.enh-zoom', {
         width: auto; height: auto;
         margin: 0 0 0 12px; border-width: 1px; overflow: visible; color: inherit;
         /* The side with room, decided by the engine rather than by measuring. */
-        position-try-fallbacks: flip-inline;
+        position-try-fallbacks: flip-inline, flip-block;
     }
 }
 .enh-score-stale__retry {
