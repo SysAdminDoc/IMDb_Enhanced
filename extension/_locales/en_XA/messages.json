@@ -360,7 +360,7 @@
     "message": "[!! Current settings could not be read; no changes were made. !!]"
   },
   "feature_castAges_detail": {
-    "message": "[!! Shows a living person’s current age next to their birth date. IMDb already prints the age at death for people who have died. !!]"
+    "message": "[!! Shows a living person’s current age next to their birth date, and roughly how old each billed actor was when a title came out. IMDb already prints the age at death for people who have died; the cast ages come from Wikidata and are approximate. !!]"
   },
   "feature_castAges_name": {
     "message": "[!! Person age !!]"
@@ -2443,6 +2443,9 @@
   },
   "text_view_full_cast_crew": {
     "message": "[!! View full cast & crew !!]"
+  },
+  "text_was_about_age": {
+    "message": "[!! (was ~$1) !!]"
   },
   "text_watch_order": {
     "message": "[!! Watch order !!]"

@@ -206,7 +206,7 @@
         error_settings_none_recognized: 'No valid recognized settings were found.',
         error_settings_not_an_object: 'Settings JSON must be an object.',
         error_settings_unreadable: 'Current settings could not be read; no changes were made.',
-        feature_castAges_detail: 'Shows a living person’s current age next to their birth date. IMDb already prints the age at death for people who have died.',
+        feature_castAges_detail: 'Shows a living person’s current age next to their birth date, and roughly how old each billed actor was when a title came out. IMDb already prints the age at death for people who have died; the cast ages come from Wikidata and are approximate.',
         feature_castAges_name: 'Person age',
         feature_collapsibleSections_detail: 'Adds per-section collapse controls and remembers each state.',
         feature_collapsibleSections_name: 'Collapsible sections',
@@ -901,6 +901,7 @@
         text_user_score: 'User: $1',
         text_uses_light_for_os_light_mode_and: 'Uses Light for OS light mode and Dark for OS dark mode.',
         text_view_full_cast_crew: 'View full cast & crew',
+        text_was_about_age: '(was ~$1)',
         text_watch_order: 'Watch order',
         text_without_the_extremes: 'Without 1s and 10s: $1 (derived)',
         toast_a_site_list_can_contain_up: 'A site list can contain up to $1 destinations',
@@ -1289,6 +1290,7 @@
         inlineLetterboxdScore: ['letterboxd', 'wikidata'],
         inlineAnimeScore: ['anilist'],
         collectionPanel: ['wikidata'],
+        castAges: ['wikidata'],
         /* Both are declared so either can be granted, but only the chosen source is ever
            contacted; activeProvidersFor narrows this to what is actually in play. */
         streamAvailability: ['justWatch', 'tmdb'],
@@ -7009,6 +7011,78 @@ section[id*="quote" i] .ipc-list-card { padding: 4px 0 !important; margin: 2px 0
         metacritic: /^(?:movie|tv)\/[a-z0-9][a-z0-9._-]{0,120}$/i,
         tmdb: /^(?:movie|tv)\/\d{1,12}$/i,
     };
+
+    /* IE-120: how old somebody was when a film was made is the question a cast list
+       raises and never answers, and it has been asked for since 2005. Birth dates live on
+       IMDb's /name/ pages, which answer a script with an anti-bot challenge, so they are
+       read from Wikidata instead: one batched query for the whole billed cast, keyed by
+       the IMDb ids the page already carries.
+
+       A year is all this needs and all it claims. Without the month, an age is out by up
+       to a year either way, so it is labelled approximate rather than presented as a
+       fact. */
+    const CAST_AGE_LIMIT = 18;
+    const CAST_AGE_MIN_YEAR = 1850;
+
+    function collectCastNameIds(root = document) {
+        const ids = [];
+        const seen = new Set();
+        const anchors = root.querySelectorAll?.('[data-testid="title-cast-item"] a[href*="/name/nm"]') || [];
+        for (const anchor of anchors) {
+            if (ids.length >= CAST_AGE_LIMIT) break;
+            const id = String(anchor.getAttribute('href') || '').match(/\/name\/(nm\d{5,12})/)?.[1];
+            if (!id || seen.has(id)) continue;
+            seen.add(id);
+            ids.push(id);
+        }
+        return ids;
+    }
+
+    function buildCastBirthQuery(nameIds) {
+        const wanted = (Array.isArray(nameIds) ? nameIds : [])
+            .filter(id => /^nm\d{5,12}$/.test(String(id || '')))
+            .slice(0, CAST_AGE_LIMIT);
+        if (!wanted.length) return '';
+        const values = wanted.map(id => JSON.stringify(id)).join(' ');
+        /* One query for the whole cast rather than one per person: eighteen requests to
+           somebody else's public endpoint for one page view is not a reasonable way to
+           ask a question. */
+        return 'SELECT ?imdb (MIN(YEAR(?dob)) AS ?born) WHERE {'
+            + ` VALUES ?imdb { ${values} }`
+            + ' ?item wdt:P345 ?imdb; wdt:P569 ?dob.'
+            + ` } GROUP BY ?imdb LIMIT ${CAST_AGE_LIMIT}`;
+    }
+
+    function parseCastBirthYears(responseText) {
+        const source = toBoundedText(responseText, WIKIDATA_RESPONSE_LIMIT);
+        if (!source) return {};
+        let payload = null;
+        try { payload = JSON.parse(source); }
+        catch { return {}; }
+        const rows = payload?.results?.bindings;
+        if (!Array.isArray(rows)) return {};
+        const years = {};
+        for (let index = 0; index < rows.length && index < CAST_AGE_LIMIT; index++) {
+            const id = String(rows[index]?.imdb?.value || '');
+            if (!/^nm\d{5,12}$/.test(id) || years[id]) continue;
+            const born = Number(rows[index]?.born?.value);
+            /* Their data is open, so a birth year in the future or in antiquity is a thing
+               that happens. Neither is an age worth putting on a page. */
+            if (!Number.isSafeInteger(born) || born < CAST_AGE_MIN_YEAR) continue;
+            if (born > new Date().getUTCFullYear()) continue;
+            years[id] = born;
+        }
+        return years;
+    }
+
+    function castAgeAtRelease(bornYear, releaseYear) {
+        const born = Number(bornYear);
+        const released = Number(releaseYear);
+        if (!Number.isSafeInteger(born) || !Number.isSafeInteger(released)) return null;
+        const age = released - born;
+        // Nobody acts before they are born, and a century on set is a data error.
+        return age >= 0 && age <= 110 ? age : null;
+    }
 
     function buildWikidataIdQuery(imdbId) {
         if (!/^tt\d{5,12}$/.test(String(imdbId || ''))) return '';
@@ -13452,23 +13526,74 @@ section[id*="quote" i] .ipc-list-card { padding: 4px 0 !important; margin: 2px 0
 
     reg({
         key: 'castAges', name: t('feature_castAges_name'), group: 'Features',
-        init() {
-            if (!isIMDbHost() || getPageSurface() !== 'name') return;
+        async init() {
+            if (!isIMDbHost()) return;
             const isCurrent = createFeatureGuard(this);
+            addThemedCSS(t => `
+                .enh-person-age { color: ${t.tx2}; font-weight: 700; margin-left: 6px; }
+                .enh-cast-age { color: ${t.tx3}; font-weight: 700; margin-left: 6px; white-space: nowrap; }
+            `, 'enh-castAges');
+            if (getPageSurface() === 'name') { this._renderPersonAge(isCurrent); return; }
+            await this._renderCastAges(isCurrent);
+        },
+        _renderPersonAge(isCurrent) {
             const birth = readPersonBirthDate();
             if (!birth || birth.deceased) return;
             const age = computeCurrentAge(birth.iso);
             if (age === null) return;
             const host = document.querySelector('[data-testid="birth-and-death-birthdate"]');
             if (!host || !isCurrent() || host.querySelector('.enh-person-age')) return;
-            addThemedCSS(t => `
-                .enh-person-age { color: ${t.tx2}; font-weight: 700; margin-left: 6px; }
-            `, 'enh-castAges');
             host.appendChild(makeEl('span', { className:'enh-person-age' }, t('text_age_parenthetical', [age])));
+        },
+        /* IE-120: age at release beside each billed name. One query for the whole cast,
+           cached against the title, and nothing at all when the year is unknown: an age
+           needs both ends and half of one is not worth a request. */
+        async _renderCastAges(isCurrent) {
+            const imdbId = getIMDbID();
+            const releaseYear = normalizeUserMarkYear(getTitleYear());
+            if (!imdbId || releaseYear === null) return;
+            await waitForTitleSurface();
+            if (!isCurrent()) return;
+            const names = collectCastNameIds(document);
+            if (!names.length) return;
+
+            const cacheKey = `wikidata_cast_${imdbId}`;
+            let years = cacheGet(cacheKey);
+            if (!years || years.unavailable) {
+                if (years?.unavailable) return;
+                const query = buildCastBirthQuery(names);
+                if (!query) return;
+                try {
+                    const response = await httpGet(
+                        `${WIKIDATA_ENDPOINT}?format=json&query=${encodeURIComponent(query)}`,
+                        { headers:{ Accept:'application/sparql-results+json' }, cancelOnRouteChange:true });
+                    if (!isCurrent()) return;
+                    years = parseCastBirthYears(response.responseText);
+                } catch { return; }
+                if (Object.keys(years).length) cacheSet(cacheKey, years, WIKIDATA_ID_TTL);
+                else { cacheSetUnavailable(cacheKey); return; }
+            }
+            if (!isCurrent()) return;
+            this._paintCastAges(years, releaseYear);
+        },
+        _paintCastAges(years, releaseYear) {
+            document.querySelectorAll('[data-testid="title-cast-item"] a[href*="/name/nm"]').forEach(anchor => {
+                const id = String(anchor.getAttribute('href') || '').match(/\/name\/(nm\d{5,12})/)?.[1];
+                const age = id ? castAgeAtRelease(years?.[id], releaseYear) : null;
+                // Nothing at all for somebody Wikidata does not know, rather than a guess.
+                if (age === null) return;
+                const host = anchor.closest('[data-testid="title-cast-item"]');
+                if (!host || host.querySelector('.enh-cast-age')) return;
+                /* Approximate, and said so. Only the year is known, so the answer is out
+                   by up to a year either way and presenting it as exact would be a lie
+                   about how well this knows. */
+                host.appendChild(makeEl('span', { className:'enh-cast-age' },
+                    t('text_was_about_age', [age])));
+            });
         },
         destroy() {
             removeCSS('enh-castAges');
-            document.querySelectorAll('.enh-person-age').forEach(node => node.remove());
+            document.querySelectorAll('.enh-person-age,.enh-cast-age').forEach(node => node.remove());
         }
     });
 

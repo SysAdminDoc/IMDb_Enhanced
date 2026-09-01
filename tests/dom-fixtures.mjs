@@ -74,6 +74,11 @@ const instrumented = userscript.replace(/\}\)\(\);\s*$/, `globalThis.__imdbEnhan
     cacheSet,
     cacheGet,
     getAvailabilityCacheKey,
+    collectCastNameIds,
+    paintCastAges: (years, releaseYear) => {
+        const feature = features.find(candidate => candidate.key === 'castAges');
+        feature._paintCastAges(years, releaseYear);
+    },
     renderAirsOn: data => {
         const feature = features.find(candidate => candidate.key === 'airsOn');
         feature._render(data);
@@ -199,7 +204,9 @@ async function runFixture(name, run, { source = instrumented, extension = null }
 
     try {
         await run(window, window.__imdbEnhancedDomTest);
-        console.log(`ok - happy-dom ${name} fixture`);
+        /* The working set beside every pass, because the day this suite ate the machine
+           it was one fixture's growth and only a per-fixture number showed which. */
+        console.log(`ok - happy-dom ${name} fixture [rss ${Math.round(process.memoryUsage.rss()/1048576)} MB]`);
     } catch (error) {
         fs.mkdirSync(artifactDir, { recursive:true });
         const artifactPath = path.join(artifactDir, `${name}.html`);
@@ -522,7 +529,7 @@ await runFixture('title', async (window, hooks) => {
 
         hooks.stopFeature('movieChatBoard');
         window.GM_setValue('imdb_enh_movieChatBoard', false);
-        assert.equal(window.document.getElementById('enh-moviechat'), null,
+        assert.ok(window.document.getElementById('enh-moviechat') === null,
             'and switching it off takes the whole section away');
     } finally {
         window.IntersectionObserver = observer;
@@ -642,7 +649,7 @@ await runFixture('title', async (window, hooks) => {
        rather than in its own window, because a fixture window is not cheap. */
     seedEpisodeMarks(hooks, hooks.getIMDbID());
     hooks.initFeature('watchedMarking');
-    assert.equal(episodeBadge(window), null, 'a film says nothing about episodes');
+    assert.ok(episodeBadge(window) === null, 'a film says nothing about episodes');
     hooks.stopFeature('watchedMarking');
     hooks.setStoredSetting('userMarks', {});
     hooks.initFeature('watchedMarking');
@@ -761,10 +768,10 @@ await runFixture('title', async (window, hooks) => {
     hooks.setStoredSetting('userMarks', {});
     hooks.getUserMarks(true);
     hooks.rescanMarks();
-    assert.equal(episodeBadge(window), null, 'a show with no episode marks carries no badge');
+    assert.ok(episodeBadge(window) === null, 'a show with no episode marks carries no badge');
 
     hooks.stopFeature('watchedMarking');
-    assert.equal(episodeBadge(window), null, 'switching the feature off takes it away');
+    assert.ok(episodeBadge(window) === null, 'switching the feature off takes it away');
     window.GM_setValue('imdb_enh_watchedMarking', false);
     hooks.setStoredSetting('userMarks', {});
 
@@ -937,6 +944,46 @@ await runFixture('title', async (window, hooks) => {
     assert.equal(link('tt0133093').title, '', 'and the tooltip it added with them');
     assert.equal(owned.title, 'IMDb says something here', 'while leaving IMDb\'s alone');
 
+    /* IE-120: how old the billed cast were when a title came out. The captured fixture
+       keeps the cast section and the sanitiser strips its rows, so the rows are built
+       here; what matters is that a name IMDb links to is matched to what Wikidata knew
+       about it, and that somebody it did not know gets nothing rather than a guess. */
+    const cast = window.document.createElement('div');
+    cast.innerHTML = '<div data-testid="title-cast-item"><a href="/name/nm0000206/">Keanu Reeves</a></div>'
+        + '<div data-testid="title-cast-item"><a href="/name/nm0000401/">Laurence Fishburne</a></div>'
+        + '<div data-testid="title-cast-item"><a href="/name/nm0005251/">Somebody Unknown</a></div>';
+    window.document.body.appendChild(cast);
+    const items = [...cast.querySelectorAll('[data-testid="title-cast-item"]')];
+
+    assert.deepEqual(Array.from(hooks.collectCastNameIds(cast)),
+        ['nm0000206', 'nm0000401', 'nm0005251'],
+        'the names come from the links the page already carries');
+
+    /* A full cast list runs to hundreds. The query is bounded, so the walk that feeds it
+       has to stop in the same place, or the ceiling is enforced by throwing work away
+       after doing it. */
+    const long = window.document.createElement('div');
+    long.innerHTML = Array.from({ length:60 }, (_, index) =>
+        `<div data-testid="title-cast-item"><a href="/name/nm${String(2000000 + index).padStart(7, '0')}/">x</a></div>`).join('');
+    window.document.body.appendChild(long);
+    assert.equal(hooks.collectCastNameIds(long).length, 18,
+        'the walk stops at the same ceiling the query has');
+    long.remove();
+
+    hooks.paintCastAges({ nm0000206:1964, nm0000401:1961 }, 1999);
+    assert.match(items[0].textContent, /was ~35/, 'born in 1964, released in 1999');
+    assert.match(items[1].textContent, /was ~38/);
+    assert.ok(items[2].querySelector('.enh-cast-age') === null,
+        'somebody Wikidata does not know gets nothing at all');
+
+    // Painted once. This runs over a list that IMDb re-renders as it loads.
+    hooks.paintCastAges({ nm0000206:1964, nm0000401:1961 }, 1999);
+    assert.equal(items[0].querySelectorAll('.enh-cast-age').length, 1, 'and not again on a second pass');
+
+    hooks.stopFeature('castAges');
+    assert.ok(cast.querySelector('.enh-cast-age') === null, 'switching it off takes the ages away');
+    cast.remove();
+
     trivia.remove();
     card.remove();
     window.GM_setValue('imdb_enh_markLinkTint', false);
@@ -985,12 +1032,12 @@ await runFixture('title', async (window, hooks) => {
    chance to point at where the settings live. Once, and then never again. */
 await runFixture('title', async (window, hooks) => {
     const notice = () => window.document.getElementById('enh-first-run');
-    assert.equal(notice(), null, 'nothing is shown before the first init asks for it');
+    assert.ok(notice() === null, 'nothing is shown before the first init asks for it');
 
     /* It points at the gear button, so it says nothing until there is one, and it must
        not spend the one time it gets to say anything on a page with nothing to point at. */
     hooks.showFirstRunNotice();
-    assert.equal(notice(), null, 'no gear button, nothing to point at');
+    assert.ok(notice() === null, 'no gear button, nothing to point at');
     assert.equal(window.GM_getValue('imdb_enh_firstRunSeen', false), false,
         'and the one chance to say it is not spent on a page that could not');
 
@@ -1009,13 +1056,13 @@ await runFixture('title', async (window, hooks) => {
     /* Dismissed by hand. The dismiss button is the whole reason this is not a toast: a
        toast is click-through by design so it cannot swallow a click meant for IMDb. */
     shown.querySelector('button').click();
-    assert.equal(notice(), null, 'clicking dismiss takes it away');
+    assert.ok(notice() === null, 'clicking dismiss takes it away');
 
     /* And it is recorded, so the second page load of an install that has already been
        greeted says nothing. This is the whole feature: a welcome that repeats is worse
        than no welcome. */
     hooks.showFirstRunNotice();
-    assert.equal(notice(), null, 'once per install, not once per page');
+    assert.ok(notice() === null, 'once per install, not once per page');
     assert.equal(window.GM_getValue('imdb_enh_firstRunSeen', false), true,
         'the flag lives outside the defaults, so resetting settings cannot bring it back');
 
@@ -1025,7 +1072,7 @@ await runFixture('title', async (window, hooks) => {
     update.id = 'enh-update-notice';
     window.document.body.appendChild(update);
     hooks.showFirstRunNotice();
-    assert.equal(notice(), null, 'the two never stack in the same corner');
+    assert.ok(notice() === null, 'the two never stack in the same corner');
     update.remove();
 
     /* Shown once more now the corner is free, which proves the check above was about the
@@ -1317,7 +1364,7 @@ await runFixture('title', async (window, hooks) => {
     assert.match(streamsWidget.textContent, /STREAMS ON/,
         'a streaming original does not air anywhere');
     assert.doesNotMatch(streamsWidget.textContent, /\(\)/, 'and claims no country it does not have');
-    assert.equal(window.document.querySelector('#enh-tvmaze-widget a'), null,
+    assert.ok(window.document.querySelector('#enh-tvmaze-widget a') === null,
         'an answer with no usable link is still worth showing, without one');
     requireSelector(window.document, '#enh-tvmaze-widget').remove();
 

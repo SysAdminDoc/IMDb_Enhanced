@@ -289,6 +289,10 @@ function loadScriptTestHooks({ withoutDeleteValue = false, withheldCredentials =
         parseTmdbWatchProviders,
         parseTmdbReleaseDates,
         parseTvmazeShow,
+        buildCastBirthQuery,
+        parseCastBirthYears,
+        castAgeAtRelease,
+        CAST_AGE_LIMIT,
         fetchTmdbAvailability,
         parseOmdbRatings,
         fetchOmdbRatings,
@@ -1150,10 +1154,20 @@ test('a living person shows a current age computed from page data alone', () => 
     assert.strictEqual(hooks.computeCurrentAge('1964-02-31', at('2026-08-14')), null, 'impossible calendar dates are rejected');
     assert.strictEqual(hooks.computeCurrentAge(''), null);
 
-    // The feature reads the page it is already on; it must never fan out per person.
-    assert(/key: 'castAges'[\s\S]*?getPageSurface\(\) !== 'name'/.test(script), 'person ages belong to person pages');
-    assert(!/key: 'castAges'[\s\S]{0,1200}httpGet\(/.test(script), 'person ages must not issue network requests');
-    assert(/if \(!birth \|\| birth\.deceased\) return;/.test(script), 'IMDb already prints age at death, so the feature must skip those pages');
+    /* A person's current age is still read from the page it is already on, and only from
+       a person page. IE-120 added a second half to this feature — how old the billed cast
+       were when a title came out — which does ask Wikidata, so the old "no requests at
+       all" rule is replaced by the rule it was really protecting: never one request per
+       person. Eighteen calls to a public endpoint for one page view is the thing worth
+       forbidding, and one batched query for the whole cast is not it. */
+    const castFeature = script.slice(script.indexOf("key: 'castAges'"));
+    const castBody = castFeature.slice(0, castFeature.indexOf("key: 'quickCopyID'"));
+    assert(/getPageSurface\(\) === 'name'/.test(castBody), 'a person\'s own age belongs to their page');
+    assert.strictEqual((castBody.match(/httpGet\(/g) || []).length, 1,
+        'the cast half asks once for the whole cast, not once per name');
+    assert(!/forEach[\s\S]{0,400}httpGet\(/.test(castBody),
+        'and never from inside a walk over the cast');
+    assert(/if \(!birth \|\| birth\.deceased\) return;/.test(castBody), 'IMDb already prints age at death, so the feature must skip those pages');
 });
 
 test('Overseerr requests report media state and build valid bodies', () => {
@@ -3905,6 +3919,70 @@ test('a second viewing is added to a title rather than replacing the first', () 
     hooks.setStoredSetting('userMarks', {});
 });
 
+/* IE-120: how old somebody was when a film was made is the question a cast list raises
+   and never answers. Birth dates live on IMDb's /name/ pages, which answer a script with a
+   challenge, so they come from Wikidata: one query for the whole billed cast. */
+test('cast ages come from one bounded query and say how well they know', () => {
+    const hooks = loadScriptTestHooks();
+    const query = hooks.buildCastBirthQuery(['nm0000206', 'nm0000123']);
+    assert(query.includes('"nm0000206"') && query.includes('"nm0000123"'),
+        'both names go in the same query');
+    assert.strictEqual((query.match(/SELECT/g) || []).length, 1, 'which is one query, not two');
+    assert(query.includes('wdt:P569'), 'asking for the birth date');
+    assert(query.includes('wdt:P345'), 'against the IMDb id the page already carries');
+    assert(query.includes(`LIMIT ${hooks.CAST_AGE_LIMIT}`), 'and bounded');
+
+    /* Bounded on the way in as well as out: a page with two hundred names must not turn
+       into a two-hundred-value query against somebody else's public endpoint. */
+    const many = Array.from({ length:200 }, (_, index) => `nm${String(1000000 + index).padStart(7, '0')}`);
+    assert.strictEqual((hooks.buildCastBirthQuery(many).match(/"nm\d+"/g) || []).length,
+        hooks.CAST_AGE_LIMIT, 'the query carries no more names than the ceiling allows');
+    assert.strictEqual(hooks.buildCastBirthQuery(['not-an-id', '']), '',
+        'and nothing at all when there is nobody real to ask about');
+    assert.strictEqual(hooks.buildCastBirthQuery([]), '');
+
+    const rows = years => ({ results:{ bindings:years.map(([imdb, born]) =>
+        ({ imdb:{ value:imdb }, born:{ value:String(born) } })) } });
+    const parsed = hooks.parseCastBirthYears(JSON.stringify(rows([
+        ['nm0000206', 1964], ['nm0000123', 1930],
+    ])));
+    assert.strictEqual(parsed.nm0000206, 1964);
+    assert.strictEqual(parsed.nm0000123, 1930);
+
+    /* Their data is open, so a birth year in the future or in antiquity is a thing that
+       happens, and neither is an age worth putting on a page. */
+    const junk = hooks.parseCastBirthYears(JSON.stringify(rows([
+        ['nm0000001', 1200], ['nm0000002', new Date().getUTCFullYear() + 5],
+        ['not-a-name', 1970], ['nm0000003', 'nonsense'],
+    ])));
+    assert.strictEqual(Object.keys(junk).length, 0, 'nothing implausible reaches the page');
+    ['', 'not json', '{}', '{"results":{}}'].forEach(value =>
+        assert.strictEqual(Object.keys(hooks.parseCastBirthYears(value)).length, 0,
+            'a broken answer is no answer'));
+
+    /* A year is all this has, so the age is out by up to a year either way and the label
+       says so rather than presenting it as a fact. */
+    assert.strictEqual(hooks.castAgeAtRelease(1964, 1999), 35);
+    assert.strictEqual(hooks.castAgeAtRelease(1999, 1964), null, 'nobody acts before they are born');
+    assert.strictEqual(hooks.castAgeAtRelease(1850, 1999), null, 'and a century on set is a data error');
+    assert.strictEqual(hooks.castAgeAtRelease(undefined, 1999), null,
+        'somebody Wikidata does not know gets nothing, not a guess');
+    assert.strictEqual(hooks.castAgeAtRelease(1964, undefined), null,
+        'and a title with no year is not asked about at all');
+    assert(/~/.test(messageCatalog.text_was_about_age || ''),
+        'the number is labelled approximate where it is shown');
+
+    /* An age needs both ends. A title whose year cannot be read is turned away before
+       anything is requested, rather than after: half an answer is not worth a call to
+       somebody else's public endpoint. */
+    const castSource = script.slice(script.indexOf("key: 'castAges'"));
+    const castInit = castSource.slice(0, castSource.indexOf("key: 'quickCopyID'"));
+    assert(/if \(!imdbId \|\| releaseYear === null\) return;/.test(castInit),
+        'a title with no year is turned away');
+    assert(castInit.indexOf('releaseYear === null') < castInit.indexOf('httpGet('),
+        'and turned away before the request, not after it');
+});
+
 /* IE-119: where a show airs is a question neither a score nor a streaming list answers.
    TVmaze takes an IMDb id directly and needs no key, which is also what makes it safe for
    a store build. The payload below is the shape their live answer for tt0903747 has. */
@@ -6141,8 +6219,14 @@ test('external access is requested per feature, not demanded at install', () => 
     // The set the release path actually hands to permissions.remove, not just the helper.
     assert.deepStrictEqual([...hooks.releasableOriginsFor('inlineRTScore')], ['https://www.rottentomatoes.com/*'],
         'disabling one score source must not revoke the resolver its siblings still use');
-    hooks.seedStoredSetting('inlineMetacriticScore', false);
-    hooks.seedStoredSetting('inlineLetterboxdScore', false);
+    /* Every other feature that resolves through Wikidata, found rather than listed: the
+       hand-written pair here stopped covering it the moment a fourth consumer was added,
+       and the failure read as a bug in the release path rather than as a stale list. */
+    Object.entries(groups).forEach(([key, origins]) => {
+        if (key !== 'inlineRTScore' && origins.includes(shared)) hooks.seedStoredSetting(key, false);
+    });
+    assert(Object.keys(groups).filter(key => groups[key].includes(shared)).length >= 4,
+        'Wikidata should still be resolving identity for several features');
     assert.deepStrictEqual(
         [...hooks.releasableOriginsFor('inlineRTScore')].sort(),
         ['https://query.wikidata.org/*', 'https://www.rottentomatoes.com/*'],
