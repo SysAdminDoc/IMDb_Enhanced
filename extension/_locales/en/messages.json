@@ -378,7 +378,7 @@
     "message": "Franchise watch order"
   },
   "feature_compactHeader_detail": {
-    "message": "Slims the IMDb header while keeping it readable and stable."
+    "message": "Slims the IMDb header and keeps it visible while you scroll."
   },
   "feature_compactHeader_name": {
     "message": "Compact header"

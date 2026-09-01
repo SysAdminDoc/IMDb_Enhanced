@@ -2663,6 +2663,20 @@ test('the editorial layout keeps IMDb\'s own hero video', () => {
     assert(surface.includes('parent.appendChild(node)'), 'destroy must return adopted nodes to the native hero');
 });
 
+test('the compact header remains visible while scrolling', () => {
+    const header = script.slice(
+        script.indexOf("key: 'compactHeader'"),
+        script.indexOf("key: 'enhancedRatingDisplay'"));
+    assert(header.includes('position: sticky !important;'),
+        'the enhanced header must stay in the viewport instead of scrolling away with IMDb content');
+    assert(header.includes('top: 0 !important;'),
+        'the sticky header must attach to the top edge');
+    assert(header.includes('z-index: 2147482000 !important;'),
+        'the sticky header must stay above title and browse content');
+    assert(script.includes('keeps it visible while you scroll'),
+        'the setting description should state its scroll behavior');
+});
+
 test('site editing does not commit a durable write per keystroke', () => {
     const editor = script.slice(script.indexOf('function createSiteEditor'), script.indexOf('function createSettingsInput'));
     /* save() revalidates every row, re-reads every row, renormalizes them, and commits.

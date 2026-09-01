@@ -160,7 +160,7 @@
         feature_collapsibleSections_name: 'Collapsible sections',
         feature_collectionPanel_detail: 'On a film that belongs to a series, lists the other films in it in order, with the one you are on marked. Off by default, and asks nothing on a title that is in no series.',
         feature_collectionPanel_name: 'Franchise watch order',
-        feature_compactHeader_detail: 'Slims the IMDb header while keeping it readable and stable.',
+        feature_compactHeader_detail: 'Slims the IMDb header and keeps it visible while you scroll.',
         feature_compactHeader_name: 'Compact header',
         feature_dimLowRated_detail: 'Fades the artwork of titles rated below your threshold on lists, charts, and search results. Text and controls stay fully readable, and hovering restores the image.',
         feature_dimLowRated_name: 'Dim low-rated titles',
@@ -1730,4 +1730,3 @@
         seasonProgress: t('feature_seasonProgress_detail'),
         keyboardShortcuts: t('feature_keyboardShortcuts_detail'),
     };
-

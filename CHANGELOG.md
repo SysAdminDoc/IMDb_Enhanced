@@ -4,6 +4,8 @@
 
 ### Fixed
 
+- The compact header now stays at the top of the viewport while the page scrolls. IMDb currently positions its navigation in normal document flow, so it otherwise disappears with the first screen of content.
+
 - Score widgets now stay attached when the editorial layout is toggled, when providers finish late, and when IMDb replaces its title header during hydration. Replacement controls do not duplicate the originals. Their native row can wrap cleanly at 1024, 1280, 1440, and 1920 pixels without colliding with the quick navigation.
 
 - Titles without artwork no longer turn the current page URL into an image request. Their empty poster slot collapses instead of leaving a blank column.

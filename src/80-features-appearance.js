@@ -203,6 +203,11 @@ reg({
         init() {
             addThemedCSS(t => `
                 #imdbHeader {
+                    position: sticky !important;
+                    top: 0 !important;
+                    z-index: 2147482000 !important;
+                    box-sizing: border-box !important;
+                    width: 100% !important;
                     padding: 4px 0 !important;
                     background: ${t.hdr} !important;
                     border-bottom: 1px solid ${t.hdrBorder} !important;
