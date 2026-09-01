@@ -84,6 +84,7 @@
     function getEditorialPosterSource(root = document) {
         const poster = root?.querySelector?.('[data-testid="hero-media__poster"] img');
         const source = poster?.currentSrc || poster?.src || poster?.getAttribute?.('src') || '';
+        if (!source) return '';
         try {
             const url = new URL(source, location.href);
             return /^https?:$/.test(url.protocol) ? url.href : '';
@@ -198,7 +199,7 @@
         }, label)));
         subnav.append(subnavLeft, subnavRight);
 
-        const poster = makeEl('div', { className:'enh-editorial-poster' });
+        const poster = posterSource ? makeEl('div', { className:'enh-editorial-poster' }) : null;
         if (posterSource) {
             poster.appendChild(makeEl('img', {
                 src:posterSource,
@@ -218,7 +219,11 @@
             role:'group',
             'aria-label':t('aria_title_ratings_and_availability'),
         });
-        const hero = makeEl('div', { className:'enh-editorial-hero' }, poster, identity, scoreRail);
+        const hero = makeEl('div', {
+            className:`enh-editorial-hero${poster ? '' : ' enh-editorial-hero--no-poster'}`,
+        });
+        if (poster) hero.appendChild(poster);
+        hero.append(identity, scoreRail);
 
         const about = makeEl('section', {
             className:'enh-editorial-about',
@@ -271,13 +276,18 @@
         }
 
         const posterSource = getEditorialPosterSource(nativeHero);
-        const poster = surface.querySelector('.enh-editorial-poster');
-        if (posterSource && poster) {
+        const hero = surface.querySelector('.enh-editorial-hero');
+        let poster = surface.querySelector('.enh-editorial-poster');
+        if (posterSource && hero) {
+            if (!poster) {
+                poster = makeEl('div', { className:'enh-editorial-poster' });
+                hero.insertBefore(poster, hero.firstChild);
+            }
             let image = poster.querySelector('img');
             if (!image) {
                 image = makeEl('img', {
                     src:posterSource,
-                    alt:`${title || 'Title'} poster`,
+                    alt:t('text_title_poster', [title]),
                     loading:'eager',
                 });
                 poster.appendChild(image);
@@ -285,6 +295,11 @@
                 image.src = posterSource;
             }
             surface.style.setProperty('--enh-editorial-backdrop', getEditorialBackdropValue(posterSource));
+            hero.classList.remove('enh-editorial-hero--no-poster');
+        } else if (!posterSource && hero) {
+            poster?.remove();
+            hero.classList.add('enh-editorial-hero--no-poster');
+            surface.style.removeProperty('--enh-editorial-backdrop');
         }
 
         const metadataNode = surface.querySelector('.enh-editorial-meta');
@@ -1157,4 +1172,3 @@
         if (!includeCredentials) data[EXPORT_REDACTED_KEY] = redacted;
         return data;
     }
-

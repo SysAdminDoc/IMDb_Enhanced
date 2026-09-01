@@ -198,6 +198,19 @@ await runFixture('title', async (window, hooks) => {
         'the restored native rating host must retain its responsive layout hook');
 });
 
+await runFixture('title', async (window, hooks) => {
+    requireSelector(window.document, '[data-testid="hero-media__poster"] img').remove();
+    await hooks.runFeature('editorialTitleSurface');
+
+    const hero = await waitForSelector(window, '.enh-editorial-hero');
+    assert.equal(hero.classList.contains('enh-editorial-hero--no-poster'), true,
+        'a title without artwork should use the no-poster editorial grid');
+    assert.equal(hero.querySelector('.enh-editorial-poster'), null,
+        'a title without artwork must not render an empty poster card');
+
+    hooks.stopFeature('editorialTitleSurface');
+});
+
 /* The store profile is a build, not a setting, so the only honest way to exercise it is
    to run the code the store build actually ships. `source` takes the transformed script;
    `extension` installs the chrome surface the userscript uses to decide it is an
