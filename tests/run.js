@@ -2544,12 +2544,23 @@ test('polish: truncation, certifications, and dependent settings', () => {
     // A setting another feature reads at run time has to restart that feature.
     assert(/const FEATURE_DEPENDENTS = \{[\s\S]{0,320}?spoilerBlur:\['tvEpisodeTools'\]/.test(script),
         'spoiler blur should declare its dependent');
-    // The mark filter reads watchedMarking at init and draws nothing without it, so the
-    // filter bar has to appear and disappear with that toggle rather than after a reload.
-    // Both of these read watchedMarking at init and render nothing without it, so both
-    // have to appear and disappear with that toggle rather than after a reload.
-    assert(/const FEATURE_DEPENDENTS = \{[\s\S]{0,320}?watchedMarking:\['markFilters', 'seasonProgress'\]/.test(script),
-        'private marks should declare every feature that depends on them');
+    /* A feature that reads watchedMarking at init renders nothing without it, so it has
+       to appear and disappear with that toggle rather than after a reload. Derived from
+       the features that actually read it rather than compared against a written-out list:
+       the list was pinned as one literal, so adding a third reader passed the assertion by
+       failing it for the wrong reason and would have passed again once the literal was
+       updated, whether or not the new feature had been added to the map. */
+    const dependents = new Set();
+    for (const match of script.matchAll(/if \(!get\('watchedMarking'\)\) return;/g)) {
+        const before = script.slice(0, match.index);
+        const key = [...before.matchAll(/\bkey: '([A-Za-z0-9_]+)'/g)].pop()?.[1];
+        assert(key, 'every reader of the marks toggle sits inside a registered feature');
+        dependents.add(key);
+    }
+    assert(dependents.size >= 3, 'the readers of the marks toggle should still be found');
+    const declared = /watchedMarking:\[([^\]]*)\]/.exec(script)?.[1] || '';
+    dependents.forEach(key => assert(declared.includes(`'${key}'`),
+        `${key} reads the marks toggle at init and must be declared as depending on it`));
     assert(script.includes('(FEATURE_DEPENDENTS[feature.key] || []).forEach(refreshFeature);'), 'toggling must refresh dependents');
 });
 

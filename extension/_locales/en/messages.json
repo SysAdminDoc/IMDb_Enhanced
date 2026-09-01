@@ -482,6 +482,12 @@
   "feature_listRuntimeSummary_name": {
     "message": "List runtime summary"
   },
+  "feature_markLinkTint_detail": {
+    "message": "Underlines links to titles you have marked, in the mark colour, anywhere they appear on a page. Needs private marks."
+  },
+  "feature_markLinkTint_name": {
+    "message": "Show marks on plain title links"
+  },
   "feature_markFilters_detail": {
     "message": "Adds an All / Unseen / Seen / Skipped filter with counts to lists, charts, watchlists, search results, and filmographies. Needs private marks."
   },
@@ -1981,6 +1987,9 @@
   },
   "text_get_it": {
     "message": "Get it"
+  },
+  "text_has_a_note": {
+    "message": "has a note"
   },
   "text_heatmap_legend": {
     "message": "Colours: 8+ great · 7+ good · 6+ average · 5+ below · under 5 poor"

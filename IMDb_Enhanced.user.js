@@ -246,6 +246,8 @@
         feature_listRoulette_name: 'Pick something to watch',
         feature_listRuntimeSummary_detail: 'Totals how long the titles on a watchlist, list, or chart would take to watch, and says how many had no runtime listed.',
         feature_listRuntimeSummary_name: 'List runtime summary',
+        feature_markLinkTint_detail: 'Underlines links to titles you have marked, in the mark colour, anywhere they appear on a page. Needs private marks.',
+        feature_markLinkTint_name: 'Show marks on plain title links',
         feature_markFilters_detail: 'Adds an All / Unseen / Seen / Skipped filter with counts to lists, charts, watchlists, search results, and filmographies. Needs private marks.',
         feature_markFilters_name: 'Filter by private marks',
         feature_mediaServerIntegration_detail: 'Checks configured local Plex, Jellyfin, and Emby servers and shows whether the title is already in your library.',
@@ -746,6 +748,7 @@
         text_filter_title_count_other: '$2: $1 titles',
         text_first_run_active: 'IMDb Enhanced is running on this page. The gear button in the bottom corner opens its settings.',
         text_get_it: 'Get it',
+        text_has_a_note: 'has a note',
         text_heatmap_legend: 'Colours: 8+ great · 7+ good · 6+ average · 5+ below · under 5 poor',
         text_imdb_enhanced_settings: 'IMDb Enhanced settings',
         text_imdb_weights_its_displayed_rating: 'IMDb weights its displayed rating to resist vote brigading, so a wide gap means the raw votes disagree with what the page shows.',
@@ -1669,6 +1672,9 @@
         // Utility
         quickCopyID: true, watchlistBatch: true, listMultiSearch: true, listRuntimeSummary: true,
         markFilters: true, listRoulette: true,
+        // Off by default: it touches every title link on a page, which is a change to
+        // how IMDb reads rather than an addition beside it.
+        markLinkTint: false,
         keyboardShortcuts: false,
         // Extension builds only: the userscript updates itself through its manager.
         updateNotice: true, updateDismissedVersion: '',
@@ -1740,6 +1746,7 @@
         listMultiSearch: t('feature_listMultiSearch_detail'),
         listRuntimeSummary: t('feature_listRuntimeSummary_detail'),
         markFilters: t('feature_markFilters_detail'),
+        markLinkTint: t('feature_markLinkTint_detail'),
         titleNotes: t('feature_titleNotes_detail'),
         listRoulette: t('feature_listRoulette_detail'),
         seasonProgress: t('feature_seasonProgress_detail'),
@@ -10999,6 +11006,136 @@ section[id*="quote" i] .ipc-list-card { padding: 4px 0 !important; margin: 2px 0
         }
     });
 
+    /* IE-116: marks only ever showed on cards with a poster, and most links to a title on
+       IMDb are not that. Trivia, plot summaries, awards, review bodies and the "more like
+       this" fallbacks are all plain anchors, so a title somebody had already watched read
+       exactly like one they had not. This marks the anchors themselves.
+
+       Deliberately quiet: a dotted underline in the mark's colour and a tooltip. Tinting
+       the text would fight IMDb's own link colours in five themes and turn a paragraph of
+       trivia into a patchwork.
+
+       Every anchor is resolved from its own href through getLinkedTitleId, never from
+       what another feature has decorated: that walk is progressive, so reading it would
+       make this feature's coverage depend on how far another one had got. */
+    /* What the tooltip says. A note is the thing somebody is most likely to have
+       forgotten writing, so its presence is worth saying; the note itself is not, because
+       a tooltip on a link in a paragraph of trivia is not where anybody reads one. */
+    function describeLinkMark(record) {
+        const state = record?.state === 'skip' ? t('settings_local_skip') : t('settings_local_seen');
+        const viewings = countViewings(record);
+        const parts = [viewings > 1 ? `${state} ${t('text_times_count', [viewings])}` : state];
+        if (normalizeUserNote(record?.note)) parts.push(t('text_has_a_note'));
+        return parts.join(t('text_clause_separator'));
+    }
+
+    const LINK_MARK_ATTRIBUTE = 'data-enh-link-mark';
+    const LINK_MARK_TITLED = 'data-enh-link-mark-titled';
+    /* Anchors another feature already speaks for, and this script's own interface. A card
+       carries a badge and a set of controls; underlining its title as well says the same
+       thing twice in the same place. */
+    const LINK_MARK_EXCLUDED = '.enh-markable-card, #enh-settings-panel, #enh-settings-overlay,'
+        + ' .enh-marks-panel, .enh-mark-controls, #enh-first-run, #enh-update-notice';
+
+    reg({
+        key: 'markLinkTint', name: t('feature_markLinkTint_name'), group: 'Features',
+        _observer: null,
+        _raf: 0,
+        _pending: null,
+        _onMarksUpdated: null,
+        init() {
+            if (!isIMDbHost()) return;
+            // The marks are the whole content of this, so it follows their feature.
+            if (!get('watchedMarking')) return;
+            const isCurrent = createFeatureGuard(this);
+
+            addThemedCSS(theme => `
+                a[${LINK_MARK_ATTRIBUTE}] {
+                    text-decoration-line: underline;
+                    text-decoration-style: dotted;
+                    text-decoration-thickness: 2px;
+                    text-underline-offset: 2px;
+                }
+                a[${LINK_MARK_ATTRIBUTE}="watched"] { text-decoration-color: ${theme.accent}; }
+                a[${LINK_MARK_ATTRIBUTE}="skip"] { text-decoration-color: ${theme.red}; }
+            `, 'enh-markLinkTint');
+
+            this._scan(document);
+            this._pending = new Set();
+            /* Only added nodes. Watching attributes would watch this feature's own
+               writes, which is a repaint loop with extra steps. */
+            this._observer = new MutationObserver(mutations => {
+                mutations.forEach(mutation => mutation.addedNodes.forEach(node => {
+                    if (node?.matches || node?.querySelectorAll) this._pending.add(node);
+                }));
+                if (!this._pending.size || !isCurrent()) return;
+                if (this._pending.size > 50) {
+                    this._pending.clear();
+                    this._pending.add(document);
+                }
+                cancelAnimationFrame(this._raf);
+                this._raf = requestAnimationFrame(() => {
+                    const roots = [...this._pending];
+                    this._pending.clear();
+                    if (isCurrent()) roots.forEach(root => this._scan(root));
+                });
+            });
+            this._observer.observe(document.documentElement, { childList:true, subtree:true });
+
+            this._onMarksUpdated = () => { if (isCurrent()) this._scan(document); };
+            document.addEventListener('imdb-enhanced:marks-updated', this._onMarksUpdated);
+        },
+        _scan(root) {
+            const marks = getUserMarks();
+            const anchors = [];
+            if (root?.matches?.('a[href*="/title/tt"]')) anchors.push(root);
+            root?.querySelectorAll?.('a[href*="/title/tt"]').forEach(anchor => anchors.push(anchor));
+            anchors.forEach(anchor => this._apply(anchor, marks));
+        },
+        _apply(anchor, marks) {
+            if (anchor.closest(LINK_MARK_EXCLUDED)) return;
+            const imdbId = getLinkedTitleId(anchor.href);
+            const record = imdbId ? marks[imdbId] : null;
+            const state = record?.state === 'watched' || record?.state === 'skip' ? record.state : '';
+            /* Written only when it changes, for the same reason the badge counts are: this
+               runs from a document-wide observer over the subtree it writes into. */
+            if ((anchor.getAttribute(LINK_MARK_ATTRIBUTE) || '') === state) return;
+            if (!state) {
+                anchor.removeAttribute(LINK_MARK_ATTRIBUTE);
+                if (anchor.hasAttribute(LINK_MARK_TITLED)) {
+                    anchor.removeAttribute('title');
+                    anchor.removeAttribute(LINK_MARK_TITLED);
+                }
+                return;
+            }
+            anchor.setAttribute(LINK_MARK_ATTRIBUTE, state);
+            /* Never over a tooltip IMDb wrote. Somebody hovering a link to read what the
+               site says about it should still get that. */
+            if (!anchor.title || anchor.hasAttribute(LINK_MARK_TITLED)) {
+                anchor.setAttribute('title', describeLinkMark(record));
+                anchor.setAttribute(LINK_MARK_TITLED, '1');
+            }
+        },
+        destroy() {
+            removeCSS('enh-markLinkTint');
+            this._observer?.disconnect();
+            this._observer = null;
+            cancelAnimationFrame(this._raf);
+            this._pending?.clear();
+            this._pending = null;
+            if (this._onMarksUpdated) {
+                document.removeEventListener('imdb-enhanced:marks-updated', this._onMarksUpdated);
+            }
+            this._onMarksUpdated = null;
+            document.querySelectorAll(`a[${LINK_MARK_ATTRIBUTE}]`).forEach(anchor => {
+                anchor.removeAttribute(LINK_MARK_ATTRIBUTE);
+                if (!anchor.hasAttribute(LINK_MARK_TITLED)) return;
+                anchor.removeAttribute('title');
+                anchor.removeAttribute(LINK_MARK_TITLED);
+            });
+        },
+    });
+
     /* Marks decorate cards but could not narrow a large collection, which is where they
        are most useful — a 250-row chart or a long watchlist. Filtering is pure DOM over
        cards already on the page: no request, no IMDb GraphQL call, and no reordering, so
@@ -15735,7 +15872,7 @@ ${scopedRules('.enh-zoom', {
         const FEATURE_DEPENDENTS = {
             spoilerBlur:['tvEpisodeTools'],
             // Both read watchedMarking at init and render nothing without it.
-            watchedMarking:['markFilters', 'seasonProgress'],
+            watchedMarking:['markFilters', 'seasonProgress', 'markLinkTint'],
         };
         const makeFeatureCard = (title, description, badge, keys, compact = false) => {
             const card = makeCard(title, description, badge);
@@ -16008,7 +16145,7 @@ ${scopedRules('.enh-zoom', {
         const toolsPage = pages.get('tools');
         toolsPage.appendChild(makeEl('div', { className:'enh-settings-grid enh-settings-grid--three' },
             makeFeatureCard(t('settings_title_tools'), t('settings_actions_placed_near_a_movie_or_show'), t('settings_title_pages'), [
-                'searchButtons', 'externalLinks', 'trailerPopover', 'expandedLinkMenu', 'watchedMarking', 'titleNotes',
+                'searchButtons', 'externalLinks', 'trailerPopover', 'expandedLinkMenu', 'watchedMarking', 'markLinkTint', 'titleNotes',
                 'movieChatBoard', 'collectionPanel',
             ]),
             makeFeatureCard(t('settings_tv_episodes'), t('settings_focused_tools_for_series_and_episode_lists'), 'TV', [
@@ -16742,6 +16879,9 @@ ${scopedRules('.enh-zoom', {
 
     const UNIVERSAL_FEATURE_KEYS = new Set([
         'modernUI', 'compactHeader', 'widerLayout', 'keyboardShortcuts',
+        /* A link to a title is a link to a title wherever IMDb draws it, and the point of
+           this one is the surfaces no card ever reaches. */
+        'markLinkTint',
     ]);
     /* Private marks belong anywhere IMDb renders title cards, not only on a title
        page: charts, lists, watchlists, person filmographies, episode lists, and

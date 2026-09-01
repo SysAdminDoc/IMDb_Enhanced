@@ -93,6 +93,10 @@ const instrumented = userscript.replace(/\}\)\(\);\s*$/, `globalThis.__imdbEnhan
     },
     /* What the page's own MutationObserver does when IMDb replaces something: walk
        the document again and repaint from the marks as they are now. */
+    rescanLinkMarks: () => {
+        const feature = features.find(candidate => candidate.key === 'markLinkTint');
+        feature._scan(document);
+    },
     rescanMarks: () => {
         const feature = features.find(candidate => candidate.key === 'watchedMarking');
         feature._scan(document);
@@ -778,6 +782,89 @@ await runFixture('title', async (window, hooks) => {
     });
     assert.equal(hooks.readCurrentTitleMarkMetadata(seriesId).series, undefined,
         'a title is never an episode of itself');
+});
+
+/* IE-116: marks only ever showed on cards with a poster, and most links to a title on
+   IMDb are not that. Trivia, plot text, awards and review bodies are plain anchors, so a
+   title somebody had already watched read exactly like one they had not. */
+await runFixture('title', async (window, hooks) => {
+    const trivia = window.document.createElement('section');
+    trivia.innerHTML = '<p>Compare <a href="/title/tt0133093/">The Matrix</a>, '
+        + '<a href="/title/tt2395385/">a skipped one</a> and '
+        + '<a href="/title/tt0111161/">one with no mark</a>.</p>';
+    window.document.body.appendChild(trivia);
+    const link = id => trivia.querySelector(`a[href="/title/${id}/"]`);
+    const mark = anchor => anchor.getAttribute('data-enh-link-mark');
+
+    window.GM_setValue('imdb_enh_watchedMarking', true);
+    hooks.setStoredSetting('userMarks', {
+        tt0133093:{ v:2, state:'watched', title:'The Matrix', ts:1,
+            note:'Worth another look', viewings:[{ date:'2019-04-02' }, { date:'2024-01-15' }] },
+        tt2395385:{ v:2, state:'skip', title:'Passed', ts:2 },
+    });
+    hooks.getUserMarks(true);
+
+    assert.equal(hooks.getStoredSetting('markLinkTint'), false,
+        'off by default: it writes on every title link on the page');
+    window.GM_setValue('imdb_enh_markLinkTint', true);
+    hooks.initFeature('markLinkTint');
+
+    assert.equal(mark(link('tt0133093')), 'watched', 'a plain link to something seen says so');
+    assert.equal(mark(link('tt2395385')), 'skip', 'and one to something skipped');
+    assert.equal(mark(link('tt0111161')), null, 'an unmarked title is left exactly as it was');
+
+    /* The tooltip carries what the tint cannot: how many times, and whether there is a
+       note waiting that the person has probably forgotten writing. */
+    assert.match(link('tt0133093').title, /seen/i);
+    assert.match(link('tt0133093').title, /x2/i, 'the rewatch count');
+    assert.match(link('tt0133093').title, /note/i, 'and that a note is there');
+    assert.doesNotMatch(link('tt0133093').title, /Worth another look/,
+        'but not the note itself, which is not what a link tooltip is for');
+
+    /* Never over a tooltip IMDb wrote. Somebody hovering a link to read what the site
+       says about it should still get that. */
+    const owned = link('tt0111161');
+    owned.title = 'IMDb says something here';
+    hooks.setStoredSetting('userMarks', {
+        ...hooks.getUserMarks(true),
+        tt0111161:{ v:2, state:'watched', title:'Shawshank', ts:3 },
+    });
+    hooks.getUserMarks(true);
+    window.document.dispatchEvent(new window.CustomEvent('imdb-enhanced:marks-updated'));
+    assert.equal(mark(owned), 'watched', 'it is still marked');
+    assert.equal(owned.title, 'IMDb says something here', 'and IMDb keeps its own tooltip');
+
+    /* A card already carries a badge and a set of controls. Underlining its title as well
+       says the same thing twice in the same place. */
+    const card = window.document.createElement('div');
+    card.className = 'enh-markable-card';
+    card.innerHTML = '<a href="/title/tt0133093/">On a card</a>';
+    window.document.body.appendChild(card);
+    hooks.rescanLinkMarks();
+    assert.equal(mark(card.querySelector('a')), null,
+        'a link inside a decorated card is left to that card');
+
+    /* An idle page has to stay idle. This writes into the subtree its own observer
+       watches, so an unconditional write is a repaint that feeds itself. */
+    let records = 0;
+    const watcher = new window.MutationObserver(list => { records += list.length; });
+    watcher.observe(window.document.documentElement, { childList:true, subtree:true, attributes:true });
+    hooks.rescanLinkMarks();
+    hooks.rescanLinkMarks();
+    await new Promise(resolve => window.setTimeout(resolve, 0));
+    watcher.disconnect();
+    assert.equal(records, 0, 'scanning a page whose marks have not changed writes nothing at all');
+
+    hooks.stopFeature('markLinkTint');
+    assert.equal(mark(link('tt0133093')), null, 'switching it off takes the marks off the links');
+    assert.equal(link('tt0133093').title, '', 'and the tooltip it added with them');
+    assert.equal(owned.title, 'IMDb says something here', 'while leaving IMDb\'s alone');
+
+    trivia.remove();
+    card.remove();
+    window.GM_setValue('imdb_enh_markLinkTint', false);
+    window.GM_setValue('imdb_enh_watchedMarking', false);
+    hooks.setStoredSetting('userMarks', {});
 });
 
 /* IE-115: the featured review puts one stranger's opinion above the fold, and which one
