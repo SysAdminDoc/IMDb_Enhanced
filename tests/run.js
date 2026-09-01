@@ -2266,7 +2266,7 @@ test('editorial title layout owns a stable full-width title surface', () => {
         'score widgets must remember their native parent so disabling the editorial layout does not delete them');
     assert(script.includes("this._surface?.querySelectorAll('.enh-score-widget').forEach(widget =>"),
         'score widgets created directly in the editorial rail must return to the native rating host');
-    assert(script.includes('this._scoreRestoreHost.appendChild(widget)'),
+    assert(script.includes('scoreRestoreHost.appendChild(widget)'),
         'disabling the editorial layout must preserve late score widgets');
     assert(script.includes("bar?.classList.add('enh-native-score-rail')"),
         'native score widgets need a stable layout hook outside the editorial surface');
