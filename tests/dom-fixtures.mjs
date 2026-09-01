@@ -182,6 +182,34 @@ async function runFixture(name, run, { source = instrumented, extension = null }
     }
 }
 
+/* The other shape the same lie takes: load fires with no framed window at all. The
+   listener is once-only, so this needs its own frame and therefore its own window. */
+await runFixture('title', async (window, hooks) => {
+    const observer = window.IntersectionObserver;
+    window.IntersectionObserver = class {
+        constructor(callback) { this.callback = callback; }
+        observe(element) { this.callback([{ isIntersecting:true, target:element }]); }
+        disconnect() {}
+        unobserve() {}
+    };
+    try {
+        window.GM_setValue('imdb_enh_movieChatBoard', true);
+        await hooks.runFeature('movieChatBoard');
+        const section = window.document.getElementById('enh-moviechat');
+        const frame = section.querySelector('iframe');
+        assert.ok(frame, 'the frame should exist before the load is faked');
+        Object.defineProperty(frame, 'contentWindow', { configurable:true, get: () => null });
+        frame.dispatchEvent(new window.Event('load'));
+        assert.equal(section.querySelector('iframe'), null,
+            'a load that framed no window is not a board either');
+        assert.match(section.textContent, /could not be shown/);
+    } finally {
+        hooks.stopFeature('movieChatBoard');
+        window.GM_setValue('imdb_enh_movieChatBoard', false);
+        window.IntersectionObserver = observer;
+    }
+});
+
 /* The half of the gate that costs nothing: a board nobody has scrolled to is a heading
    and a link, and contacts MovieChat not at all. */
 await runFixture('title', async (window, hooks) => {
@@ -242,7 +270,27 @@ await runFixture('title', async (window, hooks) => {
         assert.ok(frame, 'the frame is created once the section is visible');
         assert.equal(frame.getAttribute('src'), 'https://moviechat.org/tt0133093');
         assert.equal(frame.getAttribute('referrerpolicy'), 'no-referrer');
-        assert.match(frame.getAttribute('sandbox'), /allow-scripts/);
+        /* What protects the page here is what this attribute does NOT contain:
+           allow-top-navigation would let the board navigate the IMDb tab away. Pinned as
+           a set, because a token added beside the ones that belong here is exactly the
+           change nobody would notice. */
+        assert.deepEqual(frame.getAttribute('sandbox').split(' ').sort(),
+            ['allow-forms', 'allow-popups', 'allow-same-origin', 'allow-scripts']);
+
+        /* A refusal fires load, not error, and leaves the frame on the about:blank it
+           started from — which is readable, unlike a board that actually loaded. That is
+           the difference the fallback turns on, so it is what this drives. */
+        Object.defineProperty(frame, 'contentWindow', {
+            configurable: true,
+            get: () => ({ location: { href: 'about:blank' } }),
+        });
+        frame.dispatchEvent(new window.Event('load'));
+        assert.equal(section.querySelector('iframe'), null,
+            'a frame that framed nothing must not be left sitting there empty');
+        assert.match(section.textContent, /could not be shown/,
+            'and the section must say so');
+        assert.ok(section.querySelector('.enh-moviechat__link'),
+            'with the link out still there');
 
         hooks.stopFeature('movieChatBoard');
         window.GM_setValue('imdb_enh_movieChatBoard', false);

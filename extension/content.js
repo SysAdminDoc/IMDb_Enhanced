@@ -8454,9 +8454,13 @@ section[id*="quote" i] .ipc-list-card { padding: 4px 0 !important; margin: 2px 0
        MovieChat keeps a board per IMDb id and, checked live on 2026-08-31, serves
        /tt{id} as a 301 to /tt{id}/{slug} with no X-Frame-Options and no CSP — so framing
        works by omission rather than by their policy, and could stop working the day they
-       add either header. A frame that is refused fires no error event in any browser, so
-       nothing here waits for one: if the board has not reported itself loaded within the
-       timeout, the section replaces itself with a plain link.
+       add either. A refusal fires no error event — but it does fire load, because every
+       browser fires load whenever a navigation commits a document, and a refusal, a 404
+       and a challenge page all commit one. Treating load as success is therefore how a
+       permanently empty 640px frame ships. What separates the two is the origin: a board
+       that actually loaded is cross-origin and reading its location throws, while a frame
+       that was refused never left the about:blank it started on, which is ours to read.
+       The timeout stays as the backstop for the case where nothing commits at all.
 
        No request of any kind is made until the section is scrolled to, and there is no
        fetch at any point — the frame is the only thing that ever contacts them. */
@@ -8513,14 +8517,25 @@ section[id*="quote" i] .ipc-list-card { padding: 4px 0 !important; margin: 2px 0
                 section.appendChild(makeEl('div', { className:'enh-moviechat__note' },
                     t('text_board_could_not_be_shown')));
             };
+            const boardIsShowing = () => {
+                if (!frame.contentWindow) return false;
+                try {
+                    // Readable means it is still our about:blank: nothing was framed.
+                    void frame.contentWindow.location.href;
+                    return false;
+                } catch {
+                    // Cross-origin, which is what their document looks like from here.
+                    return true;
+                }
+            };
             frame.addEventListener('load', () => {
                 if (settled) return;
+                if (!boardIsShowing()) { giveUp(); return; }
                 settled = true;
                 clearTimeout(this._timer);
                 section.classList.add('enh-moviechat--loaded');
             }, { once:true });
-            /* A frame refused by a framing header loads nothing and reports nothing, so
-               the timeout is the only signal there is. */
+            // The backstop, for a frame that never commits anything at all.
             this._timer = setTimeout(giveUp, MOVIECHAT_LOAD_TIMEOUT);
             section.appendChild(frame);
         },
