@@ -193,7 +193,7 @@ async function renderDataConsentRow(list) {
         state.textContent = granted
             ? core.t('recovery_consent_allowed')
             : core.t('recovery_not_allowed_so_those_lookups_should_stay');
-        button.textContent = granted ? 'Withdraw' : 'Allow';
+        button.textContent = granted ? core.t('recovery_withdraw') : core.t('recovery_allow');
         button.className = granted ? '' : 'primary';
         button.setAttribute('aria-label', granted
             ? core.t('recovery_withdraw_consent_for_sending_page_details_to')
@@ -225,11 +225,80 @@ async function renderDataConsentRow(list) {
     await paint();
 }
 
+/* The watchlist alerts run on an alarm, and an alarm has no user gesture — which is the
+   one thing permissions.request insists on. So the page that does have one offers it, the
+   same way it offers host access. Without it the daily check still runs and still records
+   what it saw; it simply says nothing, which is why granting later does not produce a
+   flood of things that arrived months ago. */
+async function renderNotificationRow(list) {
+    if (!chrome.permissions?.request) return;
+    const wanted = { permissions: ['notifications'] };
+    const ask = (method) => new Promise(resolve => {
+        try {
+            chrome.permissions[method](wanted, value => { void chrome.runtime.lastError; resolve(value === true); });
+        } catch { resolve(false); }
+    });
+
+    const row = document.createElement('div');
+    row.className = 'access-row';
+    const copy = document.createElement('div');
+    const name = document.createElement('div');
+    name.className = 'access-name';
+    name.textContent = core.t('recovery_watchlist_notifications');
+    const detail = document.createElement('div');
+    detail.className = 'access-detail';
+    detail.textContent = core.t('recovery_watchlist_notifications_detail');
+    const state = document.createElement('div');
+    state.className = 'access-state';
+    copy.append(name, detail, state);
+
+    const button = document.createElement('button');
+    button.type = 'button';
+
+    const paint = async () => {
+        const granted = await ask('contains');
+        state.dataset.state = granted ? 'granted' : 'missing';
+        state.textContent = granted
+            ? core.t('recovery_notifications_allowed')
+            : core.t('recovery_notifications_not_allowed');
+        button.textContent = granted ? core.t('recovery_withdraw') : core.t('recovery_allow');
+        button.className = granted ? '' : 'primary';
+        button.setAttribute('aria-label', granted
+            ? core.t('recovery_withdraw_watchlist_notifications')
+            : core.t('recovery_allow_watchlist_notifications'));
+    };
+
+    button.addEventListener('click', async () => {
+        button.disabled = true;
+        try {
+            if (await ask('contains')) {
+                await ask('remove');
+                say(core.t('recovery_notifications_withdrawn'), 'ok');
+            } else if (await ask('request')) {
+                say(core.t('recovery_notifications_recorded'), 'ok');
+            } else {
+                say(core.t('recovery_notifications_declined'), 'error');
+            }
+        } catch (error) {
+            say(error?.message || core.t('recovery_the_permission_could_not_be_changed'), 'error');
+        } finally {
+            button.disabled = false;
+            await paint();
+            button.focus();
+        }
+    });
+
+    row.append(copy, button);
+    list.appendChild(row);
+    await paint();
+}
+
 function renderAccessList() {
     const list = $('access-list');
     list.textContent = '';
     // Rendered first: it governs what the origin grants below are for.
     renderDataConsentRow(list);
+    renderNotificationRow(list);
     Object.keys(core.FEATURE_ORIGIN_GROUPS || {}).forEach(key => {
         const origins = core.getFeatureOrigins(key);
         if (!origins.length) return;

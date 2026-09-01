@@ -283,6 +283,7 @@ function loadScriptTestHooks({ withoutDeleteValue = false, withheldCredentials =
         getAvailabilityCacheKey,
         getJustWatchSearchUrl,
         isTmdbConfigured,
+        readSettingsPanelText: () => document.getElementById('enh-settings-overlay')?.textContent || '',
         normalizeWatchlistSnapshot,
         getWatchlistSnapshot,
         collectWatchlistTitles,
@@ -3076,6 +3077,7 @@ test('the watchlist snapshot is bounded, validated, and never emptied by an empt
     /* The userscript has no worker, so it must not offer a feature that needs one. */
     assert(!hooks.getFeatureKeys().includes('watchlistAlerts'),
         'the userscript build must not register it at all');
+
     assert(script.includes('if (IS_EXTENSION_BUILD) {\n        reg({\n            key: \'watchlistAlerts\''),
         'and the registration itself must be what is conditional');
     assert.strictEqual(hooks.DEFAULTS.watchlistAlerts, false, 'a background job is opt-in');

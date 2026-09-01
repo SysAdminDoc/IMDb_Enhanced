@@ -43,6 +43,8 @@ const instrumented = userscript.replace(/\}\)\(\);\s*$/, `globalThis.__imdbEnhan
     summarizeCollectionRuntime,
     describeCollectionRuntime,
     getPageSurface,
+    getWatchlistServiceChoices,
+    getWatchlistServices,
     boundedImageVariant,
     createSettingsPanel,
     createLocalStatsPanel,
@@ -263,6 +265,53 @@ await runFixture('title', async (window, hooks) => {
         window.GM_setValue('imdb_enh_collectionPanel', false);
         window.IntersectionObserver = observer;
     }
+});
+
+/* IE-25: the services worth interrupting someone for are the ones the daily check has
+   actually walked past in this region — a list of service names written into the source
+   would be a list that is wrong in most of the world. On the first day it is empty and
+   the panel says why. The control belongs to the extension, because the alarm behind it
+   does. */
+await runFixture('title', async (window, hooks) => {
+    window.GM_setValue('imdb_enh_watchlistAlertState', {
+        checkedAt: 1, cursor: 0, seen: {}, services: ['Hulu', 'Netflix'],
+    });
+    assert.deepEqual(Array.from(hooks.getWatchlistServiceChoices()), ['Hulu', 'Netflix'],
+        'the choices come from what the checks have seen');
+
+    hooks.createSettingsPanel();
+    const card = [...window.document.querySelectorAll('.enh-settings-card')]
+        .find(node => /Watchlist alerts/.test(node.textContent));
+    assert.ok(card, 'the extension build offers the control');
+    const boxes = [...card.querySelectorAll('input[type="checkbox"]')];
+    assert.deepEqual(boxes.map(box => box.parentElement.textContent), ['Hulu', 'Netflix']);
+    assert.equal(boxes.every(box => !box.checked), true, 'nothing is chosen for you');
+
+    boxes[1].checked = true;
+    boxes[1].dispatchEvent(new window.Event('change', { bubbles:true }));
+    assert.deepEqual(Array.from(hooks.getWatchlistServices()), ['Netflix'],
+        'ticking one records it');
+
+    boxes[1].checked = false;
+    boxes[1].dispatchEvent(new window.Event('change', { bubbles:true }));
+    assert.deepEqual(Array.from(hooks.getWatchlistServices()), [],
+        'and unticking it takes it back out');
+
+    hooks.destroySettingsChrome();
+    window.GM_setValue('imdb_enh_watchlistAlertState', null);
+}, { extension:{ runtime:{ id:'test', getManifest: () => ({ version:'0.0.0' }) }, i18n:{} } });
+
+/* And the same panel in a userscript build, which has no worker to run the alarm behind
+   the control: a picker for a background job that cannot run is worse than no picker. */
+await runFixture('title', async (window, hooks) => {
+    window.GM_setValue('imdb_enh_watchlistAlertState', { checkedAt:1, cursor:0, seen:{}, services:['Hulu'] });
+    hooks.createSettingsPanel();
+    const overlay = window.document.getElementById('enh-settings-overlay');
+    assert.ok(overlay, 'the panel itself still opens');
+    assert.equal(/Watchlist alerts/.test(overlay.textContent), false,
+        'a userscript build must not offer the control');
+    hooks.destroySettingsChrome();
+    window.GM_setValue('imdb_enh_watchlistAlertState', null);
 });
 
 /* IE-123: the structured-data memo used to be cleared only by init(), which runs about

@@ -675,7 +675,9 @@
         recovery_access_granted: 'Access to $1 granted. Reload any open IMDb tabs.',
         recovery_access_revoked: 'Access to $1 revoked.',
         recovery_access_was_not_granted_so_that_feature: 'Access was not granted, so that feature still cannot run.',
+        recovery_allow: 'Allow',
         recovery_allow_sending_page_details_to_score_services: 'Allow sending page details to score services',
+        recovery_allow_watchlist_notifications: 'Allow watchlist notifications',
         recovery_backup_copied: 'Backup copied.',
         recovery_backup_copied_omitting_one: 'Backup copied. $1 integration credential was left out.',
         recovery_backup_copied_omitting_other: 'Backup copied. $1 integration credentials were left out.',
@@ -716,6 +718,11 @@
         recovery_not_allowed_so_those_lookups_should_stay: 'Not allowed, so those lookups should stay off.',
         recovery_not_granted: 'Not granted.',
         recovery_not_granted_so_this_feature_cannot_work: 'Not granted, so this feature cannot work yet.',
+        recovery_notifications_allowed: 'Allowed.',
+        recovery_notifications_declined: 'Notifications were not allowed, so the daily check will stay quiet.',
+        recovery_notifications_not_allowed: 'Not allowed, so the daily check will say nothing.',
+        recovery_notifications_recorded: 'Notifications allowed.',
+        recovery_notifications_withdrawn: 'Notifications withdrawn. The daily check keeps running quietly.',
         recovery_open_imdb_settings: 'Open IMDb settings',
         recovery_page_intro: 'Everything here works without access to IMDb, so it stays usable when the extension cannot run on the site.',
         recovery_page_title: 'IMDb Enhanced — settings recovery',
@@ -756,7 +763,11 @@
         recovery_undo_done: 'Undone. $1 settings were put back.',
         recovery_undo_the_reset: 'Undo the reset',
         recovery_unknown_error: 'unknown error',
+        recovery_watchlist_notifications: 'Watchlist alerts',
+        recovery_watchlist_notifications_detail: 'A notification when something on your watchlist turns up on a service you chose. Sent at most once a day.',
+        recovery_withdraw: 'Withdraw',
         recovery_withdraw_consent_for_sending_page_details_to: 'Withdraw consent for sending page details to score services',
+        recovery_withdraw_watchlist_notifications: 'Stop showing watchlist notifications',
         settings_a_backup_covers_preferences_sites_and_title: 'A backup covers preferences, sites, and title marks. Integration API keys and tokens are left out unless you choose the encrypted export.',
         settings_a_key_is_saved_on_this_device: 'A key is saved on this device. It is not shown here; type a new one to replace it.',
         settings_a_readable_summary_for_bug_reports_credentials: 'A readable summary for bug reports. Credentials, marked titles, and the page query string are never included.',
@@ -767,6 +778,7 @@
         settings_add_movies_to_radarr_and_shows_to: 'Add movies to Radarr and shows to Sonarr.',
         settings_additions_to_cast_and_crew_pages: 'Additions to cast and crew pages.',
         settings_all_pages: 'All pages',
+        settings_allow_notifications: 'Allow notifications',
         settings_api_key: 'API key',
         settings_applies_when_dim_low_rated_titles_is: 'Applies when “Dim low-rated titles” is on. Unrated titles are never dimmed.',
         settings_backup_restore: 'Backup & restore',
@@ -814,6 +826,7 @@
         settings_heading_preview: 'Preview',
         settings_heading_score_sources: 'Score sources',
         settings_heading_updates: 'Updates',
+        settings_heading_watchlist_alerts: 'Watchlist alerts',
         settings_history_metadata_coverage_one: '$2 of $1 history title has year, genre, score, or runtime metadata. $3',
         settings_history_metadata_coverage_other: '$2 of $1 history titles have year, genre, score, or runtime metadata. $3',
         settings_imdb_and_letterboxd_exports_become_local_seen: 'IMDb and Letterboxd exports become local Seen marks. This does not change IMDb Watched status or any IMDb list. IMDb Labs account import is a separate feature.',
@@ -887,6 +900,8 @@
         settings_version: 'Version $1',
         settings_watch_stream: 'Watch & stream',
         settings_watch_stream_includes_a_built_in_catalog: 'Watch & stream includes a built-in catalog of every streaming destination from the FMHY video wiki. Open it below to add any of them with one click, then edit the row like any other destination.',
+        settings_watchlist_alerts_note: 'Which services are worth telling you about. Checked once a day, in one notification, for the titles on the watchlist page you last opened.',
+        settings_watchlist_services_pending: 'The services here are the ones the daily check has seen so far. Turn the alerts on and this fills in after the first check.',
         settings_when_optional_keyboard_shortcuts_is_enabled: 'When “Optional keyboard shortcuts” is enabled',
         settings_where_availability_comes_from: 'Where availability comes from',
         settings_year_has_dated_viewings: '$1 has $2 dated viewings, enough for a year review.',
@@ -1087,6 +1102,7 @@
         toast_a_site_list_can_contain_up: 'A site list can contain up to $1 destinations',
         toast_all_imdb_watched_on_this_page_one: 'All $1 IMDb Watched title on this page already has a local mark',
         toast_all_imdb_watched_on_this_page_other: 'All $1 IMDb Watched titles on this page already have a local mark',
+        toast_allow_notifications_there: 'Allow notifications on the page that just opened.',
         toast_cache_could_not_be_read_or: 'Cache could not be read or cleared.',
         toast_cache_is_already_empty: 'Cache is already empty',
         toast_cleared_cached_entries_could_not_be: 'Cleared $1 cached entries; $2 could not be removed.',
@@ -8631,6 +8647,8 @@ section[id*="quote" i] .ipc-list-card { padding: 4px 0 !important; margin: 2px 0
        Bounded on purpose. A watchlist can be thousands of titles and every one of them
        would be a request on somebody else's API on a schedule, so this keeps the most
        recently seen page of them and no more. */
+    const WATCHLIST_ALERT_STATE_KEY = 'watchlistAlertState';
+    const WATCHLIST_SERVICE_LIMIT = 60;
     const WATCHLIST_SNAPSHOT_KEY = 'watchlistSnapshot';
     const WATCHLIST_SNAPSHOT_MAX = 200;
     const WATCHLIST_SNAPSHOT_VERSION = 1;
@@ -8652,6 +8670,25 @@ section[id*="quote" i] .ipc-list-card { padding: 4px 0 !important; margin: 2px 0
         }
         const ts = Number(value.ts);
         return { v:WATCHLIST_SNAPSHOT_VERSION, ts: Number.isFinite(ts) && ts > 0 ? ts : 0, titles:normalized };
+    }
+
+    /* The services to choose from are the ones the scheduled checks have actually walked
+       past in this region, which is the only list that is right everywhere. A list of
+       service names written into this file would be a list that is wrong in most of the
+       world, and asking TMDB for one would be a second endpoint for a picker. */
+    function getWatchlistServiceChoices() {
+        const state = get(WATCHLIST_ALERT_STATE_KEY);
+        const seen = Array.isArray(state?.services) ? state.services : [];
+        return [...new Set(seen
+            .map(name => toBoundedText(name, 60))
+            .filter(Boolean))].slice(0, WATCHLIST_SERVICE_LIMIT).sort();
+    }
+
+    function getWatchlistServices() {
+        const chosen = get('watchlistAlertServices');
+        return [...new Set((Array.isArray(chosen) ? chosen : [])
+            .map(name => toBoundedText(name, 60))
+            .filter(Boolean))].slice(0, WATCHLIST_SERVICE_LIMIT);
     }
 
     function getWatchlistSnapshot() {
@@ -13309,6 +13346,14 @@ section[data-testid="hero-parent"].enh-editorial-native-hidden { display: none !
 .enh-collection__item--current { color: ${t.tx}; font-weight: 700; }
 .enh-collection__link { color: ${t.tx2}; }
 .enh-collection__link:hover { color: ${t.accent}; }
+.enh-settings-inline-choice {
+    display: inline-flex;
+    align-items: center;
+    gap: 6px;
+    margin: 0 12px 6px 0;
+    color: ${t.tx2};
+    font-size: 13px;
+}
 .enh-moviechat {
     margin: 20px 0;
     padding: 14px 16px;
@@ -15482,6 +15527,51 @@ section[data-testid="hero-parent"].enh-editorial-native-hidden { display: none !
            the choice belongs beside the toggle rather than buried with the integrations.
            The token is a credential like any other, which is what keeps it out of the
            page's reach in an extension build. */
+        /* Which services are worth interrupting someone for. The list is what the
+           scheduled checks have walked past in this region rather than a set of names
+           written into this file, so on the first day it is empty and says why. */
+        function createWatchlistAlertControl() {
+            if (!IS_EXTENSION_BUILD) return null;
+            const card = makeCard(t('settings_heading_watchlist_alerts'), t('settings_watchlist_alerts_note'));
+            const list = makeEl('div', { className:'enh-settings-card-description' });
+            const render = () => {
+                list.replaceChildren();
+                const choices = getWatchlistServiceChoices();
+                if (!choices.length) {
+                    list.appendChild(makeEl('span', {}, t('settings_watchlist_services_pending')));
+                    return;
+                }
+                const chosen = new Set(getWatchlistServices());
+                choices.forEach(name => {
+                    const input = makeEl('input', {
+                        type:'checkbox',
+                        checked: chosen.has(name),
+                        onChange: event => {
+                            const next = new Set(getWatchlistServices());
+                            if (event.target.checked) next.add(name);
+                            else next.delete(name);
+                            set('watchlistAlertServices', [...next]);
+                            markSaved();
+                        },
+                    });
+                    list.appendChild(makeEl('label', { className:'enh-settings-inline-choice' }, input, makeEl('span', {}, name)));
+                });
+            };
+            render();
+            card.appendChild(list);
+            /* The permission has to be asked for from one of the extension's own pages,
+               because a request needs a gesture there; the alarm has none. */
+            card.appendChild(makeEl('button', {
+                type:'button',
+                className:'enh-settings-footer-btn',
+                style:{ marginTop:'10px' },
+                onClick: async () => {
+                    if (await openOptionsPage()) showToast(t('toast_allow_notifications_there'), 5000);
+                },
+            }, t('settings_allow_notifications')));
+            return card;
+        }
+
         function createAvailabilitySourceControl() {
             const select = makeEl('select', {
                 className:'enh-servarr-input',
@@ -15542,6 +15632,7 @@ section[data-testid="hero-parent"].enh-editorial-native-hidden { display: none !
                 'ratingGap', 'inlineRTScore', 'inlineLetterboxdScore', 'inlineMetacriticScore', 'inlineAnimeScore', 'streamAvailability',
             ])),
             createAvailabilitySourceControl(),
+            createWatchlistAlertControl(),
             makeEl('div', { className:'enh-settings-callout', style:{ marginTop:'12px' } },
                 makeEl('strong', {}, t('settings_rotten_tomatoes_and_metacritic_through_omdb')),
                 makeEl('span', { className:'enh-settings-card-description' },

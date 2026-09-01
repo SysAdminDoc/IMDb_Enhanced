@@ -1034,8 +1034,14 @@
   "recovery_access_was_not_granted_so_that_feature": {
     "message": "[!! Access was not granted, so that feature still cannot run. !!]"
   },
+  "recovery_allow": {
+    "message": "[!! Allow !!]"
+  },
   "recovery_allow_sending_page_details_to_score_services": {
     "message": "[!! Allow sending page details to score services !!]"
+  },
+  "recovery_allow_watchlist_notifications": {
+    "message": "[!! Allow watchlist notifications !!]"
   },
   "recovery_backup_copied": {
     "message": "[!! Backup copied. !!]"
@@ -1157,6 +1163,21 @@
   "recovery_not_granted_so_this_feature_cannot_work": {
     "message": "[!! Not granted, so this feature cannot work yet. !!]"
   },
+  "recovery_notifications_allowed": {
+    "message": "[!! Allowed. !!]"
+  },
+  "recovery_notifications_declined": {
+    "message": "[!! Notifications were not allowed, so the daily check will stay quiet. !!]"
+  },
+  "recovery_notifications_not_allowed": {
+    "message": "[!! Not allowed, so the daily check will say nothing. !!]"
+  },
+  "recovery_notifications_recorded": {
+    "message": "[!! Notifications allowed. !!]"
+  },
+  "recovery_notifications_withdrawn": {
+    "message": "[!! Notifications withdrawn. The daily check keeps running quietly. !!]"
+  },
   "recovery_open_imdb_settings": {
     "message": "[!! Open IMDb settings !!]"
   },
@@ -1277,8 +1298,20 @@
   "recovery_unknown_error": {
     "message": "[!! unknown error !!]"
   },
+  "recovery_watchlist_notifications": {
+    "message": "[!! Watchlist alerts !!]"
+  },
+  "recovery_watchlist_notifications_detail": {
+    "message": "[!! A notification when something on your watchlist turns up on a service you chose. Sent at most once a day. !!]"
+  },
+  "recovery_withdraw": {
+    "message": "[!! Withdraw !!]"
+  },
   "recovery_withdraw_consent_for_sending_page_details_to": {
     "message": "[!! Withdraw consent for sending page details to score services !!]"
+  },
+  "recovery_withdraw_watchlist_notifications": {
+    "message": "[!! Stop showing watchlist notifications !!]"
   },
   "settings_a_backup_covers_preferences_sites_and_title": {
     "message": "[!! A backup covers preferences, sites, and title marks. Integration API keys and tokens are left out unless you choose the encrypted export. !!]"
@@ -1309,6 +1342,9 @@
   },
   "settings_all_pages": {
     "message": "[!! All pages !!]"
+  },
+  "settings_allow_notifications": {
+    "message": "[!! Allow notifications !!]"
   },
   "settings_api_key": {
     "message": "[!! API key !!]"
@@ -1450,6 +1486,9 @@
   },
   "settings_heading_updates": {
     "message": "[!! Updates !!]"
+  },
+  "settings_heading_watchlist_alerts": {
+    "message": "[!! Watchlist alerts !!]"
   },
   "settings_history_metadata_coverage_one": {
     "message": "[!! $2 of $1 history title has year, genre, score, or runtime metadata. $3 !!]"
@@ -1669,6 +1708,12 @@
   },
   "settings_watch_stream_includes_a_built_in_catalog": {
     "message": "[!! Watch & stream includes a built-in catalog of every streaming destination from the FMHY video wiki. Open it below to add any of them with one click, then edit the row like any other destination. !!]"
+  },
+  "settings_watchlist_alerts_note": {
+    "message": "[!! Which services are worth telling you about. Checked once a day, in one notification, for the titles on the watchlist page you last opened. !!]"
+  },
+  "settings_watchlist_services_pending": {
+    "message": "[!! The services here are the ones the daily check has seen so far. Turn the alerts on and this fills in after the first check. !!]"
   },
   "settings_when_optional_keyboard_shortcuts_is_enabled": {
     "message": "[!! When “Optional keyboard shortcuts” is enabled !!]"
@@ -2269,6 +2314,9 @@
   },
   "toast_all_imdb_watched_on_this_page_other": {
     "message": "[!! All $1 IMDb Watched titles on this page already have a local mark !!]"
+  },
+  "toast_allow_notifications_there": {
+    "message": "[!! Allow notifications on the page that just opened. !!]"
   },
   "toast_cache_could_not_be_read_or": {
     "message": "[!! Cache could not be read or cleared. !!]"

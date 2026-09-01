@@ -908,7 +908,7 @@ function tmdbFetch(providerIds, { region = 'US' } = {}) {
         if (url.startsWith('https://api.themoviedb.org/3/movie/')) {
             return Promise.resolve({
                 ok: true,
-                json: () => Promise.resolve({ results:{ [region]: { flatrate: providerIds.map(id => ({ provider_id:id })) } } }),
+                json: () => Promise.resolve({ results:{ [region]: { flatrate: providerIds.map(name => ({ provider_name:name })) } } }),
             });
         }
         return Promise.resolve({ ok:false, status:404, json: () => Promise.resolve({}) });
@@ -917,7 +917,7 @@ function tmdbFetch(providerIds, { region = 'US' } = {}) {
 
 const ALERT_SEED = {
     imdb_enh_watchlistAlerts: true,
-    imdb_enh_watchlistAlertServices: [8],
+    imdb_enh_watchlistAlertServices: ['Netflix'],
     imdb_enh_watchlistSnapshot: { v:1, ts:1, titles:{ tt0133093:{ title:'The Matrix' } } },
     imdb_enh_availabilityRegion: 'US',
     imdb_enh_tmdbReadToken: 'TMDB-TOKEN',
@@ -940,7 +940,7 @@ test('the alarm is only scheduled while the alerts are switched on', async () =>
 
 test('a first check records what is already available and says nothing', async () => {
     const worker = loadBackground({
-        fetchImpl: tmdbFetch([8, 9]),
+        fetchImpl: tmdbFetch(['Netflix', 'Hulu']),
         seed: ALERT_SEED,
         grantedPermissions: ['notifications'],
     });
@@ -949,16 +949,21 @@ test('a first check records what is already available and says nothing', async (
     assert.strictEqual(worker.calls.notifications.length, 0,
         'everything a title is already on is not news');
     const state = worker.storage.get('imdb_enh_watchlistAlertState');
-    assert.deepStrictEqual(Array.from(state.seen.tt0133093), [8, 9], 'but it is remembered');
+    assert.deepStrictEqual(Array.from(state.seen.tt0133093), ['Netflix', 'Hulu'], 'but it is remembered');
+    /* And every service it walked past is kept as something the settings panel can
+       offer: that list is the only thing the picker has to show, so an empty one is a
+       picker that stays empty forever. */
+    assert.deepStrictEqual(Array.from(state.services), ['Hulu', 'Netflix'],
+        'the services it saw are recorded for the picker');
     assert(worker.calls.fetches.length >= 2, 'the find and the providers call both happen');
 });
 
 test('a service arriving on a watched title produces exactly one notification', async () => {
     const worker = loadBackground({
-        fetchImpl: tmdbFetch([8, 9]),
+        fetchImpl: tmdbFetch(['Netflix', 'Hulu']),
         seed: {
             ...ALERT_SEED,
-            imdb_enh_watchlistAlertState: { checkedAt:1, cursor:0, seen:{ tt0133093:[9] } },
+            imdb_enh_watchlistAlertState: { checkedAt:1, cursor:0, seen:{ tt0133093:['Hulu'] } },
         },
         grantedPermissions: ['notifications'],
     });
@@ -983,7 +988,7 @@ test('two titles arriving on the same day are one notification, not two', async 
         if (url.includes('/movie/')) {
             return Promise.resolve({
                 ok: true,
-                json: () => Promise.resolve({ results:{ US:{ flatrate:[{ provider_id:8 }] } } }),
+                json: () => Promise.resolve({ results:{ US:{ flatrate:[{ provider_name:'Netflix' }] } } }),
             });
         }
         return Promise.resolve({ ok:false, status:404, json: () => Promise.resolve({}) });
@@ -1011,10 +1016,10 @@ test('two titles arriving on the same day are one notification, not two', async 
 
 test('an arrival on a service nobody asked about is not a notification', async () => {
     const worker = loadBackground({
-        fetchImpl: tmdbFetch([9, 15]),
+        fetchImpl: tmdbFetch(['Hulu', 'Shudder']),
         seed: {
             ...ALERT_SEED,
-            imdb_enh_watchlistAlertState: { checkedAt:1, cursor:0, seen:{ tt0133093:[9] } },
+            imdb_enh_watchlistAlertState: { checkedAt:1, cursor:0, seen:{ tt0133093:['Hulu'] } },
         },
         grantedPermissions: ['notifications'],
     });
@@ -1022,16 +1027,16 @@ test('an arrival on a service nobody asked about is not a notification', async (
 
     assert.strictEqual(worker.calls.notifications.length, 0,
         'service 15 was not one of the chosen ones');
-    assert.deepStrictEqual(Array.from(worker.storage.get('imdb_enh_watchlistAlertState').seen.tt0133093), [9, 15],
+    assert.deepStrictEqual(Array.from(worker.storage.get('imdb_enh_watchlistAlertState').seen.tt0133093), ['Hulu', 'Shudder'],
         'though it is still recorded, so it is not news next time either');
 });
 
 test('without the notification permission the check still records what it saw', async () => {
     const worker = loadBackground({
-        fetchImpl: tmdbFetch([8, 9]),
+        fetchImpl: tmdbFetch(['Netflix', 'Hulu']),
         seed: {
             ...ALERT_SEED,
-            imdb_enh_watchlistAlertState: { checkedAt:1, cursor:0, seen:{ tt0133093:[9] } },
+            imdb_enh_watchlistAlertState: { checkedAt:1, cursor:0, seen:{ tt0133093:['Hulu'] } },
         },
         grantedPermissions: [],
     });
@@ -1040,7 +1045,7 @@ test('without the notification permission the check still records what it saw', 
     assert.strictEqual(worker.calls.notifications.length, 0, 'nothing is shown without permission');
     /* And what it saw is kept, so granting the permission later does not produce a flood
        of things that arrived months ago. */
-    assert.deepStrictEqual(Array.from(worker.storage.get('imdb_enh_watchlistAlertState').seen.tt0133093), [8, 9]);
+    assert.deepStrictEqual(Array.from(worker.storage.get('imdb_enh_watchlistAlertState').seen.tt0133093), ['Netflix', 'Hulu']);
 });
 
 test('nothing is requested without a token, chosen services, or a recorded watchlist', async () => {
@@ -1051,7 +1056,7 @@ test('nothing is requested without a token, chosen services, or a recorded watch
         ['switched off', { ...ALERT_SEED, imdb_enh_watchlistAlerts: false }],
     ];
     for (const [name, seed] of cases) {
-        const worker = loadBackground({ fetchImpl: tmdbFetch([8]), seed, grantedPermissions: ['notifications'] });
+        const worker = loadBackground({ fetchImpl: tmdbFetch(['Netflix']), seed, grantedPermissions: ['notifications'] });
         await worker.fireAlarm('imdb-enhanced:watchlist-alerts');
         assert.strictEqual(worker.calls.fetches.length, 0, `${name} must cost no request`);
         assert.strictEqual(worker.calls.notifications.length, 0, `${name} must say nothing`);
@@ -1060,10 +1065,10 @@ test('nothing is requested without a token, chosen services, or a recorded watch
 
 test('a title that has left the watchlist is forgotten', async () => {
     const worker = loadBackground({
-        fetchImpl: tmdbFetch([8]),
+        fetchImpl: tmdbFetch(['Netflix']),
         seed: {
             ...ALERT_SEED,
-            imdb_enh_watchlistAlertState: { checkedAt:1, cursor:0, seen:{ tt0133093:[8], tt0000001:[8, 9] } },
+            imdb_enh_watchlistAlertState: { checkedAt:1, cursor:0, seen:{ tt0133093:['Netflix'], tt0000001:['Netflix', 'Hulu'] } },
         },
         grantedPermissions: ['notifications'],
     });

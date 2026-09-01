@@ -24,6 +24,8 @@
 
 ### Added
 
+- Watchlist streaming alerts, in the extension only and off by default. Once a day it checks part of your watchlist against the services you picked and sends one notification when something turns up. It needs a TMDB token, and the services to choose from are the ones the checks have actually seen where you are rather than a list written into the code, so the picker fills in after the first check. Notifications are asked for separately, from the extension own page, and until you allow them the check still runs quietly so that turning them on later does not bury you in months of old news.
+
 - A franchise watch order, off by default. On a film that belongs to a series, the other films in it are listed in order with the one you are on marked, using the series own numbering where it has one and release year where it does not. It comes from Wikidata, needs no key of any kind, and asks nothing on a film that is in no series.
 
 - A message board for the title, off by default. IMDb closed its boards in 2017; MovieChat keeps one per title, and this puts it at the bottom of the page with a line saying whose page it is. Nothing loads until you scroll to it, and if the board cannot be shown in place the section becomes a plain link to it.

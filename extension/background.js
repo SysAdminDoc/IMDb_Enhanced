@@ -485,10 +485,12 @@ const WATCHLIST_TOKEN_KEY = 'imdb_enh_tmdbReadToken';
 const WATCHLIST_BATCH = 20;
 const WATCHLIST_NOTIFICATION_TITLES = 3;
 
-function boundedProviderIds(value) {
+const WATCHLIST_PROVIDER_NAME_LIMIT = 60;
+
+function boundedProviderNames(value) {
     return [...new Set((Array.isArray(value) ? value : [])
-        .map(entry => Number(entry?.provider_id))
-        .filter(id => Number.isInteger(id) && id > 0))].slice(0, 40);
+        .map(entry => String(entry?.provider_name || '').trim().slice(0, 60))
+        .filter(Boolean))].slice(0, 40);
 }
 
 async function tmdbJson(path, token) {
@@ -511,7 +513,7 @@ async function readAvailableProviders(imdbId, region, token) {
     const providers = await tmdbJson(`movie/${Number(movie.id)}/watch/providers`, token);
     const regional = providers?.results?.[region];
     if (!regional) return [];
-    return boundedProviderIds(regional.flatrate);
+    return boundedProviderNames(regional.flatrate);
 }
 
 function describeArrivals(arrivals) {
@@ -542,8 +544,9 @@ async function runWatchlistCheck() {
     ]).catch(() => null);
     if (!stored || stored[WATCHLIST_SETTING_KEY] !== true) return;
     const token = String(stored[WATCHLIST_TOKEN_KEY] || '');
-    const wanted = new Set(boundedProviderIds((stored[WATCHLIST_SERVICES_KEY] || [])
-        .map(id => ({ provider_id: id }))));
+    const wanted = new Set(boundedProviderNames((Array.isArray(stored[WATCHLIST_SERVICES_KEY])
+        ? stored[WATCHLIST_SERVICES_KEY]
+        : []).map(name => ({ provider_name: name }))));
     // No token or no chosen services: nothing to ask and nothing worth asking about.
     if (!token || !wanted.size) return;
     const titles = stored[WATCHLIST_SNAPSHOT_KEY]?.titles;
@@ -583,8 +586,21 @@ async function runWatchlistCheck() {
     const live = new Set(ids);
     Object.keys(seen).forEach(id => { if (!live.has(id)) delete seen[id]; });
 
+    /* Every service these runs have walked past, so the settings panel has a list to
+       offer without a second endpoint and without any service names written into this
+       file — which would be a list that is wrong in most of the world. */
+    const services = [...new Set([
+        ...(Array.isArray(previous.services) ? previous.services : []),
+        ...Object.values(seen).flat(),
+    ])].filter(name => typeof name === 'string' && name).slice(0, WATCHLIST_PROVIDER_NAME_LIMIT).sort();
+
     await callApi(chrome.storage.local, 'set', {
-        [WATCHLIST_STATE_KEY]: { checkedAt: Date.now(), cursor: (start + slice.length) % ids.length, seen },
+        [WATCHLIST_STATE_KEY]: {
+            checkedAt: Date.now(),
+            cursor: (start + slice.length) % ids.length,
+            seen,
+            services,
+        },
     }).catch(() => { /* the next run re-reads whatever did land */ });
     await notifyArrivals(arrivals);
 }
