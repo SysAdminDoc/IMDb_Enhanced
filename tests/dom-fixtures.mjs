@@ -373,6 +373,22 @@ await runFixture('title', async (window, hooks) => {
         'which is what decides whether a film source is asked about a series');
 });
 
+/* A route with no title id in it cannot be checked against the data at all, so nothing
+   is remembered there — which is what stops a title's data following a reader onto a
+   chart or a search page. */
+await runFixture('title', async (window, hooks) => {
+    assert.equal(hooks.getLDData().name, 'The Matrix');
+    window.happyDOM.setURL('https://www.imdb.com/chart/top/');
+    assert.equal(hooks.getLDData().name, 'The Matrix',
+        'the page still holds that data, so it is still what is read');
+
+    /* But it was not remembered: replacing the page changes the answer immediately,
+       rather than after whatever cleared the memo next ran. */
+    window.document.querySelector('script[type="application/ld+json"]').remove();
+    assert.equal(Object.keys(hooks.getLDData()).length, 0,
+        'an unverifiable parse is answered with, never memoized');
+});
+
 /* A page that has not rendered its structured data yet must not poison every later read:
    nothing is remembered until there is something to remember. */
 await runFixture('title', async (window, hooks) => {

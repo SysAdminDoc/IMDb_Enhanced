@@ -3260,6 +3260,56 @@ test('the Letterboxd export carries seen titles and their viewing dates', () => 
     assert.strictEqual(hooks.buildLetterboxdCsv([]), 'imdbID,WatchedDate');
 });
 
+/* An export this extension cannot read back is not an export. The importer knew neither
+   the Timestamp column nor the Note column, so a file it had just written lost every date
+   and every note on the way in — and the formula guard was never removed, so a title like
+   "-30-" grew another tab on every trip. */
+test('an exported CSV reads back into the same marks', () => {
+    const hooks = loadScriptTestHooks();
+    const entries = [
+        ['tt0133093', { state:'watched', title:'The Matrix', ts:Date.UTC(2024, 0, 15), note:'A note, with a comma' }],
+        ['tt0044337', { state:'watched', title:'-30-', ts:Date.UTC(2023, 5, 2), note:'' }],
+        ['tt2395385', { state:'skip', title:'+1', ts:Date.UTC(2022, 2, 3), note:'Say "no"' }],
+    ];
+
+    let csv = hooks.buildMarksCsv(entries);
+    const first = hooks.prepareCsvMarkImport(csv, {});
+    assert.strictEqual(first.importedRows, 3, 'every row is readable');
+
+    /* Titles IMDb really carries. Each of them starts with a character a spreadsheet
+       reads as a formula, and each has to survive unchanged. */
+    assert.strictEqual(first.marks.tt0044337.title, '-30-', 'the guard is removed, not accumulated');
+    assert.strictEqual(first.marks.tt2395385.title, '+1');
+    assert.strictEqual(first.marks.tt0133093.title, 'The Matrix');
+
+    // The columns the export writes and the import used to ignore.
+    assert.strictEqual(first.marks.tt0133093.note, 'A note, with a comma');
+    assert.strictEqual(first.marks.tt2395385.note, 'Say "no"', 'a quoted quote comes back as one quote');
+    assert(String(first.marks.tt0133093.viewings?.[0]?.date || '').startsWith('2024-01-15'),
+        'and the date, which the importer did not recognize at all');
+
+    /* The trip has to be stable, not merely survivable: exporting what was imported and
+       importing that again must produce the same titles. */
+    csv = hooks.buildMarksCsv(Object.entries(first.marks));
+    const second = hooks.prepareCsvMarkImport(csv, {});
+    assert.strictEqual(second.marks.tt0044337.title, '-30-', 'a second trip adds nothing');
+    assert.strictEqual(second.marks.tt2395385.title, '+1');
+    assert.strictEqual(second.marks.tt0133093.note, 'A note, with a comma');
+});
+
+/* The two hazards the export defends against, checked against values a spreadsheet
+   actually evaluates rather than the shapes that are easy to test. */
+test('the formula guard is not fooled by leading whitespace', () => {
+    const hooks = loadScriptTestHooks();
+    const guarded = hooks.buildMarksCsv([['tt0000001', { state:'watched', title:' =1+1', ts:0, note:'' }]]);
+    assert(guarded.includes('\t =1+1') || guarded.includes('"\t =1+1"'),
+        'a space before the equals sign does not stop a spreadsheet evaluating it');
+
+    // A line separator that is not \n still ends a line for a reader, so it is quoted.
+    const separated = hooks.buildMarksCsv([['tt0000002', { state:'watched', title:'a\u2028b', ts:0, note:'' }]]);
+    assert(separated.includes('"a\u2028b"'), 'U+2028 is quoted like any other line break');
+});
+
 test('version strings match', () => {
     const metaVersion = script.match(/@version\s+(\S+)/)?.[1];
     const constVersion = script.match(/const VERSION\s*=\s*'([^']+)'/)?.[1];

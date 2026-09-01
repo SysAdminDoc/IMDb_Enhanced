@@ -564,6 +564,10 @@
         settings_csv_import_failed_previous_marks_were_restored: 'CSV import failed. Previous marks were restored.',
         settings_dated_viewings: 'Dated viewings',
         settings_diagnostics_copied_paste_it_into_your_report: 'Diagnostics copied. Paste it into your report.',
+        settings_download_marks: 'Download CSV',
+        settings_download_marks_hint: 'Save every mark as a file',
+        settings_download_marks_letterboxd: 'Download for Letterboxd',
+        settings_download_marks_letterboxd_hint: 'Save the Letterboxd import file',
         settings_edit_every_destination_directly_hide_categorize: 'Edit every destination directly. Hide, categorize, reorder, or remove links without changing the rest of IMDb Enhanced.',
         settings_export_marks_full: 'Copy as CSV',
         settings_export_marks_full_hint: 'Every mark, with its state, date, title and note',
@@ -2476,12 +2480,18 @@
        is = + - or @ is a formula to a spreadsheet, not text: someone else's film title
        should not run when the file is opened, so those are prefixed with a tab, which
        spreadsheets treat as text and importers strip. */
-    const CSV_FORMULA_LEAD = /^[=+\-@\t\r]/;
+    /* Tested against the value as a spreadsheet sees it: leading whitespace is ignored
+       when it decides whether a cell is a formula, so a space before an equals sign is
+       not a defence. */
+    const CSV_FORMULA_LEAD = /^\s*[=+\-@]|^[\t\r]/;
+    /* U+2028 and U+2029 end a line for a reader even though they are not \n, and a NUL
+       truncates a field in more than one importer. All four are quoted. */
+    const CSV_MUST_QUOTE = /["\,\n\r\u2028\u2029\u0000]/;
 
     function csvField(value) {
         let text = String(value ?? '');
         if (CSV_FORMULA_LEAD.test(text)) text = `\t${text}`;
-        return /[",\n\r]/.test(text) ? `"${text.replace(/"/g, '""')}"` : text;
+        return CSV_MUST_QUOTE.test(text) ? `"${text.replace(/"/g, '""')}"` : text;
     }
 
     function csvRow(values) {
@@ -2580,6 +2590,10 @@
         return headers.findIndex(header => wanted.has(header));
     }
     function readCsvCell(row, index) {
+        /* trim is what undoes the export's tab prefix: a field a spreadsheet would
+           have evaluated is written with a leading tab, and reading it back drops it
+           along with any other surrounding whitespace. A round-trip test holds that,
+           which is why there is no separate unprefixing step to get wrong. */
         return index >= 0 ? String(row[index] ?? '').trim() : '';
     }
     function normalizeCsvIMDbId(value) {
@@ -2642,11 +2656,12 @@
             originalTitle:findCsvColumn(headers, ['originaltitle']),
             year:findCsvColumn(headers, ['year', 'releaseyear']),
             rating,
-            date:findCsvColumn(headers, ['daterated', 'watcheddate', 'datewatched', 'watchedon', 'date']),
+            date:findCsvColumn(headers, ['daterated', 'watcheddate', 'datewatched', 'watchedon', 'date', 'timestamp']),
             genres:findCsvColumn(headers, ['genres', 'genre']),
             imdbRating:findCsvColumn(headers, ['imdbrating']),
             runtime:findCsvColumn(headers, ['runtimemins', 'runtimeminutes', 'runtime']),
             state:findCsvColumn(headers, ['state', 'status']),
+            note:findCsvColumn(headers, ['note', 'notes', 'review']),
         };
     }
     function normalizeCsvRating(value, scale) {
@@ -2692,6 +2707,8 @@
             const rawRuntime = readCsvCell(row, columns.runtime);
             const runtime = normalizeCsvRuntime(rawRuntime);
             const genres = normalizeUserMarkGenres(readCsvCell(row, columns.genres));
+            // Written by this extension's own export, so a file it produced reads back whole.
+            const note = normalizeUserNote(readCsvCell(row, columns.note));
             if ((rawYear && year === null) || (rawDate && !date) || (rawRating && rating === null)
                 || (rawImdbRating && imdbRating === null) || (rawRuntime && runtime === null)) {
                 skippedRows += 1;
@@ -2733,6 +2750,7 @@
                 ...(event.length || previous.viewings?.length
                     ? { viewings:mergeViewingEvents(previous.viewings, event) }
                     : {}),
+                ...(note ? { note } : {}),
                 ...(rating !== null ? { rating } : {}),
                 ...(year !== null ? { year } : {}),
                 ...(genres.length || previous.genres?.length
@@ -4294,9 +4312,14 @@
         if (!Object.keys(selected).length) return {};
         const wanted = getIMDbID();
         const found = structuredDataTitleId(selected);
-        /* Only when both are known and disagree. A page that names no id in its data, or
-           a route with no id in it, is not evidence of anything and is read as before. */
+        // Data that names another title is not this page's data.
         if (wanted && found && wanted !== found) return {};
+        /* And where the check cannot be made — a route with no title id, or data that
+           names none — the answer is still given but never remembered, so the next reader
+           parses the page as it is then rather than as it was when somebody last looked.
+           Memoizing an unverifiable parse is how the previous title followed a reader onto
+           a chart page. */
+        if (!wanted || !found) return selected;
         _ldData = selected;
         return _ldData;
     }
@@ -15731,10 +15754,28 @@ ${scopedRules('.enh-zoom', {
            different thing and the one people actually asked for. */
         const marksCsvCard = makeCard(t('settings_heading_export_marks'), t('settings_export_marks_note'));
         const copyCsv = (build, label) => async () => {
-            const entries = getUserMarkEntries();
-            if (!entries.length) { showToast(t('toast_no_marks_to_export'), 3000); return; }
-            if (!copyTextToClipboard(build(entries))) { showToast(COPY_FAILURE_MESSAGE, 4500); return; }
-            showToast(t('toast_marks_copied', [label, entries.length]), 3000);
+            const csv = build(getUserMarkEntries());
+            // The header is always there; what matters is whether anything followed it.
+            const rows = csv.split('\r\n').length - 1;
+            if (!rows) { showToast(t('toast_no_marks_to_export'), 3000); return; }
+            if (!copyTextToClipboard(csv)) { showToast(COPY_FAILURE_MESSAGE, 4500); return; }
+            showToast(t('toast_marks_copied', [label, rows]), 3000);
+        };
+        const downloadCsv = (build, filename) => () => {
+            const csv = build(getUserMarkEntries());
+            if (csv.split('\r\n').length - 1 === 0) { showToast(t('toast_no_marks_to_export'), 3000); return; }
+            /* A BOM, because the single most likely destination is Excel, which reads a
+               UTF-8 file without one as the local code page and turns every non-ASCII
+               title into mojibake. Every other reader, including this extension's own
+               importer, skips it. */
+            const blob = new Blob([`\uFEFF${csv}`], { type:'text/csv;charset=utf-8' });
+            const href = URL.createObjectURL(blob);
+            const link = makeEl('a', { href, download:filename });
+            document.body.appendChild(link);
+            link.click();
+            link.remove();
+            // Released on the next turn so the download has taken the reference.
+            setTimeout(() => URL.revokeObjectURL(href), 0);
         };
         marksCsvCard.appendChild(makeEl('div', { className:'enh-data-actions' },
             makeEl('button', {
@@ -15746,7 +15787,17 @@ ${scopedRules('.enh-zoom', {
                 type:'button', className:'enh-settings-footer-btn', id:'enh-export-marks-letterboxd',
                 title:t('settings_export_marks_letterboxd_hint'),
                 onClick: copyCsv(buildLetterboxdCsv, t('settings_export_marks_letterboxd')),
-            }, t('settings_export_marks_letterboxd'))
+            }, t('settings_export_marks_letterboxd')),
+            makeEl('button', {
+                type:'button', className:'enh-settings-footer-btn', id:'enh-download-marks-csv',
+                title:t('settings_download_marks_hint'),
+                onClick: downloadCsv(buildMarksCsv, 'imdb-enhanced-marks.csv'),
+            }, t('settings_download_marks')),
+            makeEl('button', {
+                type:'button', className:'enh-settings-footer-btn', id:'enh-download-marks-letterboxd',
+                title:t('settings_download_marks_letterboxd_hint'),
+                onClick: downloadCsv(buildLetterboxdCsv, 'letterboxd-import.csv'),
+            }, t('settings_download_marks_letterboxd'))
         ));
         dataPage.appendChild(marksCsvCard);
 

@@ -1445,6 +1445,18 @@
   "settings_diagnostics_copied_paste_it_into_your_report": {
     "message": "[!! Diagnostics copied. Paste it into your report. !!]"
   },
+  "settings_download_marks": {
+    "message": "[!! Download CSV !!]"
+  },
+  "settings_download_marks_hint": {
+    "message": "[!! Save every mark as a file !!]"
+  },
+  "settings_download_marks_letterboxd": {
+    "message": "[!! Download for Letterboxd !!]"
+  },
+  "settings_download_marks_letterboxd_hint": {
+    "message": "[!! Save the Letterboxd import file !!]"
+  },
   "settings_edit_every_destination_directly_hide_categorize": {
     "message": "[!! Edit every destination directly. Hide, categorize, reorder, or remove links without changing the rest of IMDb Enhanced. !!]"
   },
