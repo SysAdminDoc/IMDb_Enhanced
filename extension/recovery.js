@@ -7040,9 +7040,9 @@ html[data-imdb-enhanced="active"] .ipc-page-background {
     reg({ key: 'widerLayout', name: t('feature_widerLayout_name'), group: 'Appearance',
         css: `
 /* ── Full-width containers ── */
-.ipc-page-content-container--center { max-width: 100% !important; padding: 0 32px !important; }
+.ipc-page-content-container--center { box-sizing: border-box !important; max-width: 100% !important; padding: 0 32px !important; }
 .ipc-page-section--base.celwidget { width: 100% !important; max-width: 100% !important; }
-.ipc-page-grid { max-width: 100% !important; width: 100% !important; padding: 0 32px !important; }
+.ipc-page-grid { box-sizing: border-box !important; max-width: 100% !important; width: 100% !important; padding: 0 32px !important; }
 .ipc-page-content-container--full { max-width: 100% !important; width: 100% !important; }
 .ipc-page-wrapper { max-width: 100% !important; }
 [data-testid="atf-wrapper-bg"] { max-width: 100% !important; }
@@ -14123,7 +14123,7 @@ section[data-testid="hero-parent"].enh-editorial-native-hidden { display: none !
 #enh-editorial-surface > * { position: relative; z-index: 1; }
 /* The quick-nav column is fixed to the right edge and 70px wide; between 1200px and
    the surface's own 1600px ceiling it sat on top of the score rail's text. */
-@media (min-width: 1201px) {
+@media (min-width: 1201px) and (max-width: 1799px) {
     body:has(#enh-quicknav) #enh-editorial-surface { padding-right: 124px; }
 }
 .enh-editorial-subnav {
@@ -14227,7 +14227,12 @@ section[data-testid="hero-parent"].enh-editorial-native-hidden { display: none !
     #enh-editorial-score-rail > [data-testid="hero-rating-bar__aggregate-rating"],
     #enh-editorial-score-rail > [data-testid="hero-rating-bar__popularity"],
     #enh-editorial-score-rail > .enh-score-widget { border-bottom: 0 !important; border-left: 1px solid ${t.bd0} !important; padding: 8px 14px !important; }
-    #enh-editorial-score-rail > :first-child { border-left: 0 !important; }
+    #enh-editorial-score-rail > :nth-child(3n + 1) { border-left: 0 !important; }
+}
+@media (max-width: 1100px) {
+    .enh-editorial-details { grid-template-columns: 1fr; }
+    .enh-editorial-about { padding: 22px 0 10px; }
+    .enh-editorial-watch { padding: 22px 0 10px; border-top: 1px solid ${t.bd0}; border-left: 0; }
 }
 @media (max-width: 760px) {
     #enh-editorial-surface { padding-left: 18px; padding-right: 18px; }
@@ -14238,9 +14243,10 @@ section[data-testid="hero-parent"].enh-editorial-native-hidden { display: none !
     .enh-editorial-title { font-size: clamp(36px, 12vw, 56px); white-space: normal; }
     #enh-editorial-action-slot, #enh-editorial-standalone-slot { width: 100%; }
     #enh-editorial-score-rail { grid-template-columns: repeat(2, minmax(0, 1fr)); }
-    .enh-editorial-details { grid-template-columns: 1fr; }
-    .enh-editorial-about { padding: 22px 0 10px; }
-    .enh-editorial-watch { padding: 22px 0 10px; border-top: 1px solid ${t.bd0}; border-left: 0; }
+    #enh-editorial-score-rail > [data-testid="hero-rating-bar__aggregate-rating"],
+    #enh-editorial-score-rail > [data-testid="hero-rating-bar__popularity"],
+    #enh-editorial-score-rail > .enh-score-widget { border-left: 1px solid ${t.bd0} !important; }
+    #enh-editorial-score-rail > :nth-child(2n + 1) { border-left: 0 !important; }
     #enh-editorial-research-slot .enh-external-groups { grid-template-columns: 1fr; }
 }
 @media (max-width: 480px) {
@@ -14260,7 +14266,7 @@ section[data-testid="hero-parent"].enh-editorial-native-hidden { display: none !
     margin: 18px 0 24px;
     max-width: min(100%, 1120px);
 }
-#enh-title-stack > * { width: 100%; min-width: 0; }
+#enh-title-stack > * { box-sizing: border-box; width: 100%; min-width: 0; }
 #enh-title-stack #enh-copy-id {
     grid-column: 1 / -1;
     width: fit-content;
@@ -15470,7 +15476,6 @@ ${scopedRules('.enh-zoom', {
 }
         `, 'enh-global');
     }
-
     // #########################################################################
     //
     //  SETTINGS PANEL

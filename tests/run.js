@@ -2249,6 +2249,14 @@ test('editorial title layout owns a stable full-width title surface', () => {
     assert(script.includes("document.querySelectorAll('.enh-score-widget').forEach(widget => adopt(widget, rail))"),
         'score widgets must remember their native parent so disabling the editorial layout does not delete them');
     assert(/function findRatingBar\(\)[\s\S]*?const editorialRail = document\.getElementById\('enh-editorial-score-rail'\)[\s\S]*?if \(editorialRail\) return editorialRail/.test(script), 'rating features should target the editorial score rail');
+    assert(script.includes('#enh-editorial-score-rail > :nth-child(3n + 1)'),
+        'the responsive three-column score rail must clear the divider at the start of every row');
+    assert(/@media \(max-width: 1100px\) \{[\s\S]*?\.enh-editorial-details \{ grid-template-columns: 1fr; \}/.test(script),
+        'the editorial detail halves should stack at the 1024px audit width');
+    assert(script.includes('@media (min-width: 1201px) and (max-width: 1799px)'),
+        'wide editorial pages should stop reserving quick-navigation space once the surface clears it');
+    assert(script.includes('.ipc-page-grid { box-sizing: border-box !important;'),
+        'full-width native grids must contain their padding instead of depending on IMDb reset styles');
 });
 
 test('blur is opt-in and never part of the default title or episode experience', () => {

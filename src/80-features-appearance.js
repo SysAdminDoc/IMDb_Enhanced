@@ -206,9 +206,9 @@
     reg({ key: 'widerLayout', name: t('feature_widerLayout_name'), group: 'Appearance',
         css: `
 /* ── Full-width containers ── */
-.ipc-page-content-container--center { max-width: 100% !important; padding: 0 32px !important; }
+.ipc-page-content-container--center { box-sizing: border-box !important; max-width: 100% !important; padding: 0 32px !important; }
 .ipc-page-section--base.celwidget { width: 100% !important; max-width: 100% !important; }
-.ipc-page-grid { max-width: 100% !important; width: 100% !important; padding: 0 32px !important; }
+.ipc-page-grid { box-sizing: border-box !important; max-width: 100% !important; width: 100% !important; padding: 0 32px !important; }
 .ipc-page-content-container--full { max-width: 100% !important; width: 100% !important; }
 .ipc-page-wrapper { max-width: 100% !important; }
 [data-testid="atf-wrapper-bg"] { max-width: 100% !important; }
