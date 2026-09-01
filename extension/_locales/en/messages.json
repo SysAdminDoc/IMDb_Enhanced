@@ -1236,7 +1236,7 @@
     "message": "Everything here works without access to IMDb, so it stays usable when the extension cannot run on the site."
   },
   "recovery_page_title": {
-    "message": "IMDb Enhanced — settings recovery"
+    "message": "IMDb Enhanced settings recovery"
   },
   "recovery_passphrase": {
     "message": "Passphrase"
@@ -1635,7 +1635,7 @@
     "message": "Nothing is sent to an IMDb Enhanced account or cloud service."
   },
   "settings_nothing_is_transmitted_the_report_only_reaches": {
-    "message": "Nothing is transmitted — the report only reaches your clipboard."
+    "message": "Nothing is transmitted. The report only reaches your clipboard."
   },
   "settings_omdb_api_key": {
     "message": "OMDb API key"
@@ -1713,10 +1713,10 @@
     "message": "$1 of runtime is known across Seen titles."
   },
   "settings_sample_source_values_not_live_title_data": {
-    "message": "Sample source values — not live title data."
+    "message": "Sample values, not live title data."
   },
   "settings_saved_type_to_replace": {
-    "message": "Saved — type to replace"
+    "message": "Saved. Type to replace it."
   },
   "settings_scores_and_availability_lookups_are_cached": {
     "message": "Scores and availability lookups are cached locally for up to seven days."
@@ -2174,6 +2174,9 @@
   "text_open_on_moviechat": {
     "message": "Open on MovieChat"
   },
+  "text_trailer_could_not_be_loaded_here": {
+    "message": "The trailer could not be loaded here."
+  },
   "text_open_trailer_search_on_youtube": {
     "message": "Open trailer search on YouTube"
   },
@@ -2418,7 +2421,7 @@
     "message": "Undone."
   },
   "text_unweighted_same_as_displayed": {
-    "message": "Unweighted $1 — same as the displayed rating."
+    "message": "Unweighted $1, the same as the displayed rating."
   },
   "text_unweighted_weighting_sits": {
     "message": "Unweighted $1 · IMDb’s weighting sits $2 $3 it."
@@ -2610,10 +2613,10 @@
     "message": "$1 reset to defaults"
   },
   "toast_saved_locally_as_seen": {
-    "message": "Saved locally as Seen — IMDb Watched was not changed"
+    "message": "Saved locally as Seen. IMDb Watched was not changed."
   },
   "toast_saved_locally_as_skip": {
-    "message": "Saved locally as Skip — IMDb Watched was not changed"
+    "message": "Saved locally as Skip. IMDb Watched was not changed."
   },
   "toast_season_marks_restored": {
     "message": "Season marks restored"
@@ -2625,10 +2628,10 @@
     "message": "$1 $2 failed: $3"
   },
   "toast_settings_copied_omitting_one": {
-    "message": "Settings copied. $1 integration credential was left out — use Export with credentials to include it."
+    "message": "Settings copied. $1 integration credential was left out. Use Export with credentials to include it."
   },
   "toast_settings_copied_omitting_other": {
-    "message": "Settings copied. $1 integration credentials were left out — use Export with credentials to include them."
+    "message": "Settings copied. $1 integration credentials were left out. Use Export with credentials to include them."
   },
   "toast_settings_could_not_be_read_for": {
     "message": "Settings could not be read for export. No backup was copied."

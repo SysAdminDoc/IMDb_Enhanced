@@ -2,6 +2,36 @@
 
 ## 2.16.0 (2026-09-01)
 
+### Fixed
+
+- The title page no longer gains a horizontal scrollbar. The editorial surface was 100% wide plus 40px of padding on each side, so every viewport narrower than 1680px overflowed by 80px. Measured before and after: 1512px of document on a 1440px screen, now 1440.
+
+- The quick-navigation column used to sit on top of the score rail's text between 1200px and 1600px wide. The surface now leaves room for it.
+
+- "More watch options" rendered above the WATCH heading and the primary Watch button instead of below them. The action dock had no position in its slot, so the options section was inserted in front of it.
+
+- The Wrong? panel opened from the wrong edge of the link, sweeping 340px across the page into the action column. It now grows from the link into the rail, and a click anywhere else closes it. Escape only ever worked while focus was inside, so a mouse user had the close button and nothing else.
+
+- Opening settings while a Wrong? panel was up left the panel painted over the settings window. Settings now puts transient panels away first and joins the browser's top layer itself.
+
+- Four theme tokens that never existed (`s2`, `bd`, `sf`, `tx`) were referenced in eleven places, so the watch-order section, the MovieChat board, the image preview, the update notice's hover, and the episode heatmap's season chip all drew with `undefined` colours in every theme. Each now uses the token that was meant.
+
+- The settings scrim and the trailer backdrop were one hardcoded near-black, which read as a grey wash over the light theme. Each theme carries its own scrim now, and the two notices and the image preview take their shadow from the theme instead of a hardcoded value.
+
+- Score widgets declared no font, so where IMDb's page font did not reach them they fell back to the browser's serif. The Wrong? link was 9px; it is 10px now.
+
+- The switches had no edge, so an off switch on the high-contrast theme disappeared into the card. Every switch carries a 1px ring now, in the accent colour when on.
+
+- The dots beside the settings pages were drawn in the border colour, which is invisible on every dark theme. They use the tertiary text colour now.
+
+- Help text under each setting was the smallest text in the panel at 10px; it is 11px now. The bold lead of a callout no longer wraps mid-label, and the progress tracks on the Data page were invisible on the light theme.
+
+- The trailer window's offline state was a bare underlined link in the middle of an empty frame. It says what happened and offers the YouTube search as a button.
+
+- Badges on the marks review panel and the episode heatmap were pills; they sit on the same 6px radius as every other badge.
+
+- Toasts, notices, and the recovery page title no longer use dashes to join clauses.
+
 ### Changed
 
 - The source now lives as a set of modules under `src/`, one per area, and `IMDb_Enhanced.user.js` is assembled from them. Nothing about the installed file changes: the build is a byte concatenation in filename order, so it is still the same readable script with no minifier or bundler anywhere near it, and it is still committed. What changes is that a storage fix and a theme change no longer land in the same 17,000-line file. `npm test` fails if the committed script and the modules disagree in either direction.

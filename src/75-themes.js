@@ -32,6 +32,7 @@
             redMuted: 'rgba(232,64,87,0.10)',
             green:  '#3dd68c',  // positive
             heroScrim: 'rgba(16,16,20,0.86)',
+            scrim:  'rgba(3,5,8,0.86)',   // behind the settings panel and the trailer
             // Header / chrome
             hdr:    'rgba(16,16,20,0.82)',
             hdrBorder: 'rgba(255,255,255,0.04)',
@@ -66,6 +67,7 @@
             redMuted: 'rgba(214,56,80,0.08)',
             green:  '#30c47c',
             heroScrim: 'rgba(0,0,0,0.90)',
+            scrim:  'rgba(0,0,0,0.88)',
             hdr:    'rgba(0,0,0,0.92)',
             hdrBorder: 'rgba(255,255,255,0.03)',
             sT:     '#1a1a22', sH: '#2a2a34',
@@ -97,6 +99,7 @@
             redMuted: 'rgba(240,96,112,0.10)',
             green:  '#48e098',
             heroScrim: 'rgba(10,14,28,0.88)',
+            scrim:  'rgba(4,7,18,0.86)',
             hdr:    'rgba(10,14,28,0.88)',
             hdrBorder: 'rgba(120,160,255,0.05)',
             sT:     '#1c2444', sH: '#283460',
@@ -128,6 +131,7 @@
             redMuted: 'rgba(185,28,28,0.10)',
             green:  '#047857',
             heroScrim: 'rgba(246,247,249,0.84)',
+            scrim:  'rgba(15,23,42,0.58)',
             hdr:    'rgba(255,255,255,0.92)',
             hdrBorder: 'rgba(15,23,42,0.10)',
             sT:     '#c7ced8', sH: '#98a2b3',
@@ -159,6 +163,7 @@
             redMuted: 'rgba(255,90,102,0.20)',
             green:  '#00ff87',
             heroScrim: 'rgba(0,0,0,0.94)',
+            scrim:  'rgba(0,0,0,0.92)',
             hdr:    'rgba(0,0,0,0.98)',
             hdrBorder: '#ffffff',
             sT:     '#ffffff', sH: '#ffd400',

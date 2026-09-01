@@ -312,12 +312,12 @@
                     gap: 6px;
                     align-items: baseline;
                     padding: 3px 9px;
-                    border-radius: 999px;
+                    border-radius: 6px;
                     font: 700 11px/1.4 -apple-system, BlinkMacSystemFont, 'Segoe UI', sans-serif;
                     letter-spacing: .02em;
                 }
                 .enh-heatmap-chip--label {
-                    background: ${t.s2};
+                    background: ${t.sf2};
                     color: ${t.tx2};
                     font-weight: 600;
                 }

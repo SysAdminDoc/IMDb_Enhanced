@@ -1384,7 +1384,7 @@
             },
         }, ...DIM_THRESHOLD_OPTIONS.map(option => makeEl('option', { value:option }, option)));
         dimThreshold.value = normalizeDimThreshold(get('dimRatingThreshold'));
-        experiencePage.appendChild(makeEl('div', { className:'enh-settings-callout', style:{ marginTop:'12px' } },
+        experiencePage.appendChild(makeEl('div', { className:'enh-settings-callout' },
             makeEl('strong', {}, t('aria_dim_titles_rated_below')),
             dimThreshold,
             makeEl('span', { className:'enh-settings-card-description' },
@@ -1476,7 +1476,7 @@
                 placeholder:t('field_two_letter_country_code_such_as'),
                 refreshKey:'streamAvailability',
             });
-            return makeEl('div', { className:'enh-settings-callout', style:{ marginTop:'12px' } },
+            return makeEl('div', { className:'enh-settings-callout' },
                 makeEl('strong', {}, t('settings_where_availability_comes_from')),
                 select,
                 makeEl('span', { className:'enh-settings-card-description' },
@@ -1540,7 +1540,7 @@
                 'castAges',
             ])
         ));
-        toolsPage.appendChild(makeEl('div', { className:'enh-settings-callout', style:{ marginTop:'12px', justifyContent:'center' } },
+        toolsPage.appendChild(makeEl('div', { className:'enh-settings-callout', style:{ justifyContent:'center' } },
             makeEl('strong', {}, t('settings_when_optional_keyboard_shortcuts_is_enabled')),
             makeEl('span', { className:'enh-settings-kbd' }, '?'), 'Open settings',
             makeEl('span', { className:'enh-settings-kbd', style:{ marginLeft:'20px' } }, 'C'), 'Copy IMDb ID'
@@ -1555,7 +1555,7 @@
             createSiteEditor({ title:t('settings_watch_stream'), key:'watchSites', defaults:DEFAULT_WATCH_SITES, featureKey:'searchButtons', catalog:FMHY_WATCH_CATALOG }, registerCleanup),
             createSiteEditor({ title:t('settings_research_reviews'), key:'externalSites', defaults:DEFAULT_EXTERNAL_SITES, featureKey:'externalLinks' }, registerCleanup)
         );
-        sitesPage.append(sitesGrid, makeEl('div', { className:'enh-settings-callout', style:{ marginTop:'12px' } },
+        sitesPage.append(sitesGrid, makeEl('div', { className:'enh-settings-callout' },
             makeEl('strong', {}, t('label_templates')),
             'URL templates support {{TITLE}}, {{IMDB_ID}}, {{YEAR}}, and the tokens documented in the README. Categories include Watch, Reviews & ratings, Availability, Trailers & video, Info & research, and Other.'
         ));
@@ -1565,7 +1565,7 @@
             makeFeatureSummaryCard(t('feature_servarrIntegration_name'), t('settings_add_movies_to_radarr_and_shows_to'), 'Local', 'servarrIntegration'),
             makeFeatureSummaryCard(t('settings_media_server_indicator'), t('settings_check_plex_jellyfin_and_emby_libraries'), 'Local', 'mediaServerIntegration')
         ));
-        integrationsPage.appendChild(makeEl('div', { className:'enh-settings-callout', style:{ marginTop:'12px' } },
+        integrationsPage.appendChild(makeEl('div', { className:'enh-settings-callout' },
             makeEl('strong', {}, t('settings_private_by_design')),
             t('settings_requests_go_directly_from_your_browser_to')
         ));
@@ -1875,7 +1875,7 @@
             createMarksPanel(registerCleanup),
             makeEl('div', { className:'enh-settings-stack' }, csvImportCard, backupCard, cacheCard, journalCard, diagnosticsCard)
         ));
-        dataPage.appendChild(makeEl('div', { className:'enh-settings-callout', style:{ marginTop:'12px' } },
+        dataPage.appendChild(makeEl('div', { className:'enh-settings-callout' },
             makeEl('strong', {}, t('settings_local_only')),
             t('settings_nothing_is_sent_to_an_imdb_enhanced')
         ));
@@ -2126,6 +2126,15 @@
         const panel = document.getElementById('enh-settings-panel');
         overlay?.classList.toggle('enh-visible', settingsOpen);
         overlay?.setAttribute('aria-hidden', String(!settingsOpen));
+        /* The modal joins the top layer while open so nothing promoted earlier can sit
+           on it, and anything transient still up on the page is put away first. */
+        if (settingsOpen) {
+            document.querySelectorAll('.enh-score-correction__close').forEach(button => button.click());
+            document.querySelector('.enh-zoom')?.remove();
+            if (overlay) showInTopLayer(overlay);
+        } else if (overlay) {
+            hideFromTopLayer(overlay);
+        }
         document.getElementById('enh-settings-fab')?.setAttribute('aria-expanded', String(settingsOpen));
         if (settingsOpen) {
             lastFocusedElement = document.activeElement;

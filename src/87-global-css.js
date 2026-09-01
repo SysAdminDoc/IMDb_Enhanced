@@ -34,7 +34,7 @@
     padding: 10px 14px; border-radius: 10px;
     background: ${t.sf1}; border: 1px solid ${t.accentBorder}; color: ${t.tx1};
     font: 600 12px/1.45 -apple-system, BlinkMacSystemFont, 'Segoe UI', sans-serif;
-    box-shadow: 0 10px 30px rgba(0,0,0,.35);
+    box-shadow: ${t.sh3};
 }
 /* The welcome notice wears the update notice's clothes: same corner, same shape, and
    the two never appear together. */
@@ -45,14 +45,14 @@
     padding: 10px 14px; border-radius: 10px;
     background: ${t.sf1}; border: 1px solid ${t.accentBorder}; color: ${t.tx1};
     font: 600 12px/1.45 -apple-system, BlinkMacSystemFont, 'Segoe UI', sans-serif;
-    box-shadow: 0 10px 30px rgba(0,0,0,.35);
+    box-shadow: ${t.sh3};
 }
 .enh-update-notice__link { color: ${t.accent}; text-decoration: underline; white-space: nowrap; }
 .enh-update-notice__dismiss {
     background: ${t.sf2}; border: 1px solid ${t.bd1}; color: ${t.tx2};
     border-radius: 6px; padding: 4px 10px; cursor: pointer; white-space: nowrap;
 }
-.enh-update-notice__dismiss:hover { background: ${t.s2}; color: ${t.tx0}; }
+.enh-update-notice__dismiss:hover { background: ${t.sf2}; color: ${t.tx0}; }
 
 #enh-toast-announcer, #enh-score-announcer {
     position: fixed; bottom: 0; left: 0; width: 1px; height: 1px; padding: 0;
@@ -64,6 +64,9 @@
 section[data-testid="hero-parent"].enh-editorial-native-hidden { display: none !important; }
 #enh-editorial-surface {
     position: relative; z-index: 7; isolation: isolate; overflow: hidden;
+    /* border-box, or the 40px of side padding sits outside the 100% and the whole page
+       gains a horizontal scrollbar. Measured: 1512px of document on a 1440px viewport. */
+    box-sizing: border-box;
     width: 100%; max-width: 1600px; margin: 0 auto; padding: 0 40px 28px;
     color: ${t.tx1}; background-color: ${t.bg};
     background-image: var(--enh-editorial-backdrop, none);
@@ -75,6 +78,11 @@ section[data-testid="hero-parent"].enh-editorial-native-hidden { display: none !
     background: ${t.heroScrim}; pointer-events: none;
 }
 #enh-editorial-surface > * { position: relative; z-index: 1; }
+/* The quick-nav column is fixed to the right edge and 70px wide; between 1200px and
+   the surface's own 1600px ceiling it sat on top of the score rail's text. */
+@media (min-width: 1201px) {
+    body:has(#enh-quicknav) #enh-editorial-surface { padding-right: 124px; }
+}
 .enh-editorial-subnav {
     display: flex; align-items: center; justify-content: space-between; gap: 20px;
     min-height: 58px; border-bottom: 1px solid ${t.bd0};
@@ -518,6 +526,7 @@ section[data-testid="hero-parent"].enh-editorial-native-hidden { display: none !
     display: inline-flex; flex-direction: column; align-items: center;
     padding: 12px 20px; min-width: 104px;
     border-left: 1px solid ${t.bd0}; position: relative;
+    font-family: -apple-system, BlinkMacSystemFont, 'Segoe UI', sans-serif;
 }
 .enh-score-widget--availability {
     min-width: 150px; max-width: 240px;
@@ -556,7 +565,7 @@ section[data-testid="hero-parent"].enh-editorial-native-hidden { display: none !
 .enh-score-correction-trigger {
     margin-top: 5px; padding: 1px 5px; border: 0; border-radius: 4px;
     background: transparent; color: ${t.tx3}; cursor: pointer;
-    font: 600 9px/1.3 -apple-system, BlinkMacSystemFont, 'Segoe UI', sans-serif;
+    font: 600 10px/1.3 -apple-system, BlinkMacSystemFont, 'Segoe UI', sans-serif;
     text-decoration: underline; text-underline-offset: 2px;
 }
 .enh-score-correction-trigger:hover { color: ${t.accent}; }
@@ -575,9 +584,11 @@ section[data-testid="hero-parent"].enh-editorial-native-hidden { display: none !
 @supports (anchor-name: --enh-anchor-probe) {
     .enh-score-correction[popover] {
         position: fixed; inset: auto;
-        top: anchor(bottom); right: anchor(right);
+        top: anchor(bottom); left: anchor(left);
         height: auto; margin: 6px 0 0; overflow: visible;
-        position-try-fallbacks: flip-block;
+        /* From the Wrong? link outwards, into the rail; anchoring the right edge of a
+           340px panel to a 40px link put it across the action column instead. */
+        position-try-fallbacks: flip-inline, flip-block;
     }
 }
 .enh-score-correction__header { display: flex; align-items: center; justify-content: space-between; gap: 10px; color: ${t.tx0}; }
@@ -621,14 +632,14 @@ section[data-testid="hero-parent"].enh-editorial-native-hidden { display: none !
     color: ${t.tx3};
 }
 ${scopedRules('.enh-collection', {
-    '': `margin: 20px 0; padding: 14px 16px; border: 1px solid ${t.bd};
-        border-radius: 12px; background: ${t.sf};`,
+    '': `margin: 20px 0; padding: 14px 16px; border: 1px solid ${t.bd1};
+        border-radius: 12px; background: ${t.sf0};`,
     '.enh-collection__header': 'display: flex; flex-wrap: wrap; align-items: baseline; gap: 10px; margin-bottom: 8px;',
-    '.enh-collection__title': `margin: 0; font-size: 15px; color: ${t.tx};`,
+    '.enh-collection__title': `margin: 0; font-size: 15px; color: ${t.tx0};`,
     '.enh-collection__note': `font-size: 12px; color: ${t.tx3};`,
     '.enh-collection__list': `margin: 0; padding-left: 22px; color: ${t.tx2};`,
     '.enh-collection__item': 'padding: 3px 0;',
-    '.enh-collection__item--current': `color: ${t.tx}; font-weight: 700;`,
+    '.enh-collection__item--current': `color: ${t.tx0}; font-weight: 700;`,
     '.enh-collection__link': `color: ${t.tx2};`,
     '.enh-collection__link:hover': `color: ${t.accent};`,
 })}
@@ -641,10 +652,10 @@ ${scopedRules('.enh-collection', {
     font-size: 13px;
 }
 ${scopedRules('.enh-moviechat', {
-    '': `margin: 20px 0; padding: 14px 16px; border: 1px solid ${t.bd};
-        border-radius: 12px; background: ${t.sf};`,
+    '': `margin: 20px 0; padding: 14px 16px; border: 1px solid ${t.bd1};
+        border-radius: 12px; background: ${t.sf0};`,
     '.enh-moviechat__header': 'display: flex; flex-wrap: wrap; align-items: baseline; gap: 10px; margin-bottom: 10px;',
-    '.enh-moviechat__title': `margin: 0; font-size: 15px; color: ${t.tx};`,
+    '.enh-moviechat__title': `margin: 0; font-size: 15px; color: ${t.tx0};`,
     '.enh-moviechat__note': `font-size: 12px; color: ${t.tx3};`,
     '.enh-moviechat__link': `margin-left: auto; font-size: 13px; color: ${t.accent};`,
     '.enh-moviechat__frame': `display: block; width: 100%; height: 640px; border: 0;
@@ -652,8 +663,8 @@ ${scopedRules('.enh-moviechat', {
 })}
 ${scopedRules('.enh-zoom', {
     '': `position: absolute; z-index: 2147483000; pointer-events: none; padding: 6px;
-        border-radius: 10px; background: ${t.sf}; border: 1px solid ${t.bd};
-        box-shadow: 0 18px 44px rgba(0,0,0,.55);`,
+        border-radius: 10px; background: ${t.sf1}; border: 1px solid ${t.bd1};
+        box-shadow: ${t.sh3};`,
     '.enh-zoom__image': `display: block; max-width: min(46vw, 520px); max-height: 78vh;
         width: auto; height: auto; border-radius: 6px;`,
 })}
@@ -709,13 +720,20 @@ ${scopedRules('.enh-zoom', {
 /* ════ Settings Overlay ════ */
 #enh-settings-overlay {
     position: fixed; inset: 0;
-    background: rgba(3,5,8,0.86);
     z-index: 2147483640; opacity: 0; visibility: hidden;
+    background: ${t.scrim};
     transition: opacity .22s ease, visibility 0s linear .22s; pointer-events: none;
 }
 #enh-settings-overlay.enh-visible {
     opacity: 1; visibility: visible; pointer-events: auto;
     transition-delay: 0s;
+}
+/* Promoted into the top layer while open, so a popover raised earlier (a Wrong?
+   panel, the link menu) cannot paint over the modal. The UA popover box is restated
+   for every property the rule above leaves unset. */
+#enh-settings-overlay[popover] {
+    width: auto; height: auto; margin: 0; border: 0; padding: 0;
+    overflow: visible; color: inherit;
 }
 
 /* ════ Settings Panel ════ */
@@ -798,8 +816,8 @@ ${scopedRules('.enh-zoom', {
 }
 .enh-settings-nav-btn::after {
     content: ''; width: 5px; height: 5px; margin-right: 11px; order: -1;
-    border-radius: 50%; background: ${t.bd2};
-    transition: background .15s ease, box-shadow .15s ease;
+    border-radius: 50%; background: ${t.tx3}; opacity: .55;
+    transition: background .15s ease, box-shadow .15s ease, opacity .15s ease;
 }
 .enh-settings-nav-btn:hover { background: ${t.sf1}; color: ${t.tx0}; transform: translateX(1px); }
 .enh-settings-nav-btn[aria-selected="true"] {
@@ -810,7 +828,7 @@ ${scopedRules('.enh-zoom', {
     width: 3px; border-radius: 2px; background: ${t.accent};
 }
 .enh-settings-nav-btn[aria-selected="true"]::after {
-    background: ${t.accent}; box-shadow: 0 0 0 3px ${t.accentMuted};
+    background: ${t.accent}; opacity: 1; box-shadow: 0 0 0 3px ${t.accentMuted};
 }
 .enh-settings-main { min-width: 0; flex: 1; overflow: hidden; }
 .enh-settings-body { height: 100%; padding: 28px 30px 34px; overflow-y: auto; }
@@ -869,7 +887,7 @@ ${scopedRules('.enh-zoom', {
 .enh-settings-row:last-child { border-bottom: none; }
 .enh-settings-label { font-size: 13px; font-weight: 650; color: ${t.tx1}; }
 .enh-settings-row-copy { display: flex; flex-direction: column; gap: 3px; min-width: 0; }
-.enh-settings-help { font-size: 10px; line-height: 1.35; color: ${t.tx3}; max-width: 420px; }
+.enh-settings-help { font-size: 11px; line-height: 1.4; color: ${t.tx3}; max-width: 440px; }
 .enh-settings-card--compact .enh-settings-row { min-height: 42px; padding: 6px 0; }
 .enh-settings-card--compact .enh-settings-help,
 .enh-settings-page--experience .enh-settings-help {
@@ -922,7 +940,8 @@ ${scopedRules('.enh-zoom', {
 .enh-toggle-track {
     position: absolute; inset: 0;
     background: ${t.sf2}; border-radius: 999px;
-    transition: background .2s ease; cursor: pointer;
+    box-sizing: border-box; border: 1px solid ${t.bd1};
+    transition: background .2s ease, border-color .2s ease; cursor: pointer;
 }
 .enh-toggle-track::after {
     content: ''; position: absolute; top: 2px; left: 2px;
@@ -930,7 +949,7 @@ ${scopedRules('.enh-zoom', {
     background: ${t.tx3}; border-radius: 50%;
     transition: transform .2s cubic-bezier(.4,0,.2,1), background .2s ease;
 }
-.enh-toggle input:checked + .enh-toggle-track { background: ${t.accentMuted}; }
+.enh-toggle input:checked + .enh-toggle-track { background: ${t.accentMuted}; border-color: ${t.accentBorder}; }
 .enh-toggle input:checked + .enh-toggle-track::after {
     transform: translateX(18px); background: ${t.accent};
 }
@@ -967,7 +986,9 @@ ${scopedRules('.enh-zoom', {
     padding: 12px 14px; border: 1px solid ${t.bd1}; border-radius: 10px;
     background: color-mix(in srgb, ${t.sf1} 72%, ${t.sf0}); color: ${t.tx2}; font-size: 11px; line-height: 1.45;
 }
-.enh-settings-callout strong { color: ${t.tx0}; }
+.enh-settings-callout strong { color: ${t.tx0}; white-space: nowrap; }
+/* Spacing lives here rather than on each call site. */
+.enh-settings-callout + *, * + .enh-settings-callout { margin-top: 12px; }
 .enh-settings-kbd {
     display: inline-flex; min-width: 26px; min-height: 26px; align-items: center; justify-content: center;
     padding: 0 7px; border: 1px solid ${t.bd2}; border-radius: 6px;
@@ -987,7 +1008,7 @@ ${scopedRules('.enh-zoom', {
 .enh-stats-group h4 { margin: 0 0 8px; color: ${t.tx1}; font: 700 11px/1.3 -apple-system, sans-serif; }
 .enh-stats-row { display: grid; grid-template-columns: minmax(48px, auto) minmax(50px, 1fr) auto; gap: 7px; align-items: center; min-height: 23px; color: ${t.tx2}; font: 550 10px/1.2 -apple-system, sans-serif; }
 .enh-stats-row__label { min-width: 0; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
-.enh-stats-row__track { height: 5px; overflow: hidden; border-radius: 999px; background: ${t.bd0}; }
+.enh-stats-row__track { height: 5px; overflow: hidden; border-radius: 999px; background: ${t.bd1}; }
 .enh-stats-row__fill { height: 100%; border-radius: inherit; background: ${t.accent}; }
 .enh-stats-row__count { color: ${t.tx1}; font-variant-numeric: tabular-nums; }
 .enh-stats-empty { padding: 18px; border: 1px dashed ${t.bd1}; border-radius: 9px; color: ${t.tx2}; font: 500 12px/1.5 -apple-system, sans-serif; background: ${t.sf0}; }
@@ -1263,7 +1284,7 @@ ${scopedRules('.enh-zoom', {
 .enh-mark-row__title { min-width: 0; color: ${t.tx1}; font: 600 11px/1.25 -apple-system, BlinkMacSystemFont, 'Segoe UI', sans-serif; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
 .enh-mark-row__id { color: ${t.tx3}; font-weight: 500; margin-left: 4px; }
 .enh-mark-row__state {
-    padding: 3px 7px; border-radius: 999px;
+    padding: 3px 7px; border-radius: 6px;
     background: ${t.accentMuted}; color: ${t.accent};
     font: 800 10px/1 -apple-system, BlinkMacSystemFont, 'Segoe UI', sans-serif;
     text-transform: uppercase; letter-spacing: .04em;

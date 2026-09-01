@@ -439,6 +439,16 @@
                 event.stopPropagation();
                 closePanel(true);
             });
+            /* A click anywhere else puts it away, as the link menu already does. Escape
+               alone only works while focus is inside, and the panel opens without
+               taking focus, so a mouse user had the close button and nothing else. */
+            const onOutsideClick = event => {
+                if (!panel.isConnected) { document.removeEventListener('click', onOutsideClick, true); return; }
+                if (panel.contains(event.target) || trigger.contains(event.target)) return;
+                document.removeEventListener('click', onOutsideClick, true);
+                closePanel();
+            };
+            setTimeout(() => document.addEventListener('click', onOutsideClick, true), 0);
             manualInput.addEventListener('input', () => manualInput.setAttribute('aria-invalid', 'false'));
             const title = getTitleText();
             const year = getTitleYear();

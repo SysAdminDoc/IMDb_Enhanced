@@ -382,6 +382,10 @@
         const slot = document.getElementById('enh-editorial-action-slot');
         if (!slot) return null;
         const actions = makeEl('div', { id:'enh-editorial-actions' });
+        /* Position zero, so anything else placed in this slot lands after it. Without
+           it the watch options section (order 30) was inserted before a dock with no
+           order at all, and "More watch options" sat above the WATCH heading. */
+        actions.dataset.titleStackOrder = '0';
         slot.appendChild(actions);
         return actions;
     }

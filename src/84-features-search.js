@@ -205,7 +205,7 @@
                 #enh-trailer-overlay {
                     position: fixed; inset: 0; z-index: 2147483642;
                     display: flex; align-items: center; justify-content: center;
-                    padding: 24px; background: rgba(0,0,0,.82);
+                    padding: 24px; background: ${t.scrim};
                 }
                 /* The UA popover box would shrink this to fit its content, centre it,
                    and give it a border; the overlay IS the viewport, so every property
@@ -241,7 +241,18 @@
                     color: ${t.tx2}; font: 600 13px/1.4 -apple-system, BlinkMacSystemFont, 'Segoe UI', sans-serif;
                 }
                 .enh-trailer-body iframe { width: 100%; height: 100%; border: 0; display: block; }
-                .enh-trailer-fallback { color:${t.blue}!important; }
+                .enh-trailer-fallback {
+                    display: flex; flex-direction: column; align-items: center; gap: 12px;
+                    padding: 24px; text-align: center; color: ${t.tx2};
+                }
+                .enh-trailer-fallback__link {
+                    display: inline-flex; align-items: center; min-height: 36px; padding: 0 14px;
+                    border: 1px solid ${t.bd1}; border-radius: 8px; background: ${t.sf1};
+                    color: ${t.tx0} !important; text-decoration: none !important;
+                    font: 700 12px/1 -apple-system, BlinkMacSystemFont, 'Segoe UI', sans-serif;
+                }
+                .enh-trailer-fallback__link:hover { border-color: ${t.accentBorder}; color: ${t.accent} !important; }
+                .enh-trailer-fallback__link:focus-visible { outline: 2px solid ${t.accent}; outline-offset: 2px; }
                 /* Focusable but invisible. No negative margin: the layout guard rejects
                    those, so the size-and-clip form is used here as elsewhere. */
                 .enh-trailer-sentinel {
@@ -285,12 +296,15 @@
             } catch {
                 if (generation !== this._modalGeneration || !body.isConnected) return;
                 const url = getTrailerSearchUrl();
-                body.replaceChildren(makeEl('a', {
-                    href:url,
-                    target:'_blank',
-                    rel:'noopener noreferrer',
-                    className:'enh-trailer-fallback',
-                }, t('text_open_trailer_search_on_youtube')));
+                body.replaceChildren(makeEl('div', { className:'enh-trailer-fallback', role:'status' },
+                    makeEl('span', {}, t('text_trailer_could_not_be_loaded_here')),
+                    makeEl('a', {
+                        href:url,
+                        target:'_blank',
+                        rel:'noopener noreferrer',
+                        className:'enh-trailer-fallback__link',
+                    }, t('text_open_trailer_search_on_youtube'))
+                ));
             }
         },
         _renderModal(message) {
