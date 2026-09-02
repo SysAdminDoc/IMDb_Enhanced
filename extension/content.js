@@ -16652,6 +16652,11 @@ ${scopedRules('.enh-zoom', {
         return panel;
     }
 
+    /* Outside the panel because the offer has to outlive it: the settings overlay is torn
+       down and rebuilt on every open, and a deletion made two seconds before that should
+       still be reversible when it comes back. */
+    const MARK_UNDO_MS = 15000;
+    const pendingMarkUndo = { marks:null, timer:null };
     function createMarksPanel(registerCleanup = () => {}) {
         const panel = makeEl('div', { className:'enh-marks-panel' });
         const count = makeEl('div', { className:'enh-marks-panel__count' });
@@ -16668,20 +16673,35 @@ ${scopedRules('.enh-zoom', {
            The control lives in the panel rather than on the toast because the settings
            overlay traps Tab within itself: a button anywhere else is unreachable by
            keyboard for exactly as long as this panel is the thing on screen. */
-        const MARK_UNDO_MS = 15000;
-        let pendingUndo = null;
-        let undoTimer = null;
+        /* The offer outlives this panel, so the state does too. Closing settings two
+           seconds after a Remove used to discard the snapshot while the toast still said
+           the undo was in the panel; reopening within the window finds it still there. */
+        let ownMarkWrite = false;
         const forgetUndo = () => {
-            clearTimeout(undoTimer);
-            undoTimer = null;
-            pendingUndo = null;
+            clearTimeout(pendingMarkUndo.timer);
+            pendingMarkUndo.timer = null;
+            pendingMarkUndo.marks = null;
             undo.hidden = true;
+        };
+        /* Every repaint that this panel did not cause means something else wrote the marks
+           — the Import from page button beside this one, a Seen toggle on the page behind
+           it, another tab — and a snapshot taken before that write would put the store back
+           to before it too. Undo is meant to reverse a deletion, not everything that
+           happened after it, so a foreign write ends the offer instead of being swallowed
+           by it. This is what the two-step arm's disarm used to do on the same event. */
+        const armUndo = () => {
+            clearTimeout(pendingMarkUndo.timer);
+            pendingMarkUndo.timer = setTimeout(forgetUndo, MARK_UNDO_MS);
+            undo.hidden = false;
         };
         const afterMarkWrite = () => {
             refreshFeature('watchedMarking');
             refreshFeature('titleNotes');
-            render();
-            document.dispatchEvent(new CustomEvent('imdb-enhanced:marks-updated'));
+            ownMarkWrite = true;
+            try {
+                render();
+                document.dispatchEvent(new CustomEvent('imdb-enhanced:marks-updated'));
+            } finally { ownMarkWrite = false; }
         };
         /* One write, and the snapshot is only kept once it has succeeded: offering to undo
            something that never happened would restore the store to a state it is already
@@ -16689,12 +16709,10 @@ ${scopedRules('.enh-zoom', {
         const deleteMarks = (next, describe) => {
             const before = { ...getUserMarks(true) };
             if (!setUserMarks(next)) return false;
-            if (!pendingUndo) pendingUndo = before;
-            clearTimeout(undoTimer);
-            undoTimer = setTimeout(forgetUndo, MARK_UNDO_MS);
+            if (!pendingMarkUndo.marks) pendingMarkUndo.marks = before;
             afterMarkWrite();
-            undo.hidden = false;
-            showToast(describe, 6000);
+            armUndo();
+            showToast(describe, MARK_UNDO_MS);
             return true;
         };
         const undo = makeEl('button', {
@@ -16703,22 +16721,36 @@ ${scopedRules('.enh-zoom', {
             className:'enh-settings-footer-btn',
             'aria-label':t('aria_undo_the_last_mark_deletion'),
             onClick: () => {
-                if (!pendingUndo) {
+                if (!pendingMarkUndo.marks) {
                     showToast(t('toast_that_undo_is_no_longer_available'));
                     undo.hidden = true;
                     return;
                 }
-                const snapshot = pendingUndo;
-                const restored = Object.keys(snapshot).length;
+                const snapshot = pendingMarkUndo.marks;
+                // What comes back, not what the store will hold: reporting the size of the
+                // whole store called restoring one mark out of two a recovery of two.
+                const current = getUserMarks(true);
+                const restored = Object.keys(snapshot).filter(id => !current[id]).length;
                 /* A refused write reports itself and leaves both the store and the cache
                    as they were, so the snapshot is kept for another try rather than
-                   consumed by the attempt. */
+                   consumed by the attempt. Behind the extension's storage bridge a write
+                   cannot fail here at all — it is asynchronous, so this returns true and
+                   the rejection arrives later; the listener below is what re-offers it. */
                 if (!setUserMarks(snapshot)) return;
                 forgetUndo();
                 afterMarkWrite();
                 showToast(tCount('toast_marks_put_back', restored));
             },
         }, t('settings_undo_delete'));
+        /* The bridge cannot throw, so a rejected restore already looked like a success and
+           took the only copy of the snapshot with it. The storage layer says which key was
+           refused; when it is this one, the offer goes back up. */
+        const onMarkWriteRefused = event => {
+            if (settingKeyFromFailure(event?.detail?.key) !== 'userMarks') return;
+            if (!pendingMarkUndo.marks) return;
+            armUndo();
+        };
+        document.addEventListener('imdb-enhanced:settings-save-failed', onMarkWriteRefused);
         const clearAll = makeEl('button', {
             type:'button',
             className:'enh-settings-footer-btn enh-settings-footer-btn--danger',
@@ -16771,6 +16803,7 @@ ${scopedRules('.enh-zoom', {
             const summary = document.getElementById('enh-data-marks-count');
             if (summary) summary.textContent = tCount('text_title_count', entries.length);
             clearAll.disabled = entries.length === 0;
+            undo.hidden = !pendingMarkUndo.marks;
             rows.replaceChildren();
             if (!entries.length) {
                 rows.appendChild(makeEl('div', { className:'enh-marks-empty' }, t('text_no_local_title_marks_yet')));
@@ -16837,12 +16870,19 @@ ${scopedRules('.enh-zoom', {
             t('settings_these_marks_stay_on_this_device_and')
         ));
         panel.appendChild(rows);
-        document.addEventListener('imdb-enhanced:marks-updated', render);
+        const onMarksUpdated = () => {
+            if (!ownMarkWrite) forgetUndo();
+            render();
+        };
+        document.addEventListener('imdb-enhanced:marks-updated', onMarksUpdated);
         registerCleanup(() => {
-            document.removeEventListener('imdb-enhanced:marks-updated', render);
-            clearTimeout(undoTimer);
+            document.removeEventListener('imdb-enhanced:marks-updated', onMarksUpdated);
+            document.removeEventListener('imdb-enhanced:settings-save-failed', onMarkWriteRefused);
         });
         render();
+        // Reopened inside the window: the offer is still live and this panel's button is a
+        // new element, so the countdown is rebound to the one now on screen.
+        if (pendingMarkUndo.marks) armUndo();
         return panel;
     }
 

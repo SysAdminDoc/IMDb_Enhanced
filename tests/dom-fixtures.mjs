@@ -1911,6 +1911,19 @@ await runFixture('title', async (window, hooks) => {
     undoButton().click();
     assert.equal(Object.keys(hooks.getUserMarks()).length, 2, 'and put every record back');
 
+    /* The offer has to end when anything else writes the marks, or it stops being an undo
+       and becomes a way to delete whatever arrived after it. Adversarial review found this
+       live: Clear all, then Import from page, then Undo destroyed everything imported. */
+    requireSelector(window.document, '.enh-settings-footer-btn--danger').click();
+    assert.equal(undoButton().hidden, false, 'the offer stands immediately after the deletion');
+    window.GM_setValue('imdb_enh_userMarks', { tt1375666: { state:'watched', title:'Inception', ts:99 } });
+    window.document.dispatchEvent(new window.CustomEvent('imdb-enhanced:marks-updated'));
+    assert.equal(undoButton().hidden, true,
+        'a write this panel did not make must end the offer rather than be swallowed by it');
+    undoButton().click();
+    assert.deepEqual(Object.keys(hooks.getUserMarks()), ['tt1375666'],
+        'and pressing it anyway must not resurrect the store from before that write');
+
     window.GM_setValue('imdb_enh_userMarks', {});
     window.document.dispatchEvent(new window.CustomEvent('imdb-enhanced:marks-updated'));
 

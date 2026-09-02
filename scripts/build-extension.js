@@ -84,20 +84,24 @@ function readOriginLists() {
    request boundary in the worker already refuses a destination no provider declares. */
 function validateWorkerHosts({ PROVIDERS }) {
     const background = fs.readFileSync(path.join(extensionDir, 'background.js'), 'utf8');
-    const declared = new Set(
-        Object.values(PROVIDERS)
-            .flatMap(provider => provider.origins)
-            .map(origin => {
-                try { return new URL(origin.replace('://*.', '://').replace(/\*$/, '')).hostname; }
-                catch { return ''; }
-            })
-            .filter(Boolean)
-    );
-    const reached = [...background.matchAll(/https:\/\/([a-z0-9.-]+)/gi)]
+    /* Subdomains count only where the origin actually asked for them. Matching every
+       declared host as if it were a wildcard let https://evil.raw.githubusercontent.com
+       through a declaration that names one exact host. */
+    const declared = Object.values(PROVIDERS)
+        .flatMap(provider => provider.origins)
+        .map(origin => {
+            const wildcard = origin.includes('://*.');
+            try { return { host:new URL(origin.replace('://*.', '://').replace(/\*$/, '')).hostname, wildcard }; }
+            catch { return null; }
+        })
+        .filter(entry => entry && entry.host);
+    // http as well as https: the check exists for requests that never reach the worker's
+    // own request boundary, and a plain-http one is the more alarming of the two.
+    const reached = [...background.matchAll(/https?:\/\/([a-z0-9.-]+)/gi)]
         .map(match => match[1].toLowerCase())
         .filter(host => host.includes('.'));
-    const undeclared = [...new Set(reached)].filter(host => ![...declared].some(
-        known => host === known || host.endsWith(`.${known}`)
+    const undeclared = [...new Set(reached)].filter(host => !declared.some(
+        entry => host === entry.host || (entry.wildcard && host.endsWith(`.${entry.host}`))
     ));
     if (undeclared.length) {
         throw new Error(`The background worker names hosts no provider declares: ${undeclared.join(', ')}`);

@@ -306,7 +306,20 @@ async function sendHttpRequest(message, sender, sendResponse) {
                 withKey.searchParams.set(binding.query, value.slice(0, 4096));
                 requestUrl = withKey.toString();
                 credentialInUrl = true;
-            } else if (binding.header) {
+            } else if (binding.header && !value.includes('"')) {
+                /* A header name is case-insensitive and fetch folds duplicates into one
+                   comma-joined value, so a page that sent its own `authorization` got its
+                   text placed in front of the worker's and the destination read the page's
+                   scheme name instead. Every spelling of the bound name goes before the
+                   real one is written.
+
+                   A value carrying a double quote is refused rather than sent: where the
+                   binding wraps the token in quotes, one inside it ends the value early and
+                   the rest is parsed as further fields. No credential these services issue
+                   contains one, so this can only be a paste of the wrong thing. */
+                Object.keys(headers).forEach(name => {
+                    if (name.toLowerCase() === binding.header.toLowerCase()) delete headers[name];
+                });
                 /* The name, the scheme and anything closing the value all come from the
                    binding, never from the message: a caller that cannot read the value has
                    no business shaping the header around it, or choosing which header it

@@ -714,6 +714,37 @@ for (const engine of ['chromium', 'gecko']) {
         }
     });
 
+    /* Header names are case-insensitive and fetch folds duplicates into one comma-joined
+       value, so a page that supplied its own spelling of the bound name got its text in
+       front of the worker's and the service read the page's scheme instead of ours. */
+    test(`[${engine}] a page cannot prepend its own value to the header carrying a credential`, async () => {
+        const { dispatch, calls, storage } = loadBackground({ engine, fetchImpl: makeFetch({}) });
+        storage.set('imdb_enh_jellyfinApiKey', 'jellyfin-secret');
+        await dispatch(request('http://localhost:8096/Items', {
+            headers: { authorization: 'Bearer page-chosen' },
+            credentialHeader: { name:'Authorization', ref:'jellyfinApiKey' },
+        }), IMDB_SENDER);
+        const sent = calls.fetches[0][1];
+        const names = Object.keys(sent.headers).filter(name => name.toLowerCase() === 'authorization');
+        assert.strictEqual(names.length, 1,
+            `only one spelling of the header may survive, got ${JSON.stringify(names)}`);
+        assert(/^MediaBrowser /.test(sent.headers[names[0]]),
+            `the service must read our scheme, not the page's: ${sent.headers[names[0]]}`);
+        assert(!sent.headers[names[0]].includes('page-chosen'),
+            'and nothing the page wrote may ride along with the token');
+    });
+
+    test(`[${engine}] a credential carrying a quote is refused rather than sent`, async () => {
+        const { dispatch, calls, storage } = loadBackground({ engine, fetchImpl: makeFetch({}) });
+        storage.set('imdb_enh_jellyfinApiKey', 'abc"def');
+        await dispatch(request('http://localhost:8096/Items', {
+            credentialHeader: { name:'Authorization', ref:'jellyfinApiKey' },
+        }), IMDB_SENDER);
+        const sent = calls.fetches[0][1];
+        assert.strictEqual(sent.headers.Authorization, undefined,
+            'a quote would close the token early and turn the rest into further fields');
+    });
+
     test(`[${engine}] one service's token cannot be sent in another's header`, async () => {
         const { dispatch, calls, storage } = loadBackground({ engine, fetchImpl: makeFetch({}) });
         storage.set('imdb_enh_plexToken', 'plex-secret');
@@ -898,7 +929,7 @@ for (const engine of ['chromium', 'gecko']) {
        assertion is the one this test exists for and is unchanged; that it does not depend
        on a header name at all is proved separately, and without a sensitive header in
        sight, by the OMDb redirect test above, where the key rides in the query string. */
-    test(`[${engine}] a credential-bearing request refuses redirects whatever its header is called`, async () => {
+    test(`[${engine}] a credential-bearing request refuses redirects however it was asked for`, async () => {
         const { dispatch, calls, storage } = loadBackground({ engine, fetchImpl: makeFetch({}) });
         storage.set('imdb_enh_tmdbReadToken', 'TMDB-TOKEN-VALUE');
         await dispatch(request('https://api.themoviedb.org/3/find/tt0133093?external_source=imdb_id', {

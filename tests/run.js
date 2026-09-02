@@ -2644,10 +2644,15 @@ test('settings reset is explicit, complete, and isolated from live defaults', ()
        come back in its place and that the offer is bounded rather than indefinite. */
     assert(!/disarmClearAll|Press the clear button again/.test(script),
         'bulk mark deletion must not reintroduce a second-press arm in place of an undo');
-    assert(script.includes('undoTimer = setTimeout(forgetUndo, MARK_UNDO_MS)'),
+    assert(script.includes('pendingMarkUndo.timer = setTimeout(forgetUndo, MARK_UNDO_MS)'),
         'the offer to undo a deletion has to lapse rather than sit there forever');
     assert(/const MARK_UNDO_MS = (\d+)/.test(script) && Number(RegExp.$1) >= 10000,
         'and it has to stand long enough to be read and acted on');
+    /* The toast that points at the control has to outlast the walk to it. It was shown for
+       six seconds against a fifteen-second offer, so the only thing saying where the undo
+       lived disappeared while the undo was still there. */
+    assert(script.includes('showToast(describe, MARK_UNDO_MS)'),
+        'the message naming where the undo lives must stand as long as the undo does');
 });
 
 test('core features remain registered', () => {

@@ -10,6 +10,16 @@
 
 ### Fixed
 
+- Undoing a mark deletion no longer destroys marks that arrived after it. The offer stayed live while anything else wrote to your marks, so clearing the list, importing the titles shown on the page and then pressing Undo threw the imported ones away. Any write the panel did not make now ends the offer.
+
+- In the extension builds a restore that storage refused was reported as a success, and the only copy of the deleted marks went with it. Storage there answers after the fact; when it says no, the undo is offered again.
+
+- The undo survives closing and reopening settings, the message pointing at it lasts as long as the offer does, and it reports how many records came back rather than how many the list ends up holding.
+
+- A page could no longer put its own text in front of a credential the extension attaches. Header names ignore case and a browser joins duplicates together, so a page that sent its own spelling of the name had its value read first by the service. Every spelling is dropped before the real one is written, and a credential containing a double quote is refused instead of sent.
+
+- The check that refuses to build a worker contacting an undeclared host was reading only `https://` addresses and treating every declared host as if it covered its subdomains. Plain HTTP and a lookalike subdomain both got through it.
+
 - A large library can be restored from its own backup again. The importer refused anything over 4 MB while a full store writes about 32 MB, so the biggest libraries backed up cleanly and were turned away at restore time with nothing to say the file was fine. The ceiling is worked out from the same limits that decide how big an export can get, and a refusal now names the size of the file and the size it can read.
 
 - Eight sentences that were written into the code instead of the message catalog now come from it, so a translated build shows them translated. They cover the season bar's mark and clear messages, the subtitle-link copy, the copied-ID confirmations, and two of the destination-editor errors. The check that is supposed to catch this could not see them: it judged a piece of text by the characters immediately in front of it, and behind a conditional those characters are the conditional. It reads the call a sentence sits in now.

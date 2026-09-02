@@ -132,7 +132,7 @@ The redesigned visual reference set covers every menu page: [Experience](design/
 
 **Integrations**. Tabbed Radarr/Sonarr and Plex/Jellyfin/Emby local-service configuration with arrow/Home/End keyboard navigation.
 
-**Data.** Local viewing stats, private mark review, IMDb and Letterboxd CSV history import, validated JSON backup/restore up to 4 MB with optional passphrase-encrypted credential export, cache status/clearing, a persistent failure journal, and an explicit two-step reset with backup guidance. Removing a mark, or clearing the lot, can be undone from the panel for fifteen seconds afterwards, and the undo brings back the notes and viewing dates too.
+**Data.** Local viewing stats, private mark review, IMDb and Letterboxd CSV history import, validated JSON backup/restore with optional passphrase-encrypted credential export, cache status/clearing, a persistent failure journal, and an explicit two-step reset with backup guidance. Removing a mark, or clearing the lot, can be undone from the panel for fifteen seconds afterwards, and the undo brings back the notes and viewing dates too.
 
 **Failure journal**. The last 20 feature failures, kept across reloads so intermittent breakage is visible. Entries record the time, the feature, the kind of page, and a failure category. HTTP responses are kept separate from connection failures, and only server errors qualify for a bounded stale score. Entries never record the error text, so a title, a lookup address, or a token echoed back by a local service cannot end up in one. Copy it into a bug report or clear it from the same card.
 
@@ -142,11 +142,13 @@ The redesigned visual reference set covers every menu page: [Experience](design/
 
 **Radarr/Sonarr/Overseerr**. URL, API key, root folder, and quality profile for Radarr and Sonarr; URL and API key for an Overseerr or Jellyseerr instance. Localhost/127.0.0.1 only. Current Sonarr v4+ language selection belongs in quality-profile custom formats; retired v3 language profiles are not configured.
 
+**Updates** (extension only). Off switch for the once-a-day check that reads the published version number and tells you when a newer build exists. Turning it off stops the request.
+
 **Media Servers**. Plex URL/token and Jellyfin/Emby URL/API key fields for local library checks. Localhost/127.0.0.1 only. Jellyfin is asked for its library over the `MediaBrowser` authorization scheme, which is what Jellyfin 12 reads; servers running 10.x accept it too. Emby keeps the older token header it still uses.
 
 **Streaming availability source**. JustWatch (read from their page) or TMDB (their documented API, with a read token of your own from themoviedb.org). Both sources use the two-letter country set below the source selector. TMDB resolves the title from its IMDb id rather than by matching titles and displays the credit both TMDB and JustWatch require. Pick TMDB without a token and the panel says so rather than falling back to reading a page. The widget opens the validated title page returned by whichever source produced the result, so a TMDB result keeps its regional TMDB watch page even when that country has no offers. Cached answers are separated by source and country, which keeps a source or region change from showing the previous choice.
 
-**Desktop from mobile links**. On by default. A link copied from a phone points at IMDb mobile site, which this does not run on. Opening one on a computer sends you to the same page on the normal site. It leaves phones alone, and you can switch it off.
+**Desktop from mobile links**. On by default, under Tools as Mobile links. A link copied from a phone points at IMDb's mobile site, which this does not run on. Opening one on a computer sends you to the same page on the normal site. It leaves phones alone, and you can switch it off there.
 
 **Export your marks**. The Data page copies your marks as CSV in two shapes: everything stored, with the columns Const, State, Timestamp, Title and Note, and a Letterboxd-importable one with imdbID and WatchedDate. The Letterboxd shape covers Seen titles only, one row per logged viewing, so a rewatch imports as a rewatch.
 
