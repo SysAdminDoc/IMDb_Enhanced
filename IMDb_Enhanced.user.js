@@ -2781,6 +2781,11 @@
         if (runtime !== null) merged.runtime = runtime;
         const series = normalizeUserMarkSeries(metadata.series);
         if (series) merged.series = series;
+        /* This merge is a whitelist, so a field the reader started producing has to be
+           named here or it never reaches storage. Without this line the calendar export's
+           whole primary path was unreachable: a series marked Seen recorded nothing that
+           said it was a series. */
+        if (metadata.kind === 'series') merged.kind = 'series';
         return merged;
     }
     function normalizeUserMark(record) {
@@ -3099,7 +3104,13 @@
     /* Order matters: the backslash has to be doubled before anything else introduces one,
        or the escapes added below get escaped again. */
     function icsText(value) {
-        return toBoundedText(value, ICS_TEXT_LIMIT)
+        /* Cut rather than dropped: toBoundedText returns nothing at all past its limit,
+           which would have silently emptied a SUMMARY instead of shortening it. And the C0
+           range is stripped, because RFC 5545 forbids it in a TEXT value and an episode
+           name comes from a third party. */
+        return String(value ?? '')
+            .replace(/[ --]/g, '')
+            .slice(0, ICS_TEXT_LIMIT)
             .replace(/\\/g, '\\\\')
             .replace(/;/g, '\\;')
             .replace(/,/g, '\\,')
@@ -3153,7 +3164,9 @@
             'VERSION:2.0',
             `PRODID:-//IMDb Enhanced//${VERSION}//EN`,
             'CALSCALE:GREGORIAN',
-            'METHOD:PUBLISH',
+            /* No METHOD. RFC 5546 makes ORGANIZER required alongside PUBLISH, and this
+               file has no organizer to name: it is a published calendar, not an
+               invitation. A plain VCALENDAR needs neither and importers stop warning. */
             `X-WR-CALNAME:${icsText(t('text_calendar_name'))}`,
         ];
         let events = 0;
@@ -3176,6 +3189,12 @@
                        already has rather than adding a second copy of it. */
                     `UID:imdb-enhanced-${show?.id || 'unknown'}-${season}-${number}@imdb-enhanced`,
                     `DTSTAMP:${stamp}`,
+                    /* Both, because a stable UID on its own is not enough: with no
+                       SEQUENCE and no LAST-MODIFIED, a re-import of the same UID reads as
+                       unchanged, which is exactly wrong in the one case that matters -
+                       TVmaze moving an air date. */
+                    `LAST-MODIFIED:${stamp}`,
+                    `SEQUENCE:${Math.floor(now / 86400000)}`,
                     `DTSTART;VALUE=DATE:${start}`,
                     `DTEND;VALUE=DATE:${end}`,
                     `SUMMARY:${icsText(summary)}`,
@@ -3202,11 +3221,18 @@
             .filter(([, record]) => record?.state === 'watched')
             .sort((a, b) => (Number(b[1]?.ts) || 0) - (Number(a[1]?.ts) || 0));
         for (const [id, record] of entries) {
-            if (record.kind === 'series' && !found.has(id)) {
-                found.set(id, toBoundedText(record.title, USER_MARK_TITLE_LIMIT) || id);
+            /* Set, not set-if-absent: a series first reached through one of its episodes
+               is recorded with no title, and the mark on the show itself is the only thing
+               that carries the name. Skipping it left every exported event summarised as a
+               raw tt id. */
+            if (record.kind === 'series') {
+                const title = String(record.title || '').trim().slice(0, USER_MARK_TITLE_LIMIT);
+                if (title || !found.has(id)) found.set(id, title);
             }
             const series = normalizeUserMarkSeries(record.series);
             if (series && !found.has(series)) found.set(series, '');
+            /* Checked after both, since one pass can add two. Without the slice below a
+               run could return twenty-one. */
             if (found.size >= limit) break;
         }
         return [...found.entries()].slice(0, limit).map(([id, title]) => ({ id, title }));
@@ -10868,13 +10894,25 @@ section[id*="quote" i] .ipc-list-card { padding: 4px 0 !important; margin: 2px 0
         if (!Array.isArray(json)) return [];
         const cutoff = String(today || '').slice(0, 10);
         const out = [];
-        for (const item of json.slice(0, TVMAZE_EPISODE_LIMIT)) {
+        /* Capped AFTER the cutoff, not before it. TVmaze returns a show's episodes in
+           chronological order, so slicing the first four hundred off the front kept only
+           aired history for any long-running show - which the cutoff then discarded
+           entirely. The Simpsons has around 790, and the shows most likely to have
+           something upcoming are exactly the ones that were coming back empty. */
+        for (const item of json) {
+            if (out.length >= TVMAZE_EPISODE_LIMIT) break;
             const airdate = String(item?.airdate || '').trim();
             if (!/^\d{4}-\d{2}-\d{2}$/.test(airdate)) continue;
             if (cutoff && airdate < cutoff) continue;
+            /* Number(null) is 0 and Number.isSafeInteger accepts it, so an unnumbered
+               upcoming episode came through as number zero. Two of those in one season
+               produced the same UID twice in one file, which importers either collapse or
+               complain about. Tested for explicitly rather than coerced. */
+            if (item?.season === null || item?.number === null) continue;
             const season = Number(item?.season);
             const number = Number(item?.number);
             if (!Number.isSafeInteger(season) || !Number.isSafeInteger(number)) continue;
+            if (season < 0 || number < 0) continue;
             out.push({
                 season,
                 number,
@@ -10890,9 +10928,12 @@ section[id*="quote" i] .ipc-list-card { padding: 4px 0 !important; margin: 2px 0
        service being asked about twenty shows, and twenty simultaneous requests is how a
        free service starts refusing them. A show TVmaze does not know is skipped, not an
        error - most people's history has at least one. */
-    async function collectUpcomingEpisodes(shows, today = new Date().toISOString().slice(0, 10)) {
+    async function collectUpcomingEpisodes(shows, today = new Date().toISOString().slice(0, 10), keepGoing = () => true) {
         const out = [];
         for (const show of (Array.isArray(shows) ? shows : []).slice(0, CALENDAR_SERIES_LIMIT)) {
+            /* Asked between shows, so closing the panel stops the run rather than leaving
+               it to issue forty requests and then write onto a detached button. */
+            if (!keepGoing()) break;
             const id = String(show?.id || '');
             if (!id) continue;
             try {
@@ -10903,7 +10944,10 @@ section[id*="quote" i] .ipc-list-card { padding: 4px 0 !important; margin: 2px 0
                         `${TVMAZE_ORIGIN}/lookup/shows?imdb=${encodeURIComponent(id)}`,
                         { headers:{ Accept:'application/json' }, timeout:12000 });
                     lookup = parseTvmazeShow(parseJSONResponse(response, EXTERNAL_RESPONSE_TEXT_LIMIT));
-                    if (lookup) cacheSet(lookupKey, lookup, PROVIDERS.tvmaze.ttl);
+                    /* The miss is cached too. Most people's history has at least one show
+                       TVmaze has no entry for, and without this every export asked about
+                       it again - which is the opposite of what caching the answer is for. */
+                    cacheSet(lookupKey, lookup || { unavailable:true }, PROVIDERS.tvmaze.ttl);
                 }
                 if (!lookup?.showId) continue;
                 const episodesKey = `tvmaze_episodes_${lookup.showId}`;
@@ -12996,6 +13040,8 @@ section[id*="quote" i] .ipc-list-card { padding: 4px 0 !important; margin: 2px 0
     reg({
         key: 'watchedMarking', name: t('feature_watchedMarking_name'), group: 'Features',
         _chunkToken: null,
+        _chunkQueue: null,
+        _chunkDraining: false,
         _observer: null,
         _clickHandler: null,
         _raf: 0,
@@ -13150,11 +13196,19 @@ section[id*="quote" i] .ipc-list-card { padding: 4px 0 !important; margin: 2px 0
                single synchronous pass: chunking ten cards buys nothing and costs a frame.
                Past the threshold the work is broken up and yielded between chunks, so no
                single frame owns all of it. */
-            if (anchors.length <= DECORATE_CHUNK_SIZE) {
-                anchors.forEach(anchor => this._decorateAnchor(anchor, seen));
+            /* Anchors this pass has not already dealt with. Decorating writes into the
+               subtree the observer watches, so a chunked pass provokes the scan that would
+               have cancelled it; skipping what is already done is what makes the restart
+               cheap instead of a re-walk of the whole prefix each frame. */
+            const pending = anchors.filter(anchor => {
+                const card = this._findCard(anchor);
+                return card && !card.dataset.enhMarkId;
+            });
+            if (pending.length <= DECORATE_CHUNK_SIZE) {
+                pending.forEach(anchor => this._decorateAnchor(anchor, seen));
                 return;
             }
-            this._decorateInChunks(anchors, seen);
+            this._decorateInChunks(pending, seen);
         },
         _decorateAnchor(anchor, seen) {
             const imdbId = getLinkedTitleId(anchor.href);
@@ -13164,19 +13218,39 @@ section[id*="quote" i] .ipc-list-card { padding: 4px 0 !important; margin: 2px 0
             seen.add(card);
             this._decorate(card, imdbId, this._extractTitle(card, anchor));
         },
-        async _decorateInChunks(anchors, seen) {
-            /* A token rather than a flag, for the reason the row-badge drain uses one: this
-               object outlives a route, and a chunk loop still running when the next one
-               starts would decorate into a page that is on its way out. */
+        _decorateInChunks(anchors, seen) {
+            /* A queue with one loop, rather than a loop per scan. A token that the next
+               scan overwrites does not serialise anything: it abandons the first pass
+               wherever it had got to, and the anchors it had not reached were never
+               decorated by anybody. Everything queues, and one drain works through it. */
+            this._chunkQueue = (this._chunkQueue || []).concat(anchors.map(anchor => [anchor, seen]));
+            if (this._chunkDraining) return;
+            this._chunkDraining = true;
             const token = {};
             this._chunkToken = token;
-            for (let index = 0; index < anchors.length; index += DECORATE_CHUNK_SIZE) {
-                if (this._chunkToken !== token) return;
-                anchors.slice(index, index + DECORATE_CHUNK_SIZE)
-                    .forEach(anchor => this._decorateAnchor(anchor, seen));
-                if (index + DECORATE_CHUNK_SIZE >= anchors.length) break;
-                await yieldToBrowser();
-            }
+            (async () => {
+                try {
+                    while (this._chunkToken === token && this._chunkQueue?.length) {
+                        this._chunkQueue.splice(0, DECORATE_CHUNK_SIZE)
+                            .forEach(([anchor, batchSeen]) => {
+                                try { this._decorateAnchor(anchor, batchSeen); }
+                                catch (error) {
+                                    /* One card that cannot be decorated is not a reason to
+                                       abandon the rest of the list, which is what an
+                                       unhandled rejection out of this loop would do. */
+                                    console.warn('[IMDb Enhanced] card decoration failed:', error);
+                                }
+                            });
+                        if (!this._chunkQueue?.length) break;
+                        await yieldToBrowser();
+                    }
+                } finally {
+                    if (this._chunkToken === token) {
+                        this._chunkDraining = false;
+                        this._chunkQueue = [];
+                    }
+                }
+            })();
         },
         /* IE-107: a series page knows nothing about the episodes of it somebody has
            watched, even though the marks are right there. This says how many, and how
@@ -13318,6 +13392,8 @@ section[id*="quote" i] .ipc-list-card { padding: 4px 0 !important; margin: 2px 0
             this._observer?.disconnect();
             this._observer = null;
             this._chunkToken = null;
+            this._chunkQueue = null;
+            this._chunkDraining = false;
             cancelAnimationFrame(this._raf);
             this._pendingScanRoots?.clear();
             this._pendingScanRoots = null;
@@ -19914,7 +19990,11 @@ ${scopedRules('.enh-zoom', {
                 const original = calendarButton.textContent;
                 setTextIfChanged(calendarButton, t('label_checking'));
                 try {
-                    const gathered = await collectUpcomingEpisodes(shows);
+                    const gathered = await collectUpcomingEpisodes(shows,
+                        new Date().toISOString().slice(0, 10),
+                        () => calendarButton.isConnected);
+                    // Closing the panel is a decision not to have the file.
+                    if (!calendarButton.isConnected) return;
                     const calendar = buildEpisodeCalendar(gathered);
                     if (!calendar.events) { showToast(t('toast_no_upcoming_episodes'), 4000); return; }
                     const blob = new Blob([calendar.text], { type:'text/calendar;charset=utf-8' });
@@ -19928,9 +20008,11 @@ ${scopedRules('.enh-zoom', {
                 } catch (error) {
                     showToast(t('toast_calendar_failed', [getRequestErrorMessage(error)]), 4500);
                 } finally {
-                    calendarButton.disabled = false;
-                    calendarButton.removeAttribute('aria-busy');
-                    setTextIfChanged(calendarButton, original);
+                    if (calendarButton.isConnected) {
+                        calendarButton.disabled = false;
+                        calendarButton.removeAttribute('aria-busy');
+                        setTextIfChanged(calendarButton, original);
+                    }
                 }
             },
         }, t('settings_export_calendar'));

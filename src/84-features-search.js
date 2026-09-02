@@ -649,6 +649,8 @@
     reg({
         key: 'watchedMarking', name: t('feature_watchedMarking_name'), group: 'Features',
         _chunkToken: null,
+        _chunkQueue: null,
+        _chunkDraining: false,
         _observer: null,
         _clickHandler: null,
         _raf: 0,
@@ -803,11 +805,19 @@
                single synchronous pass: chunking ten cards buys nothing and costs a frame.
                Past the threshold the work is broken up and yielded between chunks, so no
                single frame owns all of it. */
-            if (anchors.length <= DECORATE_CHUNK_SIZE) {
-                anchors.forEach(anchor => this._decorateAnchor(anchor, seen));
+            /* Anchors this pass has not already dealt with. Decorating writes into the
+               subtree the observer watches, so a chunked pass provokes the scan that would
+               have cancelled it; skipping what is already done is what makes the restart
+               cheap instead of a re-walk of the whole prefix each frame. */
+            const pending = anchors.filter(anchor => {
+                const card = this._findCard(anchor);
+                return card && !card.dataset.enhMarkId;
+            });
+            if (pending.length <= DECORATE_CHUNK_SIZE) {
+                pending.forEach(anchor => this._decorateAnchor(anchor, seen));
                 return;
             }
-            this._decorateInChunks(anchors, seen);
+            this._decorateInChunks(pending, seen);
         },
         _decorateAnchor(anchor, seen) {
             const imdbId = getLinkedTitleId(anchor.href);
@@ -817,19 +827,39 @@
             seen.add(card);
             this._decorate(card, imdbId, this._extractTitle(card, anchor));
         },
-        async _decorateInChunks(anchors, seen) {
-            /* A token rather than a flag, for the reason the row-badge drain uses one: this
-               object outlives a route, and a chunk loop still running when the next one
-               starts would decorate into a page that is on its way out. */
+        _decorateInChunks(anchors, seen) {
+            /* A queue with one loop, rather than a loop per scan. A token that the next
+               scan overwrites does not serialise anything: it abandons the first pass
+               wherever it had got to, and the anchors it had not reached were never
+               decorated by anybody. Everything queues, and one drain works through it. */
+            this._chunkQueue = (this._chunkQueue || []).concat(anchors.map(anchor => [anchor, seen]));
+            if (this._chunkDraining) return;
+            this._chunkDraining = true;
             const token = {};
             this._chunkToken = token;
-            for (let index = 0; index < anchors.length; index += DECORATE_CHUNK_SIZE) {
-                if (this._chunkToken !== token) return;
-                anchors.slice(index, index + DECORATE_CHUNK_SIZE)
-                    .forEach(anchor => this._decorateAnchor(anchor, seen));
-                if (index + DECORATE_CHUNK_SIZE >= anchors.length) break;
-                await yieldToBrowser();
-            }
+            (async () => {
+                try {
+                    while (this._chunkToken === token && this._chunkQueue?.length) {
+                        this._chunkQueue.splice(0, DECORATE_CHUNK_SIZE)
+                            .forEach(([anchor, batchSeen]) => {
+                                try { this._decorateAnchor(anchor, batchSeen); }
+                                catch (error) {
+                                    /* One card that cannot be decorated is not a reason to
+                                       abandon the rest of the list, which is what an
+                                       unhandled rejection out of this loop would do. */
+                                    console.warn('[IMDb Enhanced] card decoration failed:', error);
+                                }
+                            });
+                        if (!this._chunkQueue?.length) break;
+                        await yieldToBrowser();
+                    }
+                } finally {
+                    if (this._chunkToken === token) {
+                        this._chunkDraining = false;
+                        this._chunkQueue = [];
+                    }
+                }
+            })();
         },
         /* IE-107: a series page knows nothing about the episodes of it somebody has
            watched, even though the marks are right there. This says how many, and how
@@ -971,6 +1001,8 @@
             this._observer?.disconnect();
             this._observer = null;
             this._chunkToken = null;
+            this._chunkQueue = null;
+            this._chunkDraining = false;
             cancelAnimationFrame(this._raf);
             this._pendingScanRoots?.clear();
             this._pendingScanRoots = null;

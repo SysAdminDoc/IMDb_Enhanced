@@ -134,15 +134,20 @@ async function main() {
         process.stdout.write('No long animation frames at all.\n');
         process.exit(0);
     }
-    /* Attributed, because a long frame caused by the fixture's own rendering is not this
-       extension's to answer for. The userscript is injected as an init script, so its work
-       is attributed to the document rather than to a file of its own; the marker is the
-       presence of a script entry at all on a frame where cards were decorated. */
-    const ours = result.frames.filter(frame => frame.scripts.some(script =>
-        /IMDb_Enhanced|about:blank|^$|unknown|document/i.test(script.source)));
+    /* The userscript is injected as an init script, so its work is attributed to the
+       document rather than to a file of its own - no attribution rule can separate it from
+       the page own, and one that tried would be a filter matching everything. The honest
+       comparison is the script time here against the same number from --baseline. */
+    if (!baseline && result.decorated !== result.rows) {
+        process.stdout.write(`Only ${result.decorated} of ${result.rows} rows were decorated; this run is not measuring what it claims.\n`);
+        process.exit(1);
+    }
     const worst = result.frames.reduce((high, frame) => Math.max(high, frame.duration), 0);
     const worstBlocking = result.frames.reduce((high, frame) => Math.max(high, frame.blocking || 0), 0);
-    process.stdout.write(`${result.frames.length} long frames, worst ${worst.toFixed(1)}ms (blocking ${worstBlocking.toFixed(1)}ms)\n`);
+    const worstScript = result.frames.reduce((high, frame) =>
+        Math.max(high, frame.scripts.reduce((sum, script) => sum + script.duration, 0)), 0);
+    process.stdout.write(`${result.frames.length} long frames | worst frame ${worst.toFixed(1)}ms | worst script ${worstScript.toFixed(1)}ms | worst blocking ${worstBlocking.toFixed(1)}ms\n`);
+    process.stdout.write('  (blocking is the excess over 50ms, not the frame length; the number to compare is the script time against --baseline)\n');
     result.frames
         .slice()
         .sort((a, b) => b.duration - a.duration)
@@ -153,10 +158,10 @@ async function main() {
                 .join(', ') || 'no script attributed';
             process.stdout.write(`  ${frame.duration.toFixed(1)}ms  ${attributed}\n`);
         });
-    process.stdout.write(ours.length
-        ? `\n${ours.length} of them carry script work.\n`
-        : '\nNone of them carry attributed script work.\n');
-    process.exit(worstBlocking > LONG_FRAME_MS ? 1 : 0);
+    /* The gate is the script time in a frame, not the frame length: a 90ms frame that is
+       80ms of the page's own layout is not this extension's to answer for, and the whole
+       reason --baseline exists is that this fixture produces long frames on its own. */
+    process.exit(worstScript > LONG_FRAME_MS ? 1 : 0);
 }
 
 main().catch(error => {

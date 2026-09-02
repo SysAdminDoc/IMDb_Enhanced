@@ -1765,13 +1765,25 @@
         if (!Array.isArray(json)) return [];
         const cutoff = String(today || '').slice(0, 10);
         const out = [];
-        for (const item of json.slice(0, TVMAZE_EPISODE_LIMIT)) {
+        /* Capped AFTER the cutoff, not before it. TVmaze returns a show's episodes in
+           chronological order, so slicing the first four hundred off the front kept only
+           aired history for any long-running show - which the cutoff then discarded
+           entirely. The Simpsons has around 790, and the shows most likely to have
+           something upcoming are exactly the ones that were coming back empty. */
+        for (const item of json) {
+            if (out.length >= TVMAZE_EPISODE_LIMIT) break;
             const airdate = String(item?.airdate || '').trim();
             if (!/^\d{4}-\d{2}-\d{2}$/.test(airdate)) continue;
             if (cutoff && airdate < cutoff) continue;
+            /* Number(null) is 0 and Number.isSafeInteger accepts it, so an unnumbered
+               upcoming episode came through as number zero. Two of those in one season
+               produced the same UID twice in one file, which importers either collapse or
+               complain about. Tested for explicitly rather than coerced. */
+            if (item?.season === null || item?.number === null) continue;
             const season = Number(item?.season);
             const number = Number(item?.number);
             if (!Number.isSafeInteger(season) || !Number.isSafeInteger(number)) continue;
+            if (season < 0 || number < 0) continue;
             out.push({
                 season,
                 number,
@@ -1787,9 +1799,12 @@
        service being asked about twenty shows, and twenty simultaneous requests is how a
        free service starts refusing them. A show TVmaze does not know is skipped, not an
        error - most people's history has at least one. */
-    async function collectUpcomingEpisodes(shows, today = new Date().toISOString().slice(0, 10)) {
+    async function collectUpcomingEpisodes(shows, today = new Date().toISOString().slice(0, 10), keepGoing = () => true) {
         const out = [];
         for (const show of (Array.isArray(shows) ? shows : []).slice(0, CALENDAR_SERIES_LIMIT)) {
+            /* Asked between shows, so closing the panel stops the run rather than leaving
+               it to issue forty requests and then write onto a detached button. */
+            if (!keepGoing()) break;
             const id = String(show?.id || '');
             if (!id) continue;
             try {
@@ -1800,7 +1815,10 @@
                         `${TVMAZE_ORIGIN}/lookup/shows?imdb=${encodeURIComponent(id)}`,
                         { headers:{ Accept:'application/json' }, timeout:12000 });
                     lookup = parseTvmazeShow(parseJSONResponse(response, EXTERNAL_RESPONSE_TEXT_LIMIT));
-                    if (lookup) cacheSet(lookupKey, lookup, PROVIDERS.tvmaze.ttl);
+                    /* The miss is cached too. Most people's history has at least one show
+                       TVmaze has no entry for, and without this every export asked about
+                       it again - which is the opposite of what caching the answer is for. */
+                    cacheSet(lookupKey, lookup || { unavailable:true }, PROVIDERS.tvmaze.ttl);
                 }
                 if (!lookup?.showId) continue;
                 const episodesKey = `tvmaze_episodes_${lookup.showId}`;

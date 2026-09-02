@@ -110,12 +110,23 @@ async function main() {
     /* 5. What the extension actually writes. Every rule that styles a trigger has to do it
           from the trigger itself; one that reaches through a wrapper would be the rule the
           149 change breaks. */
-    const css = fs.readFileSync(path.join(root, 'src', '87-global-css.js'), 'utf8');
-    const crossing = [...css.matchAll(/^([^\n{]*:hover[^\n{]*)\{/gm)]
-        .map(match => match[1].trim())
-        .filter(selector => /:hover\s+\S/.test(selector))
-        .filter(selector => /menu|correction|trailer|zoom|toast|settings-overlay/i.test(selector));
-    report.push(['descendant rules driven by an ancestor hover on a promoted surface',
+    /* Every source file, not one of them. Rules that style a promoted surface live in the
+       feature modules as often as in the shared stylesheet, and reading only the shared one
+       reported "nothing depends on this" with the other twenty-one files unexamined. The
+       child and sibling combinators count too: `.x:hover>.y` crosses the same boundary as
+       `.x:hover .y`, and a pattern requiring whitespace missed it. */
+    const sources = fs.readdirSync(path.join(root, 'src'))
+        .filter(name => name.endsWith('.js'))
+        .map(name => [name, fs.readFileSync(path.join(root, 'src', name), 'utf8')]);
+    const crossing = [];
+    sources.forEach(([name, source]) => {
+        [...source.matchAll(/([^\n{};]*:hover[^\n{};]*)\{/g)]
+            .map(match => match[1].trim())
+            .filter(selector => /:hover\s*(?:[>+~]\s*)?[.#[a-z]/i.test(selector))
+            .filter(selector => /menu|correction|trailer|zoom|toast|overlay|popover|dropdown/i.test(selector))
+            .forEach(selector => crossing.push(`${name}: ${selector}`));
+    });
+    report.push([`descendant rules driven by an ancestor hover on a promoted surface (${sources.length} files scanned)`,
         crossing.length ? `FOUND: ${crossing.join(' | ')}` : 'none - nothing here depends on the old behaviour']);
 
     /* And the surface itself, on the real fixture with the real script, because the
@@ -185,11 +196,17 @@ async function main() {
 
     await browser.close();
 
-    process.stdout.write(`Chromium ${version}\n`);
+    const major = Number((/\b(\d+)\./.exec(version) || [])[1]) || 0;
+    process.stdout.write(`Chromium ${version}${major >= 149 ? '' : ' - BEFORE 149, so this says nothing about the change'}\n`);
     report.forEach(([label, answer]) => process.stdout.write(`  ${label}\n      ${answer}\n`));
-    const broken = report.some(([, answer]) => answer.startsWith('BROKEN') || answer.startsWith('FOUND'));
-    if (!controlWorks) {
-        process.stderr.write('\nThe positive control did not fire. Fix the probe before trusting it.\n');
+    /* Anywhere in the line, not at the start of it: the live-surface row joins three
+       answers with a semicolon, so a BROKEN in the second or third position was printed
+       and then ignored, and the script exited zero saying nothing was wrong. */
+    const broken = report.some(([, answer]) => /BROKEN|FOUND/.test(answer));
+    if (!controlWorks || major < 149) {
+        process.stderr.write(major < 149
+            ? '\nThis browser predates the change; run it on 149 or later.\n'
+            : '\nThe positive control did not fire. Fix the probe before trusting it.\n');
         process.exit(1);
     }
     process.stdout.write(broken ? '\nSomething here needs fixing.\n' : '\nNo surface depends on the behaviour Chrome 149 removed.\n');

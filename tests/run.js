@@ -4015,28 +4015,43 @@ test('the calendar asks about series the store actually knows are series', () =>
 
 /* IE-148: a fully expanded IMDb list is 250 rows, and decorating them in one pass put the
    script's own blocking time consistently over 50ms - long enough that a click during it
-   feels dropped. The threshold and the yield are what stop that, and both are easy to
-   remove by accident, so both are pinned here. */
+   feels dropped. The first version of this test matched the chunk helper's DEFINITION, so
+   deleting the call that reaches it - which turns chunking off entirely - left it green.
+   Everything below is scoped to the caller or exercised. */
 test('long lists are decorated in chunks and short ones are not', () => {
     const marking = script.slice(
         script.indexOf("key: 'watchedMarking'"),
         script.indexOf("key: 'markLinkTint'"));
     assert(marking.length > 1000, 'the marking feature should be locatable');
-    assert(/anchors\.length <= DECORATE_CHUNK_SIZE/.test(marking),
+
+    // The scan itself, not the helper it can call: this is the code that decides.
+    const scan = marking.slice(marking.indexOf('_scan(root) {'), marking.indexOf('_decorateAnchor(anchor, seen) {'));
+    assert(scan.length > 200, '_scan should be locatable');
+    assert(/pending\.length <= DECORATE_CHUNK_SIZE/.test(scan),
         'a short list must keep the single synchronous pass; chunking ten cards costs a frame and buys nothing');
-    assert(/_decorateInChunks\(anchors, seen\)/.test(marking),
-        'a long one must be broken up');
-    assert(/await yieldToBrowser\(\)/.test(marking),
-        'and must hand the thread back between chunks, or it is one pass with extra steps');
+    assert(/this\._decorateInChunks\(pending, seen\)/.test(scan),
+        'and a long one must actually reach the chunked path from here');
 
-    /* A token, not a boolean: this object outlives a route, and a loop still running when
-       the next one starts would decorate into a page on its way out. */
-    assert(/this\._chunkToken = token;/.test(marking) && /if \(this\._chunkToken !== token\) return;/.test(marking),
-        'the chunk loop must stop when a newer one takes over');
-    assert(/this\._chunkToken = null;/.test(script.slice(script.indexOf("key: 'watchedMarking'"))),
-        'and teardown must stop it too');
+    /* The queue, not a token per scan. A token the next scan overwrites abandons the first
+       pass wherever it got to, and the anchors it never reached are decorated by nobody. */
+    const chunkerAt = marking.indexOf('_decorateInChunks(anchors, seen) {');
+    const chunker = marking.slice(chunkerAt, marking.indexOf('_findCard(', chunkerAt));
+    assert(chunker.length > 300, 'the chunk loop should be locatable');
+    assert(/this\._chunkQueue = \(this\._chunkQueue \|\| \[\]\)\.concat/.test(chunker),
+        'overlapping scans must queue rather than replace each other');
+    assert(/if \(this\._chunkDraining\) return;/.test(chunker), 'and only one drain may run');
+    assert(/await yieldToBrowser\(\)/.test(chunker),
+        'the loop must hand the thread back between chunks, or it is one pass with extra steps');
+    assert(/catch \(error\)/.test(chunker),
+        'one card that cannot be decorated must not abandon the rest of the list');
 
-    const helper = script.slice(script.indexOf('function yieldToBrowser'), script.indexOf('reg({\n        key: \'watchedMarking\''));
+    /* Teardown, scoped to destroy rather than to the rest of the file: the first version
+       sliced to the end of the script, so moving the line into init would have passed. */
+    const destroy = marking.slice(marking.indexOf('destroy() {'));
+    assert(/this\._chunkToken = null;/.test(destroy) && /this\._chunkQueue = null;/.test(destroy),
+        'teardown must stop an in-flight chunk loop and drop what it had left');
+
+    const helper = script.slice(script.indexOf('function yieldToBrowser'), script.indexOf("key: 'watchedMarking'"));
     assert(/scheduler\?\.yield/.test(helper),
         'scheduler.yield resumes at the front of the queue, which is the point of using it');
     assert(/setTimeout\(resolve, 0\)/.test(helper),

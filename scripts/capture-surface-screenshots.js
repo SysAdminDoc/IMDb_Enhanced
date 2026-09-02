@@ -65,19 +65,33 @@ const PROBE = `() => {
         const [high, low] = [luminance(a), luminance(b)].sort((x, y) => y - x);
         return (high + 0.05) / (low + 0.05);
     };
+    /* Seeded from what the page is actually painted on rather than from white: on a dark
+       theme every control whose ancestors are all transparent was being measured against a
+       white page that does not exist. Returns null where an image or a gradient is in the
+       stack, because a number computed against a colour that is not there is worse than no
+       number - those are reported separately instead. */
     const backdropOf = element => {
-        let stack = { r:255, g:255, b:255, a:1 };
+        const root = parse(getComputedStyle(document.documentElement).backgroundColor)
+            || parse(getComputedStyle(document.body).backgroundColor)
+            || { r:255, g:255, b:255, a:1 };
+        let stack = { ...root, a:1 };
+        let painted = false;
         const chain = [];
         for (let node = element; node && node.nodeType === 1; node = node.parentElement) chain.push(node);
-        chain.reverse().forEach(node => {
-            const colour = parse(getComputedStyle(node).backgroundColor);
-            if (colour && colour.a > 0) stack = over(colour, stack);
-        });
-        return stack;
+        for (const node of chain.reverse()) {
+            const style = getComputedStyle(node);
+            if (style.backgroundImage && style.backgroundImage !== 'none') return null;
+            const colour = parse(style.backgroundColor);
+            if (colour && colour.a > 0) { stack = over(colour, stack); painted = true; }
+        }
+        /* A control lying over a poster has no ancestor background at all; the image
+           behind it is a sibling and cannot be composited from here. */
+        return painted ? stack : null;
     };
 
     const lowContrast = [];
     const escaped = [];
+    const unmeasurable = [];
     document.querySelectorAll('[class*="enh-"], [id^="enh-"]').forEach(element => {
         const box = element.getBoundingClientRect();
         if (!box.width || !box.height) return;
@@ -110,6 +124,13 @@ const PROBE = `() => {
                    background and that is what its text sits on. Excluding it made every
                    button on a card report the same 1.07:1 against the page. */
                 const behind = backdropOf(element);
+                if (!behind) {
+                    unmeasurable.push({
+                        selector: element.id ? '#' + element.id : '.' + [...element.classList].join('.'),
+                        text: ownText.slice(0, 40),
+                    });
+                    return;
+                }
                 const seen = contrast(over(foreground, behind), behind);
                 if (seen < needed) {
                     lowContrast.push({
@@ -125,7 +146,7 @@ const PROBE = `() => {
         /* An injected control that has left the card it belongs to. Absolutely positioned
            badges and control rows are where this happens, and it is invisible in code. */
         const host = element.closest('.enh-markable-card, .enh-heatmap-cell, li.ipc-metadata-list-summary-item');
-        if (host && host !== element && getComputedStyle(element).position === 'absolute') {
+        if (host && host !== element && (style.position === 'absolute' || style.position === 'fixed')) {
             const hostBox = host.getBoundingClientRect();
             const slack = 2;
             if (box.left < hostBox.left - slack || box.right > hostBox.right + slack
@@ -139,7 +160,11 @@ const PROBE = `() => {
             }
         }
     });
-    return { lowContrast, escaped, injected: document.querySelectorAll('[class*="enh-"], [id^="enh-"]').length };
+    /* Rendered elements only. Counting the injected <style> tags meant the "nothing was
+       injected" guard could never fire, since those are always there. */
+    const injected = [...document.querySelectorAll('[class*="enh-"], [id^="enh-"]')]
+        .filter(node => node.tagName !== 'STYLE' && node.getBoundingClientRect().width > 0).length;
+    return { lowContrast, escaped, unmeasurable, injected };
 }`;
 
 async function main() {
@@ -193,11 +218,15 @@ async function main() {
         await page.waitForTimeout(1500);
 
         for (const theme of THEMES) {
-            await page.evaluate(name => {
-                window.GM_setValue('imdb_enh_themeVariant', name);
-                window.GM_setValue('imdb_enh_themeAuto', false);
-                document.dispatchEvent(new CustomEvent('imdb-enhanced:settings-saved', { detail:{ key:'themeVariant' } }));
-            }, theme);
+            /* Through the panel's own swatch, not by writing the setting and hoping.
+               Nothing listens for a settings-saved event to re-theme - the only thing that
+               repaints is the swatch handler - so setting the value directly produced five
+               byte-identical screenshots of the dark theme and a contrast report that
+               covered one palette while claiming five. */
+            await page.locator('#enh-settings-fab').click();
+            await page.locator('#enh-settings-tab-experience').click();
+            await page.locator(`.enh-theme-swatch[data-theme="${theme}"]`).click();
+            await page.locator('.enh-settings-close').click();
             /* Themes transition. A measurement taken before they settle is a colour part
                way between two palettes, which is neither of the ones anybody sees. */
             await page.waitForTimeout(600);
@@ -215,7 +244,10 @@ async function main() {
                 continue;
             }
             if (!found.lowContrast.length && !found.escaped.length) {
-                process.stdout.write(`  ${label}: ${found.injected} injected elements, all readable and inside their cards\n`);
+                const note = found.unmeasurable.length
+                    ? ` (${found.unmeasurable.length} sit over artwork and cannot be measured from the DOM)`
+                    : '';
+                process.stdout.write(`  ${label}: ${found.injected} rendered elements, all readable and inside their cards${note}\n`);
                 continue;
             }
             failures += found.lowContrast.length + found.escaped.length;

@@ -2222,7 +2222,11 @@
                 const original = calendarButton.textContent;
                 setTextIfChanged(calendarButton, t('label_checking'));
                 try {
-                    const gathered = await collectUpcomingEpisodes(shows);
+                    const gathered = await collectUpcomingEpisodes(shows,
+                        new Date().toISOString().slice(0, 10),
+                        () => calendarButton.isConnected);
+                    // Closing the panel is a decision not to have the file.
+                    if (!calendarButton.isConnected) return;
                     const calendar = buildEpisodeCalendar(gathered);
                     if (!calendar.events) { showToast(t('toast_no_upcoming_episodes'), 4000); return; }
                     const blob = new Blob([calendar.text], { type:'text/calendar;charset=utf-8' });
@@ -2236,9 +2240,11 @@
                 } catch (error) {
                     showToast(t('toast_calendar_failed', [getRequestErrorMessage(error)]), 4500);
                 } finally {
-                    calendarButton.disabled = false;
-                    calendarButton.removeAttribute('aria-busy');
-                    setTextIfChanged(calendarButton, original);
+                    if (calendarButton.isConnected) {
+                        calendarButton.disabled = false;
+                        calendarButton.removeAttribute('aria-busy');
+                        setTextIfChanged(calendarButton, original);
+                    }
                 }
             },
         }, t('settings_export_calendar'));

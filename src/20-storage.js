@@ -654,6 +654,11 @@
         if (runtime !== null) merged.runtime = runtime;
         const series = normalizeUserMarkSeries(metadata.series);
         if (series) merged.series = series;
+        /* This merge is a whitelist, so a field the reader started producing has to be
+           named here or it never reaches storage. Without this line the calendar export's
+           whole primary path was unreachable: a series marked Seen recorded nothing that
+           said it was a series. */
+        if (metadata.kind === 'series') merged.kind = 'series';
         return merged;
     }
     function normalizeUserMark(record) {
@@ -972,7 +977,13 @@
     /* Order matters: the backslash has to be doubled before anything else introduces one,
        or the escapes added below get escaped again. */
     function icsText(value) {
-        return toBoundedText(value, ICS_TEXT_LIMIT)
+        /* Cut rather than dropped: toBoundedText returns nothing at all past its limit,
+           which would have silently emptied a SUMMARY instead of shortening it. And the C0
+           range is stripped, because RFC 5545 forbids it in a TEXT value and an episode
+           name comes from a third party. */
+        return String(value ?? '')
+            .replace(/[ --]/g, '')
+            .slice(0, ICS_TEXT_LIMIT)
             .replace(/\\/g, '\\\\')
             .replace(/;/g, '\\;')
             .replace(/,/g, '\\,')
@@ -1026,7 +1037,9 @@
             'VERSION:2.0',
             `PRODID:-//IMDb Enhanced//${VERSION}//EN`,
             'CALSCALE:GREGORIAN',
-            'METHOD:PUBLISH',
+            /* No METHOD. RFC 5546 makes ORGANIZER required alongside PUBLISH, and this
+               file has no organizer to name: it is a published calendar, not an
+               invitation. A plain VCALENDAR needs neither and importers stop warning. */
             `X-WR-CALNAME:${icsText(t('text_calendar_name'))}`,
         ];
         let events = 0;
@@ -1049,6 +1062,12 @@
                        already has rather than adding a second copy of it. */
                     `UID:imdb-enhanced-${show?.id || 'unknown'}-${season}-${number}@imdb-enhanced`,
                     `DTSTAMP:${stamp}`,
+                    /* Both, because a stable UID on its own is not enough: with no
+                       SEQUENCE and no LAST-MODIFIED, a re-import of the same UID reads as
+                       unchanged, which is exactly wrong in the one case that matters -
+                       TVmaze moving an air date. */
+                    `LAST-MODIFIED:${stamp}`,
+                    `SEQUENCE:${Math.floor(now / 86400000)}`,
                     `DTSTART;VALUE=DATE:${start}`,
                     `DTEND;VALUE=DATE:${end}`,
                     `SUMMARY:${icsText(summary)}`,
@@ -1075,11 +1094,18 @@
             .filter(([, record]) => record?.state === 'watched')
             .sort((a, b) => (Number(b[1]?.ts) || 0) - (Number(a[1]?.ts) || 0));
         for (const [id, record] of entries) {
-            if (record.kind === 'series' && !found.has(id)) {
-                found.set(id, toBoundedText(record.title, USER_MARK_TITLE_LIMIT) || id);
+            /* Set, not set-if-absent: a series first reached through one of its episodes
+               is recorded with no title, and the mark on the show itself is the only thing
+               that carries the name. Skipping it left every exported event summarised as a
+               raw tt id. */
+            if (record.kind === 'series') {
+                const title = String(record.title || '').trim().slice(0, USER_MARK_TITLE_LIMIT);
+                if (title || !found.has(id)) found.set(id, title);
             }
             const series = normalizeUserMarkSeries(record.series);
             if (series && !found.has(series)) found.set(series, '');
+            /* Checked after both, since one pass can add two. Without the slice below a
+               run could return twenty-one. */
             if (found.size >= limit) break;
         }
         return [...found.entries()].slice(0, limit).map(([id, title]) => ({ id, title }));
