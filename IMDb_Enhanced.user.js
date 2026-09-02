@@ -5594,6 +5594,28 @@
             return items;
         } catch { return []; }
     }
+    /* Jellyfin 12.0 stopped reading X-Emby-Token and X-MediaBrowser-Token unless the
+       server operator turns EnableLegacyAuthorization back on, so a token sent that way
+       authenticates nothing on a current server. Its parser requires the scheme name to
+       read MediaBrowser, then splits the rest on commas, trims quotes off each value and
+       takes Token; the other parts only name the client in the server's device list. Emby
+       kept the old header and Plex has always had its own, so the shape belongs to the
+       service rather than being shared between them.
+       (jellyfin/jellyfin, Jellyfin.Server.Implementations/Security/AuthorizationContext.cs)
+
+       The token itself is a server-generated hex id, which is why it is placed between the
+       quotes as it stands: Jellyfin URL-decodes each value it reads back out, so a value
+       carrying % or + would need encoding, and one carrying a quote could not be expressed
+       here at all. Neither shape is a Jellyfin API key. */
+    const MEDIA_SERVER_AUTH = Object.freeze({
+        plex: Object.freeze({ header:'X-Plex-Token', prefix:'', suffix:'' }),
+        jellyfin: Object.freeze({
+            header:'Authorization',
+            prefix:`MediaBrowser Client="IMDb Enhanced", Device="Browser", DeviceId="imdb-enhanced", Version="${VERSION}", Token="`,
+            suffix:'"',
+        }),
+        emby: Object.freeze({ header:'X-Emby-Token', prefix:'', suffix:'' }),
+    });
     function parseMediaServerItems(payload) {
         try {
             const source = typeof payload === 'string' ? toBoundedText(payload, LOCAL_RESPONSE_TEXT_LIMIT) : null;
@@ -5612,11 +5634,11 @@
             throw failure('unknown', t('error_media_server_local_only'));
         }
         const query = { ...(opts.query || {}) };
-        const headerName = cfg.kind === 'plex' ? 'X-Plex-Token' : 'X-Emby-Token';
+        const auth = MEDIA_SERVER_AUTH[cfg.kind] || MEDIA_SERVER_AUTH.emby;
         const headers = cfg.kind === 'plex'
             ? { Accept:'application/xml', ...(opts.headers || {}) }
             : { Accept:'application/json', ...(opts.headers || {}) };
-        if (cfg.token) headers[headerName] = cfg.token;
+        if (cfg.token) headers[auth.header] = `${auth.prefix}${cfg.token}${auth.suffix}`;
         return httpRequest(buildLocalServiceUrl(cfg.baseUrl, path, query), {
             method: opts.method || 'GET',
             timeout: opts.timeout || 12000,
@@ -5624,7 +5646,7 @@
             headers,
             // Extension build: the value is not readable here, so the background is told
             // which stored key to inject and does it only for a loopback destination.
-            credentialHeader: cfg.tokenRef ? { name:headerName, ref:cfg.tokenRef } : null,
+            credentialHeader: cfg.tokenRef ? { name:auth.header, ref:cfg.tokenRef } : null,
         });
     }
 

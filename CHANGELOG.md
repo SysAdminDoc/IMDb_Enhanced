@@ -1,5 +1,13 @@
 # Changelog
 
+## Unreleased
+
+### Fixed
+
+- The Jellyfin library check works again on Jellyfin 12. That release stopped reading the `X-Emby-Token` header unless the server operator turns legacy authorization back on, so the check had quietly stopped finding anything. The token now travels in the `MediaBrowser` authorization scheme Jellyfin has always accepted, which older 10.x servers read as well. Emby is untouched, since it still uses the header Jellyfin retired.
+
+- The extension's background worker now decides which header carries a stored credential, instead of taking that name from the page. Each key was already bound to the one destination it may reach; it is bound to the one header it may ride in as well, so a page that cannot read a key cannot put one into a different service's authentication scheme.
+
 ## 2.19.0 (2026-09-01)
 
 ### Fixed

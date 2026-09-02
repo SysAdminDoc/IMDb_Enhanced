@@ -399,8 +399,14 @@ assert(background.includes('const CREDENTIAL_STORAGE_KEYS = new Set(CREDENTIAL_D
     'the injectable keys must be exactly the bound ones, not a second list');
 /* Two credentials leave the machine, each to exactly one host over TLS. Every other one
    is bound to loopback, so no request to a public host can ask for it. */
-assert(/\['imdb_enh_tmdbReadToken', \{ host: 'api\.themoviedb\.org', scheme: 'Bearer ' \}\]/.test(background),
-    'the TMDB token must be bound to TMDB and to the scheme it is sent under');
+assert(/\['imdb_enh_tmdbReadToken', \{ host: 'api\.themoviedb\.org', header: 'Authorization', scheme: 'Bearer ' \}\]/.test(background),
+    'the TMDB token must be bound to TMDB, to the header it rides in, and to the scheme it is sent under');
+/* The header name is the binding's too, not the calling page's, so every key that is sent
+   as a header has to name one. A binding that forgot would attach nothing at all. */
+[...bindingBlock.matchAll(/\['(imdb_enh_[^']+)', \{([\s\S]*?)\}\]/g)].forEach(([, key, body]) => {
+    if (/\bquery:/.test(body)) return;
+    assert(/\bheader: '/.test(body), `${key} must name the header its value is sent in`);
+});
 /* OMDb takes its key only in the query string, so its binding names the parameter rather
    than a header scheme. The name is the worker's, not the caller's, for the same reason
    the scheme is. */

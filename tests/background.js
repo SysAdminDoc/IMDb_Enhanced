@@ -673,6 +673,60 @@ for (const engine of ['chromium', 'gecko']) {
             'a credential carrying control characters must be refused, not sent');
     });
 
+    /* The header a credential arrives in is the binding's to choose, not the caller's.
+       Jellyfin's is the one that changed, so it is the one that proves the rule: the worker
+       must fill Authorization with the MediaBrowser scheme even when the message asks for
+       the header its own release stopped reading. */
+    test(`[${engine}] the Jellyfin token is wrapped by the binding, not the message`, async () => {
+        const { dispatch, calls, storage } = loadBackground({ engine, fetchImpl: makeFetch({}) });
+        storage.set('imdb_enh_jellyfinApiKey', 'jellyfin-secret');
+        await dispatch(request('http://localhost:8096/Items', {
+            credentialHeader: { name:'X-Emby-Token', ref:'jellyfinApiKey' },
+        }), IMDB_SENDER);
+        const sent = calls.fetches[0][1];
+        assert.strictEqual(sent.headers['X-Emby-Token'], undefined,
+            'the header the message named must be ignored when the binding names another');
+        assert(/^MediaBrowser .*Token="jellyfin-secret"$/.test(sent.headers.Authorization || ''),
+            `the binding's own scheme must wrap the token: ${sent.headers.Authorization}`);
+        assert.strictEqual(sent.redirect, 'manual',
+            'a request carrying a credential still refuses to follow a hop');
+    });
+
+    /* A binding that forgot to name a header would attach nothing at all now that the
+       message's name is ignored, and the integration would fail silently. This is the check
+       that turns that into a test failure instead. */
+    test(`[${engine}] every loopback credential names the header it rides in`, async () => {
+        const expected = {
+            radarrApiKey:'X-Api-Key', sonarrApiKey:'X-Api-Key', seerrApiKey:'X-Api-Key',
+            plexToken:'X-Plex-Token', jellyfinApiKey:'Authorization', embyApiKey:'X-Emby-Token',
+        };
+        for (const [ref, header] of Object.entries(expected)) {
+            const { dispatch, calls, storage } = loadBackground({ engine, fetchImpl: makeFetch({}) });
+            storage.set(`imdb_enh_${ref}`, `${ref}-secret`);
+            await dispatch(request('http://localhost:9999/probe', {
+                credentialHeader: { name:'X-Not-This-One', ref },
+            }), IMDB_SENDER);
+            const sent = calls.fetches[0][1];
+            assert(String(sent.headers[header] || '').includes(`${ref}-secret`),
+                `${ref} must arrive in ${header}`);
+            assert.strictEqual(sent.headers['X-Not-This-One'], undefined,
+                `${ref} must ignore the header the message asked for`);
+        }
+    });
+
+    test(`[${engine}] one service's token cannot be sent in another's header`, async () => {
+        const { dispatch, calls, storage } = loadBackground({ engine, fetchImpl: makeFetch({}) });
+        storage.set('imdb_enh_plexToken', 'plex-secret');
+        await dispatch(request('http://localhost:32400/library/sections', {
+            credentialHeader: { name:'Authorization', ref:'plexToken' },
+        }), IMDB_SENDER);
+        const sent = calls.fetches[0][1];
+        assert.strictEqual(sent.headers.Authorization, undefined,
+            'naming a different header must not move a token into another authentication scheme');
+        assert.strictEqual(sent.headers['X-Plex-Token'], 'plex-secret',
+            'it arrives in the header its own binding declares');
+    });
+
     test(`[${engine}] credentials are never sent to a public provider`, async () => {
         const { dispatch, calls } = loadBackground({ engine, fetchImpl: makeFetch({}) });
         await dispatch(request('https://query.wikidata.org/sparql?query=x', {
@@ -836,10 +890,14 @@ for (const engine of ['chromium', 'gecko']) {
             'a local service on your own machine is normally plain http and must keep working');
     });
 
-    /* Whether a request carries a credential was decided by sniffing the header name, and
-       the caller chooses that name. Calling it something outside the sensitive list got
+    /* Whether a request carries a credential was once decided by sniffing the header name,
+       and the caller chose that name. Calling it something outside the sensitive list got
        the token attached AND redirect:'follow', which is what carries a custom header
-       across an origin change. */
+       across an origin change. The caller no longer names the header at all — the binding
+       does — so the name it asks for is ignored here rather than honoured. The redirect
+       assertion is the one this test exists for and is unchanged; that it does not depend
+       on a header name at all is proved separately, and without a sensitive header in
+       sight, by the OMDb redirect test above, where the key rides in the query string. */
     test(`[${engine}] a credential-bearing request refuses redirects whatever its header is called`, async () => {
         const { dispatch, calls, storage } = loadBackground({ engine, fetchImpl: makeFetch({}) });
         storage.set('imdb_enh_tmdbReadToken', 'TMDB-TOKEN-VALUE');
@@ -847,8 +905,10 @@ for (const engine of ['chromium', 'gecko']) {
             credentialHeader: { name:'X-Not-On-The-Sensitive-List', ref:'tmdbReadToken' },
         }), IMDB_SENDER);
         const sent = calls.fetches[0][1];
-        assert.strictEqual(sent.headers['X-Not-On-The-Sensitive-List'], 'Bearer TMDB-TOKEN-VALUE',
-            'the binding still decides what is attached');
+        assert.strictEqual(sent.headers['X-Not-On-The-Sensitive-List'], undefined,
+            'a caller-chosen header name must not be where the token ends up');
+        assert.strictEqual(sent.headers.Authorization, 'Bearer TMDB-TOKEN-VALUE',
+            'the binding decides both what is attached and what carries it');
         assert.strictEqual(sent.redirect, 'manual',
             'and the worker knows it attached one, whatever the caller called the header');
     });

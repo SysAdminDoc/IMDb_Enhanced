@@ -29,15 +29,25 @@ const LOOPBACK_HOSTS = new Set(['localhost', '127.0.0.1']);
    destination that does not own it, gets nothing. The scheme is declared here too so the
    page cannot influence any part of the header it is unable to read. */
 const CREDENTIAL_DESTINATIONS = new Map([
-    ['imdb_enh_radarrApiKey', { loopback: true }],
-    ['imdb_enh_sonarrApiKey', { loopback: true }],
-    ['imdb_enh_seerrApiKey', { loopback: true }],
-    ['imdb_enh_plexToken', { loopback: true }],
-    ['imdb_enh_jellyfinApiKey', { loopback: true }],
-    ['imdb_enh_embyApiKey', { loopback: true }],
+    ['imdb_enh_radarrApiKey', { loopback: true, header: 'X-Api-Key' }],
+    ['imdb_enh_sonarrApiKey', { loopback: true, header: 'X-Api-Key' }],
+    ['imdb_enh_seerrApiKey', { loopback: true, header: 'X-Api-Key' }],
+    ['imdb_enh_plexToken', { loopback: true, header: 'X-Plex-Token' }],
+    /* Jellyfin 12.0 reads X-Emby-Token only where the operator re-enabled legacy
+       authorization, so its token rides in the scheme its parser always accepts. The
+       parts around the token name this client in the server's device list; only Token
+       carries the secret, and the closing quote is the suffix because the parser trims
+       quotes off each value it reads. */
+    ['imdb_enh_jellyfinApiKey', {
+        loopback: true,
+        header: 'Authorization',
+        scheme: `MediaBrowser Client="IMDb Enhanced", Device="Browser", DeviceId="imdb-enhanced", Version="${chrome.runtime.getManifest().version}", Token="`,
+        suffix: '"',
+    }],
+    ['imdb_enh_embyApiKey', { loopback: true, header: 'X-Emby-Token' }],
     // The one credential that goes anywhere but your own machine, and it goes to exactly
     // one host over TLS.
-    ['imdb_enh_tmdbReadToken', { host: 'api.themoviedb.org', scheme: 'Bearer ' }],
+    ['imdb_enh_tmdbReadToken', { host: 'api.themoviedb.org', header: 'Authorization', scheme: 'Bearer ' }],
     /* OMDb accepts its key in the query string and nowhere else, so this binding names
        the parameter instead of a header scheme. The parameter name comes from here, like
        the scheme does, so a page that cannot read the key cannot shape what carries it.
@@ -296,10 +306,15 @@ async function sendHttpRequest(message, sender, sendResponse) {
                 withKey.searchParams.set(binding.query, value.slice(0, 4096));
                 requestUrl = withKey.toString();
                 credentialInUrl = true;
-            } else if (typeof credentialRef.name === 'string') {
-                // The scheme comes from the binding, never from the message: a caller that
-                // cannot read the value has no business shaping the header around it.
-                headers[credentialRef.name.slice(0, 120)] = `${binding.scheme || ''}${value.slice(0, 4096)}`;
+            } else if (binding.header) {
+                /* The name, the scheme and anything closing the value all come from the
+                   binding, never from the message: a caller that cannot read the value has
+                   no business shaping the header around it, or choosing which header it
+                   arrives in. Every key here is bound to exactly one header name, so a
+                   message asking for a different one is simply ignored rather than
+                   honoured — which is what keeps one service's token out of another
+                   service's authentication scheme. */
+                headers[binding.header] = `${binding.scheme || ''}${value.slice(0, 4096)}${binding.suffix || ''}`;
             }
         }
     }

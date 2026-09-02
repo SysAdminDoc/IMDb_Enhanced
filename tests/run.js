@@ -5135,6 +5135,44 @@ test('media server integration is configurable and local-only', () => {
     assert(script.includes("btn.setAttribute('aria-busy', 'true')"), 'Servarr adds should expose their pending state');
 });
 
+/* Jellyfin 12.0 reads X-Emby-Token only where the operator turned legacy authorization
+   back on, so the header this build used to send authenticates nothing on a current
+   server. Emby kept it. The two used to share one code path, which is why this asserts
+   both: a fix that moved Emby onto the MediaBrowser scheme would break the service that
+   never changed. */
+test('Jellyfin authenticates with the scheme its current release parses', () => {
+    const hooks = loadScriptTestHooks();
+    hooks.mediaServerRequest({
+        kind:'jellyfin', label:'Jellyfin', baseUrl:'http://localhost:8096', token:'jellyfin-secret',
+    }, '/Items', { query:{ Recursive:'true' } }).catch(() => {});
+    const jellyfin = hooks.getCapturedRequests().at(-1);
+    assert(jellyfin, 'the Jellyfin request was not created');
+    assert.strictEqual(jellyfin.headers['X-Emby-Token'], undefined,
+        'a retired header must not be sent alongside the one that replaced it');
+    assert.strictEqual(jellyfin.headers['X-MediaBrowser-Token'], undefined,
+        'the other legacy header is gated behind the same server setting');
+    const header = jellyfin.headers.Authorization;
+    assert(typeof header === 'string', 'Jellyfin must be given an Authorization header');
+    assert(header.startsWith('MediaBrowser '),
+        `only the MediaBrowser scheme is accepted without legacy authorization: ${header}`);
+    assert(/(?:^|,\s*)Token="jellyfin-secret"\s*$/.test(header),
+        `the token has to arrive as a quoted Token part: ${header}`);
+    assert(/Client="[^"]+"/.test(header) && /DeviceId="[^"]+"/.test(header),
+        'the parts either side of the token are what names this client in the server device list');
+    assert(!jellyfin.url.includes('jellyfin-secret'),
+        'the token must not reach the URL, which Jellyfin would also accept');
+
+    hooks.mediaServerRequest({
+        kind:'emby', label:'Emby', baseUrl:'http://localhost:8096', token:'emby-secret',
+    }, '/Items', {}).catch(() => {});
+    const emby = hooks.getCapturedRequests().at(-1);
+    assert.strictEqual(emby.headers['X-Emby-Token'], 'emby-secret',
+        'Emby still reads the header Jellyfin retired');
+    assert.strictEqual(emby.headers.Authorization, undefined,
+        'and does not take the scheme that replaced it');
+    assert(!emby.url.includes('emby-secret'), 'the Emby token must not reach the URL either');
+});
+
 test('local-service credentials stay out of request URLs', () => {
     const hooks = loadScriptTestHooks();
     assert.strictEqual(hooks.normalizeLocalServiceUrl('http://localhost:32400/library'), 'http://localhost:32400/library');
