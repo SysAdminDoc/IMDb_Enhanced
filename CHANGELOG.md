@@ -4,6 +4,7 @@
 
 ### Added
 
+- The extension's recovery and permissions pages follow your system colour scheme instead of forcing dark. Dark is still the default; a light-mode system now gets a light page, with every control checked for readable contrast in both.
 - A person's page says how many of their titles are in your library, counted from the rows the library badge has already answered rather than from a second round of requests. It says how many were checked, so a filmography still loading cannot look like a smaller one.
 - Douban, Kinopoisk and Filmweb are available as external links under Info and research, hidden until you switch one on. All three search by title and year. Kinopoisk's route was checked in a real browser, since it bounces scripted clients to a sign-in check.
 - The episode heatmap and the rating colour coding now use a scale that varies by brightness rather than from red to green. The old scale was the exact pair a red-green colour-blind viewer cannot separate, so a heatmap of a bad season came out looking like a heatmap of a good one. The traditional scale is still there under Experience if you prefer it. In Windows High Contrast the swatches now keep their colours instead of flattening to one system pair, which is safe because every one of them also shows its rating as text.

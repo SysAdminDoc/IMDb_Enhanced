@@ -781,6 +781,65 @@ test('the source archive carries what a rebuild needs and no build output', () =
     fs.unlinkSync(target);
 });
 
+/* IE-123: both pages forced color-scheme: dark with a hardcoded palette, so a light-mode
+   user got a dark page from an extension that offers a light theme everywhere else. The
+   palettes are tokens now, and every foreground/background pair the pages actually draw is
+   measured here rather than eyeballed - including the status tones, which were the pairs
+   most likely to fail once the surfaces went light. */
+{
+    const luminance = hex => {
+        const value = hex.replace('#', '');
+        const channels = [0, 2, 4].map(index => parseInt(value.slice(index, index + 2), 16) / 255)
+            .map(channel => channel <= 0.04045 ? channel / 12.92 : ((channel + 0.055) / 1.055) ** 2.4);
+        return channels[0] * 0.2126 + channels[1] * 0.7152 + channels[2] * 0.0722;
+    };
+    const contrast = (a, b) => {
+        const [high, low] = [luminance(a), luminance(b)].sort((x, y) => y - x);
+        return (high + 0.05) / (low + 0.05);
+    };
+    const readTokens = (css, from, to) => {
+        const block = css.slice(css.indexOf(from), css.indexOf(to, css.indexOf(from)));
+        return Object.fromEntries([...block.matchAll(/--([\w-]+)\s*:\s*(#[0-9a-f]{6})/gi)]
+            .map(match => [match[1], match[2]]));
+    };
+
+    [
+        ['recovery.html', ['tx', 'tx2', 'tx3', 'ok', 'warn', 'err', 'danger-tx'], ['bg', 'sf', 'sf2']],
+        ['permissions.html', ['tx', 'tx2', 'tx3', 'link'], ['bg', 'sf', 'sf2']],
+    ].forEach(([file, foregrounds, backgrounds]) => {
+        const css = fs.readFileSync(path.join(root, 'extension', file), 'utf8');
+        assert(/color-scheme:\s*dark light/.test(css),
+            `${file} must follow the system scheme rather than forcing one`);
+        assert(/@media \(prefers-color-scheme: light\)/.test(css),
+            `${file} needs a light palette`);
+        /* No colour may be written anywhere but the two token blocks, or a control keeps
+           its dark value on a light page and no contrast check would ever see it. */
+        const styles = css.slice(css.indexOf('<style>'), css.indexOf('</style>'));
+        const lightEnd = styles.indexOf('}', styles.indexOf('@media (prefers-color-scheme: light)'));
+        const afterTokens = styles.slice(styles.indexOf('}', lightEnd + 1));
+        assert(!/#[0-9a-f]{3,8}\b/i.test(afterTokens),
+            `${file} still writes a colour outside its palette: ${(/#[0-9a-f]{3,8}\b/i.exec(afterTokens) || [])[0]}`);
+
+        const dark = readTokens(styles, ':root {', '@media');
+        const light = readTokens(styles, '@media (prefers-color-scheme: light)', 'body {');
+        [['dark', dark], ['light', light]].forEach(([scheme, tokens]) => {
+            foregrounds.forEach(foreground => {
+                assert(tokens[foreground], `${file} ${scheme} has no --${foreground}`);
+                backgrounds.forEach(background => {
+                    assert(tokens[background], `${file} ${scheme} has no --${background}`);
+                    const ratio = contrast(tokens[foreground], tokens[background]);
+                    assert(ratio >= 4.5,
+                        `${file} ${scheme}: --${foreground} on --${background} is ${ratio.toFixed(2)}:1`);
+                });
+            });
+            // The one pair that is a background rather than a foreground.
+            assert(contrast(tokens['on-accent'], tokens.accent) >= 4.5,
+                `${file} ${scheme}: the primary button text is unreadable on the accent`);
+        });
+    });
+    console.log('ok - the extension pages follow the system colour scheme with readable contrast in both');
+}
+
 if (packFailures) {
     console.error(`${packFailures} release-archive check(s) failed.`);
     process.exit(1);
