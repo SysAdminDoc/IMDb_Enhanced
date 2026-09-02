@@ -974,12 +974,16 @@ test('every version the changelog names can be checked out', () => {
     const declared = new Set(
         readGitPackageVersions() || versions.filter(version => tags.has(`v${version}`))
     );
-    const inHistory = versions.filter(version => declared.has(version));
+    /* The version being released is in the changelog and in package.json but not yet in
+       either git history or the tag list, because the commit that puts it there is the one
+       being prepared. It is the only version allowed to be in that state. */
+    const releasing = packageJson.version;
+    const inHistory = versions.filter(version => declared.has(version) && version !== releasing);
     assert(inHistory.length >= 20, `most versions should be in the repository, saw ${inHistory.length}`);
     const untagged = inHistory.filter(version => !tags.has(`v${version}`));
     assert.deepStrictEqual(untagged, [],
         'a version this repository contains but no tag names cannot be checked out and rebuilt');
-    const predating = versions.filter(version => !declared.has(version));
+    const predating = versions.filter(version => !declared.has(version) && version !== releasing);
     predating.forEach(version => {
         assert(compareVersions(version, [...declared].sort(compareVersions)[0]) < 0,
             `${version} is not in package.json's history and is not older than everything that is`);
