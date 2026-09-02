@@ -200,6 +200,9 @@
   "aria_parents_guide_severities": {
     "message": "Parents guide severity ratings"
   },
+  "aria_rating_colour_ramp": {
+    "message": "Rating colour scale"
+  },
   "aria_search_settings": {
     "message": "Search settings"
   },
@@ -2056,6 +2059,18 @@
   },
   "settings_list_pages": {
     "message": "Lists"
+  },
+  "settings_ramp_accessible": {
+    "message": "Colour-blind safe (blue to yellow)"
+  },
+  "settings_ramp_classic": {
+    "message": "Traditional (red to green)"
+  },
+  "settings_rating_colour_ramp": {
+    "message": "Rating colour scale"
+  },
+  "settings_the_traditional_scale_is_unreadable": {
+    "message": "The traditional scale runs red to green, which is the pair a deuteranomalous viewer cannot separate. The default varies by brightness instead, so the order survives."
   },
   "settings_search_placeholder": {
     "message": "Search every setting"

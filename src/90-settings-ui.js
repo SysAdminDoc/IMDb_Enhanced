@@ -1713,8 +1713,8 @@
         experienceGrid.appendChild(makeFeatureCard(t('settings_tune_the_interface'), t('settings_refine_how_content_looks_and_is_presented'), 'Desktop', [
             'modernUI', 'editorialTitleSurface', 'compactHeader', 'enhancedRatingDisplay', 'widerLayout', 'ratingColorCoding',
             'collapsibleSections', 'expandSummaries', 'spoilerBlur', 'quickNav', 'dimLowRated', 'imageZoom',
-            'restoreImageContextMenu',
-         'largerThumbnails',], true));
+            'restoreImageContextMenu', 'largerThumbnails',
+        ], true));
         experiencePage.appendChild(experienceGrid);
         /* The threshold belongs with the toggle it qualifies. Changing it restarts the
            feature so the page repaints, rather than waiting for a reload. */
@@ -1731,6 +1731,32 @@
             },
         }, ...DIM_THRESHOLD_OPTIONS.map(option => makeEl('option', { value:option }, option)));
         dimThreshold.value = normalizeDimThreshold(get('dimRatingThreshold'));
+        /* IE-147: which scale the heatmap and the rating badges use. Colour-blind safe by
+           default, because the ramp it replaces is exactly the pair a deuteranomalous
+           viewer cannot separate. Changing it restarts both features that draw from it. */
+        const ratingRamp = makeEl('select', {
+            className:'enh-servarr-input',
+            id:'enh-rating-ramp',
+            'aria-label':t('aria_rating_colour_ramp'),
+            onChange: event => {
+                const value = normalizeRatingRamp(event.target.value);
+                event.target.value = value;
+                if (!trySaveSetting('ratingRamp', value)) return;
+                refreshFeature('episodeHeatmap');
+                refreshFeature('ratingColorCoding');
+                markSaved();
+            },
+        },
+            makeEl('option', { value:'accessible' }, t('settings_ramp_accessible')),
+            makeEl('option', { value:'classic' }, t('settings_ramp_classic'))
+        );
+        ratingRamp.value = normalizeRatingRamp(get('ratingRamp'));
+        experiencePage.appendChild(makeEl('div', { className:'enh-settings-callout' },
+            makeEl('strong', {}, t('settings_rating_colour_ramp')),
+            ratingRamp,
+            makeEl('span', { className:'enh-settings-card-description' },
+                t('settings_the_traditional_scale_is_unreadable'))
+        ));
         experiencePage.appendChild(makeEl('div', { className:'enh-settings-callout' },
             makeEl('strong', {}, t('aria_dim_titles_rated_below')),
             dimThreshold,

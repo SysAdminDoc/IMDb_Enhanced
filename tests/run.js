@@ -2540,16 +2540,83 @@ test('theme overrides native IMDb surfaces and generated card text', () => {
     assert(script.includes('.text-on-light'), 'native light-surface utility classes need to be remapped inside themed cards');
 });
 
+/* IE-147: the ramp this replaced ran red to green, which is the exact pair a
+   deuteranomalous viewer cannot separate - a heatmap of a bad season and a heatmap of a
+   good one came out the same muddy colour. Simulated numerically rather than argued
+   about: the Vienot, Brettel and Mollon (1999) deuteranope projection, applied in linear
+   RGB, then checked for a strictly increasing order. */
+test('the rating ramp survives a deuteranope reading it', () => {
+    const hooks = loadScriptTestHooks();
+    const toLinear = channel => (channel <= 0.04045 ? channel / 12.92 : ((channel + 0.055) / 1.055) ** 2.4);
+    const fromHex = hex => {
+        const value = hex.replace('#', '');
+        return [0, 2, 4].map(index => toLinear(parseInt(value.slice(index, index + 2), 16) / 255));
+    };
+    const luminance = ([r, g, b]) => r * 0.2126 + g * 0.7152 + b * 0.0722;
+    /* Vienot 1999, table 2: the deuteranope plane expressed directly in linear RGB. */
+    const simulateDeuteranopia = ([r, g, b]) => [
+        0.625 * r + 0.375 * g + 0.0 * b,
+        0.700 * r + 0.300 * g + 0.0 * b,
+        0.0 * r + 0.300 * g + 0.700 * b,
+    ];
+    const rampOf = ramp => {
+        hooks.setStoredSetting('ratingRamp', ramp);
+        return [2, 5.5, 6.5, 7.5, 9].map(score => hooks.ratingColor(score).bg);
+    };
+
+    const accessible = rampOf('accessible');
+    assert.strictEqual(accessible.length, 5);
+    const seen = accessible.map(hex => luminance(simulateDeuteranopia(fromHex(hex))));
+    seen.slice(1).forEach((value, index) => {
+        assert(value > seen[index],
+            `step ${index + 1} of the ramp is not brighter than step ${index} to a deuteranope: ${seen.join(', ')}`);
+    });
+    /* Monotonic is not enough on its own - two steps a hair apart are monotonic and
+       indistinguishable. Each step has to be a real difference. */
+    const steps = seen.slice(1).map((value, index) => value - seen[index]);
+    assert(Math.min(...steps) > 0.02,
+        `the smallest step a deuteranope sees is too small to read: ${steps.map(s => s.toFixed(3)).join(', ')}`);
+
+    /* And the reason this was worth doing: the traditional ramp fails the same check, so
+       the test is measuring something rather than passing on anything it is given. */
+    const classic = rampOf('classic');
+    const classicSeen = classic.map(hex => luminance(simulateDeuteranopia(fromHex(hex))));
+    const classicMonotonic = classicSeen.slice(1).every((value, index) => value > classicSeen[index]);
+    const classicSteps = classicSeen.slice(1).map((value, index) => value - classicSeen[index]);
+    assert(!classicMonotonic || Math.min(...classicSteps) <= 0.02,
+        'the red-to-green ramp should fail the check the replacement passes');
+
+    hooks.setStoredSetting('ratingRamp', 'accessible');
+    // An unreadable stored value falls back rather than producing undefined swatches.
+    hooks.setStoredSetting('ratingRamp', 'nonsense');
+    assert.strictEqual(hooks.ratingColor(9).bg, accessible[4], 'an unknown ramp falls back to the safe one');
+    hooks.setStoredSetting('ratingRamp', 'accessible');
+
+    /* Forced colours: swatches keep their ramp instead of flattening to one system pair,
+       which is only defensible because each one also carries its rating as text. */
+    assert(/td\.enh-heatmap-cell a, \.enh-heatmap-chip, #enh-rating-badge \{\s*forced-color-adjust: none;/.test(script),
+        'rating swatches must opt out of the forced-colours substitution');
+    assert(!/td\.enh-heatmap-cell a, \.enh-heatmap-chip, #enh-rating-badge \{[^}]*background: ButtonFace/.test(script),
+        'and must not also be flattened to a single system colour');
+});
+
 test('branded controls keep readable text across themes and score states', () => {
     const hooks = loadScriptTestHooks();
     const contrast = (foreground, background) => {
         const values = [hooks.getHexLuminance(foreground), hooks.getHexLuminance(background)].sort((a, b) => b - a);
         return (values[0] + 0.05) / (values[1] + 0.05);
     };
-    [4.5, 5.5, 6.5, 7.5, 8.5, NaN].forEach(score => {
-        const state = hooks.ratingColor(score);
-        assert(contrast(state.text, state.bg) >= 4.5, `${state.label} rating badge text is too faint`);
+    /* Both ramps, because the one that is not the default is still one somebody can be
+       looking at. */
+    ['accessible', 'classic'].forEach(ramp => {
+        hooks.setStoredSetting('ratingRamp', ramp);
+        [4.5, 5.5, 6.5, 7.5, 8.5, NaN].forEach(score => {
+            const state = hooks.ratingColor(score);
+            assert(contrast(state.text, state.bg) >= 4.5,
+                `${state.label} rating badge text is too faint on the ${ramp} ramp`);
+        });
     });
+    hooks.setStoredSetting('ratingRamp', 'accessible');
     Object.values(hooks.THEMES).forEach(theme => {
         [theme.accent, theme.red].forEach(background => {
             const text = hooks.readableTextColor(background);

@@ -1116,6 +1116,9 @@
                 ? { key, value }
                 : null;
         }
+        if (key === 'ratingRamp') {
+            return value === normalizeRatingRamp(value) ? { key, value } : null;
+        }
         if (LOCAL_SERVICE_URL_KEYS.has(key)) {
             if (typeof value !== 'string') return null;
             const raw = value.trim();

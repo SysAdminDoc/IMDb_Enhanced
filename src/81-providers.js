@@ -17,14 +17,34 @@
         const lightContrast = 1.05 / (backgroundLuminance + 0.05);
         return darkContrast >= lightContrast ? '#050505' : '#fff';
     }
+    /* IE-147: the red-to-green scale this used everywhere is the one ramp a deuteranomalous
+       viewer cannot read - red and green collapse into the same muddy tone, so a heatmap
+       of a badly-reviewed season looks like a heatmap of a good one. Cividis (Nunez,
+       Anderton and Renslow, PLOS ONE 2018) was built for exactly this: it varies almost
+       entirely in luminance and in blue-to-yellow, which is the axis deuteranopes keep, so
+       the order survives the simulation rather than merely looking different.
+
+       The old ramp stays available, because somebody who reads it fine and is used to it
+       should not have to relearn a page. */
+    const RATING_RAMPS = {
+        accessible: ['#00204d', '#48506b', '#7c7b78', '#bcaf6f', '#ffea46'],
+        classic: ['#ef4444', '#f97316', '#eab308', '#84cc16', '#22c55e'],
+    };
+    function normalizeRatingRamp(value) {
+        return Object.prototype.hasOwnProperty.call(RATING_RAMPS, value) ? value : 'accessible';
+    }
+    function getRatingRamp() {
+        return RATING_RAMPS[normalizeRatingRamp(get('ratingRamp'))];
+    }
     function ratingColor(val) {
         const n = parseFloat(val);
+        const ramp = getRatingRamp();
         const [bg, label] = isNaN(n) ? ['#555', t('label_rating_unrated')]
-            : n >= 8.0 ? ['#22c55e', t('label_rating_great')]
-                : n >= 7.0 ? ['#84cc16', t('label_rating_good')]
-                    : n >= 6.0 ? ['#eab308', t('label_rating_average')]
-                        : n >= 5.0 ? ['#f97316', t('text_below_avg')]
-                            : ['#ef4444', t('label_rating_poor')];
+            : n >= 8.0 ? [ramp[4], t('label_rating_great')]
+                : n >= 7.0 ? [ramp[3], t('label_rating_good')]
+                    : n >= 6.0 ? [ramp[2], t('label_rating_average')]
+                        : n >= 5.0 ? [ramp[1], t('text_below_avg')]
+                            : [ramp[0], t('label_rating_poor')];
         return { bg, text:readableTextColor(bg), label };
     }
     function mcColor(s) { return s >= 75 ? '#6c3' : s >= 50 ? '#ffbd3f' : s >= 25 ? '#ff6874' : '#f00'; }

@@ -721,11 +721,13 @@ a:focus-visible, button:focus-visible, .ipc-chip:focus-visible {
         text-shadow: none !important;
         box-shadow: none !important;
     }
-    /* Rating and heatmap colours are data, not decoration — keep them legible by
-       letting the system pick the pair rather than forcing our own. */
+    /* Rating and heatmap colours are data, not decoration. Flattening them to the system
+       pair kept every cell legible and made the heatmap say nothing at all - a grid of
+       identical squares. These are swatches, so they opt out of the substitution and keep
+       their ramp, which is only safe because every one of them also carries its rating as
+       text: the colour is a second reading of a number that is already written there. */
     td.enh-heatmap-cell a, .enh-heatmap-chip, #enh-rating-badge {
-        background: ButtonFace !important;
-        color: ButtonText !important;
+        forced-color-adjust: none;
         border: 1px solid ButtonText !important;
     }
 }

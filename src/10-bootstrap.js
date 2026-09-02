@@ -101,6 +101,7 @@
         aria_season_averages: 'Season averages',
         aria_season_progress: 'Season progress',
         aria_parents_guide_severities: 'Parents guide severity ratings',
+        aria_rating_colour_ramp: 'Rating colour scale',
         aria_search_settings: 'Search settings',
         aria_severity_for_category: '$1 for $2',
         aria_settings_sections: 'Settings sections',
@@ -720,6 +721,10 @@
         settings_keywords_mobile_links: 'mobile, phone, m.imdb, redirect',
         settings_keywords_update_notice: 'update, new release, upgrade, notify',
         settings_list_pages: 'Lists',
+        settings_ramp_accessible: 'Colour-blind safe (blue to yellow)',
+        settings_ramp_classic: 'Traditional (red to green)',
+        settings_rating_colour_ramp: 'Rating colour scale',
+        settings_the_traditional_scale_is_unreadable: 'The traditional scale runs red to green, which is the pair a deuteranomalous viewer cannot separate. The default varies by brightness instead, so the order survives.',
         settings_search_placeholder: 'Search every setting',
         settings_these_marks_stay_on_this_device_and: 'These marks stay on this device and never change your IMDb account. Import from page copies the IMDb Watched titles visible on the page behind the settings dialog into local Seen marks; existing marks are kept, and nothing is ever sent back to IMDb.',
         settings_this_backup_is_encrypted_enter_its_passphrase: 'This backup is encrypted. Enter its passphrase.',
@@ -1858,6 +1863,9 @@
            avoids. Declared here so it round-trips through backup and restore like any
            other setting; without it the region was read but could never be set. */
         availabilityRegion: 'US',
+        /* Colour-blind-safe by default: the ramp it replaces is unreadable to a
+           deuteranomalous viewer, which is around one man in twelve. */
+        ratingRamp: 'accessible',
         // Links
         searchButtons: true, externalLinks: true, expandedLinkMenu: true,
         trailerPopover: true,

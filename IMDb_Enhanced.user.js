@@ -154,6 +154,7 @@
         aria_season_averages: 'Season averages',
         aria_season_progress: 'Season progress',
         aria_parents_guide_severities: 'Parents guide severity ratings',
+        aria_rating_colour_ramp: 'Rating colour scale',
         aria_search_settings: 'Search settings',
         aria_severity_for_category: '$1 for $2',
         aria_settings_sections: 'Settings sections',
@@ -773,6 +774,10 @@
         settings_keywords_mobile_links: 'mobile, phone, m.imdb, redirect',
         settings_keywords_update_notice: 'update, new release, upgrade, notify',
         settings_list_pages: 'Lists',
+        settings_ramp_accessible: 'Colour-blind safe (blue to yellow)',
+        settings_ramp_classic: 'Traditional (red to green)',
+        settings_rating_colour_ramp: 'Rating colour scale',
+        settings_the_traditional_scale_is_unreadable: 'The traditional scale runs red to green, which is the pair a deuteranomalous viewer cannot separate. The default varies by brightness instead, so the order survives.',
         settings_search_placeholder: 'Search every setting',
         settings_these_marks_stay_on_this_device_and: 'These marks stay on this device and never change your IMDb account. Import from page copies the IMDb Watched titles visible on the page behind the settings dialog into local Seen marks; existing marks are kept, and nothing is ever sent back to IMDb.',
         settings_this_backup_is_encrypted_enter_its_passphrase: 'This backup is encrypted. Enter its passphrase.',
@@ -1911,6 +1916,9 @@
            avoids. Declared here so it round-trips through backup and restore like any
            other setting; without it the region was read but could never be set. */
         availabilityRegion: 'US',
+        /* Colour-blind-safe by default: the ramp it replaces is unreadable to a
+           deuteranomalous viewer, which is around one man in twelve. */
+        ratingRamp: 'accessible',
         // Links
         searchButtons: true, externalLinks: true, expandedLinkMenu: true,
         trailerPopover: true,
@@ -4617,6 +4625,9 @@
                 ? { key, value }
                 : null;
         }
+        if (key === 'ratingRamp') {
+            return value === normalizeRatingRamp(value) ? { key, value } : null;
+        }
         if (LOCAL_SERVICE_URL_KEYS.has(key)) {
             if (typeof value !== 'string') return null;
             const raw = value.trim();
@@ -7102,11 +7113,13 @@ a:focus-visible, button:focus-visible, .ipc-chip:focus-visible {
         text-shadow: none !important;
         box-shadow: none !important;
     }
-    /* Rating and heatmap colours are data, not decoration — keep them legible by
-       letting the system pick the pair rather than forcing our own. */
+    /* Rating and heatmap colours are data, not decoration. Flattening them to the system
+       pair kept every cell legible and made the heatmap say nothing at all - a grid of
+       identical squares. These are swatches, so they opt out of the substitution and keep
+       their ramp, which is only safe because every one of them also carries its rating as
+       text: the colour is a second reading of a number that is already written there. */
     td.enh-heatmap-cell a, .enh-heatmap-chip, #enh-rating-badge {
-        background: ButtonFace !important;
-        color: ButtonText !important;
+        forced-color-adjust: none;
         border: 1px solid ButtonText !important;
     }
 }
@@ -7595,14 +7608,34 @@ section[id*="quote" i] .ipc-list-card { padding: 4px 0 !important; margin: 2px 0
         const lightContrast = 1.05 / (backgroundLuminance + 0.05);
         return darkContrast >= lightContrast ? '#050505' : '#fff';
     }
+    /* IE-147: the red-to-green scale this used everywhere is the one ramp a deuteranomalous
+       viewer cannot read - red and green collapse into the same muddy tone, so a heatmap
+       of a badly-reviewed season looks like a heatmap of a good one. Cividis (Nunez,
+       Anderton and Renslow, PLOS ONE 2018) was built for exactly this: it varies almost
+       entirely in luminance and in blue-to-yellow, which is the axis deuteranopes keep, so
+       the order survives the simulation rather than merely looking different.
+
+       The old ramp stays available, because somebody who reads it fine and is used to it
+       should not have to relearn a page. */
+    const RATING_RAMPS = {
+        accessible: ['#00204d', '#48506b', '#7c7b78', '#bcaf6f', '#ffea46'],
+        classic: ['#ef4444', '#f97316', '#eab308', '#84cc16', '#22c55e'],
+    };
+    function normalizeRatingRamp(value) {
+        return Object.prototype.hasOwnProperty.call(RATING_RAMPS, value) ? value : 'accessible';
+    }
+    function getRatingRamp() {
+        return RATING_RAMPS[normalizeRatingRamp(get('ratingRamp'))];
+    }
     function ratingColor(val) {
         const n = parseFloat(val);
+        const ramp = getRatingRamp();
         const [bg, label] = isNaN(n) ? ['#555', t('label_rating_unrated')]
-            : n >= 8.0 ? ['#22c55e', t('label_rating_great')]
-                : n >= 7.0 ? ['#84cc16', t('label_rating_good')]
-                    : n >= 6.0 ? ['#eab308', t('label_rating_average')]
-                        : n >= 5.0 ? ['#f97316', t('text_below_avg')]
-                            : ['#ef4444', t('label_rating_poor')];
+            : n >= 8.0 ? [ramp[4], t('label_rating_great')]
+                : n >= 7.0 ? [ramp[3], t('label_rating_good')]
+                    : n >= 6.0 ? [ramp[2], t('label_rating_average')]
+                        : n >= 5.0 ? [ramp[1], t('text_below_avg')]
+                            : [ramp[0], t('label_rating_poor')];
         return { bg, text:readableTextColor(bg), label };
     }
     function mcColor(s) { return s >= 75 ? '#6c3' : s >= 50 ? '#ffbd3f' : s >= 25 ? '#ff6874' : '#f00'; }
@@ -18739,8 +18772,8 @@ ${scopedRules('.enh-zoom', {
         experienceGrid.appendChild(makeFeatureCard(t('settings_tune_the_interface'), t('settings_refine_how_content_looks_and_is_presented'), 'Desktop', [
             'modernUI', 'editorialTitleSurface', 'compactHeader', 'enhancedRatingDisplay', 'widerLayout', 'ratingColorCoding',
             'collapsibleSections', 'expandSummaries', 'spoilerBlur', 'quickNav', 'dimLowRated', 'imageZoom',
-            'restoreImageContextMenu',
-         'largerThumbnails',], true));
+            'restoreImageContextMenu', 'largerThumbnails',
+        ], true));
         experiencePage.appendChild(experienceGrid);
         /* The threshold belongs with the toggle it qualifies. Changing it restarts the
            feature so the page repaints, rather than waiting for a reload. */
@@ -18757,6 +18790,32 @@ ${scopedRules('.enh-zoom', {
             },
         }, ...DIM_THRESHOLD_OPTIONS.map(option => makeEl('option', { value:option }, option)));
         dimThreshold.value = normalizeDimThreshold(get('dimRatingThreshold'));
+        /* IE-147: which scale the heatmap and the rating badges use. Colour-blind safe by
+           default, because the ramp it replaces is exactly the pair a deuteranomalous
+           viewer cannot separate. Changing it restarts both features that draw from it. */
+        const ratingRamp = makeEl('select', {
+            className:'enh-servarr-input',
+            id:'enh-rating-ramp',
+            'aria-label':t('aria_rating_colour_ramp'),
+            onChange: event => {
+                const value = normalizeRatingRamp(event.target.value);
+                event.target.value = value;
+                if (!trySaveSetting('ratingRamp', value)) return;
+                refreshFeature('episodeHeatmap');
+                refreshFeature('ratingColorCoding');
+                markSaved();
+            },
+        },
+            makeEl('option', { value:'accessible' }, t('settings_ramp_accessible')),
+            makeEl('option', { value:'classic' }, t('settings_ramp_classic'))
+        );
+        ratingRamp.value = normalizeRatingRamp(get('ratingRamp'));
+        experiencePage.appendChild(makeEl('div', { className:'enh-settings-callout' },
+            makeEl('strong', {}, t('settings_rating_colour_ramp')),
+            ratingRamp,
+            makeEl('span', { className:'enh-settings-card-description' },
+                t('settings_the_traditional_scale_is_unreadable'))
+        ));
         experiencePage.appendChild(makeEl('div', { className:'enh-settings-callout' },
             makeEl('strong', {}, t('aria_dim_titles_rated_below')),
             dimThreshold,
