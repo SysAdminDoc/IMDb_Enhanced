@@ -272,6 +272,15 @@
                         // kept as the platform-native alias.
                         finalUrl:String(response.responseURL || options.url || ''),
                         responseURL:String(response.responseURL || options.url || ''),
+                        /* The one header this build acts on. A manager hands back the raw
+                           block and the page parses it; a worker cannot, so it parses the
+                           seconds and passes the number. Dropping it here left every
+                           rate-limit hold at the default minute, which is the loop the
+                           hold exists to stop: a service asking for ten minutes was
+                           re-asked at one and refused again. */
+                        ...(Number.isFinite(Number(response.retryAfterMs))
+                            ? { retryAfterMs:Number(response.retryAfterMs) }
+                            : {}),
                     });
                     return;
                 }
@@ -2599,12 +2608,24 @@
         const status = Number(error?.status);
         return status === 401 || status === 403;
     }
-    async function cacheUnavailableUnlessBlocked(featureKey, cacheKey, error = null) {
+    /* Three kinds of failure must not be written down as "this title has no entry there".
+       An authentication problem is the user's to fix and the fix should take effect at
+       once. A rate limit is the service asking for a pause, and the pause is already held
+       by the request layer. A page whose structure has changed has not answered about this
+       title at all. All three used to land in the same 24-hour sentinel, so the widget said
+       what had actually happened once and then read back a bare "score unavailable" for a
+       day — the message both of those changes existed to replace. */
+    function isTransientLookupFailure(error, schemaChanged = false) {
+        if (schemaChanged) return true;
+        if (isAuthenticationHttpFailure(error)) return true;
+        return classifyFailure(error) === 'rate_limited';
+    }
+    async function cacheUnavailableUnlessBlocked(featureKey, cacheKey, error = null, schemaChanged = false) {
         if (!cacheKey) return false;
         /* Fixing a credential or access policy should take effect on the next request.
            A 24-hour unavailable sentinel would preserve the rejected answer long after
            the cause was fixed, so authentication failures never write one. */
-        if (isAuthenticationHttpFailure(error)) return false;
+        if (isTransientLookupFailure(error, schemaChanged)) return false;
         if (await hasFeatureOrigins(featureKey)) {
             cacheSetUnavailable(cacheKey);
             return false;
@@ -9925,7 +9946,7 @@ section[id*="quote" i] .ipc-list-card { padding: 4px 0 !important; margin: 2px 0
             /* Before giving up: a stored MDBList key answers this too, so a Letterboxd page
                that could not be read or matched is not the end of the lookup. */
             if (await renderMdbListScore(this, 'letterboxd', imdbId, isCurrent)) return;
-            const blocked = await cacheUnavailableUnlessBlocked(this.key, cacheKey, lookupError);
+            const blocked = await cacheUnavailableUnlessBlocked(this.key, cacheKey, lookupError, schemaChanged);
             if (!isCurrent()) return;
             if (schemaChanged) appendFailureJournal(this.key, 'schema');
             this._renderUnavailable(unavailableReasonFor(lookupError, blocked, schemaChanged));

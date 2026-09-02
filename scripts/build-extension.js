@@ -570,6 +570,15 @@ const bridgeFor = ({ trusted }) => String.raw`
                         // kept as the platform-native alias.
                         finalUrl:String(response.responseURL || options.url || ''),
                         responseURL:String(response.responseURL || options.url || ''),
+                        /* The one header this build acts on. A manager hands back the raw
+                           block and the page parses it; a worker cannot, so it parses the
+                           seconds and passes the number. Dropping it here left every
+                           rate-limit hold at the default minute, which is the loop the
+                           hold exists to stop: a service asking for ten minutes was
+                           re-asked at one and refused again. */
+                        ...(Number.isFinite(Number(response.retryAfterMs))
+                            ? { retryAfterMs:Number(response.retryAfterMs) }
+                            : {}),
                     });
                     return;
                 }

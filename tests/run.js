@@ -306,6 +306,8 @@ function loadScriptTestHooks({ withoutDeleteValue = false, withheldCredentials =
         computeRatingShape,
         describeRatingShape,
         providerPageLooksIntact,
+        isTransientLookupFailure,
+        failure,
         FAILURE_CATEGORIES,
         parseRetryAfter,
         readRetryAfter,
@@ -6689,10 +6691,14 @@ test('external access is requested per feature, not demanded at install', () => 
        through the failure-only helper. Derived, so the next source someone adds is
        covered instead of silently exempt. */
     const guardedLookups = Object.keys(loadScriptTestHooks().SCORE_WIDGET_IDS).length + 1;
-    assert.strictEqual((script.match(/cacheUnavailableUnlessBlocked\(this\.key, cacheKey(?:, (?:lookupError|tmdbError))?\)/g) || []).length, guardedLookups,
+    assert.strictEqual((script.match(/cacheUnavailableUnlessBlocked\(this\.key, cacheKey(?:, (?:lookupError|tmdbError))?(?:, schemaChanged)?\)/g) || []).length, guardedLookups,
         'every score and availability lookup must use the guarded form');
-    assert.strictEqual((script.match(/cacheUnavailableUnlessBlocked\(this\.key, cacheKey, lookupError\)/g) || []).length, guardedLookups - 1,
+    /* One of them also passes whether the source's page changed shape, which is a reason
+       not to write the sentinel at all. Counted together, so neither form can go missing. */
+    assert.strictEqual((script.match(/cacheUnavailableUnlessBlocked\(this\.key, cacheKey, lookupError(?:, schemaChanged)?\)/g) || []).length, guardedLookups - 1,
         'each ordinary provider failure must pass its real error to the cache guard');
+    assert.strictEqual((script.match(/cacheUnavailableUnlessBlocked\(this\.key, cacheKey, lookupError, schemaChanged\)/g) || []).length, 1,
+        'and the lookup that can tell a changed page from an absent entry must say which it was');
     assert.strictEqual((script.match(/cacheUnavailableUnlessBlocked\(this\.key, cacheKey, tmdbError\)/g) || []).length, 1,
         'the TMDB failure must pass its real error to the cache guard');
     assert.strictEqual((script.match(/cacheUnavailableUnlessBlocked\(this\.key, cacheKey\)/g) || []).length, 0,
@@ -7666,6 +7672,20 @@ test('a page that loaded but parsed to nothing is reported as a changed page', (
        at all, which already declines. */
     assert.strictEqual(hooks.isReachabilityFailure(null), false,
         'a schema change must not qualify for the stale-score fallback');
+
+    /* And it must not be written down as "no entry here" either. All three of these used to
+       land in the same 24-hour sentinel, so the widget said what had really happened once
+       and then read back a bare "score unavailable" for a day — the message these exist to
+       replace. */
+    assert.strictEqual(hooks.isTransientLookupFailure(null, true), true,
+        'a changed page has said nothing about this title and must not be cached as an answer');
+    const limited = hooks.failure('rate_limited', 'slow down');
+    assert.strictEqual(hooks.isTransientLookupFailure(limited, false), true,
+        'and a service asking for a pause has not answered either');
+    assert.strictEqual(hooks.isTransientLookupFailure({ status:403 }, false), true,
+        'the authentication case this started as still holds');
+    assert.strictEqual(hooks.isTransientLookupFailure(hooks.failure('network', 'down'), false), false,
+        'an ordinary outage is still cached, or every visit would re-ask a dead host');
 });
 
 /* IE-139: a 429 says the service is working and wants fewer requests. It was filed as an

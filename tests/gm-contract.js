@@ -61,9 +61,15 @@ function createManagerAdapter() {
             xmlHttpRequest: options => {
                 // Managers hand back finalUrl, which is why every consumer reads it.
                 setImmediate(() => options.onload && options.onload({
-                    status: 200,
+                    status: pendingResponseStatus,
                     responseText: 'body',
                     finalUrl: pendingResponseUrl,
+                    // A manager hands back the raw header block; the page reads it.
+                    ...(pendingRetryAfterMs === null
+                        ? {}
+                        : { responseHeaders: `content-type: text/html
+Retry-After: ${pendingRetryAfterMs / 1000}
+` }),
                 }));
                 return { abort() {} };
             },
@@ -83,6 +89,8 @@ function createManagerAdapter() {
  * Implementation B — the generated MV3 bridge, executed as it ships.
  * ------------------------------------------------------------------------- */
 let pendingResponseUrl = 'https://example.test/final';
+let pendingResponseStatus = 200;
+let pendingRetryAfterMs = null;
 
 async function createBridgeAdapter({ seed = {}, trusted = false } = {}) {
     const store = Object.create(null);
@@ -110,9 +118,10 @@ async function createBridgeAdapter({ seed = {}, trusted = false } = {}) {
                 if (typeof callback !== 'function') return;
                 if (message.type === 'imdb-enhanced:http') {
                     setImmediate(() => callback({
-                        status: 200,
+                        status: pendingResponseStatus,
                         responseText: 'body',
                         responseURL: pendingResponseUrl,
+                        ...(pendingRetryAfterMs === null ? {} : { retryAfterMs: pendingRetryAfterMs }),
                     }));
                 }
             },
@@ -458,6 +467,33 @@ async function runContract(adapter) {
         });
         assert.strictEqual(response.finalUrl, pendingResponseUrl,
             'post-redirect URL validation depends on finalUrl');
+    });
+
+    /* The other field the page cannot get any other way. A manager hands back the raw
+       header block and the page reads Retry-After out of it; a worker cannot, so it parses
+       the seconds and passes a number. The bridge dropped it while rebuilding the response,
+       so every rate-limit hold fell back to the default minute and a service asking for ten
+       was re-asked at one — the loop the hold exists to prevent. */
+    await check(label, 'a rate-limited response carries the wait the service asked for', async () => {
+        pendingResponseStatus = 429;
+        pendingRetryAfterMs = 600000;
+        try {
+            const response = await new Promise(resolve => {
+                gm.xmlHttpRequest({ url: 'https://graphql.anilist.co/', onload: resolve });
+            });
+            assert.strictEqual(response.status, 429);
+            /* Each shape carries it the way that shape can: a manager passes the header
+               block through, the bridge parses the one header and passes a number. What
+               matters is that neither drops it, since the page has no other source. */
+            const carried = Number.isFinite(Number(response.retryAfterMs))
+                ? Number(response.retryAfterMs) === 600000
+                : /retry-after:[ 	]*600(?![0-9])/i.test(String(response.responseHeaders || ''));
+            assert(carried,
+                `the hold length has to reach the page: ${JSON.stringify(response)}`);
+        } finally {
+            pendingResponseStatus = 200;
+            pendingRetryAfterMs = null;
+        }
     });
 }
 

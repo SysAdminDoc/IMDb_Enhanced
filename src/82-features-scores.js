@@ -1111,7 +1111,7 @@
             /* Before giving up: a stored MDBList key answers this too, so a Letterboxd page
                that could not be read or matched is not the end of the lookup. */
             if (await renderMdbListScore(this, 'letterboxd', imdbId, isCurrent)) return;
-            const blocked = await cacheUnavailableUnlessBlocked(this.key, cacheKey, lookupError);
+            const blocked = await cacheUnavailableUnlessBlocked(this.key, cacheKey, lookupError, schemaChanged);
             if (!isCurrent()) return;
             if (schemaChanged) appendFailureJournal(this.key, 'schema');
             this._renderUnavailable(unavailableReasonFor(lookupError, blocked, schemaChanged));
