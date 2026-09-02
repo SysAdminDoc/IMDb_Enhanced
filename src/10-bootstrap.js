@@ -1152,7 +1152,7 @@
 
     const STORAGE_HOST_LABEL = IS_EXTENSION_BUILD ? 'extension storage' : 'userscript storage';
     const COPY_FAILURE_MESSAGE = t('error_copy_failed');
-    const VERSION = '2.20.0';
+    const VERSION = '2.21.0';
     const PREFIX  = 'imdb_enh_';
     const CACHE_TTL = 7 * 24 * 60 * 60 * 1000; // 7 days — default for volatile score data
     /* Envelope ceiling, not the default. Stable cross-site identifiers are cached far
