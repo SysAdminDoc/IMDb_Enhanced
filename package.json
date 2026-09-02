@@ -14,6 +14,7 @@
     "check:frames": "node scripts/probe-decoration.js",
     "capture:fixtures": "node scripts/capture-fixtures.js",
     "capture:screenshots": "node scripts/capture-settings-screenshots.js",
+    "capture:surfaces": "node scripts/capture-surface-screenshots.js",
     "test:dom": "node scripts/run-bounded.js --mb=1536 --seconds=300 -- node tests/dom-fixtures.mjs",
     "build:firefox": "node scripts/build-userscript.js && node scripts/build-extension.js --firefox",
     "build-for-amo": "npm run build:firefox",

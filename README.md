@@ -221,6 +221,8 @@ Every string a person reads lives in `MESSAGES` near the top of `IMDb_Enhanced.u
 
 `npm run pack` rebuilds every profile and writes four archives plus their SHA-256 sums to `dist/`: the Chromium package from `extension/`, the Firefox one from `extension-firefox/`, the web-store one from `extension-store/`, and a source archive for AMO, which requires the source of any add-on it cannot read. The zip writer is part of the repository rather than a dependency, so the archives are deterministic: entries are sorted and written with a fixed timestamp, and two builds of the same commit produce identical bytes and identical checksums.
 
+`npm run capture:surfaces` renders the chart and episode fixtures with marks present under all five themes, writes a screenshot of each, and measures what it rendered: every piece of injected text is checked for WCAG AA against the colour actually painted behind it, and every absolutely positioned control is checked for staying inside the card it belongs to. A picture nobody opens proves nothing, so it fails on a defect rather than only recording one.
+
 `npm run check:frames` grows the chart fixture to 250 rows and measures how long the card decorators block the main thread, using the Long Animation Frames API rather than a stopwatch. `--baseline` runs the same page with those features off, so the fixture's own rendering cost can be subtracted rather than blamed on the extension.
 
 `npm run check:toplayer` opens the promoted surfaces in headless Chromium and reports whether anything still depends on the ancestor `:hover` matching that Chrome 149 removed across top-layer boundaries. It carries a positive control, so a clean report cannot come from a probe that stopped measuring.
