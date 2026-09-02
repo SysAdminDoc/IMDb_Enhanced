@@ -193,6 +193,8 @@ function loadScriptTestHooks({ withoutDeleteValue = false, withheldCredentials =
         filterSitesForMediaType,
         getLinkContext,
         DEFAULT_EXTERNAL_SITES,
+        URL_TEMPLATE_KEYS,
+        stremioTitleId,
         getWatchSearchTitle,
         getWatchLinkContext,
         applyLinkTemplate,
@@ -4519,15 +4521,16 @@ test('custom site templates require complete HTTP or HTTPS URLs', () => {
        template written into the defaults. A near miss is still refused, so the allowance
        cannot be widened by anything a person types or a backup carries. */
     assert.strictEqual(
-        hooks.normalizeUrlTemplate('stremio://detail/{{STREMIO_TYPE}}/{{IMDB_ID}}'),
-        'stremio://detail/{{STREMIO_TYPE}}/{{IMDB_ID}}');
+        hooks.normalizeUrlTemplate('stremio://detail/{{STREMIO_TYPE}}/{{STREMIO_ID}}'),
+        'stremio://detail/{{STREMIO_TYPE}}/{{STREMIO_ID}}');
     [
-        'stremio://detail/movie/{{IMDB_ID}}',
-        'stremio://detail/{{STREMIO_TYPE}}/{{IMDB_ID}}/',
-        'stremio://detail/{{STREMIO_TYPE}}/{{IMDB_ID}}?x=1',
+        'stremio://detail/movie/{{STREMIO_ID}}',
+        'stremio://detail/{{STREMIO_TYPE}}/{{IMDB_ID}}',
+        'stremio://detail/{{STREMIO_TYPE}}/{{STREMIO_ID}}/',
+        'stremio://detail/{{STREMIO_TYPE}}/{{STREMIO_ID}}?x=1',
         ' stremio://detail/{{STREMIO_TYPE}}/{{TITLE}}',
         'stremio://anything',
-        'STREMIO://detail/{{STREMIO_TYPE}}/{{IMDB_ID}}',
+        'STREMIO://detail/{{STREMIO_TYPE}}/{{STREMIO_ID}}',
     ].forEach(template => assert.strictEqual(hooks.normalizeUrlTemplate(template), '',
         `a template that is not the built-in one must stay refused: ${template}`));
     assert.strictEqual(hooks.normalizeUrlTemplate('https://user:secret@example.com/search'), '');
@@ -5347,11 +5350,21 @@ test('the Stremio entry hands a title to the app and stays hidden until asked fo
     assert(hooks.normalizeSite(stremio), 'and must survive the same normalization every other entry goes through');
 
     const film = hooks.getLinkContext('The Matrix', 'tt0133093', '1999');
-    assert.strictEqual(hooks.applyLinkTemplate(stremio.url, { ...film, STREMIO_TYPE:'movie' }),
+    assert.strictEqual(hooks.applyLinkTemplate(stremio.url, { ...film, STREMIO_TYPE:'movie', STREMIO_ID:'tt0133093' }),
         'stremio://detail/movie/tt0133093');
-    assert.strictEqual(hooks.applyLinkTemplate(stremio.url, { ...film, STREMIO_TYPE:'series' }),
-        'stremio://detail/series/tt0133093',
+    assert.strictEqual(hooks.applyLinkTemplate(stremio.url, { ...film, STREMIO_TYPE:'series', STREMIO_ID:'tt0903747' }),
+        'stremio://detail/series/tt0903747',
         'a series opens the series route, which Stremio spells differently from Trakt');
+    /* Stremio addresses a series by the series id. An episode page's own id there
+       resolves to nothing, so an episode has to lift to the show it belongs to. */
+    assert.strictEqual(hooks.stremioTitleId('tt2364777', {
+        '@type':'TVEpisode',
+        partOfSeries:{ '@type':'TVSeries', url:'https://www.imdb.com/title/tt0903747/' },
+    }), 'tt0903747', 'an episode resolves to its series');
+    assert.strictEqual(hooks.stremioTitleId('tt0133093', { '@type':'Movie' }), 'tt0133093',
+        'and a film stays itself');
+    assert.strictEqual(hooks.stremioTitleId('tt2364777', { '@type':'TVEpisode' }), 'tt2364777',
+        'an episode whose page does not name its series keeps its own id rather than emptying');
     /* Both tokens it uses are resolved, which is what stops a half-expanded scheme URL
        from being handed to the operating system. */
     assert(!hooks.applyLinkTemplate(stremio.url, hooks.getLinkContext('X', 'tt1', '2000')).includes('{{'),
@@ -8358,6 +8371,13 @@ test('public documentation matches what the project actually ships', () => {
         assert(/no git tags or GitHub releases yet/i.test(readme),
             'the README should say plainly that no tags or releases exist yet');
     }
+
+    /* The checker expands templates from a sample context of its own, and a token missing
+       from it silently becomes an empty path segment in the report. */
+    const checkerSource = fs.readFileSync(path.join(root, 'scripts', 'check-destinations.js'), 'utf8');
+    const sample = checkerSource.slice(checkerSource.indexOf('const SAMPLE = {'), checkerSource.indexOf('const MAX_REDIRECTS'));
+    loadScriptTestHooks().URL_TEMPLATE_KEYS.forEach(key => assert(sample.includes(`${key}:`),
+        `the destination checker has no sample value for the ${key} token`));
 
     // Every npm script the README names has to exist.
     const scripts = Object.keys(packageJson.scripts || {});

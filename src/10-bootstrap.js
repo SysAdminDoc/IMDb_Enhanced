@@ -1248,7 +1248,7 @@
     const SITE_CATEGORY_LABELS = Object.fromEntries(SITE_CATEGORY_OPTIONS.map(option => [option.key, option.label]));
     const URL_TEMPLATE_KEYS = new Set([
         'TITLE', 'TITLE_RAW', 'TITLE_DASH', 'TITLE_SLUG',
-        'IMDB_ID', 'IMDB_NUM', 'TRAKT_TYPE', 'STREMIO_TYPE', 'YEAR',
+        'IMDB_ID', 'IMDB_NUM', 'TRAKT_TYPE', 'STREMIO_TYPE', 'STREMIO_ID', 'YEAR',
     ]);
     /* IE-144: the link validator refuses every non-HTTP(S) template, which is right for
        anything somebody types and wrong for the one destination people actually ask for.
@@ -1260,7 +1260,7 @@
        to one written here or it goes through the ordinary HTTP(S) rules. That keeps the
        scheme allowlist to precisely these destinations and no others. */
     const BUILT_IN_APP_LINK_TEMPLATES = new Set([
-        'stremio://detail/{{STREMIO_TYPE}}/{{IMDB_ID}}',
+        'stremio://detail/{{STREMIO_TYPE}}/{{STREMIO_ID}}',
     ]);
     /* Which origins each feature actually needs, and nothing more. The extension used to
        demand every score, availability, ad, video and loopback origin at install even
@@ -1583,7 +1583,7 @@
         /* Hidden for a different reason: this one only does anything on a machine with
            Stremio installed, and a button that silently fails everywhere else is worse
            than no button. */
-        { name:'Stremio', color:'#8a5aab', url:'stremio://detail/{{STREMIO_TYPE}}/{{IMDB_ID}}', category:'availability', enabled:false },
+        { name:'Stremio', color:'#8a5aab', url:'stremio://detail/{{STREMIO_TYPE}}/{{STREMIO_ID}}', category:'availability', enabled:false },
     ];
     /* Every streaming destination from the FMHY video wiki
        (reddit.com/r/FREEMEDIAHECKYEAH/wiki/video, snapshot 2026-08-31), one entry per

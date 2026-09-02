@@ -2171,9 +2171,22 @@ await runFixture('title', async (window, hooks) => {
 
     assert.equal(hooks.getStoredSetting('parentsGuideSeverity'), false, 'the feature is off by default');
 
+    /* ok is derived rather than declared, because a real Response with status 202 reports
+       ok:true - a stub that says otherwise would let the production code test ok before
+       status and still pass. The options are recorded too: without them, changing
+       credentials to omit, which is the exact failure this feature is designed around,
+       went unnoticed. */
     let fetches = [];
-    let answer = () => ({ ok:true, status:200, text: async () => guideHtml });
-    window.fetch = url => { fetches.push(String(url)); return Promise.resolve(answer()); };
+    let answer = () => ({ status:200, text: async () => guideHtml });
+    window.fetch = (url, options) => {
+        const shaped = answer();
+        fetches.push({ url:String(url), options, status:shaped.status });
+        return Promise.resolve({
+            ...shaped,
+            ok: shaped.status >= 200 && shaped.status < 300,
+            headers: { get: () => null },
+        });
+    };
 
     window.GM_setValue('imdb_enh_parentsGuideSeverity', true);
     await hooks.runFeature('editorialTitleSurface');
@@ -2193,7 +2206,12 @@ await runFixture('title', async (window, hooks) => {
     };
 
     leftClick();
-    assert.deepEqual(fetches, ['/title/tt0133093/parentalguide/'], 'the click reads the guide, same-origin');
+    assert.equal(fetches.length, 1, 'the click reads the guide');
+    assert.equal(fetches[0].url, '/title/tt0133093/parentalguide/', 'from IMDb itself, by path');
+    assert.equal(fetches[0].options.credentials, 'same-origin',
+        'with the tab cookies, without which IMDb answers a challenge instead of the page');
+    assert.equal(fetches[0].options.headers.Accept, 'text/html');
+    assert.ok(fetches[0].options.signal, 'and something to cancel it with');
     const panel = await settleGuide();
     const chips = [...panel.querySelectorAll('.enh-pg-chip')];
     assert.equal(chips.length, 5, 'five severity chips');
@@ -2213,6 +2231,33 @@ await runFixture('title', async (window, hooks) => {
     assert.equal(window.document.getElementById('enh-parents-guide'), null, 'a second click collapses it');
     assert.equal(link.getAttribute('aria-expanded'), 'false');
 
+    /* IMDb draws the certificate chip beside the title as a link to the same route, and
+       turning "R" into a disclosure for severities is not what anybody clicking a content
+       rating asked for. Nor is a link to somebody else's guide this title's business. */
+    const hero = requireSelector(window.document, 'section[data-testid="hero-parent"]');
+    const certificate = window.document.createElement('a');
+    certificate.setAttribute('href', '/title/tt0133093/parentalguide/');
+    certificate.textContent = 'R';
+    hero.appendChild(certificate);
+    const otherTitle = window.document.createElement('a');
+    otherTitle.setAttribute('href', '/title/tt0903747/parentalguide/');
+    otherTitle.textContent = 'Parents guide';
+    hero.appendChild(otherTitle);
+
+    let ignoredPrevented = null;
+    const watchIgnored = event => { ignoredPrevented = event.defaultPrevented; event.preventDefault(); };
+    window.document.addEventListener('click', watchIgnored, true);
+    certificate.dispatchEvent(new window.MouseEvent('click', { bubbles:true, cancelable:true, button:0 }));
+    assert.equal(ignoredPrevented, false, 'the content-rating chip is still a link to the page');
+    assert.equal(window.document.getElementById('enh-parents-guide'), null, 'and expands nothing');
+    otherTitle.dispatchEvent(new window.MouseEvent('click', { bubbles:true, cancelable:true, button:0 }));
+    assert.equal(ignoredPrevented, false, "a link to another title's guide is left alone");
+    assert.equal(window.document.getElementById('enh-parents-guide'), null,
+        'and never answered with this title severities');
+    window.document.removeEventListener('click', watchIgnored, true);
+    certificate.remove();
+    otherTitle.remove();
+
     /* Anything but a plain left click is somebody opening the page for real. The guard
        below stops the click short of an actual navigation, which would tear down the
        document this test is still using; it registers after the feature's own capturing
@@ -2230,7 +2275,7 @@ await runFixture('title', async (window, hooks) => {
        it is distinguishable from IMDb being down and from IMDb changing its markup. */
     const failuresBefore = hooks.getFeatureFailures().length;
     fetches = [];
-    answer = () => ({ ok:false, status:202, text: async () => '<html><body>challenge</body></html>' });
+    answer = () => ({ status:202, text: async () => '<html><body>challenge</body></html>' });
     leftClick();
     const refused = await settleGuide();
     assert.match(refused.textContent, /would not serve the guide/, 'a challenge is shown as a refusal');
@@ -2421,6 +2466,15 @@ await runFixture('chart', async (window, hooks) => {
     assert.equal(askedHeight(thumbs[1].getAttribute('src')), 300,
         'a 150-pixel thumbnail is asked for at 300');
     assert.equal(thumbs[1].style.getPropertyValue('--enh-thumb-width'), '204px');
+    /* Every extension the variant pattern accepts, not just the one this fixture uses:
+       asserting .jpg on a .jpg input passes even with the extension hardcoded. */
+    [['jpg', 'jpg'], ['jpeg', 'jpeg'], ['png', 'png']].forEach(([extension, expected]) => {
+        const rewritten = hooks.boundedImageVariant(
+            `https://m.media-amazon.com/images/M/MV5BABC._V1_QL75_UX67_.${extension}`, 400);
+        assert.ok(rewritten.endsWith(`.${expected}`),
+            `a .${extension} thumbnail must stay a .${extension} after the rewrite, got ${rewritten}`);
+        assert.ok(rewritten.includes('_UY400_'), 'and must carry the size that was asked for');
+    });
     assert.ok(enlarged.getAttribute('src').endsWith('.jpg'),
         'and the rewritten URL keeps the extension the original had');
     assert.equal(enlarged.hasAttribute('srcset'), false,

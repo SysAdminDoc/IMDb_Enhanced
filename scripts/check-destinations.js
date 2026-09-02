@@ -35,6 +35,8 @@ const SAMPLE = {
     IMDB_ID: 'tt0133093',
     IMDB_NUM: '0133093',
     TRAKT_TYPE: 'movie',
+    STREMIO_TYPE: 'movie',
+    STREMIO_ID: 'tt0133093',
     YEAR: '1999',
 };
 
@@ -276,7 +278,11 @@ async function main() {
         const startUrl = expand(site.url);
         let startHost = '';
         try { startHost = new URL(startUrl).host; } catch { /* reported as a bad template */ }
-        const isAppLink = !/^https?:$/i.test((/^([a-z][a-z0-9+.-]*:)/i.exec(startUrl) || [])[1] || '');
+        /* Named schemes only. Testing for "not http(s)" made every malformed or
+           scheme-less template look like an application link and pass with no review,
+           which is the opposite of what a health report is for. */
+        const APP_SCHEMES = /^stremio:$/i;
+        const isAppLink = APP_SCHEMES.test((/^([a-z][a-z0-9+.-]*:)/i.exec(startUrl) || [])[1] || '');
         const result = isAppLink
             ? { category: CATEGORY.APP_LINK, status: null, chain: [], finalUrl: startUrl, sampleMentioned: false,
                 review: 'Opens an installed application. Nothing to request, so nothing is checked here.' }

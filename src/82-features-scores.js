@@ -2492,9 +2492,30 @@
        href is the fragment for that section, beside an .ipc-html-content-inner-div holding
        the severity word. The page carries no JSON-LD and no severity data in its
        application-data blob, so the rendered list is the only source. */
+    /* Which title's guide a link points at, from the path alone. A link to a different
+       title's guide is somebody else's link. */
+    function getLinkedGuideId(href) {
+        const path = String(href || '');
+        if (!/\/parentalguide\/?(?:[?#]|$)/.test(path)) return '';
+        return (path.match(/\/title\/(tt\d+)\//) || [])[1] || '';
+    }
+    /* IMDb draws the certificate chip beside the title as a link to the same route, and
+       turning "R" into a disclosure for severities is not what anybody clicking a content
+       rating asked for. A link that reads as the guide says so in its own text - which is
+       translated, so this compares against the catalog's word for it rather than English -
+       or is one this extension drew itself. */
+    function looksLikeParentsGuideLink(link) {
+        if (link.classList?.contains('enh-editorial-subnav__link')) return true;
+        const label = (link.textContent || '').trim().toLowerCase();
+        if (!label) return false;
+        return label === String(t('text_parents_guide')).trim().toLowerCase();
+    }
+
     const PARENTS_GUIDE_ROW_LIMIT = 8;
     const PARENTS_GUIDE_TEXT_LIMIT = 48;
     const PARENTS_GUIDE_HTML_LIMIT = 3_000_000;
+    // The same ceiling the shared request path uses, for the same reason.
+    const PARENTS_GUIDE_TIMEOUT_MS = 10000;
     /* IMDb's own vocabulary. Used to colour a chip and for nothing else: a locale that
        translates these still gets the word IMDb gave it, uncoloured, rather than nothing. */
     const PARENTS_GUIDE_SEVERITIES = { none:0, mild:1, moderate:2, severe:3 };
@@ -2533,6 +2554,8 @@
         key: 'parentsGuideSeverity', name: t('feature_parentsGuideSeverity_name'), group: 'Features',
         _handler: null,
         _panel: null,
+        _owner: null,
+        _abort: null,
         _state: 'idle',
         init() {
             if (!isIMDbHost()) return;
@@ -2574,8 +2597,19 @@
                 if (event.button !== 0 || event.metaKey || event.ctrlKey || event.shiftKey || event.altKey) return;
                 const link = event.target.closest?.('a[href*="/parentalguide"]');
                 if (!link || link.closest('#enh-parents-guide')) return;
+                /* Only a link to THIS title's guide, and only a link that reads as one.
+                   IMDb draws the certificate chip beside the title as a link to the same
+                   route, and turning "R" into a disclosure for severities is not what
+                   anybody clicking a content rating asked for. The href is checked too, so
+                   a link to a different title's guide is left alone rather than answered
+                   with this title's severities. */
+                if (getLinkedGuideId(link.getAttribute('href')) !== imdbId) return;
+                if (!looksLikeParentsGuideLink(link)) return;
+
                 event.preventDefault();
-                event.stopPropagation();
+                /* preventDefault is enough. stopPropagation here, first in the capture
+                   phase at the document, would take the click away from every other
+                   listener on the page including this extension's own. */
                 this._toggle(link, imdbId, isCurrent);
             };
             document.addEventListener('click', this._handler, true);
@@ -2584,11 +2618,14 @@
             const existing = document.getElementById('enh-parents-guide');
             if (existing) {
                 /* A second click puts it away. The link goes back to being a link, so the
-                   page is never more than two clicks away either. */
-                existing.remove();
-                this._panel = null;
-                this._state = 'idle';
-                link.setAttribute('aria-expanded', 'false');
+                   page is never more than two clicks away either.
+
+                   The expanded state is cleared on whichever link opened it, not on the
+                   one just clicked: a page can carry more than one link to the same guide,
+                   and closing from the second used to leave the first announcing an
+                   expanded panel that no longer existed. */
+                this._collapse();
+                if (this._owner !== link) link.setAttribute('aria-expanded', 'false');
                 return;
             }
             const panel = makeEl('div', {
@@ -2597,14 +2634,43 @@
                 'aria-label':t('aria_parents_guide_severities'),
             }, makeEl('span', { className:'enh-pg-note' }, t('label_checking')));
             this._panel = panel;
+            this._owner = link;
             link.setAttribute('aria-expanded', 'true');
-            (link.closest('nav') || link.parentElement)?.insertAdjacentElement('afterend', panel);
+            /* Below the whole bar the link sits in, never beside the link. Dropping it
+               after a link inside a flex nav made the chips a third column of that nav,
+               sharing its row; and a div placed as a sibling inside a metadata list is
+               invalid markup as well as misplaced. */
+            const host = link.closest('.enh-editorial-subnav, nav, [data-testid="hero-parent"]')
+                || link.parentElement;
+            host?.insertAdjacentElement('afterend', panel);
             this._load(imdbId, panel, isCurrent);
         },
+        _collapse() {
+            this._abort?.abort();
+            this._abort = null;
+            document.getElementById('enh-parents-guide')?.remove();
+            this._panel = null;
+            this._state = 'idle';
+            this._owner?.setAttribute('aria-expanded', 'false');
+            this._owner = null;
+        },
         async _load(imdbId, panel, isCurrent) {
+            /* A second open while the first is still open is impossible - the panel is the
+               guard - but a route change during a read is not, and neither is a stalled
+               connection. Both end the request rather than the render: without this the
+               panel sat on Checking for as long as the socket did, and a navigation left a
+               multi-megabyte download and a DOMParser running for a page nobody was on. */
+            this._abort?.abort();
+            const controller = typeof AbortController === 'function' ? new AbortController() : null;
+            this._abort = controller;
+            const timer = controller
+                ? setTimeout(() => controller.abort(), PARENTS_GUIDE_TIMEOUT_MS)
+                : null;
+            const cancel = () => controller?.abort();
+            pendingRouteWorkCancels.add(cancel);
             this._state = 'loading';
             try {
-                const rows = await this._fetch(imdbId);
+                const rows = await this._fetch(imdbId, controller?.signal);
                 if (!isCurrent() || !panel.isConnected) return;
                 this._state = 'done';
                 this._render(panel, imdbId, rows);
@@ -2621,9 +2687,13 @@
                         href:`/title/${imdbId}/parentalguide/`,
                     }, t('text_open_the_full_guide'))
                 );
+            } finally {
+                clearTimeout(timer);
+                pendingRouteWorkCancels.delete(cancel);
+                if (this._abort === controller) this._abort = null;
             }
         },
-        async _fetch(imdbId) {
+        async _fetch(imdbId, signal) {
             let response = null;
             try {
                 /* same-origin, so the tab's cookies go with it. Without them IMDb's WAF
@@ -2631,18 +2701,29 @@
                 response = await fetch(`/title/${imdbId}/parentalguide/`, {
                     credentials:'same-origin',
                     headers:{ Accept:'text/html' },
+                    signal,
                 });
             } catch (error) {
+                if (signal?.aborted) throw failure('aborted', t('error_request_aborted'));
                 throw failure('network', getRequestErrorMessage(error));
             }
             /* 202 is the WAF's challenge interstitial, not a success and not a server
                fault: the request was refused pending a check this cannot perform. Filed
                as a refusal so the journal distinguishes it from IMDb being down and from
-               IMDb having changed its markup. */
+               IMDb having changed its markup. A real Response with status 202 reports
+               ok:true, so this is tested before ok, not after it. */
             if (response.status === 202) throw failure('permission', t('error_parents_guide_challenged'));
             if (!response.ok) throw failure('http', `HTTP ${response.status}`);
-            const rows = parseParentsGuideSeverities(await response.text());
-            // Landmark gone means the page is no longer the page this reads.
+            /* Refused on the declared length where there is one, rather than after the
+               whole body has already been read into a string. A guide page is a few
+               hundred kilobytes; anything at the cap is not one. */
+            const declared = Number(response.headers?.get?.('content-length')) || 0;
+            if (declared > PARENTS_GUIDE_HTML_LIMIT) throw failure('schema', t('error_parents_guide_changed'));
+            const html = await response.text();
+            const rows = parseParentsGuideSeverities(html);
+            /* Landmark gone means the page is no longer the page this reads - which is
+               also what a challenge served as a 200 looks like, and there is no way to
+               tell those apart from the body alone. */
             if (rows === null) throw failure('schema', t('error_parents_guide_changed'));
             return rows;
         },
@@ -2665,6 +2746,9 @@
             removeCSS('enh-parentsGuideSeverity');
             if (this._handler) document.removeEventListener('click', this._handler, true);
             this._handler = null;
+            this._abort?.abort();
+            this._abort = null;
+            this._owner = null;
             document.getElementById('enh-parents-guide')?.remove();
             document.querySelectorAll('a[href*="/parentalguide"][aria-expanded]')
                 .forEach(link => link.removeAttribute('aria-expanded'));

@@ -326,7 +326,6 @@ section[id*="quote" i] .ipc-list-card { padding: 4px 0 !important; margin: 2px 0
         '.ipc-metadata-list-summary-item img',
         '[data-testid="title-cast-item__avatar"] img',
         '[data-testid="shoveler-item-poster"] img',
-        '.ipc-sub-grid-item img',
     ].join(', ');
     const LARGE_THUMB_SCALE = 2;
     /* The hero poster is already the big one on the page, and the settings panel draws
@@ -340,9 +339,13 @@ section[id*="quote" i] .ipc-list-card { padding: 4px 0 !important; margin: 2px 0
        the attributes are there before the picture is. */
     function readThumbnailWidth(img) {
         const declared = Number(img?.getAttribute?.('width')) || 0;
-        if (declared >= LARGE_THUMB_MIN) return Math.min(declared, LARGE_THUMB_MAX);
         const measured = Number(img?.getBoundingClientRect?.().width) || 0;
-        if (measured >= LARGE_THUMB_MIN) return Math.min(Math.round(measured), LARGE_THUMB_MAX);
+        /* The smaller of the two where both are known. IMDb declares a width on images
+           that CSS then renders narrower, and doubling the declared number there produces
+           a picture wider than the track it sits in - an overflow rather than a resize.
+           What is on screen is what is being doubled. */
+        const candidates = [declared, measured].filter(value => value >= LARGE_THUMB_MIN);
+        if (candidates.length) return Math.min(Math.round(Math.min(...candidates)), LARGE_THUMB_MAX);
         const natural = Number(img?.naturalWidth) || 0;
         if (natural >= LARGE_THUMB_MIN) return Math.min(natural, LARGE_THUMB_MAX);
         return 0;
@@ -371,13 +374,24 @@ section[id*="quote" i] .ipc-list-card { padding: 4px 0 !important; margin: 2px 0
                 if (this._raf) return;
                 this._raf = requestAnimationFrame(() => { this._raf = 0; scan(); });
             });
-            this._observer.observe(document.body, { childList:true, subtree:true });
+            /* Attributes too: IMDb's hydration sets an image's src after mount, and an
+               img that had none at scan time was skipped and never looked at again. The
+               marker is written before the src is, so the feature's own writes come back
+               here and return immediately rather than looping. */
+            this._observer.observe(document.body, {
+                childList:true, subtree:true, attributes:true, attributeFilter:['src', 'srcset'],
+            });
             scan();
         },
         _enlarge(img) {
             if (!img || img.dataset.enhBigThumb || img.closest(LARGE_THUMB_EXCLUDE)) return;
-            const source = img.currentSrc || img.getAttribute('src') || '';
-            if (!source) return;
+            /* currentSrc says which candidate the browser actually chose, which is the
+               right thing to ask IMDb for a bigger version of. The attribute is what has
+               to go back on teardown: on a HiDPI display currentSrc is the 2x candidate,
+               so restoring that would leave a different URL than was there before. */
+            const attribute = img.getAttribute('src') || '';
+            const source = img.currentSrc || attribute;
+            if (!source || !attribute) return;
             const width = readThumbnailWidth(img);
             if (!width) return;
             /* Height, because that is what the variant helper asks IMDb for. A poster is
@@ -387,7 +401,7 @@ section[id*="quote" i] .ipc-list-card { padding: 4px 0 !important; margin: 2px 0
             const bigger = boundedImageVariant(source, height * LARGE_THUMB_SCALE);
             if (!bigger) return;
             img.dataset.enhBigThumb = '1';
-            img.dataset.enhThumbSrc = source;
+            img.dataset.enhThumbSrc = attribute;
             /* srcset wins over src, so leaving it would mean the browser keeps choosing
                the small file and the whole rewrite does nothing visible. */
             if (img.hasAttribute('srcset')) {

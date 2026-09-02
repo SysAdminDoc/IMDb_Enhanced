@@ -180,6 +180,14 @@
         return trySaveSetting(key, normalized, { notify:notifyFailure });
     }
 
+    function stremioTitleId(imdbId, ld = getLDData()) {
+        const id = imdbId || '';
+        if (getStructuredMediaType(ld) !== 'episode') return id;
+        const series = structuredDataTitleId(ld?.partOfSeries)
+            || structuredDataTitleId(ld?.partOfSeason?.partOfSeries);
+        return series || id;
+    }
+
     function getLinkContext(title = getTitleText(), imdbId = getIMDbID(), year = getTitleYear()) {
         const rawTitle = title || '';
         return {
@@ -192,6 +200,11 @@
             TRAKT_TYPE: isTVType() ? 'show' : 'movie',
             // Stremio's own words for the same distinction, which are not Trakt's.
             STREMIO_TYPE: isTVType() ? 'series' : 'movie',
+            /* Stremio addresses a series by the series id. An episode page's own id in
+               that slot resolves to nothing at all, so an episode lifts to the show it
+               belongs to - the same lift the watch-site search already does for the
+               title, read from the same structured data and costing no request. */
+            STREMIO_ID: stremioTitleId(imdbId),
             YEAR: year || '',
         };
     }
