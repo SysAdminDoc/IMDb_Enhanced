@@ -1590,6 +1590,37 @@
                 'castAges',
             ])
         ));
+        /* The redirect this switches runs at document-start on IMDb's mobile host, before
+           any feature is initialized and on a page the registry never reaches, so it is
+           not a registered feature and cannot be one. It still needs somewhere to be
+           turned off: the setting existed, the README said you could switch it off, and
+           the only way to actually do it was to hand-edit a settings backup and import it. */
+        const mobileCard = makeCard(t('settings_heading_mobile_links'), t('settings_desktop_from_mobile_help'));
+        const mobileRow = makeEl('div', { className:'enh-settings-row' },
+            makeEl('div', { className:'enh-settings-row-copy' },
+                makeEl('span', { className:'enh-settings-label' }, t('aria_open_mobile_links_on_the_desktop_site'))
+            )
+        );
+        const mobileToggle = makeEl('label', { className:'enh-toggle' });
+        const mobileInput = makeEl('input', {
+            id:'enh-desktop-from-mobile-toggle',
+            type:'checkbox',
+            'aria-label':t('aria_open_mobile_links_on_the_desktop_site'),
+        });
+        mobileInput.checked = get('desktopFromMobileLinks') !== false;
+        mobileInput.addEventListener('change', () => {
+            const enabled = mobileInput.checked;
+            if (!trySaveSetting('desktopFromMobileLinks', enabled)) {
+                mobileInput.checked = !enabled;
+                return;
+            }
+            markSaved();
+        });
+        mobileToggle.append(mobileInput, makeEl('span', { className:'enh-toggle-track' }));
+        mobileRow.appendChild(mobileToggle);
+        mobileCard.appendChild(mobileRow);
+        toolsPage.appendChild(mobileCard);
+
         toolsPage.appendChild(makeEl('div', { className:'enh-settings-callout', style:{ justifyContent:'center' } },
             makeEl('strong', {}, t('settings_when_optional_keyboard_shortcuts_is_enabled')),
             makeEl('span', { className:'enh-settings-kbd' }, '?'), 'Open settings',

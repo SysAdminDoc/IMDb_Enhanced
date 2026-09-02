@@ -3917,6 +3917,14 @@ test('a mobile IMDb address is rewritten to the desktop one, path and all', () =
     const boot = script.slice(script.indexOf('registerManagerMenuCommands();', script.length - 4000));
     assert(/get\('desktopFromMobileLinks'\) !== false/.test(boot),
         'the redirect must consult the setting rather than always firing');
+    /* And switchable off in the product, not only in a settings file. The setting had a
+       default, a reader here and the README's word that it could be turned off, and no
+       control anywhere: hand-editing a backup and importing it was the only way. The
+       control is exercised against the rendered panel in tests/dom-fixtures.mjs. */
+    assert(script.includes("id:'enh-desktop-from-mobile-toggle'"),
+        'the setting needs a control, since the redirect runs before any feature and cannot be one');
+    assert(/trySaveSetting\('desktopFromMobileLinks', enabled\)/.test(script),
+        'and that control has to write the key the redirect reads');
 
     /* It has to happen before anything paints, and it has to replace rather than push, or
        the back button bounces between the two hosts forever. */

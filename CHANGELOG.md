@@ -10,6 +10,8 @@
 
 ### Fixed
 
+- The setting that opens phone links on the desktop site has a switch now. It was on by default, the README said you could turn it off, and there was nowhere to do it: hand-editing a settings backup and importing it was the only way. It sits under Tools. The redirect itself runs before any feature starts, on a page the feature list never reaches, which is why it is a plain control rather than one of them.
+
 - The extension's daily update check is now declared like every other host this build can reach. It reads the published version number from GitHub once a day so the panel can say when a newer build exists, and it was the one request that appeared in no manifest and no privacy list, because GitHub answers a background worker without asking for a permission first. It is named in the provider registry and in the README now, and the build refuses to produce a worker that contacts a host nothing declares. Turning off the update notice stops the request.
 
 - The Jellyfin library check works again on Jellyfin 12. That release stopped reading the `X-Emby-Token` header unless the server operator turns legacy authorization back on, so the check had quietly stopped finding anything. The token now travels in the `MediaBrowser` authorization scheme Jellyfin has always accepted, which older 10.x servers read as well. Emby is untouched, since it still uses the header Jellyfin retired.

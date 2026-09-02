@@ -1571,6 +1571,15 @@
   "settings_heading_score_sources": {
     "message": "[!! Score sources !!]"
   },
+  "settings_heading_mobile_links": {
+    "message": "[!! Mobile links !!]"
+  },
+  "settings_desktop_from_mobile_help": {
+    "message": "[!! A link copied from a phone points at IMDb’s mobile site, which this does not run on. Opening one on a computer takes you to the same page on the normal site instead. Phones are left alone. !!]"
+  },
+  "aria_open_mobile_links_on_the_desktop_site": {
+    "message": "[!! Open mobile links on the desktop site !!]"
+  },
   "settings_heading_updates": {
     "message": "[!! Updates !!]"
   },

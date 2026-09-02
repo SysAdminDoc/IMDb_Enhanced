@@ -1913,6 +1913,21 @@ await runFixture('title', async (window, hooks) => {
 
     window.GM_setValue('imdb_enh_userMarks', {});
     window.document.dispatchEvent(new window.CustomEvent('imdb-enhanced:marks-updated'));
+
+    /* The mobile-link redirect had a stored setting, a reader at document-start and the
+       README's word that it could be switched off, and no control anywhere: the only way
+       to turn it off was to hand-edit a settings backup and import it. */
+    const mobileToggle = requireSelector(window.document, '#enh-desktop-from-mobile-toggle');
+    assert.equal(mobileToggle.checked, true, 'the redirect is on unless it has been turned off');
+    mobileToggle.checked = false;
+    mobileToggle.dispatchEvent(new window.Event('change', { bubbles:true }));
+    assert.equal(window.GM_getValue('imdb_enh_desktopFromMobileLinks'), false,
+        'unticking it has to reach the value the document-start redirect reads');
+    mobileToggle.checked = true;
+    mobileToggle.dispatchEvent(new window.Event('change', { bubbles:true }));
+    assert.equal(window.GM_getValue('imdb_enh_desktopFromMobileLinks'), true,
+        'and ticking it back on restores the redirect');
+
     hooks.destroySettingsChrome();
 
     ['watchedMarking', 'titleNotes', 'quickCopyID', 'collapsibleSections'].forEach(hooks.stopFeature);
