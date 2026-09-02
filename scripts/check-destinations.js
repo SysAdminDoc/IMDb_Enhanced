@@ -91,6 +91,10 @@ const CATEGORY = {
     DNS_ERROR: 'dns-error',
     TIMEOUT: 'timeout',
     NETWORK_ERROR: 'network-error',
+    /* A link that hands the title to an installed application rather than to a page.
+       There is nothing on the other end to request, so probing one and reporting the
+       failure would put a permanent false alarm in the report. */
+    APP_LINK: 'app-link',
 };
 
 const BOT_WALL = /(just a moment|checking your browser|cf-browser-verification|attention required|enable javascript and cookies|ddos-guard|anubis|captcha|are you a robot)/i;
@@ -272,8 +276,12 @@ async function main() {
         const startUrl = expand(site.url);
         let startHost = '';
         try { startHost = new URL(startUrl).host; } catch { /* reported as a bad template */ }
-        const result = await probe(startUrl);
-        const category = classifyDestination(site, result);
+        const isAppLink = !/^https?:$/i.test((/^([a-z][a-z0-9+.-]*:)/i.exec(startUrl) || [])[1] || '');
+        const result = isAppLink
+            ? { category: CATEGORY.APP_LINK, status: null, chain: [], finalUrl: startUrl, sampleMentioned: false,
+                review: 'Opens an installed application. Nothing to request, so nothing is checked here.' }
+            : await probe(startUrl);
+        const category = isAppLink ? CATEGORY.APP_LINK : classifyDestination(site, result);
         process.stderr.write(`  ${category.padEnd(18)} ${site.name}\n`);
         return {
             name: site.name,

@@ -190,6 +190,8 @@
             IMDB_ID: imdbId || '',
             IMDB_NUM: (imdbId || '').replace(/^tt/, ''),
             TRAKT_TYPE: isTVType() ? 'show' : 'movie',
+            // Stremio's own words for the same distinction, which are not Trakt's.
+            STREMIO_TYPE: isTVType() ? 'series' : 'movie',
             YEAR: year || '',
         };
     }

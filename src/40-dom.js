@@ -726,6 +726,9 @@
 
     function normalizeUrlTemplate(url) {
         const value = String(url || '').trim();
+        /* The built-in application links, matched whole. Everything else, including
+           anything a person types or a backup carries, still has to be HTTP(S). */
+        if (BUILT_IN_APP_LINK_TEMPLATES.has(value)) return value;
         if (!value || value.length > URL_TEMPLATE_TEXT_LIMIT || !/^https?:\/\//i.test(value)) return '';
         try {
             const parsed = new URL(value);

@@ -192,6 +192,7 @@ function loadScriptTestHooks({ withoutDeleteValue = false, withheldCredentials =
         getSiteList,
         filterSitesForMediaType,
         getLinkContext,
+        DEFAULT_EXTERNAL_SITES,
         getWatchSearchTitle,
         getWatchLinkContext,
         applyLinkTemplate,
@@ -4433,6 +4434,21 @@ test('custom site templates require complete HTTP or HTTPS URLs', () => {
     assert.strictEqual(hooks.normalizeUrlTemplate('https:\\example.com\\search'), '', 'backslash-style URLs must not bypass authority validation');
     assert.strictEqual(hooks.normalizeUrlTemplate('javascript:alert(1)'), '');
     assert.strictEqual(hooks.normalizeUrlTemplate('file:///tmp/search'), '');
+    /* IE-144: exactly one scheme other than HTTP(S) can appear, and only as the whole
+       template written into the defaults. A near miss is still refused, so the allowance
+       cannot be widened by anything a person types or a backup carries. */
+    assert.strictEqual(
+        hooks.normalizeUrlTemplate('stremio://detail/{{STREMIO_TYPE}}/{{IMDB_ID}}'),
+        'stremio://detail/{{STREMIO_TYPE}}/{{IMDB_ID}}');
+    [
+        'stremio://detail/movie/{{IMDB_ID}}',
+        'stremio://detail/{{STREMIO_TYPE}}/{{IMDB_ID}}/',
+        'stremio://detail/{{STREMIO_TYPE}}/{{IMDB_ID}}?x=1',
+        ' stremio://detail/{{STREMIO_TYPE}}/{{TITLE}}',
+        'stremio://anything',
+        'STREMIO://detail/{{STREMIO_TYPE}}/{{IMDB_ID}}',
+    ].forEach(template => assert.strictEqual(hooks.normalizeUrlTemplate(template), '',
+        `a template that is not the built-in one must stay refused: ${template}`));
     assert.strictEqual(hooks.normalizeUrlTemplate('https://user:secret@example.com/search'), '');
     assert.strictEqual(
         hooks.normalizeUrlTemplate('https://{{TITLE}}.example.com/search'),
@@ -5237,6 +5253,28 @@ test('default watch sites resolve to browser-verified contextual search routes',
         'Dune: Part Two',
         'movie searches should keep the page title'
     );
+});
+
+/* IE-144: the one destination that is an application rather than a page. It has to be
+   off until asked for, resolve to Stremio's own words for film and series, and not have
+   widened what anybody else can save. */
+test('the Stremio entry hands a title to the app and stays hidden until asked for', () => {
+    const hooks = loadScriptTestHooks();
+    const stremio = hooks.DEFAULT_EXTERNAL_SITES.find(site => site.name === 'Stremio');
+    assert(stremio, 'the Stremio entry should be among the default external links');
+    assert.strictEqual(stremio.enabled, false, 'and must be hidden until somebody turns it on');
+    assert(hooks.normalizeSite(stremio), 'and must survive the same normalization every other entry goes through');
+
+    const film = hooks.getLinkContext('The Matrix', 'tt0133093', '1999');
+    assert.strictEqual(hooks.applyLinkTemplate(stremio.url, { ...film, STREMIO_TYPE:'movie' }),
+        'stremio://detail/movie/tt0133093');
+    assert.strictEqual(hooks.applyLinkTemplate(stremio.url, { ...film, STREMIO_TYPE:'series' }),
+        'stremio://detail/series/tt0133093',
+        'a series opens the series route, which Stremio spells differently from Trakt');
+    /* Both tokens it uses are resolved, which is what stops a half-expanded scheme URL
+       from being handed to the operating system. */
+    assert(!hooks.applyLinkTemplate(stremio.url, hooks.getLinkContext('X', 'tt1', '2000')).includes('{{'),
+        'no token may be left unresolved in an application link');
 });
 
 test('settings preserve host scroll state and complete nested tab keyboard support', () => {
@@ -6148,7 +6186,14 @@ test('the destination health report classifies without guessing or leaking', () 
         checker.CATEGORY.BOT_BLOCKED, checker.CATEGORY.AUTH_REQUIRED,
         checker.CATEGORY.GEO_BLOCKED, checker.CATEGORY.SEMANTIC_MISMATCH,
     ]).size, 4);
-    Object.values(checker.CATEGORY).filter(c => c !== checker.CATEGORY.OK).forEach(category => {
+    /* Every category a human has to act on carries a reason. OK is one of the two that
+       needs no action; an application link is the other, because there is nothing on the
+       other end to request and never will be. It is asserted absent rather than merely
+       skipped, so it cannot drift into being a review category with no reason attached. */
+    const NO_ACTION = [checker.CATEGORY.OK, checker.CATEGORY.APP_LINK];
+    assert.strictEqual(checker.NEEDS_REVIEW[checker.CATEGORY.APP_LINK], undefined,
+        'an application link is not something to review');
+    Object.values(checker.CATEGORY).filter(c => !NO_ACTION.includes(c)).forEach(category => {
         assert(checker.NEEDS_REVIEW[category], `${category} needs a plain-language review reason`);
     });
 

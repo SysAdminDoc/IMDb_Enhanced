@@ -1550,7 +1550,19 @@
     const SITE_CATEGORY_LABELS = Object.fromEntries(SITE_CATEGORY_OPTIONS.map(option => [option.key, option.label]));
     const URL_TEMPLATE_KEYS = new Set([
         'TITLE', 'TITLE_RAW', 'TITLE_DASH', 'TITLE_SLUG',
-        'IMDB_ID', 'IMDB_NUM', 'TRAKT_TYPE', 'YEAR',
+        'IMDB_ID', 'IMDB_NUM', 'TRAKT_TYPE', 'STREMIO_TYPE', 'YEAR',
+    ]);
+    /* IE-144: the link validator refuses every non-HTTP(S) template, which is right for
+       anything somebody types and wrong for the one destination people actually ask for.
+       Stremio is an installed application addressed by a scheme, and the whole value of
+       the link is that it hands the title to the app rather than to a page.
+
+       Allowed as exact strings rather than by a flag on the entry, because a flag is a
+       field an imported settings backup can set: a template is either character-identical
+       to one written here or it goes through the ordinary HTTP(S) rules. That keeps the
+       scheme allowlist to precisely these destinations and no others. */
+    const BUILT_IN_APP_LINK_TEMPLATES = new Set([
+        'stremio://detail/{{STREMIO_TYPE}}/{{IMDB_ID}}',
     ]);
     /* Which origins each feature actually needs, and nothing more. The extension used to
        demand every score, availability, ad, video and loopback origin at install even
@@ -1862,6 +1874,10 @@
         { name:'Wikipedia', color:'#636466', url:'https://en.wikipedia.org/w/index.php?search={{TITLE}}+{{YEAR}}', category:'info' },
         { name:'JustWatch', color:'#fbc500', url:'https://www.justwatch.com/us/search?q={{TITLE}}', category:'availability' },
         { name:'Trakt', color:'#ed1c24', url:'https://app.trakt.tv/search?query={{TITLE}}', category:'reviews' },
+        /* Hidden until somebody turns it on: it only does anything on a machine with
+           Stremio installed, and a button that silently fails everywhere else is worse
+           than no button. */
+        { name:'Stremio', color:'#8a5aab', url:'stremio://detail/{{STREMIO_TYPE}}/{{IMDB_ID}}', category:'availability', enabled:false },
     ];
     /* Every streaming destination from the FMHY video wiki
        (reddit.com/r/FREEMEDIAHECKYEAH/wiki/video, snapshot 2026-08-31), one entry per
@@ -4464,6 +4480,9 @@
 
     function normalizeUrlTemplate(url) {
         const value = String(url || '').trim();
+        /* The built-in application links, matched whole. Everything else, including
+           anything a person types or a backup carries, still has to be HTTP(S). */
+        if (BUILT_IN_APP_LINK_TEMPLATES.has(value)) return value;
         if (!value || value.length > URL_TEMPLATE_TEXT_LIMIT || !/^https?:\/\//i.test(value)) return '';
         try {
             const parsed = new URL(value);
@@ -5198,6 +5217,8 @@
             IMDB_ID: imdbId || '',
             IMDB_NUM: (imdbId || '').replace(/^tt/, ''),
             TRAKT_TYPE: isTVType() ? 'show' : 'movie',
+            // Stremio's own words for the same distinction, which are not Trakt's.
+            STREMIO_TYPE: isTVType() ? 'series' : 'movie',
             YEAR: year || '',
         };
     }

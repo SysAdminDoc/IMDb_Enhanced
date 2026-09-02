@@ -142,7 +142,7 @@ The redesigned visual reference set covers every menu page: [Experience](design/
 
 **Watch Sites**. Add, remove, reorder, show/hide, categorize, and customize streaming site buttons with name, URL template, and color. The FMHY streaming catalog sits under the editor as a filterable list grouped by the wiki's own sections. Sites with a tested contextual search route can be added as normal editable rows. Homepage-only entries open for browsing but are not added to IMDb pages. Entries already in your list read as Added. A list holds up to 250 destinations.
 
-**External Links**. Same customization as watch sites for review, availability, trailer, and research links; hidden destinations remain available to re-enable later.
+**External Links**. Same customization as watch sites for review, availability, trailer, and research links; hidden destinations remain available to re-enable later. A Stremio entry ships hidden and opens the title in the Stremio app; it is the only non-HTTP(S) destination allowed, matched as one exact built-in template, so a scheme URL you type yourself is still refused.
 
 **Radarr/Sonarr/Seerr**. URL, API key, root folder, and quality profile for Radarr and Sonarr; URL and API key for a Seerr instance, or an Overseerr or Jellyseerr one. Localhost/127.0.0.1 only. Current Sonarr v4+ language selection belongs in quality-profile custom formats; retired v3 language profiles are not configured.
 
