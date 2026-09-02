@@ -10,6 +10,8 @@
 
 ### Changed
 
+- Every version in this changelog has a git tag now, not just the newest two. The README tells you to check out a version and rebuild it to confirm the file that ships matches its source, and that was only possible for the most recent release.
+
 - The request integration is called Seerr now, which is what Overseerr and Jellyseerr were merged into in February 2026. Both older installs still work and the API calls are unchanged; only the wording moved, because naming two retired products reads as an integration nobody maintains.
 
 - The README names script-manager versions that exist. It asked for "Violentmonkey 2026.7", a numbering that project has never used, so there was nothing to compare an install against. It now names Tampermonkey 5.6, Violentmonkey 2.48.0 and ScriptCat 1.4, and says why the Violentmonkey floor matters: below it, installing a script on Chrome 146 and later can take minutes.

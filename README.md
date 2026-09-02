@@ -221,7 +221,7 @@ To rebuild an archive and check it against a published one: `npm ci`, then `npm 
 
 Every outside service the extension can reach is declared in one place, the `PROVIDERS` map near the top of `IMDb_Enhanced.user.js`. Each entry names the service, the origins it needs, what leaves your browser to reach it, how long its answers are cached, and the credit it requires. The origins in both manifests are generated from that map, so the permissions a build asks for cannot drift from the list you can read. The build refuses to run if an entry is incomplete, or if a manifest ends up asking for an origin no service accounts for.
 
-Tagged versions are published on the [GitHub Releases page](https://github.com/SysAdminDoc/IMDb_Enhanced/releases) with checksummed Chromium, Firefox, web-store, and source archives. The userscript at the install link above remains the direct install for script managers.
+Every version in the changelog has a tag, so the rebuild check above works on any of them, not just the newest. Release archives with checksummed Chromium, Firefox, web-store, and source builds are attached to the recent entries on the [GitHub Releases page](https://github.com/SysAdminDoc/IMDb_Enhanced/releases); older tags are there to check out and rebuild rather than to download. The userscript at the install link above remains the direct install for script managers.
 
 ## Compatibility
 

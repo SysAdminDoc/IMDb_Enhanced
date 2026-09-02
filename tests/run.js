@@ -892,6 +892,30 @@ test('score results are announced through a region that exists before any result
 
 /* The zero-runtime-dependency, no-telemetry posture is a real differentiator after
    the 2025-26 extension-compromise wave, and it was documented nowhere. */
+/* IE-138: the README tells a reader to check out a version and rebuild it to confirm the
+   shipped file matches its source. Two of the twenty-three versions in the changelog had a
+   tag, so that instruction was true for the newest release and nothing else. Checked against
+   git rather than against a list, since a list would be the same kind of claim. */
+test('every version the changelog names can be checked out', () => {
+    const { execFileSync } = require('child_process');
+    let tags;
+    try {
+        tags = new Set(execFileSync('git', ['tag'], { cwd:root, encoding:'utf8' }).split('\n').map(line => line.trim()));
+    } catch {
+        console.log('# skipped: not a git checkout');
+        return;
+    }
+    const readme = fs.readFileSync(path.join(root, 'README.md'), 'utf8');
+    const changelog = fs.readFileSync(path.join(root, 'CHANGELOG.md'), 'utf8');
+    const versions = [...changelog.matchAll(/^## (\d+\.\d+\.\d+) \(/gm)].map(match => match[1]);
+    assert(versions.length >= 20, 'the changelog should still be readable as a version history');
+    const untagged = versions.filter(version => !tags.has(`v${version}`));
+    assert.deepStrictEqual(untagged, [],
+        'a version the changelog documents but no tag names cannot be checked out and rebuilt');
+    assert(/rebuild check above works on any of them/.test(readme),
+        'and the README should say so, since that is the claim these tags make true');
+});
+
 test('README states the trust posture the build actually has', () => {
     assert(/No telemetry, ever/.test(readme), 'the absence of telemetry must be stated, not implied');
     assert(/No runtime dependencies/.test(readme), 'the zero-dependency posture must be stated');
