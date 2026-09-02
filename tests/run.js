@@ -3764,6 +3764,140 @@ test('the Letterboxd export carries seen titles and their viewing dates', () => 
    the Timestamp column nor the Note column, so a file it had just written lost every date
    and every note on the way in — and the formula guard was never removed, so a title like
    "-30-" grew another tab on every trip. */
+/* IE-149: the CSV importer has taken four review-found fixes in two days, every one of
+   them a value nobody thought to write an example for. Examples are the wrong shape of
+   test for a parser: they cover what the author imagined. These generate the awkward
+   values instead - quotes, commas, both line endings, a BOM, the separators that are not
+   \n, a NUL, and characters outside the BMP - and assert the round trip through the
+   writer and reader this project actually ships.
+
+   Deterministic, not random: a property test that fails on a different input every run is
+   a test nobody can act on. The seed is fixed here and the failing value is printed, so a
+   failure is reproducible from the message alone. */
+test('a written CSV reads back as what was written, for values nobody would think to type', () => {
+    const hooks = loadScriptTestHooks();
+
+    // xorshift32. Small, dependency-free, and identical on every machine.
+    let seed = 0x1a2b3c4d;
+    const next = () => {
+        seed ^= seed << 13; seed >>>= 0;
+        seed ^= seed >>> 17;
+        seed ^= seed << 5; seed >>>= 0;
+        return seed / 0x100000000;
+    };
+    const pick = list => list[Math.floor(next() * list.length) % list.length];
+    /* Every character class that has ever broken a CSV: the quote and the comma RFC 4180
+       is about, both line endings, the two Unicode separators a reader treats as newlines,
+       a NUL that truncates a field in more than one importer, the formula leads a
+       spreadsheet executes, an astral pair, and ordinary text to dilute them. */
+    const ATOMS = [
+        '"', ',', '\r', '\n', '\r\n', ' ', ' ', ' ', '\t',
+        '=', '+', '-', '@', ' ', 'é', '日本', '👍', 'The Matrix', 'a', 'Z', '9',
+        '""', 'x,y', '"quoted"', ' leading', 'trailing ',
+    ];
+    const makeValue = () => {
+        const parts = [];
+        const length = 1 + Math.floor(next() * 6);
+        for (let index = 0; index < length; index += 1) parts.push(pick(ATOMS));
+        return parts.join('');
+    };
+
+    /* What the writer promises: RFC 4180 quoting, plus a tab in front of anything a
+       spreadsheet would execute. The tab is a deliberate change, not a round-trip
+       failure, so the expectation accounts for it rather than the test pretending the
+       writer is the identity. */
+    const expected = value => (/^\s*[=+\-@]|^[\t\r]/.test(value) ? `\t${value}` : value);
+
+    let checked = 0;
+    for (let round = 0; round < 400; round += 1) {
+        const entries = [];
+        const rows = 1 + Math.floor(next() * 3);
+        for (let index = 0; index < rows; index += 1) {
+            entries.push({
+                id: `tt${String(1000000 + index).padStart(7, '0')}`,
+                title: makeValue(),
+                year: 1999,
+                titleType: makeValue(),
+                rating: 7.5,
+                runtime: 136,
+            });
+        }
+        const csv = hooks.buildCollectionCsv(entries);
+        let table;
+        try { table = hooks.parseCsvTable(csv); }
+        catch (error) {
+            assert.fail(`round ${round} produced a document the reader refuses: ${error.message}\n${JSON.stringify(entries)}`);
+        }
+        assert.strictEqual(table.length, entries.length + 1,
+            `round ${round}: ${entries.length} rows plus a header should read back as ${entries.length + 1}\n${JSON.stringify(entries)}`);
+        entries.forEach((entry, index) => {
+            const row = table[index + 1];
+            assert.strictEqual(row[0], entry.id, `round ${round} row ${index}: the id changed`);
+            assert.strictEqual(row[1], expected(entry.title),
+                `round ${round} row ${index}: title round trip\n  wrote ${JSON.stringify(entry.title)}\n  read  ${JSON.stringify(row[1])}`);
+            assert.strictEqual(row[3], expected(entry.titleType),
+                `round ${round} row ${index}: title type round trip\n  wrote ${JSON.stringify(entry.titleType)}\n  read  ${JSON.stringify(row[3])}`);
+            checked += 1;
+        });
+    }
+    assert(checked > 500, `the generator should have exercised hundreds of rows, got ${checked}`);
+
+    /* A BOM is what a spreadsheet writes at the front of a file it exports, and it must
+       not become part of the first cell. */
+    const withBom = hooks.buildCollectionCsv([{ id:'tt0133093', title:'The Matrix', year:1999, titleType:'Movie', rating:8.7, runtime:136 }]);
+    assert.deepStrictEqual(hooks.parseCsvTable(`﻿${withBom}`), hooks.parseCsvTable(withBom),
+        'a leading byte-order mark must not change how the document reads');
+
+    /* And the guard it is easiest to break by accident: a value a spreadsheet would run
+       has to come back marked, and one it would not must not be marked. */
+    assert.strictEqual(hooks.parseCsvTable(hooks.buildCollectionCsv([
+        { id:'tt1', title:'=cmd|calc', year:'', titleType:'', rating:'', runtime:'' },
+    ]))[1][1], '\t=cmd|calc', 'a formula is defused, not executed');
+    assert.strictEqual(hooks.parseCsvTable(hooks.buildCollectionCsv([
+        { id:'tt1', title:'Se7en', year:'', titleType:'', rating:'', runtime:'' },
+    ]))[1][1], 'Se7en', 'and an ordinary title is left exactly as it was');
+});
+
+/* IE-149: mutation testing found this gap. Lowering POLARITY_REVERSE_J from 0.5 to 0.1
+   changed which distributions get called reverse-J and no test noticed, because every
+   existing case was either far above the line or far below it. These sit on it: the
+   difference between a title that is divided and one that has been voted down is the
+   strongest claim this feature makes, and it is the one worth pinning exactly. */
+test('the reverse-J threshold is a boundary, not a suggestion', () => {
+    const hooks = loadScriptTestHooks();
+    /* Held fixed at values that satisfy the other two conditions - three quarters of the
+       end votes at the bottom, and more ones than nines and tens together - so the only
+       thing under test is how much of the whole distribution has to sit at the ends. */
+    const distribution = (ends, total) => {
+        const low = Math.round(ends * 0.8);
+        const high = ends - low;
+        return [
+            { rating:1, voteCount:low },
+            { rating:9, voteCount:high },
+            { rating:5, voteCount:total - ends },
+        ];
+    };
+    // Exactly on the line counts as over it, which is what >= means and what the code says.
+    const onTheLine = hooks.computeRatingShape(distribution(5000, 10000));
+    assert.strictEqual(onTheLine.polarity, 0.5, 'the fixture should sit exactly on the threshold');
+    assert.strictEqual(onTheLine.label, 'reverse-j', 'at the threshold it qualifies');
+
+    const justUnder = hooks.computeRatingShape(distribution(4990, 10000));
+    assert.ok(justUnder.polarity < 0.5 && justUnder.polarity > 0.49,
+        `the fixture should sit just under the threshold, got ${justUnder.polarity}`);
+    assert.strictEqual(justUnder.label, 'divisive',
+        'ten votes under the line it is merely divided, not voted down');
+
+    /* And the other two conditions really are conditions: a distribution far over the
+       polarity line still is not reverse-J without them. */
+    assert.strictEqual(hooks.computeRatingShape([
+        { rating:1, voteCount:1000 }, { rating:10, voteCount:9000 },
+    ]).label, 'divisive', 'ends piled at the TOP are not a title being voted down');
+    assert.strictEqual(hooks.computeRatingShape([
+        { rating:2, voteCount:8000 }, { rating:1, voteCount:100 }, { rating:10, voteCount:1900 },
+    ]).label, 'divisive', 'a bottom made of twos rather than ones does not qualify either');
+});
+
 test('an exported CSV reads back into the same marks', () => {
     const hooks = loadScriptTestHooks();
     const entries = [

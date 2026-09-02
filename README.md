@@ -219,6 +219,8 @@ Every string a person reads lives in `MESSAGES` near the top of `IMDb_Enhanced.u
 
 `npm run pack` rebuilds every profile and writes four archives plus their SHA-256 sums to `dist/`: the Chromium package from `extension/`, the Firefox one from `extension-firefox/`, the web-store one from `extension-store/`, and a source archive for AMO, which requires the source of any add-on it cannot read. The zip writer is part of the repository rather than a dependency, so the archives are deterministic: entries are sorted and written with a fixed timestamp, and two builds of the same commit produce identical bytes and identical checksums.
 
+`npm run check:mutants` is a developer-run mutation check: it edits one constant or comparison in the rating, colour and CSV functions at a time, runs the suite, and reports any change the tests failed to notice. It is not part of `npm test` because it rebuilds and runs the whole suite once per mutant. A surviving mutant is the finding, not a failure to fix by hand.
+
 To rebuild an archive and check it against a published one: `npm ci`, then `npm test` (which regenerates every build directory and fails if any of them disagrees with the source), then `npm run pack`, and compare `dist/SHA256SUMS-<version>.txt`. Node 22 or newer, and nothing else. Those are also the instructions AMO asks for with a source submission.
 
 AMO reviewers rebuilding the Firefox add-on on its own can run `npm ci` and then `npm run build-for-amo`, which writes `extension-firefox/` and nothing else. The `packageManager` field names the npm version the committed lockfile was written with, so `npm ci` resolves the same tree it did here.

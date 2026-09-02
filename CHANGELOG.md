@@ -4,6 +4,7 @@
 
 ### Added
 
+- Testing: the CSV round trip is now checked against generated awkward values rather than hand-written examples, and a developer-run mutation check covers the rating maths, the colour ramp and the CSV writer. Writing it found one real gap, in how a title that has been voted down is told apart from one people simply disagree about.
 - A title page can point out which of IMDb's More like this entries you have already seen and rated, best first, under a Because you watched heading. Nothing is fetched and nothing leaves the device: the candidates are IMDb's own list and the ratings are the ones on this machine. It needs at least three rated Seen titles and stays quiet below that, because a recommendation drawn from one film is a guess wearing a reason. Off by default, under Tools.
 - The extension's recovery and permissions pages follow your system colour scheme instead of forcing dark. Dark is still the default; a light-mode system now gets a light page, with every control checked for readable contrast in both.
 - A person's page says how many of their titles are in your library, counted from the rows the library badge has already answered rather than from a second round of requests. It says how many were checked, so a filmography still loading cannot look like a smaller one.
