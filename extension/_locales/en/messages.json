@@ -2616,7 +2616,7 @@
     "message": "IMDb watchlist controls are unavailable on this title surface"
   },
   "toast_import_is_too_large_use_a": {
-    "message": "Import is too large. Use a complete export under 4 MB."
+    "message": "That backup is $1, and the most this can read is $2. Nothing was changed."
   },
   "toast_imported_keeping_existing_one": {
     "message": "Imported $2 as local Seen; kept $1 existing mark"

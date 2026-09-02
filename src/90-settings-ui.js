@@ -2118,7 +2118,14 @@
             const apply = overlay.querySelector('#enh-import-apply');
             const raw = overlay.querySelector('#enh-import-textarea').value.trim();
             if (!raw) { showToast(t('toast_paste_settings_json_before_importing')); return; }
-            if (raw.length > SETTINGS_IMPORT_TEXT_LIMIT) { showToast(t('toast_import_is_too_large_use_a')); return; }
+            /* Naming both numbers matters: the ceiling used to be smaller than the file
+               this build writes, and "too large" gave no way to tell a corrupt paste from
+               a backup that was refused for being exactly what it should be. */
+            if (raw.length > SETTINGS_IMPORT_TEXT_LIMIT) {
+                showToast(t('toast_import_is_too_large_use_a',
+                    [formatCacheBytes(raw.length), formatCacheBytes(SETTINGS_IMPORT_TEXT_LIMIT)]), 5000);
+                return;
+            }
             apply.disabled = true;
             try {
                 let data = JSON.parse(raw);

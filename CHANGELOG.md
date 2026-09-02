@@ -10,6 +10,8 @@
 
 ### Fixed
 
+- A large library can be restored from its own backup again. The importer refused anything over 4 MB while a full store writes about 32 MB, so the biggest libraries backed up cleanly and were turned away at restore time with nothing to say the file was fine. The ceiling is worked out from the same limits that decide how big an export can get, and a refusal now names the size of the file and the size it can read.
+
 - Eight sentences that were written into the code instead of the message catalog now come from it, so a translated build shows them translated. They cover the season bar's mark and clear messages, the subtitle-link copy, the copied-ID confirmations, and two of the destination-editor errors. The check that is supposed to catch this could not see them: it judged a piece of text by the characters immediately in front of it, and behind a conditional those characters are the conditional. It reads the call a sentence sits in now.
 
 - The setting that opens phone links on the desktop site has a switch now. It was on by default, the README said you could turn it off, and there was nowhere to do it: hand-editing a settings backup and importing it was the only way. It sits under Tools. The redirect itself runs before any feature starts, on a page the feature list never reaches, which is why it is a plain control rather than one of them.

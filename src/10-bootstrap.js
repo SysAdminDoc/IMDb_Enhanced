@@ -906,7 +906,7 @@
         toast_grant_then_reload: 'Grant site access on the page that just opened, then reload this one.',
         toast_grant_then_return: 'Grant site access on the page that just opened, then return here.',
         toast_imdb_watchlist_controls_are_unavailable_on: 'IMDb watchlist controls are unavailable on this title surface',
-        toast_import_is_too_large_use_a: 'Import is too large. Use a complete export under 4 MB.',
+        toast_import_is_too_large_use_a: 'That backup is $1, and the most this can read is $2. Nothing was changed.',
         toast_imported_keeping_existing_one: 'Imported $2 as local Seen; kept $1 existing mark',
         toast_imported_keeping_existing_other: 'Imported $2 as local Seen; kept $1 existing marks',
         toast_imported_local_titles_from_csv_rows: 'Imported $1 local titles from $2 CSV rows.$3 Reloading...',
@@ -1058,7 +1058,26 @@
     const LIST_SEARCH_TITLE_LIMIT = 20;
     const URL_TEMPLATE_TEXT_LIMIT = 4096;
     const SETTING_TEXT_LIMIT = 4096;
-    const SETTINGS_IMPORT_TEXT_LIMIT = 4 * 1024 * 1024;
+    /* The importer has to accept anything the exporter can write, or a large library backs
+       up cleanly and cannot be restored. A hand-typed 4 MiB stopped covering that the day
+       a mark record grew a note and a hundred viewing dates: a full store serialises to
+       roughly eighteen megabytes, so every backup of one was refused at restore time, with
+       nothing to say the file was fine and the ceiling was not. The CSV path was bitten by
+       the same thing on 2026-09-01 and its bounds are derived for the same reason.
+
+       Worst case per mark: the id, the state, two timestamps and the JSON punctuation
+       around them, a title and a note at their own limits, and a full viewing history at
+       roughly forty bytes a date. Per destination: a name and a URL template at theirs.
+       These are ceilings rather than estimates, and the export is pretty-printed, hence
+       the indentation allowance. */
+    const USER_MARK_JSON_BYTES_MAX = 256
+        + USER_MARK_TITLE_LIMIT + USER_MARK_NOTE_LIMIT + (USER_MARK_VIEWINGS_MAX * 64);
+    const SITE_JSON_BYTES_MAX = 256 + SETTING_TEXT_LIMIT + URL_TEMPLATE_TEXT_LIMIT;
+    /* Two site lists, watch and external, plus room for every other preference, the
+       credential fields an export with credentials carries, and the envelope itself. */
+    const SETTINGS_IMPORT_TEXT_LIMIT = (USER_MARKS_MAX * USER_MARK_JSON_BYTES_MAX)
+        + (2 * SITE_LIST_LIMIT * SITE_JSON_BYTES_MAX)
+        + (1024 * 1024);
     /* Big enough that a file this extension wrote always reads back. The export is a row
        per viewing, so the worst case is every one of the 5,000 marks carrying its full
        hundred dates, and a ten-thousand-row ceiling silently dropped a third of a large

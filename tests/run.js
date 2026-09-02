@@ -254,6 +254,7 @@ function loadScriptTestHooks({ withoutDeleteValue = false, withheldCredentials =
         USER_MARK_VIEWINGS_MAX,
         USER_MARKS_MAX,
         USER_MARK_NOTE_LIMIT,
+        USER_MARK_TITLE_LIMIT,
         readPersonBirthDate,
         isPersonDeceased,
         EPISODE_CODE_PATTERN,
@@ -2560,9 +2561,24 @@ test('settings exports are canonical and fully re-importable', () => {
 
     const maximumHooks = loadScriptTestHooks();
     const maximumMarks = {};
-    for (let index = 0; index < 5000; index++) {
+    /* Every bound a mark record has, not the three fields it used to carry here. A mark
+       grew a note and a hundred dated viewings, this seeded neither, and so it kept
+       reporting that the largest possible export fitted a limit it had long outgrown: a
+       full library backed up and then refused to restore. Derived from the limits rather
+       than typed, so the next field to gain a ceiling is covered by raising that ceiling. */
+    const maximumViewings = Array.from(
+        { length: maximumHooks.USER_MARK_VIEWINGS_MAX },
+        // Distinct and in the past: a repeated date is deduplicated and a future one is
+        // rejected, so either would quietly make this a smaller store than it claims.
+        (_, day) => ({ date:`2025-${String(1 + Math.floor(day / 28)).padStart(2, '0')}-${String(1 + (day % 28)).padStart(2, '0')}` })
+    );
+    for (let index = 0; index < maximumHooks.USER_MARKS_MAX; index++) {
         maximumMarks[`tt${String(index).padStart(7, '0')}`] = {
-            state:index % 2 ? 'watched' : 'skip', title:'T'.repeat(160), ts:index,
+            state:index % 2 ? 'watched' : 'skip',
+            title:'T'.repeat(maximumHooks.USER_MARK_TITLE_LIMIT),
+            note:'N'.repeat(maximumHooks.USER_MARK_NOTE_LIMIT),
+            viewings:maximumViewings.map(entry => ({ ...entry })),
+            ts:index,
         };
     }
     /* Derived from the real limit, not a copy of what it used to be: when the site-list
@@ -2589,7 +2605,17 @@ test('settings exports are canonical and fully re-importable', () => {
         0,
         'a maximum supported export should still pass the importer'
     );
+    /* Compared against what went in, not against a second trip. A restore that quietly
+       dropped the notes or trimmed the viewing history would still produce a file that
+       matched itself on the way back out. */
+    maximumHooks.applySettingsImport(maximumHooks.prepareSettingsImport(JSON.parse(maximumExportText)).entries);
+    assert.strictEqual(
+        JSON.stringify(maximumHooks.getExportSettings(), null, 2),
+        maximumExportText,
+        'a maximum supported export must restore to exactly what was exported'
+    );
 });
+
 
 test('settings reset is explicit, complete, and isolated from live defaults', () => {
     const hooks = loadScriptTestHooks();
@@ -7792,6 +7818,46 @@ asyncTest('the TMDB adapter makes no request at all without a token', async () =
     assert.strictEqual(attempted.length, 1, 'a configured token must actually be used');
     assert(String(attempted[0].url).startsWith('https://api.themoviedb.org/'),
         'and used against TMDB');
+});
+
+/* The other half of the same guarantee. An encrypted backup carries the credentials an
+   ordinary one leaves out, so it is the larger of the two files and the one a full library
+   is most likely to be refused on. */
+asyncTest('a store at every bound survives the encrypted backup path', async () => {
+    const hooks = loadScriptTestHooks();
+    const viewings = Array.from(
+        { length: hooks.USER_MARK_VIEWINGS_MAX },
+        // Distinct and in the past: a repeated date is deduplicated and a future one is
+        // rejected, so either would quietly make this a smaller store than it claims.
+        (_, day) => ({ date:`2025-${String(1 + Math.floor(day / 28)).padStart(2, '0')}-${String(1 + (day % 28)).padStart(2, '0')}` })
+    );
+    const marks = {};
+    for (let index = 0; index < hooks.USER_MARKS_MAX; index++) {
+        marks[`tt${String(index).padStart(7, '0')}`] = {
+            state:index % 2 ? 'watched' : 'skip',
+            title:'T'.repeat(hooks.USER_MARK_TITLE_LIMIT),
+            note:'N'.repeat(hooks.USER_MARK_NOTE_LIMIT),
+            viewings:viewings.map(entry => ({ ...entry })),
+            ts:index,
+        };
+    }
+    hooks.seedStoredSetting('userMarks', marks);
+    hooks.seedStoredSetting('radarrApiKey', 'radarr-secret-value');
+
+    const envelope = await hooks.createEncryptedBackup('correct horse battery staple');
+    assert(envelope.length <= hooks.SETTINGS_IMPORT_TEXT_LIMIT,
+        `a maximal encrypted backup (${envelope.length}) must fit the limit (${hooks.SETTINGS_IMPORT_TEXT_LIMIT})`);
+    const opened = await hooks.readEncryptedBackup(JSON.parse(envelope), 'correct horse battery staple');
+    assert.strictEqual(opened.radarrApiKey, 'radarr-secret-value',
+        'the credential an encrypted backup exists for must come back');
+    const restoredMarks = opened.userMarks;
+    assert.strictEqual(Object.keys(restoredMarks).length, hooks.USER_MARKS_MAX, 'every mark must survive');
+    assert.strictEqual(restoredMarks.tt0000001.note.length, hooks.USER_MARK_NOTE_LIMIT,
+        'a note at its limit must come back whole');
+    assert.strictEqual(restoredMarks.tt0000001.viewings.length, hooks.USER_MARK_VIEWINGS_MAX,
+        'and a full viewing history with it');
+    assert.strictEqual(hooks.prepareSettingsImport(opened).ignored, 0,
+        'and the decrypted payload must still be one the importer accepts');
 });
 
 asyncTest('an encrypted backup round-trips credentials under its passphrase', async () => {
