@@ -53,6 +53,7 @@ const instrumented = userscript.replace(/\}\)\(\);\s*$/, `globalThis.__imdbEnhan
     getWatchlistServices,
     boundedImageVariant,
     createSettingsPanel,
+    toggleSettings,
     getStoredSetting: key => get(key),
     /* What init() does to the structured-data memo on a route change. happy-dom cannot
        navigate, so a fixture that needs a second page says so this way. */
@@ -1932,7 +1933,7 @@ await runFixture('title', async (window, hooks) => {
     /* Two shapes: a row inside a card, and a summary card that is itself one feature's
        control. Both carry the feature key, so both are results. */
     const visibleRows = () => Array.from(window.document.querySelectorAll([
-        '.enh-settings-page:not([hidden]) .enh-settings-card:not([hidden]) .enh-settings-row[data-feature-key]:not([hidden])',
+        '.enh-settings-page:not([hidden]) .enh-settings-card:not([hidden]) .enh-settings-row[data-search-text]:not([hidden])',
         '.enh-settings-page:not([hidden]) .enh-settings-card[data-feature-key]:not([hidden])',
     ].join(',')));
     const search = text => {
@@ -1970,9 +1971,54 @@ await runFixture('title', async (window, hooks) => {
     assert.equal(window.document.activeElement.closest('.enh-settings-row')?.dataset.featureKey,
         'keyboardShortcuts', 'Enter puts focus on the first result');
 
+    /* Three settings are plain rows rather than registered features, so nothing
+       catalogued describes them and the search could not reach them at all. */
+    search('m.imdb');
+    assert.deepEqual(visibleRows().map(row => row.querySelector('.enh-settings-label')?.textContent),
+        ['Open mobile links on the desktop site'],
+        'a setting that is not a registered feature is still findable');
+    search('operating system');
+    assert.deepEqual(visibleRows().map(row => row.querySelector('.enh-settings-label')?.textContent),
+        ['Follow system theme'],
+        'and so is the theme control that follows the OS');
+
+    /* Enter must land on a result, not on whichever checkbox happens to sit first in the
+       card the result lives in. "theme" matches modernUI, and the card holding it opens
+       with the Follow system theme row, which is not a feature row. */
+    search('restyle');
+    searchBox.focus();
+    searchBox.dispatchEvent(new window.KeyboardEvent('keydown', { key:'Enter', bubbles:true, cancelable:true }));
+    assert.equal(window.document.activeElement.closest('.enh-settings-row')?.dataset.featureKey, 'modernUI',
+        'Enter lands on the matching row, not on a non-matching row above it');
+
     search('zzzzznothing');
     assert.equal(visibleRows().length, 0, 'a query nothing matches shows nothing');
     assert.equal(requireSelector(window.document, '#enh-settings-search-count').textContent, '0 matches');
+
+    /* Escape belongs to the search while it holds text: the dialog's own Escape closes
+       the panel, and clearing the box is what somebody pressing it there means. */
+    searchBox.focus();
+    searchBox.dispatchEvent(new window.KeyboardEvent('keydown', { key:'Escape', bubbles:true, cancelable:true }));
+    assert.equal(searchBox.value, '', 'Escape clears the search');
+    assert.equal(visibleRows().length, beforeSearch, 'and puts the page back');
+
+    // Picking a section leaves the search rather than filtering inside it.
+    search('plex');
+    requireSelector(window.document, '.enh-settings-nav-btn[data-settings-page="tools"]').click();
+    assert.equal(searchBox.value, '', 'choosing a section clears the search');
+    assert.equal(window.document.getElementById('enh-settings-page-tools').hidden, false,
+        'and shows that section');
+
+    /* A search left running hides every page. Closing on one used to reopen onto an empty
+       body with focus parked on a tab whose panel was still hidden. */
+    search('zzzzznothing');
+    hooks.toggleSettings();
+    hooks.toggleSettings();
+    assert.equal(searchBox.value, '', 'the search does not survive the dialog closing');
+    assert.equal(window.document.querySelectorAll('.enh-settings-page:not([hidden])').length, 1,
+        'and exactly one page is showing again');
+    hooks.toggleSettings();
+    requireSelector(window.document, '.enh-settings-nav-btn[data-settings-page="experience"]').click();
 
     search('');
     assert.equal(visibleRows().length, beforeSearch,
@@ -2043,6 +2089,27 @@ await runFixture('title', async (window, hooks) => {
         'every row shown has a note');
     noteFilter.checked = false;
     noteFilter.dispatchEvent(new window.Event('change', { bubbles:true }));
+
+    /* The heading counts the whole store, so a filter that leaves fewer rows than one page
+       used to leave no count of what it left: 5,000 saved above twelve rows. */
+    stateFilter.value = 'note';
+    stateFilter.dispatchEvent(new window.Event('change', { bubbles:true }));
+    window.GM_setValue('imdb_enh_userMarks', {
+        ...Object.fromEntries(Object.entries(bulk).slice(0, 8)),
+    });
+    window.document.dispatchEvent(new window.CustomEvent('imdb-enhanced:marks-updated'));
+    const narrowed = markRows().length;
+    assert.ok(narrowed > 0 && narrowed < 8, 'the filter should leave fewer rows than the store holds');
+    assert.equal(requireSelector(window.document, '.enh-marks-panel__pager').hidden, false,
+        'a filtered list keeps its count even when one page holds all of it');
+    assert.match(requireSelector(window.document, '.enh-marks-panel__page').textContent,
+        new RegExp(`of ${narrowed}$`), 'and the count is of what the filter left, not of the store');
+    assert.equal(pagerButton('Next page of marks').hidden, true,
+        'while the buttons go, since there is nowhere to page to');
+    stateFilter.value = 'all';
+    stateFilter.dispatchEvent(new window.Event('change', { bubbles:true }));
+    window.GM_setValue('imdb_enh_userMarks', bulk);
+    window.document.dispatchEvent(new window.CustomEvent('imdb-enhanced:marks-updated'));
 
     sort.value = 'viewing';
     sort.dispatchEvent(new window.Event('change', { bubbles:true }));
@@ -2177,8 +2244,12 @@ await runFixture('chart', async (window, hooks) => {
         unobserve(element) { this.watched.delete(element); }
         disconnect() { this.watched.clear(); }
     };
-    const reveal = elements => watchers.forEach(watcher => {
-        const entries = elements.filter(element => watcher.watched.has(element))
+    /* force bypasses the watched set. A real observer stops reporting a row the feature
+       unobserved, so without it a "seen again" assertion proves only that the stub
+       forgot the row - the feature could re-queue everything handed to it and still
+       pass. Forcing hands the row back exactly as a second observer would. */
+    const reveal = (elements, { force = false } = {}) => watchers.forEach(watcher => {
+        const entries = elements.filter(element => force || watcher.watched.has(element))
             .map(element => ({ isIntersecting:true, target:element }));
         if (entries.length) watcher.callback(entries);
     });
@@ -2190,6 +2261,9 @@ await runFixture('chart', async (window, hooks) => {
         if (id === 'tt9000011') return 0;              // known to Seerr, not requested
         return -1;                                     // no entry at all
     };
+    // Held answers, so a teardown can be placed provably between a request and its reply.
+    let holdAnswers = false;
+    const held = [];
     window.GM_xmlhttpRequest = options => {
         const id = /query=(tt\d+)/.exec(options.url)?.[1] || '';
         asked.push(id);
@@ -2198,11 +2272,13 @@ await runFixture('chart', async (window, hooks) => {
             id: 42, mediaType:'movie',
             mediaInfo: status === 0 ? null : { status },
         }];
-        window.queueMicrotask(() => options.onload?.({
+        const answer = () => options.onload?.({
             status: 200,
             finalUrl: options.url,
             responseText: JSON.stringify({ results }),
-        }));
+        });
+        if (holdAnswers) held.push(answer);
+        else window.queueMicrotask(answer);
         return { abort() {} };
     };
 
@@ -2264,10 +2340,12 @@ await runFixture('chart', async (window, hooks) => {
         assert.equal(allRows.slice(20).some(row => badgeIn(row)), false,
             'a row never scrolled to gets no badge');
         const beforeSecondScroll = asked.length;
-        reveal(allRows.slice(0, 20));
+        reveal(allRows.slice(0, 20), { force:true });
         await settle();
         assert.equal(asked.length, beforeSecondScroll,
-            'a row that comes back into view is not looked up again');
+            'a row handed back after it was answered is not looked up again');
+        assert.equal(document.querySelectorAll('.enh-row-integration').length, 20,
+            'and does not gain a second badge');
 
         reveal(allRows.slice(20, 40));
         await settle();
@@ -2277,9 +2355,30 @@ await runFixture('chart', async (window, hooks) => {
         /* Switching the feature off with lookups still open destroys it without a route
            change. The answers still arrive; they must not land on a torn-down feature,
            which in this harness would surface as an unhandled rejection killing the run. */
-        reveal(allRows.slice(40, 60));
+        /* Exactly one concurrency slice, so the loop is destroyed with nothing left to
+           check isCurrent against: it resumes past the last slice, yields, and comes back
+           to a while condition reading a queue teardown has dropped. A twenty-row reveal
+           does not reach that line - the next slice's guard returns first. */
+        const beforeTeardown = asked.length;
+        holdAnswers = true;
+        reveal(allRows.slice(40, 43));
+        for (let tick = 0; tick < 5 && !held.length; tick += 1) {
+            await new Promise(resolve => window.setTimeout(resolve, 1));
+        }
+        assert.ok(held.length > 0,
+            'lookups must genuinely be open when the feature is destroyed, or this proves nothing');
+        assert.ok(asked.length > beforeTeardown, 'and they must be new ones');
         hooks.stopFeature('rowIntegrationState');
+        // The answers arrive now, into a feature whose maps and queue teardown dropped.
+        held.splice(0).forEach(answer => answer());
+        holdAnswers = false;
         await settle();
+        /* The loop resumes on its own between-batches timer, after the answer it was
+           parked on. Ending the fixture here would close the window before that fires and
+           the resumption - the part being tested - would never happen. */
+        for (let tick = 0; tick < 5; tick += 1) {
+            await new Promise(resolve => window.setTimeout(resolve, 1));
+        }
         assert.equal(document.querySelectorAll('.enh-row-integration').length, 0,
             'answers arriving after teardown paint nothing');
 

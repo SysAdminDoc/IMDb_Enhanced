@@ -130,10 +130,18 @@
         ...UNIVERSAL_FEATURE_KEYS, 'collapsibleSections', 'expandSummaries', 'quickNav',
         // Person pages carry a filmography, which is exactly the long card list marks
         // are useful for narrowing.
-        'watchedMarking', 'markFilters', 'castAges', 'rowIntegrationState',
+        'watchedMarking', 'markFilters', 'castAges',
         /* A full cast list and a person's filmography are where the thumbnails are;
            covering only the title page's top-billed row misses most of them. */
         'imageZoom',
+    ]);
+    /* A filmography is a list of titles, so the library badge belongs there. An episode
+       list, a season grid and a full-credits page are not: their rows are episodes and
+       people, and no media server or request service is keyed by an episode id. Putting
+       this in SECONDARY_PAGE_FEATURE_KEYS reached all four, which would have meant 250
+       futile requests to somebody's local service for every episode list opened. */
+    const NAME_PAGE_FEATURE_KEYS = new Set([
+        ...SECONDARY_PAGE_FEATURE_KEYS, 'rowIntegrationState',
     ]);
     const EPISODE_LIST_FEATURE_KEYS = new Set([
         ...SECONDARY_PAGE_FEATURE_KEYS, 'tvEpisodeTools', 'seasonProgress', 'episodeSubtitles',
@@ -169,7 +177,11 @@
         // episodeHeatmap would otherwise wait out its selector timeout on every title page.
         /* ratingGap needs the vote distribution, which IMDb stopped shipping on title
            pages — verified 2026-08-15 that no script there carries histogramData. */
-        if (surface === 'title') return !['watchlistBatch', 'listMultiSearch', 'listRuntimeSummary', 'markFilters', 'dimLowRated', 'listRoulette', 'episodeHeatmap', 'ratingGap'].includes(feature.key);
+        /* rowIntegrationState is scoped to lists, charts and filmographies, which is what
+           its description promises. A title page already carries the full integration bar
+           for the title it is about, so badging the recommendation carousel underneath
+           would be a second answer to a question already answered above it. */
+        if (surface === 'title') return !['watchlistBatch', 'listMultiSearch', 'listRuntimeSummary', 'markFilters', 'dimLowRated', 'listRoulette', 'episodeHeatmap', 'ratingGap', 'rowIntegrationState'].includes(feature.key);
         if (surface === 'episodes') return EPISODE_LIST_FEATURE_KEYS.has(feature.key);
         if (surface === 'ratings') return RATINGS_FEATURE_KEYS.has(feature.key);
         if (surface === 'collection') return COLLECTION_FEATURE_KEYS.has(feature.key);
@@ -182,7 +194,7 @@
             return SECONDARY_PAGE_FEATURE_KEYS.has(feature.key)
                 && !['markFilters', 'dimLowRated'].includes(feature.key);
         }
-        if (surface === 'name') return SECONDARY_PAGE_FEATURE_KEYS.has(feature.key);
+        if (surface === 'name') return NAME_PAGE_FEATURE_KEYS.has(feature.key);
         if (surface === 'search' || surface === 'home') return BROWSE_FEATURE_KEYS.has(feature.key);
         return UNIVERSAL_FEATURE_KEYS.has(feature.key);
     }

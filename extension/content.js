@@ -1018,6 +1018,10 @@
         settings_stored_in: 'Stored in $1.',
         settings_the_encrypted_backup_could_not_be_created: 'The encrypted backup could not be created.',
         settings_the_last_20_feature_failures_kept_across: 'The last 20 feature failures, kept across reloads so an intermittent problem can be seen. Each entry records when, which feature, which kind of page, and what category of failure — never a title, address, or message.',
+        settings_keywords_auto_theme: 'automatic, system, operating system, follows',
+        settings_keywords_mobile_links: 'mobile, phone, m.imdb, redirect',
+        settings_keywords_update_notice: 'update, new release, upgrade, notify',
+        settings_list_pages: 'Lists',
         settings_search_placeholder: 'Search every setting',
         settings_these_marks_stay_on_this_device_and: 'These marks stay on this device and never change your IMDb account. Import from page copies the IMDb Watched titles visible on the page behind the settings dialog into local Seen marks; existing marks are kept, and nothing is ever sent back to IMDb.',
         settings_this_backup_is_encrypted_enter_its_passphrase: 'This backup is encrypted. Enter its passphrase.',
@@ -1151,6 +1155,8 @@
         text_no_external_sites: 'no external sites',
         text_no_importable_rows_skipped_one: 'No importable rows found. $1 row was skipped.',
         text_no_importable_rows_skipped_other: 'No importable rows found. $1 rows were skipped.',
+        text_no_date: 'No date',
+        text_no_date_recorded: 'No viewing or marking date was recorded for this title',
         text_no_local_title_marks_yet: 'No local title marks yet. Mark a title Seen or Skip from any card or title page and it shows up here.',
         text_monitored: 'Monitored',
         text_no_matching_title_found: 'No matching title found',
@@ -13630,7 +13636,8 @@ section[id*="quote" i] .ipc-list-card { padding: 4px 0 !important; margin: 2px 0
         _queue: null,
         // id -> the badges waiting on it, since a list can carry the same title twice.
         _waiting: null,
-        _draining: false,
+        // A token rather than a flag: see _drain.
+        _drainToken: null,
         init() {
             if (!isIMDbHost()) return;
             /* Without an observer there is no way to tell a row that was scrolled to from
@@ -13771,8 +13778,15 @@ section[id*="quote" i] .ipc-list-card { padding: 4px 0 !important; margin: 2px 0
            firing twenty simultaneous requests at somebody's Raspberry Pi is how a local
            service starts refusing them. Three at a time, a yield between batches. */
         async _drain(isCurrent) {
-            if (this._draining) return;
-            this._draining = true;
+            /* A token, not a boolean. Teardown clears the flag while a suspended loop is
+               still parked on an await; when that stale loop resumes and returns, its
+               finally would clear the flag belonging to the loop the next init started,
+               and the next reveal would run a second drain beside it. Two loops splicing
+               one queue is twice the concurrency this is here to bound. Only the loop that
+               owns the current token may release it. */
+            if (this._drainToken) return;
+            const token = {};
+            this._drainToken = token;
             try {
                 // Optional chaining for the same reason as in _resolve: teardown between
                 // two batches drops the queue rather than emptying it.
@@ -13787,7 +13801,7 @@ section[id*="quote" i] .ipc-list-card { padding: 4px 0 !important; margin: 2px 0
                     await new Promise(resolve => setTimeout(resolve, 0));
                 }
             } finally {
-                this._draining = false;
+                if (this._drainToken === token) this._drainToken = null;
             }
         },
         async _resolve(entry, isCurrent) {
@@ -13876,7 +13890,7 @@ section[id*="quote" i] .ipc-list-card { padding: 4px 0 !important; margin: 2px 0
             this._cache = null;
             this._inflight = null;
             this._waiting = null;
-            this._draining = false;
+            this._drainToken = null;
             this._probe = null;
             document.querySelectorAll('.enh-row-integration').forEach(badge => badge.remove());
             document.querySelectorAll('[data-enh-row-integration]').forEach(card => {
@@ -17760,6 +17774,15 @@ ${scopedRules('.enh-zoom', {
     /* Outside the panel because the offer has to outlive it: the settings overlay is torn
        down and rebuilt on every open, and a deletion made two seconds before that should
        still be reversible when it comes back. */
+    /* Three settings are plain rows rather than registered features - follow the system
+       theme, the mobile-link redirect, and the update notice - so nothing catalogued
+       describes them and the search would never have found them. They index the words
+       already on screen plus a keyword list of their own, like every feature row does. */
+    function makeSearchableRow(row, keywords = '') {
+        row.dataset.searchText = `${row.textContent} ${keywords}`.toLowerCase();
+        return row;
+    }
+
     const MARK_UNDO_MS = 15000;
     const pendingMarkUndo = { marks:null, timer:null };
     /* IE-141: the store holds up to 5,000 records and the panel used to draw every one of
@@ -17786,11 +17809,17 @@ ${scopedRules('.enh-zoom', {
         }
         /* Most recent first, and a tie broken by the title rather than by whatever order
            the store happened to enumerate in — a list that reshuffles between two renders
-           of the same data is the kind of thing people report as data loss. */
-        return entries.sort((a, b) => {
-            const dates = lastViewingDate(b[1]).localeCompare(lastViewingDate(a[1]));
-            return dates || byTitle(a, b);
-        });
+           of the same data is the kind of thing people report as data loss.
+
+           The date is computed once per record rather than inside the comparator: sorting
+           5,000 entries calls the comparator around 85,000 times, and lastViewingDate
+           re-normalizes a record's whole viewing list on every call. This panel exists
+           because 5,000 records were slow; doing that would have moved the cost rather
+           than removed it. */
+        return entries
+            .map(entry => [lastViewingDate(entry[1]), entry])
+            .sort((a, b) => b[0].localeCompare(a[0]) || byTitle(a[1], b[1]))
+            .map(pair => pair[1]);
     }
     function filterMarkEntries(entries, { state = 'all', noteOnly = false } = {}) {
         return entries.filter(([, record]) => {
@@ -18002,7 +18031,15 @@ ${scopedRules('.enh-zoom', {
             page = Math.min(Math.max(1, page), pages);
             const start = (page - 1) * MARKS_PAGE_SIZE;
             const shown = entries.slice(start, start + MARKS_PAGE_SIZE);
-            pager.hidden = entries.length <= MARKS_PAGE_SIZE;
+            /* The heading counts the whole store, so the only place a filtered total is
+               said is here. Hiding the pager whenever one page was enough hid that total
+               in exactly the case it mattered: filtering 5,000 marks down to twelve left
+               a panel reading "5000 saved" above twelve rows. The buttons go when there
+               is nowhere to page to; the count stays whenever it says something the
+               heading does not. */
+            pager.hidden = !entries.length || (pages === 1 && entries.length === all.length);
+            previous.hidden = pages === 1;
+            next.hidden = pages === 1;
             previous.disabled = page <= 1;
             next.disabled = page >= pages;
             pageLabel.textContent = t('text_showing_marks_range',
@@ -18062,13 +18099,17 @@ ${scopedRules('.enh-zoom', {
                 /* The date the neighbourhood's open ask is about: when this was last
                    watched, or failing that the day it was marked, said as such rather
                    than presented as a viewing that was never logged. */
+                /* A mark upgraded from the era when these were stored as a bare string has
+                   no viewings and a timestamp of zero, so there is no date to show. Saying
+                   so beats an empty cell above a tooltip reading "Marked on " with nothing
+                   after it. */
                 const viewed = lastViewingDate(record);
                 const dateEl = makeEl('div', {
-                    className:'enh-mark-row__date',
-                    title: countViewings(record)
-                        ? t('text_last_viewing_on', [viewed])
+                    className:'enh-mark-row__date' + (viewed ? '' : ' enh-mark-row__date--unknown'),
+                    title: !viewed ? t('text_no_date_recorded')
+                        : countViewings(record) ? t('text_last_viewing_on', [viewed])
                         : t('text_marked_on_date', [viewed]),
-                }, viewed);
+                }, viewed || t('text_no_date'));
                 const row = makeEl('div', { className:'enh-mark-row' }, titleEl, stateEl, dateEl, open, clear);
                 // Rendered as text, never markup: a note is arbitrary user input.
                 if (note) row.appendChild(makeEl('div', { className:'enh-mark-row__note' }, note));
@@ -18290,7 +18331,7 @@ ${scopedRules('.enh-zoom', {
         let searchQuery = '';
         const resetSearchVisibility = () => {
             body.querySelectorAll('.enh-settings-card').forEach(card => { card.hidden = false; });
-            body.querySelectorAll('.enh-settings-row[data-feature-key]').forEach(row => { row.hidden = false; });
+            body.querySelectorAll('.enh-settings-row[data-search-text]').forEach(row => { row.hidden = false; });
         };
         const clearSearch = () => {
             searchQuery = '';
@@ -18316,7 +18357,7 @@ ${scopedRules('.enh-zoom', {
                        rows under "Clean up" are what somebody searching for that wanted. */
                     const cardMatches = `${heading} ${description}`.toLowerCase().includes(searchQuery)
                         || (card.dataset.searchText || '').includes(searchQuery);
-                    const rows = card.querySelectorAll('.enh-settings-row[data-feature-key]');
+                    const rows = card.querySelectorAll('.enh-settings-row[data-search-text]');
                     let rowMatches = 0;
                     rows.forEach(row => {
                         const hit = cardMatches || (row.dataset.searchText || '').includes(searchQuery);
@@ -18337,7 +18378,7 @@ ${scopedRules('.enh-zoom', {
            control was hoisted into its own header. Comma-joined so the browser returns
            whichever comes first in the document rather than whichever is listed first. */
         const firstResultControl = () => body.querySelector([
-            '.enh-settings-page:not([hidden]) .enh-settings-card:not([hidden]) .enh-settings-row:not([hidden]) input',
+            '.enh-settings-page:not([hidden]) .enh-settings-card:not([hidden]) .enh-settings-row[data-search-text]:not([hidden]) input',
             '.enh-settings-page:not([hidden]) .enh-settings-card[data-feature-key]:not([hidden]) .enh-settings-card-actions input',
         ].join(','));
         searchInput.addEventListener('input', () => {
@@ -18583,12 +18624,12 @@ ${scopedRules('.enh-zoom', {
             themeSelector.appendChild(makeEl('div', { className:'enh-theme-option' }, swatch, makeEl('span', {}, theme.label)));
         });
         themeCard.appendChild(themeSelector);
-        const autoThemeRow = makeEl('div', { className:'enh-settings-row enh-theme-auto-row' },
+        const autoThemeRow = makeSearchableRow(makeEl('div', { className:'enh-settings-row enh-theme-auto-row' },
             makeEl('div', { className:'enh-settings-row-copy' },
                 makeEl('span', { className:'enh-settings-label' }, t('aria_follow_system_theme')),
                 makeEl('span', { className:'enh-settings-help' }, t('text_uses_light_for_os_light_mode_and'))
             )
-        );
+        ), t('settings_keywords_auto_theme'));
         const autoThemeToggle = makeEl('label', { className:'enh-toggle' });
         const autoThemeInput = makeEl('input', { id:'enh-theme-auto', type:'checkbox', 'aria-label':t('aria_follow_system_theme') });
         autoThemeInput.checked = get('themeAuto');
@@ -18805,11 +18846,11 @@ ${scopedRules('.enh-zoom', {
            turned off: the setting existed, the README said you could switch it off, and
            the only way to actually do it was to hand-edit a settings backup and import it. */
         const mobileCard = makeCard(t('settings_heading_mobile_links'), t('settings_desktop_from_mobile_help'));
-        const mobileRow = makeEl('div', { className:'enh-settings-row' },
+        const mobileRow = makeSearchableRow(makeEl('div', { className:'enh-settings-row' },
             makeEl('div', { className:'enh-settings-row-copy' },
                 makeEl('span', { className:'enh-settings-label' }, t('aria_open_mobile_links_on_the_desktop_site'))
             )
-        );
+        ), t('settings_keywords_mobile_links'));
         const mobileToggle = makeEl('label', { className:'enh-toggle' });
         const mobileInput = makeEl('input', {
             id:'enh-desktop-from-mobile-toggle',
@@ -18854,7 +18895,7 @@ ${scopedRules('.enh-zoom', {
         integrationsPage.appendChild(makeEl('div', { className:'enh-integration-summary' },
             makeFeatureSummaryCard(t('feature_servarrIntegration_name'), t('settings_add_movies_to_radarr_and_shows_to'), 'Local', 'servarrIntegration'),
             makeFeatureSummaryCard(t('settings_media_server_indicator'), t('settings_check_plex_jellyfin_and_emby_libraries'), 'Local', 'mediaServerIntegration'),
-            makeFeatureSummaryCard(t('feature_rowIntegrationState_name'), t('settings_badge_list_rows_with_library_status'), 'Lists', 'rowIntegrationState')
+            makeFeatureSummaryCard(t('feature_rowIntegrationState_name'), t('settings_badge_list_rows_with_library_status'), t('settings_list_pages'), 'rowIntegrationState')
         ));
         integrationsPage.appendChild(makeEl('div', { className:'enh-settings-callout' },
             makeEl('strong', {}, t('settings_private_by_design')),
@@ -19123,12 +19164,12 @@ ${scopedRules('.enh-zoom', {
            manager — so the control exists only where it means something. */
         if (IS_EXTENSION_BUILD) {
             const updateCard = makeCard(t('settings_heading_updates'), t('settings_this_build_cannot_update_itself_so_it'));
-            const updateRow = makeEl('div', { className:'enh-settings-row' },
+            const updateRow = makeSearchableRow(makeEl('div', { className:'enh-settings-row' },
                 makeEl('div', { className:'enh-settings-row-copy' },
                     makeEl('span', { className:'enh-settings-label' }, t('aria_tell_me_about_new_versions')),
                     makeEl('span', { className:'enh-settings-help' }, t('text_reads_the_published_version_once_a_day'))
                 )
-            );
+            ), t('settings_keywords_update_notice'));
             const updateToggle = makeEl('label', { className:'enh-toggle' });
             const updateInput = makeEl('input', { id:'enh-update-notice-toggle', type:'checkbox', 'aria-label':t('aria_tell_me_about_new_versions') });
             updateInput.checked = get('updateNotice') !== false;
@@ -19436,6 +19477,15 @@ ${scopedRules('.enh-zoom', {
             hideFromTopLayer(overlay);
         }
         document.getElementById('enh-settings-fab')?.setAttribute('aria-expanded', String(settingsOpen));
+        /* A search left running hides every page it did not match. Closing on one and
+           reopening put focus on a tab whose panel was still hidden, over an empty body.
+           The search is a way of getting somewhere, not a setting, so it does not survive
+           the dialog closing. */
+        const searchBox = overlay?.querySelector('#enh-settings-search');
+        if (searchBox?.value) {
+            searchBox.value = '';
+            searchBox.dispatchEvent(new Event('input', { bubbles:true }));
+        }
         if (settingsOpen) {
             lastFocusedElement = document.activeElement;
             previousDocumentOverflow = document.documentElement.style.overflow;
@@ -19597,10 +19647,18 @@ ${scopedRules('.enh-zoom', {
         ...UNIVERSAL_FEATURE_KEYS, 'collapsibleSections', 'expandSummaries', 'quickNav',
         // Person pages carry a filmography, which is exactly the long card list marks
         // are useful for narrowing.
-        'watchedMarking', 'markFilters', 'castAges', 'rowIntegrationState',
+        'watchedMarking', 'markFilters', 'castAges',
         /* A full cast list and a person's filmography are where the thumbnails are;
            covering only the title page's top-billed row misses most of them. */
         'imageZoom',
+    ]);
+    /* A filmography is a list of titles, so the library badge belongs there. An episode
+       list, a season grid and a full-credits page are not: their rows are episodes and
+       people, and no media server or request service is keyed by an episode id. Putting
+       this in SECONDARY_PAGE_FEATURE_KEYS reached all four, which would have meant 250
+       futile requests to somebody's local service for every episode list opened. */
+    const NAME_PAGE_FEATURE_KEYS = new Set([
+        ...SECONDARY_PAGE_FEATURE_KEYS, 'rowIntegrationState',
     ]);
     const EPISODE_LIST_FEATURE_KEYS = new Set([
         ...SECONDARY_PAGE_FEATURE_KEYS, 'tvEpisodeTools', 'seasonProgress', 'episodeSubtitles',
@@ -19636,7 +19694,11 @@ ${scopedRules('.enh-zoom', {
         // episodeHeatmap would otherwise wait out its selector timeout on every title page.
         /* ratingGap needs the vote distribution, which IMDb stopped shipping on title
            pages — verified 2026-08-15 that no script there carries histogramData. */
-        if (surface === 'title') return !['watchlistBatch', 'listMultiSearch', 'listRuntimeSummary', 'markFilters', 'dimLowRated', 'listRoulette', 'episodeHeatmap', 'ratingGap'].includes(feature.key);
+        /* rowIntegrationState is scoped to lists, charts and filmographies, which is what
+           its description promises. A title page already carries the full integration bar
+           for the title it is about, so badging the recommendation carousel underneath
+           would be a second answer to a question already answered above it. */
+        if (surface === 'title') return !['watchlistBatch', 'listMultiSearch', 'listRuntimeSummary', 'markFilters', 'dimLowRated', 'listRoulette', 'episodeHeatmap', 'ratingGap', 'rowIntegrationState'].includes(feature.key);
         if (surface === 'episodes') return EPISODE_LIST_FEATURE_KEYS.has(feature.key);
         if (surface === 'ratings') return RATINGS_FEATURE_KEYS.has(feature.key);
         if (surface === 'collection') return COLLECTION_FEATURE_KEYS.has(feature.key);
@@ -19649,7 +19711,7 @@ ${scopedRules('.enh-zoom', {
             return SECONDARY_PAGE_FEATURE_KEYS.has(feature.key)
                 && !['markFilters', 'dimLowRated'].includes(feature.key);
         }
-        if (surface === 'name') return SECONDARY_PAGE_FEATURE_KEYS.has(feature.key);
+        if (surface === 'name') return NAME_PAGE_FEATURE_KEYS.has(feature.key);
         if (surface === 'search' || surface === 'home') return BROWSE_FEATURE_KEYS.has(feature.key);
         return UNIVERSAL_FEATURE_KEYS.has(feature.key);
     }

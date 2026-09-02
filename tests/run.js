@@ -1244,6 +1244,26 @@ test('feature activation is scoped to the current IMDb surface', () => {
     hooks.setTestPath('/name/nm0000206/');
     assert.strictEqual(hooks.getPageSurface(), 'name');
     assert(hooks.shouldInitFeature({ key:'removeAds', group:'Cleanup' }), 'cleanup should run on name pages');
+    /* IE-135: a filmography is a list of titles, so the library badge belongs on it. The
+       surfaces below are the ones it must never reach: their rows are episodes and
+       people, and no media server or request service is keyed by an episode id, so a
+       badge there is one futile local-service request per row and nothing else. */
+    const rowBadge = { key:'rowIntegrationState', group:'Features' };
+    assert(hooks.shouldInitFeature(rowBadge), 'the library badge belongs on a filmography');
+    [
+        ['/title/tt0903747/episodes/', 'episodes'],
+        ['/title/tt0903747/ratings/', 'ratings'],
+        ['/title/tt0903747/fullcredits/', 'title-subpage'],
+        ['/title/tt0903747/', 'title'],
+    ].forEach(([path, surface]) => {
+        hooks.setTestPath(path);
+        assert.strictEqual(hooks.getPageSurface(), surface);
+        assert(!hooks.shouldInitFeature(rowBadge),
+            `the library badge must not run on ${surface}: every row there would cost a futile lookup`);
+    });
+    hooks.setTestPath('/chart/top/');
+    assert(hooks.shouldInitFeature(rowBadge), 'and it does belong on a chart');
+    hooks.setTestPath('/name/nm0000206/');
     assert(!hooks.shouldInitFeature({ key:'searchButtons', group:'Features' }), 'title watch buttons should not run on name pages');
 
     hooks.setTestPath('/chart/top/');
@@ -7252,7 +7272,15 @@ test('every feature can be searched for by a word that is not in its name', () =
     const hooks = loadScriptTestHooks();
     const thin = [];
     const echoes = [];
-    hooks.getFeatureNames().forEach(([key, name]) => {
+    /* Every feature with a keyword list, not only the ones this build registers: a
+       feature the userscript does not run still shows a row in the extension's settings,
+       and checking only registered features left it as a hole in the gate. */
+    const named = new Map(hooks.getFeatureNames());
+    Object.keys(hooks.FEATURE_KEYWORDS).forEach(key => {
+        // Straight from the catalog, since an unregistered feature has no live name.
+        if (!named.has(key)) named.set(key, hooks.MESSAGES[`feature_${key}_name`] || key);
+    });
+    [...named.entries()].forEach(([key, name]) => {
         const words = String(hooks.FEATURE_KEYWORDS[key] || '')
             .split(',').map(word => word.trim().toLowerCase()).filter(Boolean);
         if (words.length < 2) thin.push(key);

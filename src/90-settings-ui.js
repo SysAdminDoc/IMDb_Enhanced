@@ -833,6 +833,15 @@
     /* Outside the panel because the offer has to outlive it: the settings overlay is torn
        down and rebuilt on every open, and a deletion made two seconds before that should
        still be reversible when it comes back. */
+    /* Three settings are plain rows rather than registered features - follow the system
+       theme, the mobile-link redirect, and the update notice - so nothing catalogued
+       describes them and the search would never have found them. They index the words
+       already on screen plus a keyword list of their own, like every feature row does. */
+    function makeSearchableRow(row, keywords = '') {
+        row.dataset.searchText = `${row.textContent} ${keywords}`.toLowerCase();
+        return row;
+    }
+
     const MARK_UNDO_MS = 15000;
     const pendingMarkUndo = { marks:null, timer:null };
     /* IE-141: the store holds up to 5,000 records and the panel used to draw every one of
@@ -859,11 +868,17 @@
         }
         /* Most recent first, and a tie broken by the title rather than by whatever order
            the store happened to enumerate in — a list that reshuffles between two renders
-           of the same data is the kind of thing people report as data loss. */
-        return entries.sort((a, b) => {
-            const dates = lastViewingDate(b[1]).localeCompare(lastViewingDate(a[1]));
-            return dates || byTitle(a, b);
-        });
+           of the same data is the kind of thing people report as data loss.
+
+           The date is computed once per record rather than inside the comparator: sorting
+           5,000 entries calls the comparator around 85,000 times, and lastViewingDate
+           re-normalizes a record's whole viewing list on every call. This panel exists
+           because 5,000 records were slow; doing that would have moved the cost rather
+           than removed it. */
+        return entries
+            .map(entry => [lastViewingDate(entry[1]), entry])
+            .sort((a, b) => b[0].localeCompare(a[0]) || byTitle(a[1], b[1]))
+            .map(pair => pair[1]);
     }
     function filterMarkEntries(entries, { state = 'all', noteOnly = false } = {}) {
         return entries.filter(([, record]) => {
@@ -1075,7 +1090,15 @@
             page = Math.min(Math.max(1, page), pages);
             const start = (page - 1) * MARKS_PAGE_SIZE;
             const shown = entries.slice(start, start + MARKS_PAGE_SIZE);
-            pager.hidden = entries.length <= MARKS_PAGE_SIZE;
+            /* The heading counts the whole store, so the only place a filtered total is
+               said is here. Hiding the pager whenever one page was enough hid that total
+               in exactly the case it mattered: filtering 5,000 marks down to twelve left
+               a panel reading "5000 saved" above twelve rows. The buttons go when there
+               is nowhere to page to; the count stays whenever it says something the
+               heading does not. */
+            pager.hidden = !entries.length || (pages === 1 && entries.length === all.length);
+            previous.hidden = pages === 1;
+            next.hidden = pages === 1;
             previous.disabled = page <= 1;
             next.disabled = page >= pages;
             pageLabel.textContent = t('text_showing_marks_range',
@@ -1135,13 +1158,17 @@
                 /* The date the neighbourhood's open ask is about: when this was last
                    watched, or failing that the day it was marked, said as such rather
                    than presented as a viewing that was never logged. */
+                /* A mark upgraded from the era when these were stored as a bare string has
+                   no viewings and a timestamp of zero, so there is no date to show. Saying
+                   so beats an empty cell above a tooltip reading "Marked on " with nothing
+                   after it. */
                 const viewed = lastViewingDate(record);
                 const dateEl = makeEl('div', {
-                    className:'enh-mark-row__date',
-                    title: countViewings(record)
-                        ? t('text_last_viewing_on', [viewed])
+                    className:'enh-mark-row__date' + (viewed ? '' : ' enh-mark-row__date--unknown'),
+                    title: !viewed ? t('text_no_date_recorded')
+                        : countViewings(record) ? t('text_last_viewing_on', [viewed])
                         : t('text_marked_on_date', [viewed]),
-                }, viewed);
+                }, viewed || t('text_no_date'));
                 const row = makeEl('div', { className:'enh-mark-row' }, titleEl, stateEl, dateEl, open, clear);
                 // Rendered as text, never markup: a note is arbitrary user input.
                 if (note) row.appendChild(makeEl('div', { className:'enh-mark-row__note' }, note));
@@ -1363,7 +1390,7 @@
         let searchQuery = '';
         const resetSearchVisibility = () => {
             body.querySelectorAll('.enh-settings-card').forEach(card => { card.hidden = false; });
-            body.querySelectorAll('.enh-settings-row[data-feature-key]').forEach(row => { row.hidden = false; });
+            body.querySelectorAll('.enh-settings-row[data-search-text]').forEach(row => { row.hidden = false; });
         };
         const clearSearch = () => {
             searchQuery = '';
@@ -1389,7 +1416,7 @@
                        rows under "Clean up" are what somebody searching for that wanted. */
                     const cardMatches = `${heading} ${description}`.toLowerCase().includes(searchQuery)
                         || (card.dataset.searchText || '').includes(searchQuery);
-                    const rows = card.querySelectorAll('.enh-settings-row[data-feature-key]');
+                    const rows = card.querySelectorAll('.enh-settings-row[data-search-text]');
                     let rowMatches = 0;
                     rows.forEach(row => {
                         const hit = cardMatches || (row.dataset.searchText || '').includes(searchQuery);
@@ -1410,7 +1437,7 @@
            control was hoisted into its own header. Comma-joined so the browser returns
            whichever comes first in the document rather than whichever is listed first. */
         const firstResultControl = () => body.querySelector([
-            '.enh-settings-page:not([hidden]) .enh-settings-card:not([hidden]) .enh-settings-row:not([hidden]) input',
+            '.enh-settings-page:not([hidden]) .enh-settings-card:not([hidden]) .enh-settings-row[data-search-text]:not([hidden]) input',
             '.enh-settings-page:not([hidden]) .enh-settings-card[data-feature-key]:not([hidden]) .enh-settings-card-actions input',
         ].join(','));
         searchInput.addEventListener('input', () => {
@@ -1656,12 +1683,12 @@
             themeSelector.appendChild(makeEl('div', { className:'enh-theme-option' }, swatch, makeEl('span', {}, theme.label)));
         });
         themeCard.appendChild(themeSelector);
-        const autoThemeRow = makeEl('div', { className:'enh-settings-row enh-theme-auto-row' },
+        const autoThemeRow = makeSearchableRow(makeEl('div', { className:'enh-settings-row enh-theme-auto-row' },
             makeEl('div', { className:'enh-settings-row-copy' },
                 makeEl('span', { className:'enh-settings-label' }, t('aria_follow_system_theme')),
                 makeEl('span', { className:'enh-settings-help' }, t('text_uses_light_for_os_light_mode_and'))
             )
-        );
+        ), t('settings_keywords_auto_theme'));
         const autoThemeToggle = makeEl('label', { className:'enh-toggle' });
         const autoThemeInput = makeEl('input', { id:'enh-theme-auto', type:'checkbox', 'aria-label':t('aria_follow_system_theme') });
         autoThemeInput.checked = get('themeAuto');
@@ -1878,11 +1905,11 @@
            turned off: the setting existed, the README said you could switch it off, and
            the only way to actually do it was to hand-edit a settings backup and import it. */
         const mobileCard = makeCard(t('settings_heading_mobile_links'), t('settings_desktop_from_mobile_help'));
-        const mobileRow = makeEl('div', { className:'enh-settings-row' },
+        const mobileRow = makeSearchableRow(makeEl('div', { className:'enh-settings-row' },
             makeEl('div', { className:'enh-settings-row-copy' },
                 makeEl('span', { className:'enh-settings-label' }, t('aria_open_mobile_links_on_the_desktop_site'))
             )
-        );
+        ), t('settings_keywords_mobile_links'));
         const mobileToggle = makeEl('label', { className:'enh-toggle' });
         const mobileInput = makeEl('input', {
             id:'enh-desktop-from-mobile-toggle',
@@ -1927,7 +1954,7 @@
         integrationsPage.appendChild(makeEl('div', { className:'enh-integration-summary' },
             makeFeatureSummaryCard(t('feature_servarrIntegration_name'), t('settings_add_movies_to_radarr_and_shows_to'), 'Local', 'servarrIntegration'),
             makeFeatureSummaryCard(t('settings_media_server_indicator'), t('settings_check_plex_jellyfin_and_emby_libraries'), 'Local', 'mediaServerIntegration'),
-            makeFeatureSummaryCard(t('feature_rowIntegrationState_name'), t('settings_badge_list_rows_with_library_status'), 'Lists', 'rowIntegrationState')
+            makeFeatureSummaryCard(t('feature_rowIntegrationState_name'), t('settings_badge_list_rows_with_library_status'), t('settings_list_pages'), 'rowIntegrationState')
         ));
         integrationsPage.appendChild(makeEl('div', { className:'enh-settings-callout' },
             makeEl('strong', {}, t('settings_private_by_design')),
@@ -2196,12 +2223,12 @@
            manager — so the control exists only where it means something. */
         if (IS_EXTENSION_BUILD) {
             const updateCard = makeCard(t('settings_heading_updates'), t('settings_this_build_cannot_update_itself_so_it'));
-            const updateRow = makeEl('div', { className:'enh-settings-row' },
+            const updateRow = makeSearchableRow(makeEl('div', { className:'enh-settings-row' },
                 makeEl('div', { className:'enh-settings-row-copy' },
                     makeEl('span', { className:'enh-settings-label' }, t('aria_tell_me_about_new_versions')),
                     makeEl('span', { className:'enh-settings-help' }, t('text_reads_the_published_version_once_a_day'))
                 )
-            );
+            ), t('settings_keywords_update_notice'));
             const updateToggle = makeEl('label', { className:'enh-toggle' });
             const updateInput = makeEl('input', { id:'enh-update-notice-toggle', type:'checkbox', 'aria-label':t('aria_tell_me_about_new_versions') });
             updateInput.checked = get('updateNotice') !== false;
@@ -2509,6 +2536,15 @@
             hideFromTopLayer(overlay);
         }
         document.getElementById('enh-settings-fab')?.setAttribute('aria-expanded', String(settingsOpen));
+        /* A search left running hides every page it did not match. Closing on one and
+           reopening put focus on a tab whose panel was still hidden, over an empty body.
+           The search is a way of getting somewhere, not a setting, so it does not survive
+           the dialog closing. */
+        const searchBox = overlay?.querySelector('#enh-settings-search');
+        if (searchBox?.value) {
+            searchBox.value = '';
+            searchBox.dispatchEvent(new Event('input', { bubbles:true }));
+        }
         if (settingsOpen) {
             lastFocusedElement = document.activeElement;
             previousDocumentOverflow = document.documentElement.style.overflow;

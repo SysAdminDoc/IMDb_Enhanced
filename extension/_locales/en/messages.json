@@ -2015,6 +2015,18 @@
   "settings_the_last_20_feature_failures_kept_across": {
     "message": "The last 20 feature failures, kept across reloads so an intermittent problem can be seen. Each entry records when, which feature, which kind of page, and what category of failure — never a title, address, or message."
   },
+  "settings_keywords_auto_theme": {
+    "message": "automatic, system, operating system, follows"
+  },
+  "settings_keywords_mobile_links": {
+    "message": "mobile, phone, m.imdb, redirect"
+  },
+  "settings_keywords_update_notice": {
+    "message": "update, new release, upgrade, notify"
+  },
+  "settings_list_pages": {
+    "message": "Lists"
+  },
   "settings_search_placeholder": {
     "message": "Search every setting"
   },
@@ -2413,6 +2425,12 @@
   },
   "text_no_importable_rows_skipped_other": {
     "message": "No importable rows found. $1 rows were skipped."
+  },
+  "text_no_date": {
+    "message": "No date"
+  },
+  "text_no_date_recorded": {
+    "message": "No viewing or marking date was recorded for this title"
   },
   "text_no_local_title_marks_yet": {
     "message": "No local title marks yet. Mark a title Seen or Skip from any card or title page and it shows up here."

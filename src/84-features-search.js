@@ -1924,7 +1924,8 @@
         _queue: null,
         // id -> the badges waiting on it, since a list can carry the same title twice.
         _waiting: null,
-        _draining: false,
+        // A token rather than a flag: see _drain.
+        _drainToken: null,
         init() {
             if (!isIMDbHost()) return;
             /* Without an observer there is no way to tell a row that was scrolled to from
@@ -2065,8 +2066,15 @@
            firing twenty simultaneous requests at somebody's Raspberry Pi is how a local
            service starts refusing them. Three at a time, a yield between batches. */
         async _drain(isCurrent) {
-            if (this._draining) return;
-            this._draining = true;
+            /* A token, not a boolean. Teardown clears the flag while a suspended loop is
+               still parked on an await; when that stale loop resumes and returns, its
+               finally would clear the flag belonging to the loop the next init started,
+               and the next reveal would run a second drain beside it. Two loops splicing
+               one queue is twice the concurrency this is here to bound. Only the loop that
+               owns the current token may release it. */
+            if (this._drainToken) return;
+            const token = {};
+            this._drainToken = token;
             try {
                 // Optional chaining for the same reason as in _resolve: teardown between
                 // two batches drops the queue rather than emptying it.
@@ -2081,7 +2089,7 @@
                     await new Promise(resolve => setTimeout(resolve, 0));
                 }
             } finally {
-                this._draining = false;
+                if (this._drainToken === token) this._drainToken = null;
             }
         },
         async _resolve(entry, isCurrent) {
@@ -2170,7 +2178,7 @@
             this._cache = null;
             this._inflight = null;
             this._waiting = null;
-            this._draining = false;
+            this._drainToken = null;
             this._probe = null;
             document.querySelectorAll('.enh-row-integration').forEach(badge => badge.remove());
             document.querySelectorAll('[data-enh-row-integration]').forEach(card => {
