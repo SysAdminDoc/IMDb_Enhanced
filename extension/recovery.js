@@ -455,7 +455,7 @@
         error_request_timeout: 'The service did not answer in time',
         error_response_not_json: 'Response was not valid JSON',
         error_response_too_large: 'Response was too large',
-        error_seerr_local_only: 'Only localhost and 127.0.0.1 Overseerr/Jellyseerr URLs are allowed by this build.',
+        error_seerr_local_only: 'Only localhost and 127.0.0.1 Seerr URLs are allowed by this build.',
         error_servarr_local_only: 'Only localhost and 127.0.0.1 Servarr URLs are allowed by this build.',
         error_settings_none_recognized: 'No valid recognized settings were found.',
         error_settings_not_an_object: 'Settings JSON must be an object.',
@@ -839,7 +839,7 @@
         settings_copy_a_scrubbed_diagnostics_report_to_the: 'Copy a scrubbed diagnostics report to the clipboard',
         settings_copy_diagnostics: 'Copy diagnostics',
         settings_coverage_label: 'Coverage.',
-        settings_credentials_stay_local_and_requests_are_limited: 'Credentials stay local and requests are limited to localhost or 127.0.0.1. Overseerr and Jellyseerr both use these fields; a request there goes through your instance\'s approval workflow instead of writing straight into Radarr or Sonarr, and your instance resolves the IMDb ID itself.',
+        settings_credentials_stay_local_and_requests_are_limited: 'Credentials stay local and requests are limited to localhost or 127.0.0.1. Seerr, and the Overseerr and Jellyseerr installs it was merged from, all use these fields; a request there goes through your instance\'s approval workflow instead of writing straight into Radarr or Sonarr, and your instance resolves the IMDb ID itself.',
         settings_csv_could_not_be_read: 'CSV could not be read.',
         settings_csv_import_failed_previous_marks_were_restored: 'CSV import failed. Previous marks were restored.',
         settings_dated_viewings: 'Dated viewings',
@@ -1130,8 +1130,8 @@
         text_site_search_queue: '$1 search queue',
         text_skip_titles_i_have_marked: 'Skip titles I have marked',
         text_summary_separator: ' · ',
-        text_the_overseerr_instance_did_not_recognize_this: 'The Overseerr instance did not recognize this IMDb title',
-        text_the_overseerr_instance_returned_an_unusable_title: 'The Overseerr instance returned an unusable title id',
+        text_the_overseerr_instance_did_not_recognize_this: 'The Seerr instance did not recognize this IMDb title',
+        text_the_overseerr_instance_returned_an_unusable_title: 'The Seerr instance returned an unusable title id',
         text_the_selected_file_could_not_be: 'The selected file could not be read.',
         text_third_party_board_note: 'Hosted by MovieChat, not by IMDb or by this extension.',
         text_timed_out_waiting_for_page_content: 'Timed out waiting for page content',
@@ -16782,7 +16782,7 @@ ${scopedRules('.enh-zoom', {
                 ],
             },
             {
-                id:'seerr', title:'Overseerr', fields:[
+                id:'seerr', title:'Seerr', fields:[
                     { key:'seerrUrl', label:t('label_url'), wide:true, placeholder:t('field_http_localhost_5055') },
                     { key:'seerrApiKey', label:t('settings_api_key'), type:'password', wide:true },
                 ],

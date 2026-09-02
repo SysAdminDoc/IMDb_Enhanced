@@ -1243,7 +1243,11 @@ test('Overseerr requests report media state and build valid bodies', () => {
     // local integration, at edit time and at import time.
     assert(script.includes("'radarrUrl', 'sonarrUrl', 'seerrUrl'"), 'the Overseerr URL must be localhost-validated like its peers');
     assert(script.includes("'radarrApiKey', 'sonarrApiKey', 'seerrApiKey'"), 'the Overseerr key must be credential-normalized like its peers');
-    assert(script.includes('Only localhost and 127.0.0.1 Overseerr/Jellyseerr URLs are allowed'), 'the Overseerr request boundary must enforce loopback');
+    // Matched on the key, since the sentence names the current product now rather than
+    // the two it was merged from.
+    assert(/error_seerr_local_only/.test(script), 'the Seerr request boundary must enforce loopback');
+    assert(/Only localhost and 127\.0\.0\.1 Seerr URLs are allowed/.test(messageCatalog.error_seerr_local_only || ''),
+        'and say so in words that name the product');
 
     /* httpRequest serializes the body itself. A caller that pre-stringifies gets its
        payload encoded twice, and Overseerr receives a JSON string instead of an object
@@ -7282,7 +7286,7 @@ test('every sentence in the source comes from the catalog', () => {
     const BRANDS = new Set([
         'IMDb', 'IMDb Enhanced', 'Rotten Tomatoes', 'Metacritic', 'Letterboxd', 'JustWatch',
         'TMDB', 'OMDb', 'YouTube', 'Wikidata', 'Plex', 'Jellyfin', 'Emby', 'Radarr', 'Sonarr',
-        'Overseerr', 'AniList', 'ANILIST', 'TVmaze', 'GitHub', 'MDBList', 'RT', 'LB', 'MC', 'AL', 'TV',
+        'Overseerr', 'Seerr', 'AniList', 'ANILIST', 'TVmaze', 'GitHub', 'MDBList', 'RT', 'LB', 'MC', 'AL', 'TV',
         'TOMATOMETER', 'LETTERBOXD', 'METASCORE', 'SERVARR',
         'Box Office Mojo', 'Ep Calendar', 'Box Office',
     ]);
@@ -7628,6 +7632,28 @@ test('public documentation matches what the project actually ships', () => {
     // The Firefox build declares optional website content; claiming otherwise was false.
     assert(!/declares no data collection/.test(readme),
         'the README must not claim the Firefox build declares no data collection');
+
+    /* The manager floors are the versions this was actually checked against, and the one
+       that matters is Violentmonkey's: below 2.48.0 installing a script on Chrome 146 and
+       later takes minutes, which its own notes trace to leftover webRequest registrations.
+       The README used to name "Violentmonkey 2026.7", a version scheme that project has
+       never used, so there was nothing a reader could compare their build against. */
+    assert(/Tampermonkey 5\.6 or newer/.test(readme), 'the README must name a Tampermonkey floor that exists');
+    assert(/Violentmonkey 2\.48\.0 or newer/.test(readme), 'and a Violentmonkey one, in the scheme that project uses');
+    assert(/ScriptCat 1\.4 or newer/.test(readme), 'and a ScriptCat one');
+    assert(!/Violentmonkey\s*\n?2026\.\d/.test(readme), 'the invented date-based version must not come back');
+
+    /* Overseerr and Jellyseerr were merged into Seerr in February 2026 and both are
+       deprecated. Naming only the retired products reads as an unmaintained integration to
+       anyone running the current one, so the copy names Seerr first and the two it came
+       from after. */
+    const seerrStrings = Object.entries(messageCatalog)
+        .filter(([, text]) => /overseerr|jellyseerr/i.test(text));
+    seerrStrings.forEach(([key, text]) => {
+        assert(/\bSeerr\b/.test(text.replace(/Overseerr|Jellyseerr/g, '')),
+            `${key} names a retired product without naming Seerr: ${text}`);
+    });
+    assert(/\bSeerr\b/.test(readme), 'the README must name the product this integration currently targets');
 
     /* The README named two destinations the code had already replaced, because both
        redirected onto a retired domain. A list written out by hand in prose drifts from

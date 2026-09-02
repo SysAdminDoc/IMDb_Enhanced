@@ -788,7 +788,7 @@
                 ],
             },
             {
-                id:'seerr', title:'Overseerr', fields:[
+                id:'seerr', title:'Seerr', fields:[
                     { key:'seerrUrl', label:t('label_url'), wide:true, placeholder:t('field_http_localhost_5055') },
                     { key:'seerrApiKey', label:t('settings_api_key'), type:'password', wide:true },
                 ],

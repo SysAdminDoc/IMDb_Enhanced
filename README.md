@@ -1,6 +1,6 @@
 [![Version](https://img.shields.io/badge/version-2.19.0-blue)](https://github.com/SysAdminDoc/IMDb_Enhanced)
 [![License](https://img.shields.io/badge/license-MIT-green)](LICENSE)
-[![Platform](https://img.shields.io/badge/platform-Tampermonkey%20%7C%20Violentmonkey-yellow)](https://www.tampermonkey.net/)
+[![Platform](https://img.shields.io/badge/platform-userscript%20%7C%20Chrome%20%7C%20Firefox-yellow)](https://www.tampermonkey.net/)
 
 # IMDb Enhanced
 
@@ -26,7 +26,7 @@ Third-party lookups omit destination cookies. Responses are rendered as text, ou
 
 **Trailer Popover**. In-page trailer dialog backed by YouTube search, with focus containment, Escape/overlay close, opener restoration, and stale-result protection. No page navigation needed.
 
-**Radarr/Sonarr/Overseerr Integration**. Quick-add and request buttons that report state: add, pending, requested, processing, or already in your library. Overseerr and Jellyseerr are supported as a request backend and resolve the IMDb ID themselves, so no third-party API key is needed. Localhost-only for security.
+**Radarr/Sonarr/Seerr Integration**. Quick-add and request buttons that report state: add, pending, requested, processing, or already in your library. Seerr works as a request backend, as do the Overseerr and Jellyseerr installs it was merged from in February 2026, and it resolves the IMDb ID itself, so no third-party API key is needed. Localhost-only for security.
 
 **Media Server Indicator**. Optional Plex, Jellyfin, and Emby checks show whether the current title already exists in your local media library. Localhost-only for security; access tokens are sent in request headers, not URLs.
 
@@ -57,8 +57,10 @@ Updates are delivered automatically via the `@updateURL` metadata.
 
 Manifest V3 removed the old permissions that userscript managers relied on, so
 Chromium browsers now require one manual switch before any userscript runs. The
-manager itself must also be a Manifest V3 build (Tampermonkey 5.x, Violentmonkey
-2026.7 or newer, or ScriptCat).
+manager itself must also be a Manifest V3 build: Tampermonkey 5.6 or newer,
+Violentmonkey 2.48.0 or newer, or ScriptCat 1.4 or newer. Violentmonkey below
+2.48.0 can take minutes to install a script on Chrome 146 and later, which its
+release notes trace to leftover webRequest registrations.
 
 - **Chrome 138 and newer:** open `chrome://extensions`, click **Details** on your
   userscript manager, and turn on **Allow User Scripts**.
@@ -140,7 +142,7 @@ The redesigned visual reference set covers every menu page: [Experience](design/
 
 **External Links**. Same customization as watch sites for review, availability, trailer, and research links; hidden destinations remain available to re-enable later.
 
-**Radarr/Sonarr/Overseerr**. URL, API key, root folder, and quality profile for Radarr and Sonarr; URL and API key for an Overseerr or Jellyseerr instance. Localhost/127.0.0.1 only. Current Sonarr v4+ language selection belongs in quality-profile custom formats; retired v3 language profiles are not configured.
+**Radarr/Sonarr/Seerr**. URL, API key, root folder, and quality profile for Radarr and Sonarr; URL and API key for a Seerr instance, or an Overseerr or Jellyseerr one. Localhost/127.0.0.1 only. Current Sonarr v4+ language selection belongs in quality-profile custom formats; retired v3 language profiles are not configured.
 
 **Updates** (extension only). Off switch for the once-a-day check that reads the published version number and tells you when a newer build exists. Turning it off stops the request.
 
@@ -176,7 +178,7 @@ Integration API keys and tokens are left out of an ordinary backup, which names 
 - **No runtime dependencies.** The userscript is one file with zero third-party libraries, and the extension builds are generated without bundling a dependency. The development test suite uses happy-dom after `npm ci`, but nothing is fetched at install or at runtime to make the project work.
 - **No remote code.** Everything that executes ships in the file you installed. Nothing is `eval`'d and no script is loaded from a CDN, which is also what keeps the extension builds compliant with Chrome Web Store and AMO policy.
 - **Unminified and readable.** The shipped userscript is the source. You can read every line of what you are running.
-- **Local-only storage.** Preferences, private Seen/Skip marks, and cached lookups live in your userscript manager or `chrome.storage.local`. Integration credentials for Radarr, Sonarr, Overseerr, Plex, Jellyfin, and Emby are restricted to `localhost`/`127.0.0.1` and are sent only to those services, as request headers rather than in URLs. In the extension builds those keys stay in the background worker and are never handed to the IMDb tab. A request names the key it needs, and the worker attaches it only after checking the destination is a local address and the name is one of the six it recognizes. Which header carries it is the worker's decision as well, so a page that can't read a key can't move one into another service's authentication scheme either. Nothing running in the page can read a stored key, which is why the settings field shows a saved key as configured instead of displaying it.
+- **Local-only storage.** Preferences, private Seen/Skip marks, and cached lookups live in your userscript manager or `chrome.storage.local`. Integration credentials for Radarr, Sonarr, Seerr, Plex, Jellyfin, and Emby are restricted to `localhost`/`127.0.0.1` and are sent only to those services, as request headers rather than in URLs. In the extension builds those keys stay in the background worker and are never handed to the IMDb tab. A request names the key it needs, and the worker attaches it only after checking the destination is a local address and the name is one of the six it recognizes. Which header carries it is the worker's decision as well, so a page that can't read a key can't move one into another service's authentication scheme either. Nothing running in the page can read a stored key, which is why the settings field shows a saved key as configured instead of displaying it.
 - **What does leave your browser:** anonymous, cookie-free lookups to Rotten Tomatoes, Metacritic, Letterboxd, JustWatch, YouTube, AniList, and Wikidata, made only for the title you are looking at and only for the score sources you have enabled. Two more are contacted only if you store a key for them: TMDB, if you pick it as the availability source, and OMDb, if you save a key for the score fallback. Those two receive the IMDb id rather than the title text. Each one is cached locally so a repeat visit makes no request at all. Turn a source off and it is never contacted.
 - **One request that isn't a lookup.** The extension builds can't update themselves, so once a day the background worker reads the published userscript's version line from `raw.githubusercontent.com` and the panel says when a newer one exists. It's a plain GET of a public file. Nothing about you or the page you're on goes with it, and turning off the update notice in Settings stops it. The userscript build never does this; its manager handles updates.
 

@@ -345,7 +345,7 @@
     "message": "Response was too large"
   },
   "error_seerr_local_only": {
-    "message": "Only localhost and 127.0.0.1 Overseerr/Jellyseerr URLs are allowed by this build."
+    "message": "Only localhost and 127.0.0.1 Seerr URLs are allowed by this build."
   },
   "error_servarr_local_only": {
     "message": "Only localhost and 127.0.0.1 Servarr URLs are allowed by this build."
@@ -1497,7 +1497,7 @@
     "message": "Coverage."
   },
   "settings_credentials_stay_local_and_requests_are_limited": {
-    "message": "Credentials stay local and requests are limited to localhost or 127.0.0.1. Overseerr and Jellyseerr both use these fields; a request there goes through your instance's approval workflow instead of writing straight into Radarr or Sonarr, and your instance resolves the IMDb ID itself."
+    "message": "Credentials stay local and requests are limited to localhost or 127.0.0.1. Seerr, and the Overseerr and Jellyseerr installs it was merged from, all use these fields; a request there goes through your instance's approval workflow instead of writing straight into Radarr or Sonarr, and your instance resolves the IMDb ID itself."
   },
   "settings_csv_could_not_be_read": {
     "message": "CSV could not be read."
@@ -2370,10 +2370,10 @@
     "message": " · "
   },
   "text_the_overseerr_instance_did_not_recognize_this": {
-    "message": "The Overseerr instance did not recognize this IMDb title"
+    "message": "The Seerr instance did not recognize this IMDb title"
   },
   "text_the_overseerr_instance_returned_an_unusable_title": {
-    "message": "The Overseerr instance returned an unusable title id"
+    "message": "The Seerr instance returned an unusable title id"
   },
   "text_the_selected_file_could_not_be": {
     "message": "The selected file could not be read."
