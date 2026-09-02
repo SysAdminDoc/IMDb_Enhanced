@@ -141,6 +141,65 @@
         return Math.round((weighted / votes) * 10) / 10;
     }
 
+    /* What the shape of the distribution says, from the same ten buckets. IMDb applies a
+       different weighting "when unusual rating activity is detected" and does not say when,
+       so the only honest thing a reader can be given is the shape itself.
+
+       Polarity is the share of votes sitting at the two ends, which is the measure Schuff,
+       Mudambi and Wang use for review-bombed titles (HICSS 2024). Negative imbalance says
+       which end those votes are at. The reverse-J shape — a mass at the bottom with a
+       smaller bump at the top — is their signature of a bombing rather than a division.
+
+       Sarle's bimodality coefficient is deliberately not used: Di Martino et al. (2025)
+       show it is wrong for skewed unimodal data, which is the shape almost every film has.
+       Nothing here is a claim about why a distribution looks the way it does. */
+    const POLARITY_MIN_VOTES = 50;
+    const POLARITY_DIVISIVE = 0.4;
+    const POLARITY_REVERSE_J = 0.5;
+    const REVERSE_J_LOW_SHARE = 0.6;
+
+    function computeRatingShape(buckets) {
+        if (!Array.isArray(buckets) || !buckets.length) return null;
+        const counts = new Map();
+        let total = 0;
+        for (const bucket of buckets) {
+            const rating = Number(bucket?.rating);
+            const count = Number(bucket?.voteCount);
+            if (!Number.isFinite(rating) || !Number.isFinite(count) || count < 0) continue;
+            if (rating < 1 || rating > 10) continue;
+            counts.set(rating, (counts.get(rating) || 0) + count);
+            total += count;
+        }
+        if (total < POLARITY_MIN_VOTES) return null;
+        const at = rating => counts.get(rating) || 0;
+        const low = at(1) + at(2);
+        const high = at(9) + at(10);
+        const ends = low + high;
+        if (!ends) return { polarity:0, negativeShare:0, label:'consensus', total };
+        const polarity = ends / total;
+        const negativeShare = low / ends;
+        /* Named in that order because they are progressively stronger claims, and a title
+           can only be one of them. */
+        const label = polarity >= POLARITY_REVERSE_J && negativeShare >= REVERSE_J_LOW_SHARE
+            ? 'reverse-j'
+            : polarity >= POLARITY_DIVISIVE ? 'divisive' : 'consensus';
+        return {
+            polarity: Math.round(polarity * 1000) / 1000,
+            negativeShare: Math.round(negativeShare * 1000) / 1000,
+            label,
+            total,
+        };
+    }
+
+    function describeRatingShape(shape) {
+        if (!shape || shape.label === 'consensus') return null;
+        const percent = Math.round(shape.polarity * 100);
+        const leaning = shape.negativeShare >= 0.5 ? t('text_shape_leaning_low') : t('text_shape_leaning_high');
+        return shape.label === 'reverse-j'
+            ? t('text_shape_reverse_j', [percent, leaning])
+            : t('text_shape_divisive', [percent, leaning]);
+    }
+
     function describeRatingGap(unweighted, displayed, trimmed = null) {
         if (unweighted === null || !Number.isFinite(displayed)) return null;
         const delta = Math.round((displayed - unweighted) * 10) / 10;

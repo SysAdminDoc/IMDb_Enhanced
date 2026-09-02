@@ -2537,6 +2537,18 @@
   "text_watch_order": {
     "message": "[!! Watch order !!]"
   },
+  "text_shape_divisive": {
+    "message": "[!! Divided: $1% of votes sit at the two ends of the scale, mostly $2. !!]"
+  },
+  "text_shape_reverse_j": {
+    "message": "[!! Unusual shape: $1% of votes sit at the two ends, mostly $2, which is what a rating campaign looks like. !!]"
+  },
+  "text_shape_leaning_low": {
+    "message": "[!! at the bottom !!]"
+  },
+  "text_shape_leaning_high": {
+    "message": "[!! at the top !!]"
+  },
   "text_without_the_extremes": {
     "message": "[!! Without 1s and 10s: $1 (derived) !!]"
   },

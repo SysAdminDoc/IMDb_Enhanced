@@ -1187,6 +1187,10 @@
         text_view_full_cast_crew: 'View full cast & crew',
         text_was_about_age: '(was ~$1)',
         text_watch_order: 'Watch order',
+        text_shape_divisive: 'Divided: $1% of votes sit at the two ends of the scale, mostly $2.',
+        text_shape_reverse_j: 'Unusual shape: $1% of votes sit at the two ends, mostly $2, which is what a rating campaign looks like.',
+        text_shape_leaning_low: 'at the bottom',
+        text_shape_leaning_high: 'at the top',
         text_without_the_extremes: 'Without 1s and 10s: $1 (derived)',
         toast_a_site_list_can_contain_up: 'A site list can contain up to $1 destinations',
         toast_already_logged_a_viewing_today: 'A viewing today is already logged for this title',
@@ -8925,6 +8929,65 @@ section[id*="quote" i] .ipc-list-card { padding: 4px 0 !important; margin: 2px 0
         return Math.round((weighted / votes) * 10) / 10;
     }
 
+    /* What the shape of the distribution says, from the same ten buckets. IMDb applies a
+       different weighting "when unusual rating activity is detected" and does not say when,
+       so the only honest thing a reader can be given is the shape itself.
+
+       Polarity is the share of votes sitting at the two ends, which is the measure Schuff,
+       Mudambi and Wang use for review-bombed titles (HICSS 2024). Negative imbalance says
+       which end those votes are at. The reverse-J shape — a mass at the bottom with a
+       smaller bump at the top — is their signature of a bombing rather than a division.
+
+       Sarle's bimodality coefficient is deliberately not used: Di Martino et al. (2025)
+       show it is wrong for skewed unimodal data, which is the shape almost every film has.
+       Nothing here is a claim about why a distribution looks the way it does. */
+    const POLARITY_MIN_VOTES = 50;
+    const POLARITY_DIVISIVE = 0.4;
+    const POLARITY_REVERSE_J = 0.5;
+    const REVERSE_J_LOW_SHARE = 0.6;
+
+    function computeRatingShape(buckets) {
+        if (!Array.isArray(buckets) || !buckets.length) return null;
+        const counts = new Map();
+        let total = 0;
+        for (const bucket of buckets) {
+            const rating = Number(bucket?.rating);
+            const count = Number(bucket?.voteCount);
+            if (!Number.isFinite(rating) || !Number.isFinite(count) || count < 0) continue;
+            if (rating < 1 || rating > 10) continue;
+            counts.set(rating, (counts.get(rating) || 0) + count);
+            total += count;
+        }
+        if (total < POLARITY_MIN_VOTES) return null;
+        const at = rating => counts.get(rating) || 0;
+        const low = at(1) + at(2);
+        const high = at(9) + at(10);
+        const ends = low + high;
+        if (!ends) return { polarity:0, negativeShare:0, label:'consensus', total };
+        const polarity = ends / total;
+        const negativeShare = low / ends;
+        /* Named in that order because they are progressively stronger claims, and a title
+           can only be one of them. */
+        const label = polarity >= POLARITY_REVERSE_J && negativeShare >= REVERSE_J_LOW_SHARE
+            ? 'reverse-j'
+            : polarity >= POLARITY_DIVISIVE ? 'divisive' : 'consensus';
+        return {
+            polarity: Math.round(polarity * 1000) / 1000,
+            negativeShare: Math.round(negativeShare * 1000) / 1000,
+            label,
+            total,
+        };
+    }
+
+    function describeRatingShape(shape) {
+        if (!shape || shape.label === 'consensus') return null;
+        const percent = Math.round(shape.polarity * 100);
+        const leaning = shape.negativeShare >= 0.5 ? t('text_shape_leaning_low') : t('text_shape_leaning_high');
+        return shape.label === 'reverse-j'
+            ? t('text_shape_reverse_j', [percent, leaning])
+            : t('text_shape_divisive', [percent, leaning]);
+    }
+
     function describeRatingGap(unweighted, displayed, trimmed = null) {
         if (unweighted === null || !Number.isFinite(displayed)) return null;
         const delta = Math.round((displayed - unweighted) * 10) / 10;
@@ -13580,6 +13643,7 @@ section[id*="quote" i] .ipc-list-card { padding: 4px 0 !important; margin: 2px 0
                     font: 600 12px/1.5 -apple-system, BlinkMacSystemFont, 'Segoe UI', sans-serif;
                 }
                 #enh-rating-gap strong { color: ${t.tx0}; }
+                #enh-rating-gap .enh-rating-shape { margin-top: 4px; color: ${t.tx2}; }
             `, 'enh-ratingGap');
             waitFor('[data-testid="histogram-root"]').then(root => {
                 if (!isCurrent() || !root || document.getElementById('enh-rating-gap')) return;
@@ -13588,11 +13652,20 @@ section[id*="quote" i] .ipc-list-card { padding: 4px 0 !important; margin: 2px 0
                 const buckets = getHistogramData();
                 const unweighted = computeUnweightedMean(buckets);
                 const gap = describeRatingGap(unweighted, readDisplayedRating(), computeTrimmedMean(buckets));
-                if (!gap) return;
-                root.parentElement?.insertBefore(makeEl('div', { id:'enh-rating-gap', role:'note' },
-                    makeEl('strong', {}, gap),
-                    makeEl('span', {}, ` ${t('text_imdb_weights_its_displayed_rating')}`)
-                ), root.nextSibling);
+                /* What shape the distribution is, from the same read. Only when it is worth
+                   saying: an ordinary title has almost nothing at the two ends and the line
+                   would be noise on every page. */
+                const shape = describeRatingShape(computeRatingShape(buckets));
+                if (!gap && !shape) return;
+                const note = makeEl('div', { id:'enh-rating-gap', role:'note' });
+                if (gap) {
+                    note.append(
+                        makeEl('strong', {}, gap),
+                        makeEl('span', {}, ` ${t('text_imdb_weights_its_displayed_rating')}`)
+                    );
+                }
+                if (shape) note.appendChild(makeEl('div', { className:'enh-rating-shape' }, shape));
+                root.parentElement?.insertBefore(note, root.nextSibling);
             }).catch(() => { /* titles without a rating distribution */ });
         },
         destroy() {

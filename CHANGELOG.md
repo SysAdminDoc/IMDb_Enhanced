@@ -4,6 +4,9 @@
 
 ### Added
 
+- The ratings tab can say when a title's votes are piled at the two ends of the scale rather than spread across it. IMDb applies a different weighting when it detects unusual rating activity and never says when, so this describes the shape of the distribution it publishes and leaves the conclusion to you. A title with an ordinary spread gets no line at all, and one whose distribution IMDb withholds gets nothing either.
+
+
 - MDBList is a second place to get scores from, with a free key of your own. One call answers Rotten Tomatoes, Metacritic and Letterboxd together, and each score says when it came from there. It's asked after OMDb, so an install that already has an OMDb key keeps the answers it was getting, and nothing is contacted until a key is stored.
 
 - The web-store build can show a Letterboxd score for the first time. That build ships no page readers and Letterboxd publishes no API, so it previously said the score was simply unavailable. With an MDBList key it now has a source, and it still never asks for access to Letterboxd itself.

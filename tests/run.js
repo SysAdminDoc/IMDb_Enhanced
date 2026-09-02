@@ -301,6 +301,8 @@ function loadScriptTestHooks({ withoutDeleteValue = false, withheldCredentials =
         castAgeAtRelease,
         CAST_AGE_LIMIT,
         fetchTmdbAvailability,
+        computeRatingShape,
+        describeRatingShape,
         providerPageLooksIntact,
         FAILURE_CATEGORIES,
         parseRetryAfter,
@@ -7529,6 +7531,52 @@ test('no route or selector logic matches a translated string', () => {
    sources, omits the ones it has nothing for, and carries two numbers per entry: `value` in
    the source's own scale and `score` normalised to 0-100. The widgets show each source in
    its own scale, so reading `score` would turn 4.2 stars into 84. */
+/* IE-133: IMDb applies a different weighting "when unusual rating activity is detected"
+   and never says when, so the only honest thing to show is the shape of the distribution
+   it publishes. Every number here comes from the ten buckets already parsed for the two
+   means. Polarity and the reverse-J signature follow Schuff, Mudambi and Wang (HICSS 2024);
+   Sarle's bimodality coefficient is deliberately not used, because Di Martino et al. (2025)
+   show it misfires on skewed unimodal data, which is nearly every film. */
+test('the shape of a rating distribution is read from the buckets it publishes', () => {
+    const hooks = loadScriptTestHooks();
+    const buckets = counts => counts.map((voteCount, index) => ({ rating:index + 1, voteCount }));
+
+    // An ordinary title: a hump in the middle, almost nothing at the ends.
+    const ordinary = hooks.computeRatingShape(buckets([5, 10, 20, 60, 200, 900, 2000, 3000, 1200, 300]));
+    assert.strictEqual(ordinary.label, 'consensus');
+    assert.strictEqual(hooks.describeRatingShape(ordinary), null,
+        'and nothing is said about it, or the line would be noise on every page');
+
+    // Genuinely divided: heavy at both ends, no clear direction.
+    const divided = hooks.computeRatingShape(buckets([2000, 500, 100, 100, 100, 100, 100, 200, 700, 2200]));
+    assert.strictEqual(divided.label, 'divisive');
+    assert.match(hooks.describeRatingShape(divided), /Divided: \d+% of votes sit at the two ends/);
+
+    /* The reverse J: a wall at the bottom with a smaller bump at the top, which is what a
+       campaign looks like rather than a disagreement. */
+    const bombed = hooks.computeRatingShape(buckets([9000, 400, 60, 40, 40, 40, 60, 100, 300, 1200]));
+    assert.strictEqual(bombed.label, 'reverse-j');
+    assert.match(hooks.describeRatingShape(bombed), /rating campaign looks like/);
+    assert.match(hooks.describeRatingShape(bombed), /at the bottom/,
+        'and it says which end the votes are at, since that is the whole signal');
+
+    // The same shape upside down is not called a campaign against the title.
+    const defended = hooks.computeRatingShape(buckets([1200, 300, 100, 60, 40, 40, 40, 60, 400, 9000]));
+    assert.notStrictEqual(defended.label, 'reverse-j');
+
+    // Reproducible arithmetic, not a vibe: 2000 + 500 low, 700 + 2200 high, 6100 total.
+    assert.strictEqual(divided.total, 6100);
+    assert.strictEqual(divided.polarity, Math.round((5400 / 6100) * 1000) / 1000);
+    assert.strictEqual(divided.negativeShare, Math.round((2500 / 5400) * 1000) / 1000);
+
+    // Too few votes to describe anybody, and nothing at all to read.
+    assert.strictEqual(hooks.computeRatingShape(buckets([1, 1, 1, 1, 1, 1, 1, 1, 1, 1])), null,
+        'a handful of votes has no shape worth naming');
+    assert.strictEqual(hooks.computeRatingShape([]), null);
+    assert.strictEqual(hooks.computeRatingShape(null), null,
+        'a title whose distribution IMDb withholds gets no line at all');
+});
+
 /* IE-140: a page that answered 200 and carried none of the structure its parser needs has
    not said the title is absent. Those were one state, so a parser that silently stops
    matching is indistinguishable from a title with no entry — the failure mode that showed

@@ -267,6 +267,7 @@
                     font: 600 12px/1.5 -apple-system, BlinkMacSystemFont, 'Segoe UI', sans-serif;
                 }
                 #enh-rating-gap strong { color: ${t.tx0}; }
+                #enh-rating-gap .enh-rating-shape { margin-top: 4px; color: ${t.tx2}; }
             `, 'enh-ratingGap');
             waitFor('[data-testid="histogram-root"]').then(root => {
                 if (!isCurrent() || !root || document.getElementById('enh-rating-gap')) return;
@@ -275,11 +276,20 @@
                 const buckets = getHistogramData();
                 const unweighted = computeUnweightedMean(buckets);
                 const gap = describeRatingGap(unweighted, readDisplayedRating(), computeTrimmedMean(buckets));
-                if (!gap) return;
-                root.parentElement?.insertBefore(makeEl('div', { id:'enh-rating-gap', role:'note' },
-                    makeEl('strong', {}, gap),
-                    makeEl('span', {}, ` ${t('text_imdb_weights_its_displayed_rating')}`)
-                ), root.nextSibling);
+                /* What shape the distribution is, from the same read. Only when it is worth
+                   saying: an ordinary title has almost nothing at the two ends and the line
+                   would be noise on every page. */
+                const shape = describeRatingShape(computeRatingShape(buckets));
+                if (!gap && !shape) return;
+                const note = makeEl('div', { id:'enh-rating-gap', role:'note' });
+                if (gap) {
+                    note.append(
+                        makeEl('strong', {}, gap),
+                        makeEl('span', {}, ` ${t('text_imdb_weights_its_displayed_rating')}`)
+                    );
+                }
+                if (shape) note.appendChild(makeEl('div', { className:'enh-rating-shape' }, shape));
+                root.parentElement?.insertBefore(note, root.nextSibling);
             }).catch(() => { /* titles without a rating distribution */ });
         },
         destroy() {
