@@ -616,6 +616,21 @@
         }
     });
 
+    /* The row a title link belongs to, from the narrowest container IMDb actually uses
+       outwards. Shared because two features decorate the same rows and a second copy of
+       this walk would drift the moment IMDb renames one of these wrappers. */
+    function findTitleCard(anchor) {
+        const posterCard = anchor.closest('.ipc-poster-card');
+        if (posterCard) return posterCard;
+        const summary = anchor.closest('.ipc-metadata-list-summary-item');
+        if (summary?.querySelector('img')) return summary;
+        const listItem = anchor.closest('li');
+        if (listItem?.querySelector('img')) return listItem;
+        const media = anchor.closest('[class*="poster"],[class*="Poster"],[class*="media"],[class*="Media"]');
+        if (media?.querySelector('img')) return media;
+        return null;
+    }
+
     reg({
         key: 'watchedMarking', name: t('feature_watchedMarking_name'), group: 'Features',
         _observer: null,
@@ -810,15 +825,7 @@
                 : tCount('text_seen_episodes', seenCount));
         },
         _findCard(anchor) {
-            const posterCard = anchor.closest('.ipc-poster-card');
-            if (posterCard) return posterCard;
-            const summary = anchor.closest('.ipc-metadata-list-summary-item');
-            if (summary?.querySelector('img')) return summary;
-            const listItem = anchor.closest('li');
-            if (listItem?.querySelector('img')) return listItem;
-            const media = anchor.closest('[class*="poster"],[class*="Poster"],[class*="media"],[class*="Media"]');
-            if (media?.querySelector('img')) return media;
-            return null;
+            return findTitleCard(anchor);
         },
         _extractTitle(card, anchor) {
             const fromImg = card.querySelector('img[alt]')?.alt?.replace(/^poster for\s+/i, '').trim();
@@ -1870,5 +1877,305 @@
             removeCSS('enh-mediaServerIntegration');
             document.getElementById('enh-media-server-status')?.remove();
             pruneTitleStack();
+        }
+    });
+
+    /* IE-135: both integrations above mount on the title page only, so deciding what to
+       open from a 250-row chart means opening every row. This carries the same answer onto
+       the rows — and nothing else, because the interesting cost here is requests, not DOM:
+       one lookup per distinct id, asked only once a row has actually been scrolled to, and
+       never for a row that stays below the fold. A list is also the one place where a
+       stray write would be expensive, so this reports state and offers no action. */
+    const ROW_INTEGRATION_BATCH = 20;
+    const ROW_INTEGRATION_CONCURRENCY = 3;
+    /* Enough rows to cover a fully expanded IMDb list without becoming a crawl of the
+       whole site if a page ever renders more than that. */
+    const ROW_INTEGRATION_ROW_LIMIT = 250;
+
+    /* One probe per page, chosen once: asking all three would be three requests a row.
+       Seerr first because it is the only one that distinguishes requested from present,
+       then a media server, which answers the question people actually ask of a list. */
+    function pickRowIntegrationProbe() {
+        if (isSeerrConfigured()) return { kind:'seerr' };
+        const servers = getConfiguredMediaServers();
+        if (servers.length) return { kind:'mediaServer', server:servers[0] };
+        if (isServarrConfigured('radarr')) return { kind:'servarr', servarr:'radarr' };
+        if (isServarrConfigured('sonarr')) return { kind:'servarr', servarr:'sonarr' };
+        return null;
+    }
+
+    const ROW_INTEGRATION_LABELS = {
+        library: () => t('text_in_library'),
+        monitored: () => t('text_monitored'),
+        requested: () => t('text_requested'),
+        add: () => t('text_not_found'),
+    };
+
+    reg({
+        key: 'rowIntegrationState', name: t('feature_rowIntegrationState_name'), group: 'Features',
+        _probe: null,
+        _observer: null,
+        _rowObserver: null,
+        _raf: 0,
+        // id -> one of the four states, so a repeated id costs no second request.
+        _cache: null,
+        // id -> the in-flight lookup, so two rows of the same title share one.
+        _inflight: null,
+        _queue: null,
+        // id -> the badges waiting on it, since a list can carry the same title twice.
+        _waiting: null,
+        _draining: false,
+        init() {
+            if (!isIMDbHost()) return;
+            /* Without an observer there is no way to tell a row that was scrolled to from
+               one that was never looked at, and the fallback that would make this work at
+               all is a request for every row on the page. Nothing is the right answer. */
+            if (typeof IntersectionObserver === 'undefined') return;
+            const probe = pickRowIntegrationProbe();
+            if (!probe) return;
+            this._probe = probe;
+            this._cache = new Map();
+            this._inflight = new Map();
+            this._waiting = new Map();
+            this._queue = [];
+            const isCurrent = createFeatureGuard(this);
+
+            addThemedCSS(t => `
+                .enh-row-integration-host { position: relative; }
+                .enh-row-integration {
+                    display: inline-flex; align-items: center; gap: 5px;
+                    padding: 3px 7px; border-radius: 6px;
+                    border: 1px solid ${t.bd1}; background: ${t.sf1}; color: ${t.tx2};
+                    font: 700 10px/1 -apple-system, BlinkMacSystemFont, 'Segoe UI', sans-serif;
+                    box-shadow: ${t.sh1}; white-space: nowrap;
+                }
+                .enh-row-integration::before {
+                    content: ''; width: 7px; height: 7px; border-radius: 50%;
+                    background: ${t.tx3}; flex: 0 0 auto;
+                }
+                .enh-row-integration:focus-visible { outline: 2px solid ${t.accent}; outline-offset: 2px; }
+                .enh-row-integration[data-state="library"] { color: ${t.green}; border-color: color-mix(in srgb, ${t.green} 35%, transparent); }
+                .enh-row-integration[data-state="library"]::before { background: ${t.green}; }
+                .enh-row-integration[data-state="monitored"],
+                .enh-row-integration[data-state="requested"] { color: ${t.accent}; border-color: ${t.accentBorder}; }
+                .enh-row-integration[data-state="monitored"]::before,
+                .enh-row-integration[data-state="requested"]::before { background: ${t.accent}; }
+                .enh-row-integration[data-state="unavailable"] { color: ${t.red}; border-color: color-mix(in srgb, ${t.red} 35%, transparent); }
+                .enh-row-integration[data-state="unavailable"]::before { background: ${t.red}; }
+                /* A poster card has no flow to sit in, so the badge is pinned to the free
+                   bottom corner — the one the Seen badge is not using. That badge moves to
+                   the right where IMDb draws its own Watched control, so this moves left. */
+                .enh-row-integration-host.ipc-poster-card > .enh-row-integration,
+                .enh-markable-card > .enh-row-integration {
+                    position: absolute; bottom: 6px; right: 6px; z-index: 19;
+                }
+                .enh-markable-card[data-enh-native-watched="true"] > .enh-row-integration {
+                    right: auto; left: 6px;
+                }
+            `, 'enh-rowIntegrationState');
+
+            /* Rows arrive as the list lazy-loads, exactly as they do for the mark
+               controls, so discovery is the same document-wide observer coalesced into
+               one frame rather than a scan per mutation. */
+            const scan = () => {
+                if (!isCurrent()) return;
+                this._scan(isCurrent);
+            };
+            this._observer = new MutationObserver(() => {
+                if (this._raf) return;
+                this._raf = requestAnimationFrame(() => { this._raf = 0; scan(); });
+            });
+            this._rowObserver = new IntersectionObserver(entries => {
+                if (!isCurrent()) return;
+                entries.forEach(entry => {
+                    if (!entry.isIntersecting) return;
+                    this._rowObserver?.unobserve(entry.target);
+                    this._reveal(entry.target, isCurrent);
+                });
+            }, { rootMargin:'200px' });
+            this._observer.observe(document.body, { childList:true, subtree:true });
+            scan();
+        },
+        /* Marking a row costs a dataset key and an observation. The badge itself is not
+           created until the row is actually seen, so a list nobody scrolls carries no
+           added nodes at all. */
+        _scan(isCurrent) {
+            if (!isCurrent()) return;
+            let marked = document.querySelectorAll('[data-enh-row-integration]').length;
+            const anchors = document.querySelectorAll('a[href*="/title/tt"]');
+            for (const anchor of anchors) {
+                if (marked >= ROW_INTEGRATION_ROW_LIMIT) break;
+                const imdbId = getLinkedTitleId(anchor.href);
+                if (!imdbId) continue;
+                const card = findTitleCard(anchor);
+                if (!card || card.dataset.enhRowIntegration || card.closest('#enh-settings-panel')) continue;
+                card.dataset.enhRowIntegration = imdbId;
+                card.classList.add('enh-row-integration-host');
+                marked += 1;
+                this._rowObserver?.observe(card);
+            }
+        },
+        _reveal(card, isCurrent) {
+            if (!isCurrent()) return;
+            const imdbId = card.dataset.enhRowIntegration;
+            if (!imdbId) return;
+            let badge = Array.from(card.children).find(child => child.classList?.contains('enh-row-integration'));
+            if (!badge) {
+                badge = makeEl('span', {
+                    className:'enh-row-integration',
+                    /* Focusable because a keyboard user has no hover to reveal it and no
+                       pointer to rest on the title text; role and label together are what
+                       makes the dot and the abbreviation mean something out loud. */
+                    tabIndex: 0,
+                    role:'img',
+                    dataset:{ state:'checking' },
+                    'aria-label': t('aria_library_status_checking'),
+                }, t('label_checking'));
+                card.appendChild(badge);
+            }
+            const cached = this._cache.get(imdbId);
+            if (cached) { this._paint(badge, cached); return; }
+            const waiting = this._waiting.get(imdbId);
+            if (waiting) { waiting.push(badge); return; }
+            this._waiting.set(imdbId, [badge]);
+            this._queue.push({ imdbId, title: this._rowTitle(card) });
+            this._drain(isCurrent);
+        },
+        _rowTitle(card) {
+            const text = card.querySelector('.ipc-title__text')?.textContent
+                || card.querySelector('img[alt]')?.alt
+                || card.querySelector('a[href*="/title/tt"]')?.textContent
+                || '';
+            return text.trim().replace(/\s+/g, ' ').replace(/^\d+\.\s*/, '').slice(0, 200);
+        },
+        _paint(badge, state) {
+            if (!badge) return;
+            badge.dataset.state = state;
+            const label = (ROW_INTEGRATION_LABELS[state] || ROW_INTEGRATION_LABELS.add)();
+            const text = state === 'unavailable' ? t('text_unavailable') : label;
+            setTextIfChanged(badge, text);
+            badge.setAttribute('aria-label', t('aria_library_status_is', [text]));
+        },
+        _settle(imdbId, state) {
+            if (state !== 'unavailable') this._cache.set(imdbId, state);
+            (this._waiting.get(imdbId) || []).forEach(badge => this._paint(badge, state));
+            this._waiting.delete(imdbId);
+        },
+        /* A batch rather than a burst: twenty rows can come into view in one scroll, and
+           firing twenty simultaneous requests at somebody's Raspberry Pi is how a local
+           service starts refusing them. Three at a time, a yield between batches. */
+        async _drain(isCurrent) {
+            if (this._draining) return;
+            this._draining = true;
+            try {
+                // Optional chaining for the same reason as in _resolve: teardown between
+                // two batches drops the queue rather than emptying it.
+                while (this._queue?.length) {
+                    if (!isCurrent()) return;
+                    const batch = this._queue.splice(0, ROW_INTEGRATION_BATCH);
+                    for (let index = 0; index < batch.length; index += ROW_INTEGRATION_CONCURRENCY) {
+                        if (!isCurrent()) return;
+                        await Promise.all(batch.slice(index, index + ROW_INTEGRATION_CONCURRENCY)
+                            .map(entry => this._resolve(entry, isCurrent)));
+                    }
+                    await new Promise(resolve => setTimeout(resolve, 0));
+                }
+            } finally {
+                this._draining = false;
+            }
+        },
+        async _resolve(entry, isCurrent) {
+            const { imdbId } = entry;
+            let pending = this._inflight.get(imdbId);
+            if (!pending) {
+                pending = this._lookup(entry).catch(() => 'unavailable');
+                this._inflight.set(imdbId, pending);
+            }
+            const state = await pending;
+            /* A lookup outlives the route that started it, and teardown drops these maps
+               rather than emptying them. Reading isCurrent first is not enough on its own:
+               a feature switched off in settings while a request is open destroys without
+               a route change, so the maps are checked as well. */
+            if (!isCurrent() || !this._inflight) return;
+            this._inflight.delete(imdbId);
+            this._settle(imdbId, state);
+        },
+        async _lookup(entry) {
+            if (this._probe.kind === 'seerr') return this._lookupSeerr(entry);
+            if (this._probe.kind === 'mediaServer') return this._lookupMediaServer(entry);
+            return this._lookupServarr(entry);
+        },
+        async _lookupSeerr(entry) {
+            const response = await seerrRequest('search', {
+                query:{ query: entry.imdbId },
+                cancelOnRouteChange:true,
+            });
+            const results = parseJSONResponse(response)?.results;
+            /* A row rarely says whether it is a film or a series, and the answer for the
+               badge is the same either way, so both readings of one response are tried
+               before giving up — which costs nothing, unlike a second search. */
+            const match = selectSeerrSearchResult(results, entry.imdbId, 'movie')
+                || selectSeerrSearchResult(results, entry.imdbId, 'tv');
+            if (!match) return 'add';
+            const state = mapSeerrMediaState(match.mediaInfo);
+            if (state === 'library' || state === 'partial') return 'library';
+            if (state === 'processing' || state === 'queued') return 'requested';
+            return 'add';
+        },
+        async _lookupMediaServer(entry) {
+            const server = this._probe.server;
+            const ctx = { imdbId: entry.imdbId, title: entry.title };
+            if (server.kind === 'plex') {
+                const response = await mediaServerRequest(server, '/library/search', {
+                    query:{ query: entry.imdbId, includeGuids:'1' },
+                    cancelOnRouteChange:true,
+                });
+                return parsePlexItems(response.responseText).some(item => mediaItemMatches(item, ctx))
+                    ? 'library' : 'add';
+            }
+            const response = await mediaServerRequest(server, '/Items', {
+                query:{
+                    Recursive:'true',
+                    IncludeItemTypes:'Movie,Series',
+                    Fields:'ProviderIds,ProductionYear',
+                    Limit:'20',
+                    AnyProviderIdEquals:`imdb.${entry.imdbId}`,
+                },
+                cancelOnRouteChange:true,
+            });
+            return parseMediaServerItems(response.responseText).some(item => mediaItemMatches(item, ctx))
+                ? 'library' : 'add';
+        },
+        async _lookupServarr(entry) {
+            const kind = this._probe.servarr;
+            const response = await servarrRequest(kind, kind === 'radarr' ? 'movie/lookup' : 'series/lookup', {
+                query:{ term: `imdb:${entry.imdbId}` },
+                cancelOnRouteChange:true,
+            });
+            const items = parseJSONResponse(response);
+            /* requireExisting, so a lookup that merely resolved the title upstream is not
+               reported as something the instance is already monitoring. */
+            return selectServarrLookupResult(items, { imdbId: entry.imdbId, title: entry.title }, true)
+                ? 'monitored' : 'add';
+        },
+        destroy() {
+            removeCSS('enh-rowIntegrationState');
+            this._observer?.disconnect();
+            this._observer = null;
+            this._rowObserver?.disconnect();
+            this._rowObserver = null;
+            cancelAnimationFrame(this._raf);
+            this._raf = 0;
+            this._queue = null;
+            this._cache = null;
+            this._inflight = null;
+            this._waiting = null;
+            this._draining = false;
+            this._probe = null;
+            document.querySelectorAll('.enh-row-integration').forEach(badge => badge.remove());
+            document.querySelectorAll('[data-enh-row-integration]').forEach(card => {
+                card.classList.remove('enh-row-integration-host');
+                delete card.dataset.enhRowIntegration;
+            });
         }
     });

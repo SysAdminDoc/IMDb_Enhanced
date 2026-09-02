@@ -14,6 +14,12 @@
   "aria_clear_mark_for": {
     "message": "Clear mark for $1"
   },
+  "aria_library_status_checking": {
+    "message": "Checking library status"
+  },
+  "aria_library_status_is": {
+    "message": "Library status: $1"
+  },
   "aria_log_another_viewing_of": {
     "message": "Log another viewing of $1"
   },
@@ -553,6 +559,12 @@
   },
   "feature_ratingGap_name": {
     "message": "Weighted vs unweighted rating"
+  },
+  "feature_rowIntegrationState_detail": {
+    "message": "Shows whether each title in a list, chart, or filmography is already in your library, monitored, or requested. One lookup per title, made only once you scroll to the row, using whichever local service you have configured."
+  },
+  "feature_rowIntegrationState_name": {
+    "message": "Library status on list rows"
   },
   "feature_removeAds_detail": {
     "message": "Hides current IMDb ad placements, sponsored shells, and tracking pixels as early as the page allows."
@@ -1451,6 +1463,9 @@
   "settings_changes_save_automatically": {
     "message": "Changes save automatically."
   },
+  "settings_badge_list_rows_with_library_status": {
+    "message": "Badge list, chart, and filmography rows with library status."
+  },
   "settings_check_plex_jellyfin_and_emby_libraries": {
     "message": "Check Plex, Jellyfin, and Emby libraries."
   },
@@ -2194,6 +2209,9 @@
   },
   "text_no_local_title_marks_yet": {
     "message": "No local title marks yet. Mark a title Seen or Skip from any card or title page and it shows up here."
+  },
+  "text_monitored": {
+    "message": "Monitored"
   },
   "text_no_matching_title_found": {
     "message": "No matching title found"

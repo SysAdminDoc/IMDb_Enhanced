@@ -122,12 +122,15 @@
     const COLLECTION_FEATURE_KEYS = new Set([
         ...UNIVERSAL_FEATURE_KEYS, 'watchlistBatch', 'collectionExport', 'listMultiSearch', 'listRuntimeSummary',
         'watchedMarking', 'markFilters', 'dimLowRated', 'listRoulette',
+        /* Deciding what to open from a list is exactly where knowing a title is already
+           in your library saves opening it, and the title page already says so. */
+        'rowIntegrationState',
     ]);
     const SECONDARY_PAGE_FEATURE_KEYS = new Set([
         ...UNIVERSAL_FEATURE_KEYS, 'collapsibleSections', 'expandSummaries', 'quickNav',
         // Person pages carry a filmography, which is exactly the long card list marks
         // are useful for narrowing.
-        'watchedMarking', 'markFilters', 'castAges',
+        'watchedMarking', 'markFilters', 'castAges', 'rowIntegrationState',
         /* A full cast list and a person's filmography are where the thumbnails are;
            covering only the title page's top-billed row misses most of them. */
         'imageZoom',

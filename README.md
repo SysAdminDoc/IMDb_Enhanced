@@ -132,7 +132,7 @@ The redesigned visual reference set covers every menu page: [Experience](design/
 
 **Sites**. Editable watch-search and external-link destinations with show/hide controls, purpose categories, ordering, and colors. Page buttons are grouped into Watch, Reviews & ratings, Availability, Trailers & video, Info & research, and Other. Incomplete, non-HTTP(S), credential-bearing, origin-dynamic, or unknown-token templates are visibly rejected without replacing the last valid saved list.
 
-**Integrations**. Tabbed Radarr/Sonarr and Plex/Jellyfin/Emby local-service configuration with arrow/Home/End keyboard navigation.
+**Integrations**. Tabbed Radarr/Sonarr and Plex/Jellyfin/Emby local-service configuration with arrow/Home/End keyboard navigation, plus an optional library-status badge on list, chart, and filmography rows.
 
 **Data.** Local viewing stats, private mark review, IMDb and Letterboxd CSV history import, validated JSON backup/restore with optional passphrase-encrypted credential export, cache status/clearing, a persistent failure journal, and an explicit two-step reset with backup guidance. Removing a mark, or clearing the lot, can be undone from the panel for fifteen seconds afterwards, and the undo brings back the notes and viewing dates too.
 

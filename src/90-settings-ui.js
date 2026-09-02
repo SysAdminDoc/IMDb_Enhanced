@@ -1714,7 +1714,8 @@
         const integrationsPage = pages.get('integrations');
         integrationsPage.appendChild(makeEl('div', { className:'enh-integration-summary' },
             makeFeatureSummaryCard(t('feature_servarrIntegration_name'), t('settings_add_movies_to_radarr_and_shows_to'), 'Local', 'servarrIntegration'),
-            makeFeatureSummaryCard(t('settings_media_server_indicator'), t('settings_check_plex_jellyfin_and_emby_libraries'), 'Local', 'mediaServerIntegration')
+            makeFeatureSummaryCard(t('settings_media_server_indicator'), t('settings_check_plex_jellyfin_and_emby_libraries'), 'Local', 'mediaServerIntegration'),
+            makeFeatureSummaryCard(t('feature_rowIntegrationState_name'), t('settings_badge_list_rows_with_library_status'), 'Lists', 'rowIntegrationState')
         ));
         integrationsPage.appendChild(makeEl('div', { className:'enh-settings-callout' },
             makeEl('strong', {}, t('settings_private_by_design')),

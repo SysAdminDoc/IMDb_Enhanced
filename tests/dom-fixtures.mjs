@@ -2016,6 +2016,155 @@ await runFixture('chart', async (window, hooks) => {
         year:1994, imdbRating:9.3, runtime:142,
     }, 'a real collection-card mark click must retain the metadata already rendered in that row');
     hooks.stopFeature('watchedMarking');
+
+    /* IE-135: the same window, because a second 250-row fixture window is what the
+       happy-dom memory ceiling is about. */
+    const document = window.document;
+    const list = firstRow.parentElement;
+    /* 250 rows, the size of a fully expanded IMDb list, with one id repeated so the
+       per-id cache has something to prove. */
+    const duplicateOf = 'tt0111161';
+    for (let index = 0; index < 247; index += 1) {
+        const id = index === 0 ? duplicateOf : `tt900${String(index).padStart(4, '0')}`;
+        const row = document.createElement('li');
+        row.className = 'ipc-metadata-list-summary-item';
+        row.innerHTML = `<a href="/title/${id}/"><img src="p.jpg" alt="Poster"><span class="ipc-title__text">${index + 4}. Row ${index}</span></a>`;
+        list.appendChild(row);
+    }
+    const allRows = Array.from(document.querySelectorAll('li.ipc-metadata-list-summary-item'));
+    assert.equal(allRows.length, 250, 'the synthesized list should be 250 rows');
+
+    // An observer whose intersections this test decides, so "never scrolled to" is a
+    // state the assertions can actually distinguish from "not yet".
+    const nativeObserver = window.IntersectionObserver;
+    const watchers = [];
+    window.IntersectionObserver = class {
+        constructor(callback) {
+            this.callback = callback;
+            this.watched = new Set();
+            watchers.push(this);
+        }
+        observe(element) { this.watched.add(element); }
+        unobserve(element) { this.watched.delete(element); }
+        disconnect() { this.watched.clear(); }
+    };
+    const reveal = elements => watchers.forEach(watcher => {
+        const entries = elements.filter(element => watcher.watched.has(element))
+            .map(element => ({ isIntersecting:true, target:element }));
+        if (entries.length) watcher.callback(entries);
+    });
+
+    const asked = [];
+    const seerrState = id => {
+        if (id === duplicateOf) return 5;              // available
+        if (id === 'tt9000010') return 2;              // pending
+        if (id === 'tt9000011') return 0;              // known to Seerr, not requested
+        return -1;                                     // no entry at all
+    };
+    window.GM_xmlhttpRequest = options => {
+        const id = /query=(tt\d+)/.exec(options.url)?.[1] || '';
+        asked.push(id);
+        const status = seerrState(id);
+        const results = status < 0 ? [] : [{
+            id: 42, mediaType:'movie',
+            mediaInfo: status === 0 ? null : { status },
+        }];
+        window.queueMicrotask(() => options.onload?.({
+            status: 200,
+            finalUrl: options.url,
+            responseText: JSON.stringify({ results }),
+        }));
+        return { abort() {} };
+    };
+
+    const settle = async () => {
+        for (let tick = 0; tick < 60; tick += 1) {
+            await new Promise(resolve => window.setTimeout(resolve, 1));
+            if (!document.querySelector('.enh-row-integration[data-state="checking"]')) return;
+        }
+    };
+    const badgeIn = row => row.querySelector('.enh-row-integration');
+
+    try {
+        // No configured service is no feature: not a badge, not even a marked row.
+        window.GM_setValue('imdb_enh_rowIntegrationState', true);
+        await hooks.runFeature('rowIntegrationState');
+        assert.equal(document.querySelectorAll('.enh-row-integration').length, 0,
+            'an unconfigured integration must add no badge');
+        assert.equal(document.querySelectorAll('[data-enh-row-integration]').length, 0,
+            'an unconfigured integration must not even claim the rows');
+        hooks.stopFeature('rowIntegrationState');
+
+        window.GM_setValue('imdb_enh_seerrUrl', 'http://localhost:5055');
+        window.GM_setValue('imdb_enh_seerrApiKey', 'fixture-key');
+        await hooks.runFeature('rowIntegrationState');
+        assert.equal(document.querySelectorAll('[data-enh-row-integration]').length, 250,
+            'every row should be watched once a service is configured');
+        assert.equal(document.querySelectorAll('.enh-row-integration').length, 0,
+            'a row nobody has scrolled to yet carries no badge');
+
+        // Twenty rows come into view. One of them repeats an id already in the batch.
+        reveal(allRows.slice(0, 20));
+        await settle();
+        assert.equal(document.querySelectorAll('.enh-row-integration').length, 20,
+            'each revealed row shows exactly one badge');
+        assert.deepEqual([...new Set(asked)].length, asked.length,
+            'no id is looked up twice');
+        assert.equal(asked.length, 19,
+            'twenty rows carrying nineteen distinct ids cost nineteen requests');
+
+        // The four states, read off the rows the stub answered for.
+        const stateOf = id => badgeIn(allRows.find(row =>
+            row.dataset.enhRowIntegration === id && badgeIn(row)))?.dataset.state;
+        assert.equal(stateOf(duplicateOf), 'library');
+        assert.equal(stateOf('tt9000010'), 'requested');
+        assert.equal(stateOf('tt9000011'), 'add');
+        assert.equal(stateOf('tt9000001'), 'add');
+        // Both rows of the repeated id are painted, and the second cost nothing.
+        const repeated = allRows.filter(row => row.dataset.enhRowIntegration === duplicateOf);
+        assert.equal(repeated.length, 2, 'the id should genuinely appear on two rows');
+        assert.deepEqual(repeated.map(row => badgeIn(row)?.dataset.state), ['library', 'library'],
+            'a repeated id paints both its rows from one lookup');
+
+        const badge = badgeIn(allRows[0]);
+        assert.equal(badge.tabIndex, 0, 'the badge is reachable by keyboard');
+        assert.equal(badge.getAttribute('aria-label'), 'Library status: In Library',
+            'and says what it is when focused');
+
+        // Rows past the twentieth were never shown, so nothing was asked about them.
+        assert.equal(allRows.slice(20).some(row => badgeIn(row)), false,
+            'a row never scrolled to gets no badge');
+        const beforeSecondScroll = asked.length;
+        reveal(allRows.slice(0, 20));
+        await settle();
+        assert.equal(asked.length, beforeSecondScroll,
+            'a row that comes back into view is not looked up again');
+
+        reveal(allRows.slice(20, 40));
+        await settle();
+        assert.equal(asked.length, beforeSecondScroll + 20,
+            'scrolling on costs one request per newly seen row');
+
+        /* Switching the feature off with lookups still open destroys it without a route
+           change. The answers still arrive; they must not land on a torn-down feature,
+           which in this harness would surface as an unhandled rejection killing the run. */
+        reveal(allRows.slice(40, 60));
+        hooks.stopFeature('rowIntegrationState');
+        await settle();
+        assert.equal(document.querySelectorAll('.enh-row-integration').length, 0,
+            'answers arriving after teardown paint nothing');
+
+        await hooks.runFeature('rowIntegrationState');
+        hooks.stopFeature('rowIntegrationState');
+        assert.equal(document.querySelectorAll('.enh-row-integration').length, 0,
+            'switching it off takes every badge away');
+        assert.equal(document.querySelectorAll('[data-enh-row-integration]').length, 0,
+            'and releases the rows it claimed');
+    } finally {
+        window.GM_setValue('imdb_enh_rowIntegrationState', false);
+        window.GM_setValue('imdb_enh_seerrApiKey', '');
+        window.IntersectionObserver = nativeObserver;
+    }
 });
 
 /* IE-99: a store build does not ship the Letterboxd or JustWatch parsers, and its
