@@ -10,6 +10,9 @@
 
 ### Changed
 
+- A service that answers 429 is now left alone for as long as it asked, instead of being asked again for every remaining title on the page. AniList currently serves thirty requests a minute against a published ninety, and Wikimedia introduced per-minute buckets in 2026 that a browser shares with everything else on its address. The wait comes from the service's own Retry-After header, or a minute when it does not send one, and the score widget says the service asked for a pause rather than calling the score unavailable.
+
+
 - A score now appears if you hold a key for either service. Rotten Tomatoes and Metacritic can be answered by OMDb or by MDBList, but the two were chained so that OMDb reporting "no key" counted as an answer: anyone holding only an MDBList key was never asked and was told to go and get an OMDb key. When neither key is present the widget names both, and a missing or rejected MDBList key now gets the same wording and the same Add key button that OMDb always had.
 
 - Nine more sentences moved into the message catalog, including the two access lines in the settings panel that a screen reader reads out of a live region. The check meant to catch these lost track of where it was whenever it walked past a regular expression containing a bracket, which left it reporting no problems for the wrong reason.
