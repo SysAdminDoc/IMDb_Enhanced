@@ -26,6 +26,7 @@
     "https://*.amazon-adsystem.com/*",
     "https://127.0.0.1/*",
     "https://advertising.amazon.dev/*",
+    "https://api.mdblist.com/*",
     "https://api.themoviedb.org/*",
     "https://api.tvmaze.com/*",
     "https://backend.metacritic.com/*",

@@ -72,14 +72,32 @@
         if (!parser || !providerAllowedHere('omdb')) return false;
         return !providerAllowedHere(parser) || isOmdbConfigured();
     }
+    /* The same rule for MDBList, which backs a third feature OMDb has no answer for.
+       Letterboxd publishes no API, so where its page reader is not shipped MDBList is the
+       only source of that score and is in play whether or not a key is stored — the panel
+       can then say a key is what is missing, rather than showing nothing. */
+    const MDBLIST_BACKED_FEATURES = {
+        inlineRTScore:'rottenTomatoes',
+        inlineMetacriticScore:'metacritic',
+        inlineLetterboxdScore:'letterboxd',
+    };
+    function mdbListInPlayFor(key) {
+        const parser = MDBLIST_BACKED_FEATURES[key];
+        if (!parser || !providerAllowedHere('mdblist')) return false;
+        return !providerAllowedHere(parser) || isMdbListConfigured();
+    }
     function activeProvidersFor(key) {
         const declared = (FEATURE_PROVIDERS[key] || []).filter(providerAllowedHere);
         if (key === 'streamAvailability') {
             const preferred = getEffectiveAvailabilitySource() === 'tmdb' ? 'tmdb' : 'justWatch';
             return declared.includes(preferred) ? [preferred] : declared;
         }
-        if (OMDB_BACKED_FEATURES[key] && !omdbInPlayFor(key)) return declared.filter(id => id !== 'omdb');
-        return declared;
+        const withoutOmdb = OMDB_BACKED_FEATURES[key] && !omdbInPlayFor(key)
+            ? declared.filter(id => id !== 'omdb')
+            : declared;
+        return MDBLIST_BACKED_FEATURES[key] && !mdbListInPlayFor(key)
+            ? withoutOmdb.filter(id => id !== 'mdblist')
+            : withoutOmdb;
     }
     function getFeatureOrigins(key) {
         const active = activeProvidersFor(key);
@@ -1603,6 +1621,18 @@
                     label:t('settings_omdb_api_key'),
                     placeholder:t('field_paste_your_omdb_key'),
                     refreshKey:['inlineRTScore', 'inlineMetacriticScore'],
+                    wide:true,
+                }),
+                /* MDBList answers all three from one call, Letterboxd included, which OMDb
+                   has no equivalent for. It is asked after OMDb, so an install carrying
+                   both keys keeps the answers it already had. */
+                makeEl('span', { className:'enh-settings-card-description' },
+                    t('settings_mdblist_answers_all_three')),
+                createSettingsInput({
+                    key:'mdblistApiKey',
+                    label:t('settings_mdblist_api_key'),
+                    placeholder:t('field_paste_your_mdblist_key'),
+                    refreshKey:['inlineRTScore', 'inlineMetacriticScore', 'inlineLetterboxdScore'],
                     wide:true,
                 })
             ),

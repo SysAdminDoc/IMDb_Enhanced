@@ -273,6 +273,7 @@
         field_https_example_com_search_q_title: 'https://example.com/search?q={{TITLE}}',
         field_modernui_true_themevariant_dark: '{ "modernUI": true, "themeVariant": "dark" }',
         field_paste_a_title_url: 'Paste a $1 title URL',
+        field_paste_your_mdblist_key: 'Paste your MDBList key',
         field_paste_your_omdb_key: 'Paste your OMDb key',
         field_paste_your_v4_read_access_token: 'Paste your v4 read access token',
         field_radarr_root_folder_hint: '/movies',
@@ -358,6 +359,7 @@
         label_undo: 'Undo',
         label_unseen: 'Unseen',
         label_url: 'URL',
+        label_via_mdblist: 'via MDBList',
         label_via_omdb: 'via OMDb',
         label_wrong: 'Wrong?',
         menu_copy_settings_backup: 'Copy settings backup (no credentials)',
@@ -385,6 +387,8 @@
         provider_localServices_label: 'your own computer',
         provider_metacritic_consent: 'Sends the title and year read from the page to Metacritic to find its score.',
         provider_omdb_attribution: 'Ratings from the OMDb API, used under CC BY-NC 4.0.',
+        provider_mdblist_attribution: 'Ratings aggregated by MDBList',
+        provider_mdblist_consent: 'Sends the IMDb id to MDBList to read its Rotten Tomatoes, Metacritic and Letterboxd ratings in one call. Needs your own MDBList key.',
         provider_omdb_consent: 'Sends the IMDb id to OMDb to read its Rotten Tomatoes and Metacritic ratings. Needs your own OMDb key.',
         provider_rottenTomatoes_consent: 'Sends the title and year read from the page to Rotten Tomatoes to find its scores.',
         provider_tmdb_attribution: 'This extension uses TMDB and the TMDB APIs but is not endorsed, certified, or otherwise approved by TMDB. Streaming data provided by JustWatch.',
@@ -585,6 +589,8 @@
         settings_note_only: 'Note only',
         settings_nothing_is_sent_to_an_imdb_enhanced: 'Nothing is sent to an IMDb Enhanced account or cloud service.',
         settings_nothing_is_transmitted_the_report_only_reaches: 'Nothing is transmitted. The report only reaches your clipboard.',
+        settings_mdblist_answers_all_three: 'MDBList answers all three in one call, Letterboxd included, and is asked after OMDb. Keys are free from mdblist.com.',
+        settings_mdblist_api_key: 'MDBList API key',
         settings_omdb_api_key: 'OMDb API key',
         settings_optional_scores_normally_come_from_reading_each: 'Optional. Scores normally come from reading each site\'s own page; with an OMDb key stored here, a lookup that fails falls back to their API and the score says it came from OMDb. Free for 1,000 lookups a day from omdbapi.com.',
         settings_panel_subtitle: 'Focused controls for your IMDb workspace.',
@@ -1196,6 +1202,21 @@
             // A documented API with a key of your own, so a store listing can ship it.
             profiles: ['default', 'store'],
         },
+        /* One call answers Rotten Tomatoes, Metacritic and Letterboxd together, which is
+           the only route to a Letterboxd score in a build that ships no page readers.
+           Their ratings array names its own sources and omits the ones it has nothing
+           for, so it is read by name like OMDb's. */
+        mdblist: {
+            label: 'MDBList',
+            origins: ['https://api.mdblist.com/*'],
+            // The IMDb id of the page you are on, nothing read from the page itself.
+            transmits: 'websiteContent',
+            consent: t('provider_mdblist_consent'),
+            ttl: CACHE_TTL,
+            attribution: t('provider_mdblist_attribution'),
+            // A documented API with a key of your own, so a store listing can ship it.
+            profiles: ['default', 'store'],
+        },
         anilist: {
             label: 'AniList',
             origins: ['https://graphql.anilist.co/*'],
@@ -1298,9 +1319,9 @@
            build that cannot ship the page parser still has a source, and so an install
            that configures a key can fall back to it; activeProvidersFor keeps it out of
            the way of an install that has neither. */
-        inlineRTScore: ['rottenTomatoes', 'omdb', 'wikidata'],
-        inlineMetacriticScore: ['metacritic', 'omdb', 'wikidata'],
-        inlineLetterboxdScore: ['letterboxd', 'wikidata'],
+        inlineRTScore: ['rottenTomatoes', 'omdb', 'mdblist', 'wikidata'],
+        inlineMetacriticScore: ['metacritic', 'omdb', 'mdblist', 'wikidata'],
+        inlineLetterboxdScore: ['letterboxd', 'mdblist', 'wikidata'],
         inlineAnimeScore: ['anilist'],
         collectionPanel: ['wikidata'],
         castAges: ['wikidata'],
@@ -1681,7 +1702,7 @@
         /* Which service answers "where can I watch this". JustWatch is read by parsing
            their page; TMDB is a documented API but needs a read token of your own. The
            default stays where it was so nothing changes for an existing install. */
-        availabilitySource: 'justwatch', tmdbReadToken: '', omdbApiKey: '',
+        availabilitySource: 'justwatch', tmdbReadToken: '', omdbApiKey: '', mdblistApiKey: '',
         /* Which country's offers to read. TMDB answers for every country it knows, and
            showing another one's services as though they were yours is the failure this
            avoids. Declared here so it round-trips through backup and restore like any
@@ -1729,6 +1750,7 @@
         'radarrApiKey', 'sonarrApiKey', 'seerrApiKey', 'plexToken', 'jellyfinApiKey', 'embyApiKey',
         'tmdbReadToken',
         'omdbApiKey',
+        'mdblistApiKey',
     ]);
     const COLLAPSIBLE_SECTION_IDS = [
         'title-cast', 'UserReviews', 'MoreLikeThis', 'Details', 'BoxOffice',

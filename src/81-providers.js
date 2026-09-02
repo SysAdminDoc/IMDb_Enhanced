@@ -981,6 +981,75 @@
         return parsed;
     }
 
+    const MDBLIST_API_ORIGIN = 'https://api.mdblist.com';
+    function readMdbListKey() { return readCredential('mdblistApiKey'); }
+    function isMdbListConfigured() { return readMdbListKey().configured; }
+
+    /* Their ratings array carries a source name and two numbers: `value` in whatever scale
+       that source uses, and `score` normalised to 0-100. The widgets here show each source
+       in its own scale — a percentage for Rotten Tomatoes, a score out of a hundred for
+       Metacritic, stars out of five for Letterboxd — so `value` is the field to read, and
+       `score` would silently turn 4.2 stars into 84.
+
+       Read by name rather than by position, because the array omits a source it has nothing
+       for and its order is theirs to change. Verified against the response model a
+       maintained consumer parses (github.com/Druidblack/Jellyfin.Plugin.MDBList_Ratings,
+       Ratings/Models/MdbListModels.cs). */
+    function parseMdbListRatings(payload) {
+        if (!payload || typeof payload !== 'object') return null;
+        const ratings = Array.isArray(payload.ratings) ? payload.ratings.slice(0, 30) : [];
+        const valueFor = source => {
+            const entry = ratings.find(item => String(item?.source || '').toLowerCase() === source);
+            /* Checked before converting, because Number(null) is 0 and a zero is a real
+               score: a film with no Rotten Tomatoes rating and one every critic panned
+               would otherwise render identically. */
+            const raw = entry?.value;
+            if (raw === null || raw === undefined || raw === '') return null;
+            const value = Number(raw);
+            return Number.isFinite(value) ? value : null;
+        };
+        return {
+            rt: boundedScore(valueFor('tomatoes'), 100),
+            metacritic: boundedScore(valueFor('metacritic'), 100),
+            letterboxd: boundedScore(valueFor('letterboxd'), 5),
+        };
+    }
+
+    async function fetchMdbListRatings(imdbId, isCurrent) {
+        const key = readMdbListKey();
+        if (!key.configured) return { unconfigured:true };
+        const cacheKey = 'mdblist_' + imdbId;
+        const cached = cacheGet(cacheKey);
+        if (cached) return cached;
+        /* Same split as OMDb: under a script manager the value is readable here and goes on
+           the URL; in an extension build only the stored key's name travels and the worker
+           puts the value into the query string of a request it has already validated. */
+        const type = isTVType() ? 'show' : 'movie';
+        const requestUrl = `${MDBLIST_API_ORIGIN}/imdb/${type}/${encodeURIComponent(imdbId)}/`
+            + (key.value ? `?apikey=${encodeURIComponent(key.value)}` : '');
+        let response;
+        try {
+            response = await httpGet(requestUrl, {
+                credentialQuery: { name:'apikey', ref:key.ref },
+                timeout: 12000,
+                cancelOnRouteChange: true,
+            });
+        } catch (error) {
+            const status = Number(error?.status);
+            if (status === 401 || status === 403) return { rejected:true };
+            throw error;
+        }
+        if (!isCurrent()) return null;
+        if (typeof response?.finalUrl === 'string' && response.finalUrl
+            && !normalizeTrustedUrl(response.finalUrl, 'api.mdblist.com', '')) {
+            return { empty:true };
+        }
+        const parsed = parseMdbListRatings(parseJSONResponse(response));
+        if (!parsed) return { empty:true };
+        cacheSet(cacheKey, parsed, PROVIDERS.mdblist.ttl);
+        return parsed;
+    }
+
     /* IE-118: when a film reaches the shops is a question IMDb does not answer above the
        fold, and TMDB does. The type codes are theirs and documented: 4 is digital, 5 is
        physical. The earliest of each is the one worth reporting, because a re-release

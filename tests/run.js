@@ -303,6 +303,8 @@ function loadScriptTestHooks({ withoutDeleteValue = false, withheldCredentials =
         fetchTmdbAvailability,
         parseOmdbRatings,
         fetchOmdbRatings,
+        parseMdbListRatings,
+        fetchMdbListRatings,
         isOmdbConfigured,
         getAvailabilitySource,
         getEffectiveAvailabilitySource,
@@ -6895,25 +6897,31 @@ test('TMDB availability resolves an IMDb id and reads only the chosen region', (
    runs everywhere. */
 test('a store build names the source it cannot ship', () => {
     const hooks = loadScriptTestHooks({ storeProfile:true });
-    assert.strictEqual(hooks.featureExcludedByProfile('inlineLetterboxdScore'), true,
-        'a feature whose only source is read by parsing a page is not in a store build');
-    assert.strictEqual(hooks.describeProfileExclusion('inlineLetterboxdScore'),
-        'Not available in this build (Letterboxd)');
+    /* Letterboxd used to be excluded outright here: it publishes no API, so a build with no
+       page readers had nothing at all to ask. MDBList carries their rating, so it is a
+       grant-and-key question now rather than an absence, and the origin it asks for is
+       MDBList's. Letterboxd's own origin is still never requested there. */
+    assert.strictEqual(hooks.featureExcludedByProfile('inlineLetterboxdScore'), false,
+        'a store build has an aggregated source for Letterboxd now');
+    assert.deepStrictEqual(Array.from(hooks.getFeatureOrigins('inlineLetterboxdScore')).sort(),
+        ['https://api.mdblist.com/*', 'https://query.wikidata.org/*'],
+        'and it never asks for the page it cannot read');
     assert.strictEqual(hooks.featureExcludedByProfile('streamAvailability'), false,
         'availability still has a source there, so it is a grant question rather than an exclusion');
     assert.deepStrictEqual(Array.from(hooks.getFeatureOrigins('streamAvailability')),
         ['https://api.themoviedb.org/*'],
         'and it asks only for the origin that build can use');
 
-    /* Rotten Tomatoes and Metacritic are not excluded there any more: OMDb answers both
-       from an API, so the store build asks for OMDb's origin and nothing else for them. */
+    /* Rotten Tomatoes and Metacritic are not excluded there either: two APIs answer both,
+       so the store build asks for those two origins and never for the pages it cannot
+       read. Which of the two a person ends up using is decided by the key they hold. */
     assert.strictEqual(hooks.featureExcludedByProfile('inlineRTScore'), false,
-        'a store build has an OMDb-backed source for Rotten Tomatoes');
+        'a store build has API-backed sources for Rotten Tomatoes');
     assert.deepStrictEqual(Array.from(hooks.getFeatureOrigins('inlineRTScore')).sort(),
-        ['https://query.wikidata.org/*', 'https://www.omdbapi.com/*'],
+        ['https://api.mdblist.com/*', 'https://query.wikidata.org/*', 'https://www.omdbapi.com/*'],
         'and it never asks for the page it cannot read');
     assert.deepStrictEqual(Array.from(hooks.getFeatureOrigins('inlineMetacriticScore')).sort(),
-        ['https://query.wikidata.org/*', 'https://www.omdbapi.com/*']);
+        ['https://api.mdblist.com/*', 'https://query.wikidata.org/*', 'https://www.omdbapi.com/*']);
 
     // The ordinary build excludes nothing, or the assertions above prove only that the
     // transform ran.
@@ -7274,7 +7282,7 @@ test('every sentence in the source comes from the catalog', () => {
     const BRANDS = new Set([
         'IMDb', 'IMDb Enhanced', 'Rotten Tomatoes', 'Metacritic', 'Letterboxd', 'JustWatch',
         'TMDB', 'OMDb', 'YouTube', 'Wikidata', 'Plex', 'Jellyfin', 'Emby', 'Radarr', 'Sonarr',
-        'Overseerr', 'AniList', 'ANILIST', 'TVmaze', 'GitHub', 'RT', 'LB', 'MC', 'AL', 'TV',
+        'Overseerr', 'AniList', 'ANILIST', 'TVmaze', 'GitHub', 'MDBList', 'RT', 'LB', 'MC', 'AL', 'TV',
         'TOMATOMETER', 'LETTERBOXD', 'METASCORE', 'SERVARR',
         'Box Office Mojo', 'Ep Calendar', 'Box Office',
     ]);
@@ -7374,6 +7382,55 @@ test('no route or selector logic matches a translated string', () => {
 /* IE-110: OMDb answers Rotten Tomatoes and Metacritic for one IMDb id in a single call.
    Their Ratings array names its sources and omits the ones it has nothing for, so it is
    read by name and every shape it can take has to survive that. */
+/* IE-132: MDBList answers all three score widgets from one call and is the only source of
+   a Letterboxd rating in a build that ships no page readers. Its array names its own
+   sources, omits the ones it has nothing for, and carries two numbers per entry: `value` in
+   the source's own scale and `score` normalised to 0-100. The widgets show each source in
+   its own scale, so reading `score` would turn 4.2 stars into 84. */
+test('MDBList ratings are read by source name, in each source\'s own scale', () => {
+    const hooks = loadScriptTestHooks();
+    const full = hooks.parseMdbListRatings({
+        ids:{ imdb:'tt0133093' },
+        ratings:[
+            { source:'imdb', value:8.7, score:87 },
+            { source:'letterboxd', value:4.2, score:84 },
+            { source:'tomatoes', value:83, score:83 },
+            { source:'metacritic', value:73, score:73 },
+        ],
+    });
+    assert.strictEqual(full.rt, 83);
+    assert.strictEqual(full.metacritic, 73);
+    assert.strictEqual(full.letterboxd, 4.2, 'Letterboxd is out of five, not out of a hundred');
+
+    // Position is not identity: the order is theirs and it changes.
+    const reordered = hooks.parseMdbListRatings({
+        ratings:[{ source:'metacritic', value:40 }, { source:'tomatoes', value:12 }],
+    });
+    assert.strictEqual(reordered.rt, 12);
+    assert.strictEqual(reordered.metacritic, 40);
+    assert.strictEqual(reordered.letterboxd, null, 'a source it has nothing for is absent, not zero');
+
+    // Every shape the array can take has to survive being read.
+    assert.strictEqual(hooks.parseMdbListRatings({ ratings:[] }).rt, null);
+    assert.strictEqual(hooks.parseMdbListRatings({}).rt, null);
+    assert.strictEqual(hooks.parseMdbListRatings(null), null);
+    assert.strictEqual(hooks.parseMdbListRatings({ ratings:[{ source:'tomatoes', value:null }] }).rt, null,
+        'a null value is no answer rather than a zero score');
+    assert.strictEqual(hooks.parseMdbListRatings({ ratings:[{ source:'TOMATOES', value:55 }] }).rt, 55,
+        'the source name is matched without regard to case');
+    assert.strictEqual(hooks.parseMdbListRatings({ ratings:[{ source:'tomatoes', value:900 }] }).rt, null,
+        'a value outside the scale is refused rather than rendered');
+});
+
+test('MDBList is asked for nothing at all without a key', async () => {
+    const hooks = loadScriptTestHooks();
+    const before = hooks.getCapturedRequests().length;
+    const answer = await hooks.fetchMdbListRatings('tt0133093', () => true);
+    assert.strictEqual(answer.unconfigured, true, 'an absent key is reported, not guessed around');
+    assert.strictEqual(hooks.getCapturedRequests().length, before,
+        'and nothing is contacted while there is no key to contact it with');
+});
+
 test('OMDb ratings are read by source name and bounded', () => {
     const hooks = loadScriptTestHooks();
     const full = hooks.parseOmdbRatings({

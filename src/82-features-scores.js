@@ -669,6 +669,32 @@
         return true;
     }
 
+    /* The same shape for MDBList, which answers all three score widgets from one call and
+       is the only source of a Letterboxd rating in a build that ships no page readers.
+       Tried after OMDb, so an install carrying both keys keeps its existing answers. */
+    async function renderMdbListScore(feature, field, imdbId, isCurrent) {
+        if (!isMdbListConfigured()) return false;
+        if (!await hasFeatureOrigins(feature.key)) return false;
+        if (!isCurrent()) return true;
+        let answer;
+        try {
+            answer = await fetchMdbListRatings(imdbId, isCurrent);
+        } catch (error) {
+            recordLookupFailure(feature, error);
+            return false;
+        }
+        if (!isCurrent()) return true;
+        if (answer?.rejected) { feature._renderUnavailable('mdblist-rejected'); return true; }
+        const value = boundedScore(answer?.[field], field === 'letterboxd' ? 5 : 100);
+        if (value === null) return false;
+        // Rotten Tomatoes' widget reads a tomatometer; Metacritic's and Letterboxd's both
+        // read a score, each in its own scale.
+        feature._render(field === 'rt'
+            ? { tomatometer:value, via:'mdblist' }
+            : { score:value, via:'mdblist' });
+        return true;
+    }
+
     reg({
         key: 'inlineRTScore', name: t('feature_inlineRTScore_name'), group: 'Scores',
         async init() {
@@ -699,7 +725,8 @@
             /* A build that does not ship the page parser has no search or detail page to
                read, and no origin to read it from, so OMDb is the whole path here. */
             if (!providerAllowedHere('rottenTomatoes')) {
-                if (!await renderOmdbScore(this, 'rt', imdbId, isCurrent) && isCurrent()) {
+                if (!await renderOmdbScore(this, 'rt', imdbId, isCurrent)
+                    && !await renderMdbListScore(this, 'rt', imdbId, isCurrent) && isCurrent()) {
                     this._renderUnavailable('unavailable');
                 }
                 return;
@@ -778,6 +805,7 @@
             /* Reading their page did not answer. With a key of your own there is a second
                source that can, so it is asked before anything stale or absent is shown. */
             if (isOmdbConfigured() && await renderOmdbScore(this, 'rt', imdbId, isCurrent)) return;
+            if (await renderMdbListScore(this, 'rt', imdbId, isCurrent)) return;
             if (!isCurrent()) return;
             /* A provider that could not be reached is the one case where a bounded
                expired value beats nothing, provided it is labelled with its date and
@@ -818,6 +846,10 @@
             if (data.via === 'omdb') {
                 w.appendChild(makeEl('div', { className:'enh-score-widget__sub' }, t('label_via_omdb')));
                 appendProviderAttribution(w, 'omdb');
+            }
+            if (data.via === 'mdblist') {
+                w.appendChild(makeEl('div', { className:'enh-score-widget__sub' }, t('label_via_mdblist')));
+                appendProviderAttribution(w, 'mdblist');
             }
             if (providerAllowedHere('rottenTomatoes')) appendScoreCorrectionAction(w, 'rottenTomatoes', this.key);
             bar.appendChild(w);
@@ -889,6 +921,17 @@
             if (!await waitUntilVisible(bar, isCurrent) || !isCurrent()) return;
             this._renderLoading();
 
+            /* Letterboxd has no API of its own, so a build that does not ship the page
+               reader has no way to ask them directly. MDBList carries their rating in the
+               same call it answers the other two scores from, which is the only route to
+               one here. */
+            if (!providerAllowedHere('letterboxd')) {
+                if (!await renderMdbListScore(this, 'letterboxd', imdbId, isCurrent) && isCurrent()) {
+                    this._renderUnavailable('unavailable');
+                }
+                return;
+            }
+
             if (correction?.mode === 'url') {
                 try {
                     const response = await httpGet(correction.url, { cancelOnRouteChange:true });
@@ -936,6 +979,9 @@
             if (await renderStaleScore(this, cacheKey, lookupError, isCurrent)) return;
             /* Nothing is recorded when the failure was only a missing host grant, so the
                next visit retries instead of reading back a stale "unavailable". */
+            /* Before giving up: a stored MDBList key answers this too, so a Letterboxd page
+               that could not be read or matched is not the end of the lookup. */
+            if (await renderMdbListScore(this, 'letterboxd', imdbId, isCurrent)) return;
             const blocked = await cacheUnavailableUnlessBlocked(this.key, cacheKey, lookupError);
             if (!isCurrent()) return;
             this._renderUnavailable(blocked ? 'access' : 'unavailable');
@@ -962,7 +1008,15 @@
                 ),
                 makeEl('div', { className:'enh-score-widget__sub' }, count ? `${count} ratings` : 'Average rating')
             );
-            appendScoreCorrectionAction(w, 'letterboxd', this.key);
+            if (data.via === 'mdblist') {
+                w.appendChild(makeEl('div', { className:'enh-score-widget__sub' }, t('label_via_mdblist')));
+                appendProviderAttribution(w, 'mdblist');
+            }
+            // Correcting a match means picking a Letterboxd page to read, which a score
+            // that came from an aggregator has no equivalent for.
+            if (providerAllowedHere('letterboxd') && data.via !== 'mdblist') {
+                appendScoreCorrectionAction(w, 'letterboxd', this.key);
+            }
             announceScore('Letterboxd', formatScore(score));
             bar.appendChild(w);
         },
@@ -1821,7 +1875,8 @@
             /* As with Rotten Tomatoes: no parser in this build means no search endpoint
                and no origin, so OMDb answers or nothing does. */
             if (!providerAllowedHere('metacritic')) {
-                if (!await renderOmdbScore(this, 'metacritic', imdbId, isCurrent) && isCurrent()) {
+                if (!await renderOmdbScore(this, 'metacritic', imdbId, isCurrent)
+                    && !await renderMdbListScore(this, 'metacritic', imdbId, isCurrent) && isCurrent()) {
                     this._renderUnavailable('unavailable');
                 }
                 return;
@@ -1899,6 +1954,7 @@
                is a second source that can, so it is asked before anything stale or absent
                is shown. */
             if (isOmdbConfigured() && await renderOmdbScore(this, 'metacritic', imdbId, isCurrent)) return;
+            if (await renderMdbListScore(this, 'metacritic', imdbId, isCurrent)) return;
             if (!isCurrent()) return;
             /* A provider that could not be reached is the one case where a bounded
                expired value beats nothing, provided it is labelled with its date and
@@ -1939,6 +1995,10 @@
             if (data.via === 'omdb') {
                 w.appendChild(makeEl('div', { className:'enh-score-widget__sub' }, t('label_via_omdb')));
                 appendProviderAttribution(w, 'omdb');
+            }
+            if (data.via === 'mdblist') {
+                w.appendChild(makeEl('div', { className:'enh-score-widget__sub' }, t('label_via_mdblist')));
+                appendProviderAttribution(w, 'mdblist');
             }
             if (providerAllowedHere('metacritic')) appendScoreCorrectionAction(w, 'metacritic', this.key);
             announceScore('Metascore', hasScore ? String(score) : '');

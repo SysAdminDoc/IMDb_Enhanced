@@ -2046,15 +2046,19 @@ await runFixture('chart', async (window, hooks) => {
             assert.ok(found, `settings row "${label}" was not rendered`);
             return found;
         };
-        const excluded = rowFor('Letterboxd scores');
-        const excludedAccess = excluded.querySelector('.enh-settings-access');
-        assert.ok(excludedAccess, 'an excluded feature must still say why it cannot work');
-        assert.equal(excludedAccess.textContent, 'Not available in this build (Letterboxd)');
-        assert.equal(excludedAccess.dataset.state, 'excluded');
-        assert.equal(excluded.querySelector('.enh-settings-access-btn'), null,
-            'a build that excludes the source must not offer to request access to it');
-        assert.doesNotMatch(excludedAccess.textContent, /needs access to/,
-            'an excluded feature must not be reported as a missing grant');
+        /* Letterboxd used to be excluded here outright: they publish no API, so a build
+           with no page readers had nothing to ask. MDBList carries their rating, so this
+           row is a grant-and-key question now, the same shape as availability below. */
+        const letterboxd = rowFor('Letterboxd scores');
+        await new Promise(resolve => window.setTimeout(resolve, 0));
+        const letterboxdAccess = letterboxd.querySelector('.enh-settings-access');
+        assert.ok(letterboxdAccess, 'the row must still report its access state');
+        assert.notEqual(letterboxdAccess.dataset.state, 'excluded',
+            'a build with an aggregated source for it must stop calling it unavailable');
+        assert.doesNotMatch(letterboxdAccess.textContent, /Not available in this build/,
+            'and must not still name it as a source this build cannot ship');
+        assert.ok(letterboxd.querySelector('.enh-settings-access-btn'),
+            'it keeps the affordance that can actually resolve a missing grant');
 
         const shipped = rowFor('Streaming availability');
         await new Promise(resolve => window.setTimeout(resolve, 0));

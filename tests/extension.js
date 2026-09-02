@@ -438,8 +438,12 @@ assert(/\['imdb_enh_tmdbReadToken', \{ host: 'api\.themoviedb\.org', header: 'Au
    the scheme is. */
 assert(/\['imdb_enh_omdbApiKey', \{ host: 'www\.omdbapi\.com', query: 'apikey' \}\]/.test(background),
     'the OMDb key must be bound to OMDb and to the parameter it is carried in');
+// MDBList takes its key the same way, and is bound the same way.
+assert(/\['imdb_enh_mdblistApiKey', \{ host: 'api\.mdblist\.com', query: 'apikey' \}\]/.test(background),
+    'the MDBList key must be bound to MDBList and to the parameter it is carried in');
 const offMachine = [...bindingBlock.matchAll(/\['(imdb_enh_[^']+)', \{ host:/g)].map(m => m[1]).sort();
-assert.deepStrictEqual(offMachine, ['imdb_enh_omdbApiKey', 'imdb_enh_tmdbReadToken'],
+assert.deepStrictEqual(offMachine,
+    ['imdb_enh_mdblistApiKey', 'imdb_enh_omdbApiKey', 'imdb_enh_tmdbReadToken'],
     'no other credential may be bound to an off-machine destination without being noticed here');
 /* A key carried in the URL is a secret in the address, so the address the response came
    from must never be handed back to the page that could not read the key in the first

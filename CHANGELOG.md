@@ -2,6 +2,12 @@
 
 ## Unreleased
 
+### Added
+
+- MDBList is a second place to get scores from, with a free key of your own. One call answers Rotten Tomatoes, Metacritic and Letterboxd together, and each score says when it came from there. It's asked after OMDb, so an install that already has an OMDb key keeps the answers it was getting, and nothing is contacted until a key is stored.
+
+- The web-store build can show a Letterboxd score for the first time. That build ships no page readers and Letterboxd publishes no API, so it previously said the score was simply unavailable. With an MDBList key it now has a source, and it still never asks for access to Letterboxd itself.
+
 ### Changed
 
 - Deleting a title mark can be taken back. Remove on a row and Clear all both offer an Undo in the marks panel for fifteen seconds, and it restores the whole record, notes and viewing dates included. Undo after several removals puts all of them back, not just the last one.

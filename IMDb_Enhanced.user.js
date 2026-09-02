@@ -41,6 +41,7 @@
 // @connect      query.wikidata.org
 // @connect      api.themoviedb.org
 // @connect      www.omdbapi.com
+// @connect      api.mdblist.com
 // @connect      graphql.anilist.co
 // @connect      api.tvmaze.com
 // @connect      localhost
@@ -325,6 +326,7 @@
         field_https_example_com_search_q_title: 'https://example.com/search?q={{TITLE}}',
         field_modernui_true_themevariant_dark: '{ "modernUI": true, "themeVariant": "dark" }',
         field_paste_a_title_url: 'Paste a $1 title URL',
+        field_paste_your_mdblist_key: 'Paste your MDBList key',
         field_paste_your_omdb_key: 'Paste your OMDb key',
         field_paste_your_v4_read_access_token: 'Paste your v4 read access token',
         field_radarr_root_folder_hint: '/movies',
@@ -410,6 +412,7 @@
         label_undo: 'Undo',
         label_unseen: 'Unseen',
         label_url: 'URL',
+        label_via_mdblist: 'via MDBList',
         label_via_omdb: 'via OMDb',
         label_wrong: 'Wrong?',
         menu_copy_settings_backup: 'Copy settings backup (no credentials)',
@@ -437,6 +440,8 @@
         provider_localServices_label: 'your own computer',
         provider_metacritic_consent: 'Sends the title and year read from the page to Metacritic to find its score.',
         provider_omdb_attribution: 'Ratings from the OMDb API, used under CC BY-NC 4.0.',
+        provider_mdblist_attribution: 'Ratings aggregated by MDBList',
+        provider_mdblist_consent: 'Sends the IMDb id to MDBList to read its Rotten Tomatoes, Metacritic and Letterboxd ratings in one call. Needs your own MDBList key.',
         provider_omdb_consent: 'Sends the IMDb id to OMDb to read its Rotten Tomatoes and Metacritic ratings. Needs your own OMDb key.',
         provider_rottenTomatoes_consent: 'Sends the title and year read from the page to Rotten Tomatoes to find its scores.',
         provider_tmdb_attribution: 'This extension uses TMDB and the TMDB APIs but is not endorsed, certified, or otherwise approved by TMDB. Streaming data provided by JustWatch.',
@@ -637,6 +642,8 @@
         settings_note_only: 'Note only',
         settings_nothing_is_sent_to_an_imdb_enhanced: 'Nothing is sent to an IMDb Enhanced account or cloud service.',
         settings_nothing_is_transmitted_the_report_only_reaches: 'Nothing is transmitted. The report only reaches your clipboard.',
+        settings_mdblist_answers_all_three: 'MDBList answers all three in one call, Letterboxd included, and is asked after OMDb. Keys are free from mdblist.com.',
+        settings_mdblist_api_key: 'MDBList API key',
         settings_omdb_api_key: 'OMDb API key',
         settings_optional_scores_normally_come_from_reading_each: 'Optional. Scores normally come from reading each site\'s own page; with an OMDb key stored here, a lookup that fails falls back to their API and the score says it came from OMDb. Free for 1,000 lookups a day from omdbapi.com.',
         settings_panel_subtitle: 'Focused controls for your IMDb workspace.',
@@ -1248,6 +1255,21 @@
             // A documented API with a key of your own, so a store listing can ship it.
             profiles: ['default', 'store'],
         },
+        /* One call answers Rotten Tomatoes, Metacritic and Letterboxd together, which is
+           the only route to a Letterboxd score in a build that ships no page readers.
+           Their ratings array names its own sources and omits the ones it has nothing
+           for, so it is read by name like OMDb's. */
+        mdblist: {
+            label: 'MDBList',
+            origins: ['https://api.mdblist.com/*'],
+            // The IMDb id of the page you are on, nothing read from the page itself.
+            transmits: 'websiteContent',
+            consent: t('provider_mdblist_consent'),
+            ttl: CACHE_TTL,
+            attribution: t('provider_mdblist_attribution'),
+            // A documented API with a key of your own, so a store listing can ship it.
+            profiles: ['default', 'store'],
+        },
         anilist: {
             label: 'AniList',
             origins: ['https://graphql.anilist.co/*'],
@@ -1350,9 +1372,9 @@
            build that cannot ship the page parser still has a source, and so an install
            that configures a key can fall back to it; activeProvidersFor keeps it out of
            the way of an install that has neither. */
-        inlineRTScore: ['rottenTomatoes', 'omdb', 'wikidata'],
-        inlineMetacriticScore: ['metacritic', 'omdb', 'wikidata'],
-        inlineLetterboxdScore: ['letterboxd', 'wikidata'],
+        inlineRTScore: ['rottenTomatoes', 'omdb', 'mdblist', 'wikidata'],
+        inlineMetacriticScore: ['metacritic', 'omdb', 'mdblist', 'wikidata'],
+        inlineLetterboxdScore: ['letterboxd', 'mdblist', 'wikidata'],
         inlineAnimeScore: ['anilist'],
         collectionPanel: ['wikidata'],
         castAges: ['wikidata'],
@@ -1733,7 +1755,7 @@
         /* Which service answers "where can I watch this". JustWatch is read by parsing
            their page; TMDB is a documented API but needs a read token of your own. The
            default stays where it was so nothing changes for an existing install. */
-        availabilitySource: 'justwatch', tmdbReadToken: '', omdbApiKey: '',
+        availabilitySource: 'justwatch', tmdbReadToken: '', omdbApiKey: '', mdblistApiKey: '',
         /* Which country's offers to read. TMDB answers for every country it knows, and
            showing another one's services as though they were yours is the failure this
            avoids. Declared here so it round-trips through backup and restore like any
@@ -1781,6 +1803,7 @@
         'radarrApiKey', 'sonarrApiKey', 'seerrApiKey', 'plexToken', 'jellyfinApiKey', 'embyApiKey',
         'tmdbReadToken',
         'omdbApiKey',
+        'mdblistApiKey',
     ]);
     const COLLAPSIBLE_SECTION_IDS = [
         'title-cast', 'UserReviews', 'MoreLikeThis', 'Details', 'BoxOffice',
@@ -8099,6 +8122,75 @@ section[id*="quote" i] .ipc-list-card { padding: 4px 0 !important; margin: 2px 0
         return parsed;
     }
 
+    const MDBLIST_API_ORIGIN = 'https://api.mdblist.com';
+    function readMdbListKey() { return readCredential('mdblistApiKey'); }
+    function isMdbListConfigured() { return readMdbListKey().configured; }
+
+    /* Their ratings array carries a source name and two numbers: `value` in whatever scale
+       that source uses, and `score` normalised to 0-100. The widgets here show each source
+       in its own scale — a percentage for Rotten Tomatoes, a score out of a hundred for
+       Metacritic, stars out of five for Letterboxd — so `value` is the field to read, and
+       `score` would silently turn 4.2 stars into 84.
+
+       Read by name rather than by position, because the array omits a source it has nothing
+       for and its order is theirs to change. Verified against the response model a
+       maintained consumer parses (github.com/Druidblack/Jellyfin.Plugin.MDBList_Ratings,
+       Ratings/Models/MdbListModels.cs). */
+    function parseMdbListRatings(payload) {
+        if (!payload || typeof payload !== 'object') return null;
+        const ratings = Array.isArray(payload.ratings) ? payload.ratings.slice(0, 30) : [];
+        const valueFor = source => {
+            const entry = ratings.find(item => String(item?.source || '').toLowerCase() === source);
+            /* Checked before converting, because Number(null) is 0 and a zero is a real
+               score: a film with no Rotten Tomatoes rating and one every critic panned
+               would otherwise render identically. */
+            const raw = entry?.value;
+            if (raw === null || raw === undefined || raw === '') return null;
+            const value = Number(raw);
+            return Number.isFinite(value) ? value : null;
+        };
+        return {
+            rt: boundedScore(valueFor('tomatoes'), 100),
+            metacritic: boundedScore(valueFor('metacritic'), 100),
+            letterboxd: boundedScore(valueFor('letterboxd'), 5),
+        };
+    }
+
+    async function fetchMdbListRatings(imdbId, isCurrent) {
+        const key = readMdbListKey();
+        if (!key.configured) return { unconfigured:true };
+        const cacheKey = 'mdblist_' + imdbId;
+        const cached = cacheGet(cacheKey);
+        if (cached) return cached;
+        /* Same split as OMDb: under a script manager the value is readable here and goes on
+           the URL; in an extension build only the stored key's name travels and the worker
+           puts the value into the query string of a request it has already validated. */
+        const type = isTVType() ? 'show' : 'movie';
+        const requestUrl = `${MDBLIST_API_ORIGIN}/imdb/${type}/${encodeURIComponent(imdbId)}/`
+            + (key.value ? `?apikey=${encodeURIComponent(key.value)}` : '');
+        let response;
+        try {
+            response = await httpGet(requestUrl, {
+                credentialQuery: { name:'apikey', ref:key.ref },
+                timeout: 12000,
+                cancelOnRouteChange: true,
+            });
+        } catch (error) {
+            const status = Number(error?.status);
+            if (status === 401 || status === 403) return { rejected:true };
+            throw error;
+        }
+        if (!isCurrent()) return null;
+        if (typeof response?.finalUrl === 'string' && response.finalUrl
+            && !normalizeTrustedUrl(response.finalUrl, 'api.mdblist.com', '')) {
+            return { empty:true };
+        }
+        const parsed = parseMdbListRatings(parseJSONResponse(response));
+        if (!parsed) return { empty:true };
+        cacheSet(cacheKey, parsed, PROVIDERS.mdblist.ttl);
+        return parsed;
+    }
+
     /* IE-118: when a film reaches the shops is a question IMDb does not answer above the
        fold, and TMDB does. The type codes are theirs and documented: 4 is digital, 5 is
        physical. The earliest of each is the one worth reporting, because a re-release
@@ -8984,6 +9076,32 @@ section[id*="quote" i] .ipc-list-card { padding: 4px 0 !important; margin: 2px 0
         return true;
     }
 
+    /* The same shape for MDBList, which answers all three score widgets from one call and
+       is the only source of a Letterboxd rating in a build that ships no page readers.
+       Tried after OMDb, so an install carrying both keys keeps its existing answers. */
+    async function renderMdbListScore(feature, field, imdbId, isCurrent) {
+        if (!isMdbListConfigured()) return false;
+        if (!await hasFeatureOrigins(feature.key)) return false;
+        if (!isCurrent()) return true;
+        let answer;
+        try {
+            answer = await fetchMdbListRatings(imdbId, isCurrent);
+        } catch (error) {
+            recordLookupFailure(feature, error);
+            return false;
+        }
+        if (!isCurrent()) return true;
+        if (answer?.rejected) { feature._renderUnavailable('mdblist-rejected'); return true; }
+        const value = boundedScore(answer?.[field], field === 'letterboxd' ? 5 : 100);
+        if (value === null) return false;
+        // Rotten Tomatoes' widget reads a tomatometer; Metacritic's and Letterboxd's both
+        // read a score, each in its own scale.
+        feature._render(field === 'rt'
+            ? { tomatometer:value, via:'mdblist' }
+            : { score:value, via:'mdblist' });
+        return true;
+    }
+
     reg({
         key: 'inlineRTScore', name: t('feature_inlineRTScore_name'), group: 'Scores',
         async init() {
@@ -9014,7 +9132,8 @@ section[id*="quote" i] .ipc-list-card { padding: 4px 0 !important; margin: 2px 0
             /* A build that does not ship the page parser has no search or detail page to
                read, and no origin to read it from, so OMDb is the whole path here. */
             if (!providerAllowedHere('rottenTomatoes')) {
-                if (!await renderOmdbScore(this, 'rt', imdbId, isCurrent) && isCurrent()) {
+                if (!await renderOmdbScore(this, 'rt', imdbId, isCurrent)
+                    && !await renderMdbListScore(this, 'rt', imdbId, isCurrent) && isCurrent()) {
                     this._renderUnavailable('unavailable');
                 }
                 return;
@@ -9093,6 +9212,7 @@ section[id*="quote" i] .ipc-list-card { padding: 4px 0 !important; margin: 2px 0
             /* Reading their page did not answer. With a key of your own there is a second
                source that can, so it is asked before anything stale or absent is shown. */
             if (isOmdbConfigured() && await renderOmdbScore(this, 'rt', imdbId, isCurrent)) return;
+            if (await renderMdbListScore(this, 'rt', imdbId, isCurrent)) return;
             if (!isCurrent()) return;
             /* A provider that could not be reached is the one case where a bounded
                expired value beats nothing, provided it is labelled with its date and
@@ -9133,6 +9253,10 @@ section[id*="quote" i] .ipc-list-card { padding: 4px 0 !important; margin: 2px 0
             if (data.via === 'omdb') {
                 w.appendChild(makeEl('div', { className:'enh-score-widget__sub' }, t('label_via_omdb')));
                 appendProviderAttribution(w, 'omdb');
+            }
+            if (data.via === 'mdblist') {
+                w.appendChild(makeEl('div', { className:'enh-score-widget__sub' }, t('label_via_mdblist')));
+                appendProviderAttribution(w, 'mdblist');
             }
             if (providerAllowedHere('rottenTomatoes')) appendScoreCorrectionAction(w, 'rottenTomatoes', this.key);
             bar.appendChild(w);
@@ -9204,6 +9328,17 @@ section[id*="quote" i] .ipc-list-card { padding: 4px 0 !important; margin: 2px 0
             if (!await waitUntilVisible(bar, isCurrent) || !isCurrent()) return;
             this._renderLoading();
 
+            /* Letterboxd has no API of its own, so a build that does not ship the page
+               reader has no way to ask them directly. MDBList carries their rating in the
+               same call it answers the other two scores from, which is the only route to
+               one here. */
+            if (!providerAllowedHere('letterboxd')) {
+                if (!await renderMdbListScore(this, 'letterboxd', imdbId, isCurrent) && isCurrent()) {
+                    this._renderUnavailable('unavailable');
+                }
+                return;
+            }
+
             if (correction?.mode === 'url') {
                 try {
                     const response = await httpGet(correction.url, { cancelOnRouteChange:true });
@@ -9251,6 +9386,9 @@ section[id*="quote" i] .ipc-list-card { padding: 4px 0 !important; margin: 2px 0
             if (await renderStaleScore(this, cacheKey, lookupError, isCurrent)) return;
             /* Nothing is recorded when the failure was only a missing host grant, so the
                next visit retries instead of reading back a stale "unavailable". */
+            /* Before giving up: a stored MDBList key answers this too, so a Letterboxd page
+               that could not be read or matched is not the end of the lookup. */
+            if (await renderMdbListScore(this, 'letterboxd', imdbId, isCurrent)) return;
             const blocked = await cacheUnavailableUnlessBlocked(this.key, cacheKey, lookupError);
             if (!isCurrent()) return;
             this._renderUnavailable(blocked ? 'access' : 'unavailable');
@@ -9277,7 +9415,15 @@ section[id*="quote" i] .ipc-list-card { padding: 4px 0 !important; margin: 2px 0
                 ),
                 makeEl('div', { className:'enh-score-widget__sub' }, count ? `${count} ratings` : 'Average rating')
             );
-            appendScoreCorrectionAction(w, 'letterboxd', this.key);
+            if (data.via === 'mdblist') {
+                w.appendChild(makeEl('div', { className:'enh-score-widget__sub' }, t('label_via_mdblist')));
+                appendProviderAttribution(w, 'mdblist');
+            }
+            // Correcting a match means picking a Letterboxd page to read, which a score
+            // that came from an aggregator has no equivalent for.
+            if (providerAllowedHere('letterboxd') && data.via !== 'mdblist') {
+                appendScoreCorrectionAction(w, 'letterboxd', this.key);
+            }
             announceScore('Letterboxd', formatScore(score));
             bar.appendChild(w);
         },
@@ -10136,7 +10282,8 @@ section[id*="quote" i] .ipc-list-card { padding: 4px 0 !important; margin: 2px 0
             /* As with Rotten Tomatoes: no parser in this build means no search endpoint
                and no origin, so OMDb answers or nothing does. */
             if (!providerAllowedHere('metacritic')) {
-                if (!await renderOmdbScore(this, 'metacritic', imdbId, isCurrent) && isCurrent()) {
+                if (!await renderOmdbScore(this, 'metacritic', imdbId, isCurrent)
+                    && !await renderMdbListScore(this, 'metacritic', imdbId, isCurrent) && isCurrent()) {
                     this._renderUnavailable('unavailable');
                 }
                 return;
@@ -10214,6 +10361,7 @@ section[id*="quote" i] .ipc-list-card { padding: 4px 0 !important; margin: 2px 0
                is a second source that can, so it is asked before anything stale or absent
                is shown. */
             if (isOmdbConfigured() && await renderOmdbScore(this, 'metacritic', imdbId, isCurrent)) return;
+            if (await renderMdbListScore(this, 'metacritic', imdbId, isCurrent)) return;
             if (!isCurrent()) return;
             /* A provider that could not be reached is the one case where a bounded
                expired value beats nothing, provided it is labelled with its date and
@@ -10254,6 +10402,10 @@ section[id*="quote" i] .ipc-list-card { padding: 4px 0 !important; margin: 2px 0
             if (data.via === 'omdb') {
                 w.appendChild(makeEl('div', { className:'enh-score-widget__sub' }, t('label_via_omdb')));
                 appendProviderAttribution(w, 'omdb');
+            }
+            if (data.via === 'mdblist') {
+                w.appendChild(makeEl('div', { className:'enh-score-widget__sub' }, t('label_via_mdblist')));
+                appendProviderAttribution(w, 'mdblist');
             }
             if (providerAllowedHere('metacritic')) appendScoreCorrectionAction(w, 'metacritic', this.key);
             announceScore('Metascore', hasScore ? String(score) : '');
@@ -15661,14 +15813,32 @@ ${scopedRules('.enh-zoom', {
         if (!parser || !providerAllowedHere('omdb')) return false;
         return !providerAllowedHere(parser) || isOmdbConfigured();
     }
+    /* The same rule for MDBList, which backs a third feature OMDb has no answer for.
+       Letterboxd publishes no API, so where its page reader is not shipped MDBList is the
+       only source of that score and is in play whether or not a key is stored — the panel
+       can then say a key is what is missing, rather than showing nothing. */
+    const MDBLIST_BACKED_FEATURES = {
+        inlineRTScore:'rottenTomatoes',
+        inlineMetacriticScore:'metacritic',
+        inlineLetterboxdScore:'letterboxd',
+    };
+    function mdbListInPlayFor(key) {
+        const parser = MDBLIST_BACKED_FEATURES[key];
+        if (!parser || !providerAllowedHere('mdblist')) return false;
+        return !providerAllowedHere(parser) || isMdbListConfigured();
+    }
     function activeProvidersFor(key) {
         const declared = (FEATURE_PROVIDERS[key] || []).filter(providerAllowedHere);
         if (key === 'streamAvailability') {
             const preferred = getEffectiveAvailabilitySource() === 'tmdb' ? 'tmdb' : 'justWatch';
             return declared.includes(preferred) ? [preferred] : declared;
         }
-        if (OMDB_BACKED_FEATURES[key] && !omdbInPlayFor(key)) return declared.filter(id => id !== 'omdb');
-        return declared;
+        const withoutOmdb = OMDB_BACKED_FEATURES[key] && !omdbInPlayFor(key)
+            ? declared.filter(id => id !== 'omdb')
+            : declared;
+        return MDBLIST_BACKED_FEATURES[key] && !mdbListInPlayFor(key)
+            ? withoutOmdb.filter(id => id !== 'mdblist')
+            : withoutOmdb;
     }
     function getFeatureOrigins(key) {
         const active = activeProvidersFor(key);
@@ -17192,6 +17362,18 @@ ${scopedRules('.enh-zoom', {
                     label:t('settings_omdb_api_key'),
                     placeholder:t('field_paste_your_omdb_key'),
                     refreshKey:['inlineRTScore', 'inlineMetacriticScore'],
+                    wide:true,
+                }),
+                /* MDBList answers all three from one call, Letterboxd included, which OMDb
+                   has no equivalent for. It is asked after OMDb, so an install carrying
+                   both keys keeps the answers it already had. */
+                makeEl('span', { className:'enh-settings-card-description' },
+                    t('settings_mdblist_answers_all_three')),
+                createSettingsInput({
+                    key:'mdblistApiKey',
+                    label:t('settings_mdblist_api_key'),
+                    placeholder:t('field_paste_your_mdblist_key'),
+                    refreshKey:['inlineRTScore', 'inlineMetacriticScore', 'inlineLetterboxdScore'],
                     wide:true,
                 })
             ),

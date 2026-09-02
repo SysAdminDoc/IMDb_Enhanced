@@ -53,6 +53,8 @@ const CREDENTIAL_DESTINATIONS = new Map([
        the scheme does, so a page that cannot read the key cannot shape what carries it.
        The URL therefore holds a secret: the address is never handed back to the page. */
     ['imdb_enh_omdbApiKey', { host: 'www.omdbapi.com', query: 'apikey' }],
+    // MDBList takes its key the same way and nowhere else.
+    ['imdb_enh_mdblistApiKey', { host: 'api.mdblist.com', query: 'apikey' }],
 ]);
 const CREDENTIAL_STORAGE_KEYS = new Set(CREDENTIAL_DESTINATIONS.keys());
 /* Credentials the userscript attaches to local-service calls. fetch strips

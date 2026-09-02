@@ -728,7 +728,7 @@ const STORE_COPIED_FILES = ['background.js', 'recovery.html'];
    store build ships neither, so it needs its own sentence rather than the shared one.
    Chrome truncates a manifest description at 132 characters, so the length is checked
    here instead of being discovered at upload. */
-const STORE_DESCRIPTION = 'Decluttered IMDb: private watch marks, scores and streaming from your own OMDb and TMDB keys, and ad-request blocking.';
+const STORE_DESCRIPTION = 'Decluttered IMDb: private watch marks, plus scores and streaming from your own OMDb, MDBList and TMDB keys.';
 const CHROME_DESCRIPTION_LIMIT = 132;
 
 /* Same generator, same source, one transform. The store content bundle is the ordinary

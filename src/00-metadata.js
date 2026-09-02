@@ -41,6 +41,7 @@
 // @connect      query.wikidata.org
 // @connect      api.themoviedb.org
 // @connect      www.omdbapi.com
+// @connect      api.mdblist.com
 // @connect      graphql.anilist.co
 // @connect      api.tvmaze.com
 // @connect      localhost

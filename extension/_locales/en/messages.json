@@ -716,6 +716,9 @@
   "field_paste_a_title_url": {
     "message": "Paste a $1 title URL"
   },
+  "field_paste_your_mdblist_key": {
+    "message": "Paste your MDBList key"
+  },
   "field_paste_your_omdb_key": {
     "message": "Paste your OMDb key"
   },
@@ -971,6 +974,9 @@
   "label_url": {
     "message": "URL"
   },
+  "label_via_mdblist": {
+    "message": "via MDBList"
+  },
   "label_via_omdb": {
     "message": "via OMDb"
   },
@@ -1051,6 +1057,12 @@
   },
   "provider_omdb_attribution": {
     "message": "Ratings from the OMDb API, used under CC BY-NC 4.0."
+  },
+  "provider_mdblist_attribution": {
+    "message": "Ratings aggregated by MDBList"
+  },
+  "provider_mdblist_consent": {
+    "message": "Sends the IMDb id to MDBList to read its Rotten Tomatoes, Metacritic and Letterboxd ratings in one call. Needs your own MDBList key."
   },
   "provider_omdb_consent": {
     "message": "Sends the IMDb id to OMDb to read its Rotten Tomatoes and Metacritic ratings. Needs your own OMDb key."
@@ -1651,6 +1663,12 @@
   },
   "settings_nothing_is_transmitted_the_report_only_reaches": {
     "message": "Nothing is transmitted. The report only reaches your clipboard."
+  },
+  "settings_mdblist_answers_all_three": {
+    "message": "MDBList answers all three in one call, Letterboxd included, and is asked after OMDb. Keys are free from mdblist.com."
+  },
+  "settings_mdblist_api_key": {
+    "message": "MDBList API key"
   },
   "settings_omdb_api_key": {
     "message": "OMDb API key"
