@@ -4,6 +4,9 @@
 
 ### Added
 
+- Watchlists, lists and charts have a Copy as CSV button. It writes the rows currently on screen using IMDb's own column names, so the file goes back into IMDb and into other tools, and it says how many rows had no rating rather than reporting a count that hides them. Copying the IMDb ids is still there for feeding something that resolves them.
+
+
 - The ratings tab can say when a title's votes are piled at the two ends of the scale rather than spread across it. IMDb applies a different weighting when it detects unusual rating activity and never says when, so this describes the shape of the distribution it publishes and leaves the conclusion to you. A title with an ordinary spread gets no line at all, and one whose distribution IMDb withholds gets nothing either.
 
 
@@ -37,6 +40,9 @@
 - Clear all no longer asks for a second press five seconds after the first. A second press stopped nothing that a slip could not repeat, and it was no help at all to anyone who pressed it deliberately and meant a different row. The deletion happens at once and can be reversed instead.
 
 ### Fixed
+
+- Importing a watchlist CSV no longer marks every title on it as seen. A file with no state column was read as a history of things watched, which is right for a ratings or diary export and exactly wrong for a watchlist: IMDb's own watchlist export has the same columns and means the opposite. A row is now read as watched only where it carries a date or a rating, and a watchlist import records the titles without marking them.
+
 
 - Undoing a mark deletion no longer destroys marks that arrived after it. The offer stayed live while anything else wrote to your marks, so clearing the list, importing the titles shown on the page and then pressing Undo threw the imported ones away. Any write the panel did not make now ends the offer.
 

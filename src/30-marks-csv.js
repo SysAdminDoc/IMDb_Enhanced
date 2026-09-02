@@ -235,8 +235,18 @@
                already exists an unrecognised word leaves it alone. */
             const known = rawState === 'skip' || rawState === 'skipped' ? 'skip'
                 : rawState === 'watched' || rawState === 'seen' ? 'watched' : '';
+            /* A file with no State column is usually a ratings or diary export, where every
+               row is something the person watched. A watchlist export has the same columns
+               and means the opposite, and IMDb's own has no State column either, so reading
+               "no state" as watched turned a list of things somebody had not seen into a
+               history of things they had. A row counts as watched only where it carries
+               evidence of a viewing: a date or a rating. Without either it is recorded as a
+               title, unmarked, which is what a watchlist row actually says. */
+            const watchedByEvidence = date || rating !== null;
             const state = known
-                || (rawState ? (previous.state || 'watched') : (columns.state < 0 ? 'watched' : ''));
+                || (rawState
+                    ? (previous.state || 'watched')
+                    : (columns.state < 0 && watchedByEvidence ? 'watched' : ''));
             /* A date is a date whatever the state says. A Skip can hold the dates
                somebody watched a thing on before deciding against it again, and dropping
                them here destroyed that history on the way back in from a file this

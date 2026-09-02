@@ -301,6 +301,8 @@ function loadScriptTestHooks({ withoutDeleteValue = false, withheldCredentials =
         castAgeAtRelease,
         CAST_AGE_LIMIT,
         fetchTmdbAvailability,
+        buildCollectionCsv,
+        readLoadedCollectionRows,
         computeRatingShape,
         describeRatingShape,
         providerPageLooksIntact,
@@ -7531,6 +7533,46 @@ test('no route or selector logic matches a translated string', () => {
    sources, omits the ones it has nothing for, and carries two numbers per entry: `value` in
    the source's own scale and `score` normalised to 0-100. The widgets show each source in
    its own scale, so reading `score` would turn 4.2 stars into 84. */
+/* IE-134: copying the ids covers feeding a tool that resolves them, and nothing else. The
+   rows on a collection page already carry the year, the rating and the runtime, so the file
+   can be written from what is on screen without a request per title. */
+test('a collection exports as a CSV its own importer reads back', () => {
+    const hooks = loadScriptTestHooks();
+    const csv = hooks.buildCollectionCsv([
+        { id:'tt0133093', title:'The Matrix', year:1999, titleType:'Movie', rating:8.7, runtime:136 },
+        { id:'tt0903747', title:'Breaking Bad, Season 1', year:2008, titleType:'TV Series', rating:'', runtime:'' },
+    ]);
+    const lines = csv.split('\r\n');
+    assert.strictEqual(lines[0], 'Const,Title,Year,Title Type,IMDb Rating,Runtime (mins),URL',
+        "IMDb's own column names, so the file goes back into IMDb's importer");
+    assert.strictEqual(lines[1], 'tt0133093,The Matrix,1999,Movie,8.7,136,https://www.imdb.com/title/tt0133093/');
+    assert.match(lines[2], /^tt0903747,"Breaking Bad, Season 1",2008,TV Series,,,/,
+        'a title containing a comma is quoted, and a rating IMDb did not give is empty rather than zero');
+    assert.strictEqual(lines.length, 3, 'one header and one row per title');
+
+    // The whole point of using those column names: this extension can read its own file.
+    /* The importer recognises the shape and reads every row. It does not turn them into
+       Seen marks, and must not: a watchlist is a list of things somebody has not watched,
+       so inventing a viewing for each row would be the CSV bug this project already fixed
+       once, in the other direction. */
+    const prepared = hooks.prepareCsvMarkImport(csv, {});
+    assert.strictEqual(prepared.source, 'IMDb',
+        "the header is read as IMDb's own format, which is the point of using those names");
+    assert.strictEqual(prepared.totalRows, 2, 'and every row is read rather than refused');
+    // Counted rather than deep-compared: the object crosses the sandbox realm boundary, so
+    // its prototype is not this realm's and a deep-equal fails on that alone.
+    assert.strictEqual(Object.keys(prepared.marks).length, 0,
+        'a list of titles is not a viewing history: exporting a watchlist and importing it '
+        + 'back must not mark anything seen');
+
+    /* The other half of that rule, or the fix above would just be a way to lose ratings
+       imports: a row that does carry evidence of a viewing is still read as one. */
+    const rated = hooks.prepareCsvMarkImport(
+        'Const,Title,Year,Your Rating,Date Rated\r\ntt0133093,The Matrix,1999,9,2026-01-02', {});
+    assert.strictEqual(Object.keys(rated.marks).length, 1, 'a rated row is still a viewing');
+    assert.strictEqual(rated.marks.tt0133093.state, 'watched');
+});
+
 /* IE-133: IMDb applies a different weighting "when unusual rating activity is detected"
    and never says when, so the only honest thing to show is the shape of the distribution
    it publishes. Every number here comes from the ten buckets already parsed for the two

@@ -120,7 +120,7 @@
        search results are exactly where knowing what you already watched or
        dismissed changes what you click. */
     const COLLECTION_FEATURE_KEYS = new Set([
-        ...UNIVERSAL_FEATURE_KEYS, 'watchlistBatch', 'listMultiSearch', 'listRuntimeSummary',
+        ...UNIVERSAL_FEATURE_KEYS, 'watchlistBatch', 'collectionExport', 'listMultiSearch', 'listRuntimeSummary',
         'watchedMarking', 'markFilters', 'dimLowRated', 'listRoulette',
     ]);
     const SECONDARY_PAGE_FEATURE_KEYS = new Set([

@@ -1653,7 +1653,7 @@
                 'episodeHeatmap', 'seasonProgress', 'airsOn',
             ]),
             makeFeatureCard(t('settings_lists_shortcuts'), t('settings_batch_actions_and_quick_navigation'), 'Lists', [
-                'watchlistBatch', 'listMultiSearch', 'listRuntimeSummary', 'markFilters', 'listRoulette',
+                'watchlistBatch', 'collectionExport', 'listMultiSearch', 'listRuntimeSummary', 'markFilters', 'listRoulette',
                 'quickCopyID', 'keyboardShortcuts', 'watchlistAlerts',
             ]),
             makeFeatureCard(t('settings_heading_people'), t('settings_additions_to_cast_and_crew_pages'), t('settings_name_pages'), [

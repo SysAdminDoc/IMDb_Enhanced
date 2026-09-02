@@ -482,8 +482,14 @@
   "feature_listRoulette_name": {
     "message": "[!! Pick something to watch !!]"
   },
+  "feature_collectionExport_detail": {
+    "message": "[!! Copies the rows loaded on a watchlist, list or chart as a CSV using IMDb column names, so it reads back into IMDb and into this extension. Only the rows on screen are included, and it says how many had no rating. !!]"
+  },
   "feature_listRuntimeSummary_detail": {
     "message": "[!! Totals how long the titles on a watchlist, list, or chart would take to watch, and says how many had no runtime listed. !!]"
+  },
+  "feature_collectionExport_name": {
+    "message": "[!! Copy a list as CSV !!]"
   },
   "feature_listRuntimeSummary_name": {
     "message": "[!! List runtime summary !!]"
@@ -1964,6 +1970,9 @@
   "text_copy_all_links": {
     "message": "[!! Copy all links !!]"
   },
+  "text_copy_as_csv": {
+    "message": "[!! Copy as CSV !!]"
+  },
   "text_copy_imdb_ids": {
     "message": "[!! Copy $1 IMDb IDs !!]"
   },
@@ -2728,6 +2737,21 @@
   },
   "toast_no_episodes_are_loaded_to_export": {
     "message": "[!! No episodes are loaded to export !!]"
+  },
+  "toast_no_rows_are_loaded_to_export": {
+    "message": "[!! No rows are loaded to export yet. !!]"
+  },
+  "toast_copied_rows_as_csv_one": {
+    "message": "[!! Copied $1 row as CSV. !!]"
+  },
+  "toast_copied_rows_as_csv_other": {
+    "message": "[!! Copied $1 rows as CSV. !!]"
+  },
+  "toast_copied_rows_some_unrated_one": {
+    "message": "[!! Copied $1 row as CSV. $2 had no rating listed. !!]"
+  },
+  "toast_copied_rows_some_unrated_other": {
+    "message": "[!! Copied $1 rows as CSV. $2 had no rating listed. !!]"
   },
   "toast_no_imdb_title_ids_found": {
     "message": "[!! No IMDb title IDs found !!]"

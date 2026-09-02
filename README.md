@@ -40,7 +40,7 @@ Third-party lookups omit destination cookies. Responses are rendered as text, ou
 
 **TV Tools**. Highest-rated episode highlighting and TV-specific lookup shortcuts. Synopsis blur is opt-in and off by default.
 
-**List Page Tools**. Batch IMDb ID copy plus a popup-safe search queue on watchlist, custom list, and chart pages, including IMDb's locale-prefixed desktop URLs. Prepare up to 20 real new-tab links, open them one gesture at a time, or copy the full link set. A runtime summary totals how long the listed titles would take to watch, recounts as more rows load, and names how many rows had no runtime listed rather than reporting a smaller total as if it were complete.
+**List Page Tools**. Batch IMDb ID copy plus a popup-safe search queue on watchlist, custom list, and chart pages, including IMDb's locale-prefixed desktop URLs. Prepare up to 20 real new-tab links, open them one gesture at a time, or copy the full link set. A runtime summary totals how long the listed titles would take to watch, recounts as more rows load, and names how many rows had no runtime listed rather than reporting a smaller total as if it were complete. A Copy as CSV button writes the loaded rows using IMDb's own column names, so the file reads back into IMDb and into other tools, and says how many rows carried no rating.
 
 **Extras**. Collapsible sections with remembered state, optional keyboard-revealable spoiler blur, a keyboard-complete expanded-links menu, quick navigation sidebar, wider layout, compact header, subtitle links, copy IMDb ID button, and settings import/export.
 

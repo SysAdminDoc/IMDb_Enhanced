@@ -248,7 +248,9 @@
         feature_listMultiSearch_name: 'List multi-search',
         feature_listRoulette_detail: 'Adds a button to watchlists, lists, and charts that picks one title at random and scrolls to it. It never opens anything.',
         feature_listRoulette_name: 'Pick something to watch',
+        feature_collectionExport_detail: 'Copies the rows loaded on a watchlist, list or chart as a CSV using IMDb column names, so it reads back into IMDb and into this extension. Only the rows on screen are included, and it says how many had no rating.',
         feature_listRuntimeSummary_detail: 'Totals how long the titles on a watchlist, list, or chart would take to watch, and says how many had no runtime listed.',
+        feature_collectionExport_name: 'Copy a list as CSV',
         feature_listRuntimeSummary_name: 'List runtime summary',
         feature_markLinkTint_detail: 'Underlines links to titles you have marked, in the mark colour, anywhere they appear on a page. Needs private marks.',
         feature_markLinkTint_name: 'Show marks on plain title links',
@@ -742,6 +744,7 @@
         text_collection_entry: '$1 ($2)',
         text_collection_source_note: 'From Wikidata. Order is the series own numbering where it has one, and release year otherwise.',
         text_copy_all_links: 'Copy all links',
+        text_copy_as_csv: 'Copy as CSV',
         text_copy_imdb_ids: 'Copy $1 IMDb IDs',
         text_copy_settings_to_the_clipboard_without_integration: 'Copy settings to the clipboard without integration credentials',
         text_copy_subtitle_links_for_this_season: 'Copy subtitle links for this season',
@@ -998,6 +1001,11 @@
         toast_is_full_so_lookups_are_not: '$1 is full, so lookups are not being cached. Settings → Data → Clear cache frees it.',
         toast_marks_copied: '$1: $2 titles copied',
         toast_no_episodes_are_loaded_to_export: 'No episodes are loaded to export',
+        toast_no_rows_are_loaded_to_export: 'No rows are loaded to export yet.',
+        toast_copied_rows_as_csv_one: 'Copied $1 row as CSV.',
+        toast_copied_rows_as_csv_other: 'Copied $1 rows as CSV.',
+        toast_copied_rows_some_unrated_one: 'Copied $1 row as CSV. $2 had no rating listed.',
+        toast_copied_rows_some_unrated_other: 'Copied $1 rows as CSV. $2 had no rating listed.',
         toast_no_imdb_title_ids_found: 'No IMDb title IDs found',
         toast_no_imdb_watched_titles_found_on: 'No IMDb Watched titles found on this page. Sign in and open a list, chart, or title that shows the Watched control.',
         toast_no_marks_to_export: 'There are no marks to export yet.',
@@ -1806,6 +1814,7 @@
         castAges: true,
         // Utility
         quickCopyID: true, watchlistBatch: true, listMultiSearch: true, listRuntimeSummary: true,
+        collectionExport: true,
         markFilters: true, listRoulette: true,
         // Off by default: it touches every title link on a page, which is a change to
         // how IMDb reads rather than an addition beside it.
@@ -1880,6 +1889,7 @@
         quickCopyID: t('feature_quickCopyID_detail'),
         watchlistBatch: t('feature_watchlistBatch_detail'),
         listMultiSearch: t('feature_listMultiSearch_detail'),
+        collectionExport: t('feature_collectionExport_detail'),
         listRuntimeSummary: t('feature_listRuntimeSummary_detail'),
         markFilters: t('feature_markFilters_detail'),
         markLinkTint: t('feature_markLinkTint_detail'),
@@ -3067,8 +3077,18 @@
                already exists an unrecognised word leaves it alone. */
             const known = rawState === 'skip' || rawState === 'skipped' ? 'skip'
                 : rawState === 'watched' || rawState === 'seen' ? 'watched' : '';
+            /* A file with no State column is usually a ratings or diary export, where every
+               row is something the person watched. A watchlist export has the same columns
+               and means the opposite, and IMDb's own has no State column either, so reading
+               "no state" as watched turned a list of things somebody had not seen into a
+               history of things they had. A row counts as watched only where it carries
+               evidence of a viewing: a date or a rating. Without either it is recorded as a
+               title, unmarked, which is what a watchlist row actually says. */
+            const watchedByEvidence = date || rating !== null;
             const state = known
-                || (rawState ? (previous.state || 'watched') : (columns.state < 0 ? 'watched' : ''));
+                || (rawState
+                    ? (previous.state || 'watched')
+                    : (columns.state < 0 && watchedByEvidence ? 'watched' : ''));
             /* A date is a date whatever the state says. A Skip can hold the dates
                somebody watched a thing on before deciding against it again, and dropping
                them here destroyed that history on the way back in from a file this
@@ -13771,6 +13791,79 @@ section[id*="quote" i] .ipc-list-card { padding: 4px 0 !important; margin: 2px 0
             : t('text_runtime_complete', [titles, total]);
     }
 
+    /* IMDb's own export column names, so a file this writes is one its own importer, and
+       this extension's, already read. Const first because that is the column every tool
+       keys on. */
+    const COLLECTION_CSV_HEADER = ['Const', 'Title', 'Year', 'Title Type', 'IMDb Rating', 'Runtime (mins)', 'URL'];
+
+    /* What a collection row actually says, read from the row rather than from a lookup:
+       these pages carry the year, the rating and the runtime already, and asking a service
+       for what is on the page would be a request per row. */
+    function readCollectionRow(row) {
+        const link = row.querySelector?.('a[href*="/title/tt"]');
+        const id = link ? getLinkedTitleId(link.href) : '';
+        if (!id) return null;
+        const titleEl = row.querySelector?.('.ipc-title__text') || link;
+        const title = (titleEl?.textContent || '').trim().replace(/\s+/g, ' ').replace(/^\d+\.\s+/, '').slice(0, 200);
+        if (!title) return null;
+        const cells = [...(row.querySelectorAll?.(`${COLLECTION_METADATA_SELECTOR} li, ${COLLECTION_METADATA_SELECTOR} span`) || [])]
+            .map(cell => (cell.textContent || '').trim())
+            .filter(Boolean);
+        let year = 0;
+        let runtime = 0;
+        let titleType = '';
+        for (const cell of cells) {
+            const years = /^(\d{4})(?:\s*[–-]\s*(?:\d{4})?)?$/.exec(cell);
+            if (years && !year) { year = Number(years[1]); continue; }
+            const minutes = parseRuntimeMinutes(cell);
+            if (minutes && !runtime) { runtime = minutes; continue; }
+            // A series row says so where a film row carries a runtime instead.
+            if (/^TV\s/i.test(cell) && !titleType) titleType = cell;
+        }
+        const ratingText = (row.querySelector?.('[data-testid="ratingGroup--imdb-rating"]')?.textContent || '')
+            .trim().replace(/\s+/g, ' ');
+        const rating = parseFloat(ratingText);
+        return {
+            id,
+            title,
+            year: year || '',
+            titleType: titleType || (runtime ? 'Movie' : ''),
+            rating: Number.isFinite(rating) && rating > 0 && rating <= 10 ? rating : '',
+            runtime: runtime || '',
+        };
+    }
+
+    function readLoadedCollectionRows(rows) {
+        const seen = new Set();
+        const out = [];
+        let inspected = 0;
+        for (const row of rows || []) {
+            if (inspected >= COLLECTION_LINK_SCAN_LIMIT) break;
+            inspected += 1;
+            const parsed = readCollectionRow(row);
+            if (!parsed || seen.has(parsed.id)) continue;
+            seen.add(parsed.id);
+            out.push(parsed);
+        }
+        return out;
+    }
+
+    function buildCollectionCsv(entries) {
+        const rows = [csvRow(COLLECTION_CSV_HEADER)];
+        entries.forEach(entry => {
+            rows.push(csvRow([
+                entry.id,
+                entry.title,
+                entry.year,
+                entry.titleType,
+                entry.rating,
+                entry.runtime,
+                `https://www.imdb.com/title/${entry.id}/`,
+            ]));
+        });
+        return rows.join('\r\n');
+    }
+
     function getListTitleIdsFromLinks(links) {
         const ids = new Set();
         let inspected = 0;
@@ -13812,6 +13905,58 @@ section[id*="quote" i] .ipc-list-card { padding: 4px 0 !important; margin: 2px 0
             url: applyLinkTemplate(site.url, getLinkContext(title.name, title.id, '')),
         }));
     }
+
+    /* Copying the ids covers feeding another tool that resolves them. It does not cover
+       reading the list anywhere else, which is what people actually ask for: the rows on
+       these pages already carry the year, the rating and the runtime, so the file can be
+       written from what is on screen without a request per title. IMDb's own column names,
+       so the file goes back into IMDb's importer and into this extension's. */
+    reg({
+        key: 'collectionExport', name: t('feature_collectionExport_name'), group: 'Utility',
+        init() {
+            if (!isListPage()) return;
+            if (document.getElementById('enh-collection-export')) return;
+            const isCurrent = createFeatureGuard(this);
+            addThemedCSS(t => `
+                #enh-collection-export {
+                    display: inline-flex; align-items: center; justify-content: center;
+                    min-height: 34px; margin: 12px 8px 12px 0; padding: 0 14px;
+                    border-radius: 8px; border: 1px solid ${t.accentBorder};
+                    background: ${t.accentMuted}; color: ${t.accent};
+                    font: 800 12px/1 -apple-system, BlinkMacSystemFont, 'Segoe UI', sans-serif;
+                    cursor: pointer; box-shadow: ${t.sh1};
+                }
+                #enh-collection-export:hover { background: ${t.sf2}; transform: translateY(-1px); }
+            `, 'enh-collectionExport');
+            const btn = makeEl('button', {
+                id:'enh-collection-export',
+                type:'button',
+                onClick: () => {
+                    if (!isCurrent()) return;
+                    const entries = readLoadedCollectionRows(
+                        document.querySelectorAll('li.ipc-metadata-list-summary-item'));
+                    if (!entries.length) { showToast(t('toast_no_rows_are_loaded_to_export')); return; }
+                    if (!copyTextToClipboard(buildCollectionCsv(entries))) {
+                        showToast(COPY_FAILURE_MESSAGE, 4500);
+                        return;
+                    }
+                    /* Said the way the runtime total says it: only the rows on screen are
+                       in the file, and a row IMDb did not give a rating for is empty rather
+                       than zero. Reporting a count without either would overstate it. */
+                    const unrated = entries.filter(entry => entry.rating === '').length;
+                    showToast(unrated
+                        ? tCount('toast_copied_rows_some_unrated', entries.length, [unrated])
+                        : tCount('toast_copied_rows_as_csv', entries.length), 5000);
+                },
+            }, t('text_copy_as_csv'));
+            const target = document.querySelector('main') || document.body;
+            target.insertBefore(btn, target.firstElementChild?.nextSibling || null);
+        },
+        destroy() {
+            removeCSS('enh-collectionExport');
+            document.getElementById('enh-collection-export')?.remove();
+        }
+    });
 
     reg({
         key: 'listRuntimeSummary', name: t('feature_listRuntimeSummary_name'), group: 'Utility',
@@ -17671,7 +17816,7 @@ ${scopedRules('.enh-zoom', {
                 'episodeHeatmap', 'seasonProgress', 'airsOn',
             ]),
             makeFeatureCard(t('settings_lists_shortcuts'), t('settings_batch_actions_and_quick_navigation'), 'Lists', [
-                'watchlistBatch', 'listMultiSearch', 'listRuntimeSummary', 'markFilters', 'listRoulette',
+                'watchlistBatch', 'collectionExport', 'listMultiSearch', 'listRuntimeSummary', 'markFilters', 'listRoulette',
                 'quickCopyID', 'keyboardShortcuts', 'watchlistAlerts',
             ]),
             makeFeatureCard(t('settings_heading_people'), t('settings_additions_to_cast_and_crew_pages'), t('settings_name_pages'), [
@@ -18465,7 +18610,7 @@ ${scopedRules('.enh-zoom', {
        search results are exactly where knowing what you already watched or
        dismissed changes what you click. */
     const COLLECTION_FEATURE_KEYS = new Set([
-        ...UNIVERSAL_FEATURE_KEYS, 'watchlistBatch', 'listMultiSearch', 'listRuntimeSummary',
+        ...UNIVERSAL_FEATURE_KEYS, 'watchlistBatch', 'collectionExport', 'listMultiSearch', 'listRuntimeSummary',
         'watchedMarking', 'markFilters', 'dimLowRated', 'listRoulette',
     ]);
     const SECONDARY_PAGE_FEATURE_KEYS = new Set([

@@ -114,6 +114,79 @@
             : t('text_runtime_complete', [titles, total]);
     }
 
+    /* IMDb's own export column names, so a file this writes is one its own importer, and
+       this extension's, already read. Const first because that is the column every tool
+       keys on. */
+    const COLLECTION_CSV_HEADER = ['Const', 'Title', 'Year', 'Title Type', 'IMDb Rating', 'Runtime (mins)', 'URL'];
+
+    /* What a collection row actually says, read from the row rather than from a lookup:
+       these pages carry the year, the rating and the runtime already, and asking a service
+       for what is on the page would be a request per row. */
+    function readCollectionRow(row) {
+        const link = row.querySelector?.('a[href*="/title/tt"]');
+        const id = link ? getLinkedTitleId(link.href) : '';
+        if (!id) return null;
+        const titleEl = row.querySelector?.('.ipc-title__text') || link;
+        const title = (titleEl?.textContent || '').trim().replace(/\s+/g, ' ').replace(/^\d+\.\s+/, '').slice(0, 200);
+        if (!title) return null;
+        const cells = [...(row.querySelectorAll?.(`${COLLECTION_METADATA_SELECTOR} li, ${COLLECTION_METADATA_SELECTOR} span`) || [])]
+            .map(cell => (cell.textContent || '').trim())
+            .filter(Boolean);
+        let year = 0;
+        let runtime = 0;
+        let titleType = '';
+        for (const cell of cells) {
+            const years = /^(\d{4})(?:\s*[–-]\s*(?:\d{4})?)?$/.exec(cell);
+            if (years && !year) { year = Number(years[1]); continue; }
+            const minutes = parseRuntimeMinutes(cell);
+            if (minutes && !runtime) { runtime = minutes; continue; }
+            // A series row says so where a film row carries a runtime instead.
+            if (/^TV\s/i.test(cell) && !titleType) titleType = cell;
+        }
+        const ratingText = (row.querySelector?.('[data-testid="ratingGroup--imdb-rating"]')?.textContent || '')
+            .trim().replace(/\s+/g, ' ');
+        const rating = parseFloat(ratingText);
+        return {
+            id,
+            title,
+            year: year || '',
+            titleType: titleType || (runtime ? 'Movie' : ''),
+            rating: Number.isFinite(rating) && rating > 0 && rating <= 10 ? rating : '',
+            runtime: runtime || '',
+        };
+    }
+
+    function readLoadedCollectionRows(rows) {
+        const seen = new Set();
+        const out = [];
+        let inspected = 0;
+        for (const row of rows || []) {
+            if (inspected >= COLLECTION_LINK_SCAN_LIMIT) break;
+            inspected += 1;
+            const parsed = readCollectionRow(row);
+            if (!parsed || seen.has(parsed.id)) continue;
+            seen.add(parsed.id);
+            out.push(parsed);
+        }
+        return out;
+    }
+
+    function buildCollectionCsv(entries) {
+        const rows = [csvRow(COLLECTION_CSV_HEADER)];
+        entries.forEach(entry => {
+            rows.push(csvRow([
+                entry.id,
+                entry.title,
+                entry.year,
+                entry.titleType,
+                entry.rating,
+                entry.runtime,
+                `https://www.imdb.com/title/${entry.id}/`,
+            ]));
+        });
+        return rows.join('\r\n');
+    }
+
     function getListTitleIdsFromLinks(links) {
         const ids = new Set();
         let inspected = 0;
@@ -155,6 +228,58 @@
             url: applyLinkTemplate(site.url, getLinkContext(title.name, title.id, '')),
         }));
     }
+
+    /* Copying the ids covers feeding another tool that resolves them. It does not cover
+       reading the list anywhere else, which is what people actually ask for: the rows on
+       these pages already carry the year, the rating and the runtime, so the file can be
+       written from what is on screen without a request per title. IMDb's own column names,
+       so the file goes back into IMDb's importer and into this extension's. */
+    reg({
+        key: 'collectionExport', name: t('feature_collectionExport_name'), group: 'Utility',
+        init() {
+            if (!isListPage()) return;
+            if (document.getElementById('enh-collection-export')) return;
+            const isCurrent = createFeatureGuard(this);
+            addThemedCSS(t => `
+                #enh-collection-export {
+                    display: inline-flex; align-items: center; justify-content: center;
+                    min-height: 34px; margin: 12px 8px 12px 0; padding: 0 14px;
+                    border-radius: 8px; border: 1px solid ${t.accentBorder};
+                    background: ${t.accentMuted}; color: ${t.accent};
+                    font: 800 12px/1 -apple-system, BlinkMacSystemFont, 'Segoe UI', sans-serif;
+                    cursor: pointer; box-shadow: ${t.sh1};
+                }
+                #enh-collection-export:hover { background: ${t.sf2}; transform: translateY(-1px); }
+            `, 'enh-collectionExport');
+            const btn = makeEl('button', {
+                id:'enh-collection-export',
+                type:'button',
+                onClick: () => {
+                    if (!isCurrent()) return;
+                    const entries = readLoadedCollectionRows(
+                        document.querySelectorAll('li.ipc-metadata-list-summary-item'));
+                    if (!entries.length) { showToast(t('toast_no_rows_are_loaded_to_export')); return; }
+                    if (!copyTextToClipboard(buildCollectionCsv(entries))) {
+                        showToast(COPY_FAILURE_MESSAGE, 4500);
+                        return;
+                    }
+                    /* Said the way the runtime total says it: only the rows on screen are
+                       in the file, and a row IMDb did not give a rating for is empty rather
+                       than zero. Reporting a count without either would overstate it. */
+                    const unrated = entries.filter(entry => entry.rating === '').length;
+                    showToast(unrated
+                        ? tCount('toast_copied_rows_some_unrated', entries.length, [unrated])
+                        : tCount('toast_copied_rows_as_csv', entries.length), 5000);
+                },
+            }, t('text_copy_as_csv'));
+            const target = document.querySelector('main') || document.body;
+            target.insertBefore(btn, target.firstElementChild?.nextSibling || null);
+        },
+        destroy() {
+            removeCSS('enh-collectionExport');
+            document.getElementById('enh-collection-export')?.remove();
+        }
+    });
 
     reg({
         key: 'listRuntimeSummary', name: t('feature_listRuntimeSummary_name'), group: 'Utility',
