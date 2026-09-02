@@ -2546,6 +2546,9 @@
   "text_watch_order": {
     "message": "Watch order"
   },
+  "text_shape_divisive_even": {
+    "message": "Divided: $1% of votes sit at the two ends of the scale, split evenly between them."
+  },
   "text_shape_divisive": {
     "message": "Divided: $1% of votes sit at the two ends of the scale, mostly $2."
   },

@@ -884,6 +884,7 @@
         text_view_full_cast_crew: 'View full cast & crew',
         text_was_about_age: '(was ~$1)',
         text_watch_order: 'Watch order',
+        text_shape_divisive_even: 'Divided: $1% of votes sit at the two ends of the scale, split evenly between them.',
         text_shape_divisive: 'Divided: $1% of votes sit at the two ends of the scale, mostly $2.',
         text_shape_reverse_j: 'Unusual shape: $1% of votes sit at the two ends, mostly $2, which is what a rating campaign looks like.',
         text_shape_leaning_low: 'at the bottom',

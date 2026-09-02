@@ -153,10 +153,15 @@
        Sarle's bimodality coefficient is deliberately not used: Di Martino et al. (2025)
        show it is wrong for skewed unimodal data, which is the shape almost every film has.
        Nothing here is a claim about why a distribution looks the way it does. */
-    const POLARITY_MIN_VOTES = 50;
+    /* Thresholds, and why each is where it is. A three-to-two split of the extreme votes is
+       a title people disagree about, not a campaign, and calling it one is an accusation
+       the shape does not support: the low end has to dominate, and the bottom bucket alone
+       has to outweigh the whole top end. Fifty votes is far too few to say anything about
+       anybody, so the floor is high enough that the claim is about a real audience. */
+    const POLARITY_MIN_VOTES = 1000;
     const POLARITY_DIVISIVE = 0.4;
     const POLARITY_REVERSE_J = 0.5;
-    const REVERSE_J_LOW_SHARE = 0.6;
+    const REVERSE_J_LOW_SHARE = 0.75;
 
     function computeRatingShape(buckets) {
         if (!Array.isArray(buckets) || !buckets.length) return null;
@@ -180,7 +185,10 @@
         const negativeShare = low / ends;
         /* Named in that order because they are progressively stronger claims, and a title
            can only be one of them. */
-        const label = polarity >= POLARITY_REVERSE_J && negativeShare >= REVERSE_J_LOW_SHARE
+        const bottomOutweighsTop = at(1) > high;
+        const label = polarity >= POLARITY_REVERSE_J
+            && negativeShare >= REVERSE_J_LOW_SHARE
+            && bottomOutweighsTop
             ? 'reverse-j'
             : polarity >= POLARITY_DIVISIVE ? 'divisive' : 'consensus';
         return {
@@ -194,10 +202,15 @@
     function describeRatingShape(shape) {
         if (!shape || shape.label === 'consensus') return null;
         const percent = Math.round(shape.polarity * 100);
-        const leaning = shape.negativeShare >= 0.5 ? t('text_shape_leaning_low') : t('text_shape_leaning_high');
-        return shape.label === 'reverse-j'
-            ? t('text_shape_reverse_j', [percent, leaning])
-            : t('text_shape_divisive', [percent, leaning]);
+        /* An even split is not "mostly" anything. Reading 50/50 as leaning low was a claim
+           the numbers do not make. */
+        const leaning = shape.negativeShare > 0.55 ? t('text_shape_leaning_low')
+            : shape.negativeShare < 0.45 ? t('text_shape_leaning_high')
+            : '';
+        if (shape.label === 'reverse-j') return t('text_shape_reverse_j', [percent, leaning]);
+        return leaning
+            ? t('text_shape_divisive', [percent, leaning])
+            : t('text_shape_divisive_even', [percent]);
     }
 
     function describeRatingGap(unweighted, displayed, trimmed = null) {

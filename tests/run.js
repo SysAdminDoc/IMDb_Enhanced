@@ -5,6 +5,47 @@ const { execFileSync } = require('child_process');
 const vm = require('vm');
 
 const root = path.resolve(__dirname, '..');
+/* null means "this checkout has no repository to ask", which is the AMO source archive the
+   README tells reviewers to run this suite on. An empty list means a repository that has no
+   tags. Those are different answers, and one of them used to be an uncaught throw that took
+   the whole run down in exactly the environment the README documents. */
+/* Every version package.json has ever declared, which is the set of versions this
+   repository can actually produce a build for. null where there is no repository to ask. */
+function readGitPackageVersions() {
+    try {
+        const shas = require('child_process')
+            .execFileSync('git', ['log', '--format=%H', '--', 'package.json'], { cwd:root, encoding:'utf8', stdio:['ignore', 'pipe', 'ignore'] })
+            .split('\n').map(line => line.trim()).filter(Boolean);
+        const seen = new Set();
+        shas.forEach(sha => {
+            try {
+                const raw = require('child_process')
+                    .execFileSync('git', ['show', `${sha}:package.json`], { cwd:root, encoding:'utf8', stdio:['ignore', 'pipe', 'ignore'] });
+                const version = JSON.parse(raw).version;
+                if (version) seen.add(version);
+            } catch { /* a commit that did not carry a readable package.json */ }
+        });
+        return seen.size ? [...seen] : null;
+    } catch { return null; }
+}
+
+// Numeric, so 2.10.0 sorts after 2.9.0 rather than before it.
+function compareVersions(a, b) {
+    const left = String(a).split('.').map(Number);
+    const right = String(b).split('.').map(Number);
+    for (let index = 0; index < 3; index += 1) {
+        if ((left[index] || 0) !== (right[index] || 0)) return (left[index] || 0) - (right[index] || 0);
+    }
+    return 0;
+}
+
+function readGitTags() {
+    try {
+        return require('child_process')
+            .execFileSync('git', ['tag', '--list'], { cwd:root, encoding:'utf8', stdio:['ignore', 'pipe', 'ignore'] })
+            .split('\n').map(line => line.trim()).filter(Boolean);
+    } catch { return null; }
+}
 const scriptPath = path.join(root, 'IMDb_Enhanced.user.js');
 const packagePath = path.join(root, 'package.json');
 const readmePath = path.join(root, 'README.md');
@@ -913,21 +954,36 @@ test('score results are announced through a region that exists before any result
    tag, so that instruction was true for the newest release and nothing else. Checked against
    git rather than against a list, since a list would be the same kind of claim. */
 test('every version the changelog names can be checked out', () => {
-    const { execFileSync } = require('child_process');
-    let tags;
-    try {
-        tags = new Set(execFileSync('git', ['tag'], { cwd:root, encoding:'utf8' }).split('\n').map(line => line.trim()));
-    } catch {
+    const found = readGitTags();
+    if (found === null) {
         console.log('# skipped: not a git checkout');
         return;
     }
+    const tags = new Set(found);
     const readme = fs.readFileSync(path.join(root, 'README.md'), 'utf8');
     const changelog = fs.readFileSync(path.join(root, 'CHANGELOG.md'), 'utf8');
-    const versions = [...changelog.matchAll(/^## (\d+\.\d+\.\d+) \(/gm)].map(match => match[1]);
-    assert(versions.length >= 20, 'the changelog should still be readable as a version history');
-    const untagged = versions.filter(version => !tags.has(`v${version}`));
+    /* Every version heading, dated or not. Requiring a parenthesised date silently
+       excluded the five oldest, which were exactly the five with no tag, so the check
+       passed by not looking at them. */
+    const versions = [...changelog.matchAll(/^## (\d+\.\d+\.\d+)(?:[ ]|$)/gm)].map(match => match[1]);
+    assert(versions.length >= 28, `the changelog should still be readable as a version history, saw ${versions.length}`);
+    /* The five oldest entries predate the repository: package.json's history begins at
+       2.4.0, so there is no commit those versions could be tagged at and no way to check
+       them out. Derived from that history rather than listed, so the exemption cannot
+       quietly grow to cover a version this repository does contain. */
+    const declared = new Set(
+        readGitPackageVersions() || versions.filter(version => tags.has(`v${version}`))
+    );
+    const inHistory = versions.filter(version => declared.has(version));
+    assert(inHistory.length >= 20, `most versions should be in the repository, saw ${inHistory.length}`);
+    const untagged = inHistory.filter(version => !tags.has(`v${version}`));
     assert.deepStrictEqual(untagged, [],
-        'a version the changelog documents but no tag names cannot be checked out and rebuilt');
+        'a version this repository contains but no tag names cannot be checked out and rebuilt');
+    const predating = versions.filter(version => !declared.has(version));
+    predating.forEach(version => {
+        assert(compareVersions(version, [...declared].sort(compareVersions)[0]) < 0,
+            `${version} is not in package.json's history and is not older than everything that is`);
+    });
     assert(/rebuild check above works on any of them/.test(readme),
         'and the README should say so, since that is the claim these tags make true');
 });
@@ -7628,7 +7684,28 @@ test('the shape of a rating distribution is read from the buckets it publishes',
     assert.strictEqual(divided.polarity, Math.round((5400 / 6100) * 1000) / 1000);
     assert.strictEqual(divided.negativeShare, Math.round((2500 / 5400) * 1000) / 1000);
 
+    /* The boundary the label turns on, pinned. A three-to-two split of the extreme votes is
+       a title people disagree about; calling that a campaign is an accusation the shape does
+       not support. Adversarial review found this reading as one. */
+    const contested = hooks.computeRatingShape(buckets([2500, 500, 400, 300, 300, 300, 300, 400, 1000, 1000]));
+    assert.strictEqual(contested.negativeShare, 0.6, 'three fifths of the extremes at the bottom');
+    assert.strictEqual(contested.label, 'divisive',
+        'a three-to-two split is a disagreement, not a campaign');
+
+    /* And the bottom bucket alone has to outweigh the whole top end, or a title with a
+       large low mass and an equally large top one qualifies. */
+    const balancedEnds = hooks.computeRatingShape(buckets([3000, 900, 100, 100, 100, 100, 100, 100, 1200, 2000]));
+    assert.notStrictEqual(balancedEnds.label, 'reverse-j');
+
+    // An even split is not "mostly" anything.
+    const even = hooks.computeRatingShape(buckets([2500, 0, 200, 200, 200, 200, 200, 200, 0, 2500]));
+    assert.strictEqual(even.negativeShare, 0.5);
+    assert.match(hooks.describeRatingShape(even), /split evenly between them/);
+    assert.doesNotMatch(hooks.describeRatingShape(even), /mostly/);
+
     // Too few votes to describe anybody, and nothing at all to read.
+    assert.strictEqual(hooks.computeRatingShape(buckets([20, 0, 0, 0, 25, 0, 0, 0, 0, 5])), null,
+        'fifty voters are not an audience this can make a claim about');
     assert.strictEqual(hooks.computeRatingShape(buckets([1, 1, 1, 1, 1, 1, 1, 1, 1, 1])), null,
         'a handful of votes has no shape worth naming');
     assert.strictEqual(hooks.computeRatingShape([]), null);
@@ -8039,8 +8116,11 @@ test('public documentation matches what the project actually ships', () => {
 
     // Nothing may point at a release artifact or tag that does not exist. Both are
     // IE-27's job; until it lands, saying otherwise sends people to a 404.
-    const tags = execFileSync('git', ['tag', '--list'], { cwd:root, encoding:'utf8' }).trim();
-    if (!tags) {
+    /* The AMO source archive ships without .git and the README tells a reviewer to run this
+       suite on it, so an unguarded call here took the whole run down in exactly the place
+       the README documents. A checkout that cannot be asked is not a checkout with no tags. */
+    const tags = readGitTags();
+    if (tags !== null && !tags.length) {
         assert(!/git checkout v<version>/.test(readme),
             'the README documents tag-based rollback but the repository has no tags');
         assert(/no git tags or GitHub releases yet/i.test(readme),
