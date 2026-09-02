@@ -54,6 +54,7 @@ const instrumented = userscript.replace(/\}\)\(\);\s*$/, `globalThis.__imdbEnhan
     boundedImageVariant,
     parseParentsGuideSeverities,
     rankLocalRecommendations,
+    readThumbnailWidth,
     getFeatureFailures,
     createSettingsPanel,
     toggleSettings,
@@ -2226,6 +2227,14 @@ await runFixture('title', async (window, hooks) => {
     assert.equal(chips[0].getAttribute('aria-label'), 'Mild for Sex & Nudity',
         'and says what it is out loud');
     assert.equal(link.getAttribute('aria-expanded'), 'true');
+    /* Below the whole bar, never beside the link. closest() with a selector list returns
+       the NEAREST matching ancestor whichever selector matched, so the first attempt at
+       this resolved to the inner nav and the chips stayed a third flex child of the
+       58-pixel subnav row. */
+    assert.equal(panel.parentElement.classList.contains('enh-editorial-subnav'), false,
+        'the panel must not be a child of the subnav bar it would share a row with');
+    assert.equal(panel.previousElementSibling?.classList.contains('enh-editorial-subnav'), true,
+        'it sits immediately after that whole bar');
 
     // A second click puts it away, so the link is never more than two clicks from the page.
     leftClick();
@@ -2351,12 +2360,18 @@ await runFixture('title', async (window, hooks) => {
         /* The candidates are IMDb's, never the whole store: a rated Seen title IMDb does
            not call similar to this one must not appear. */
         assert.equal(items.some(item => item.getAttribute('href').includes('tt0111161')), false);
+        /* stopFeature first: runFeature only bumps the generation, and init returns early
+           while the panel is still on the page - so without this the assertion below read
+           the panel built before the new mark existed and proved nothing. */
+        hooks.stopFeature('becauseYouWatched');
         window.GM_setValue('imdb_enh_userMarks', {
             ...marks,
             tt0111161: { state:'watched', title:'The Shawshank Redemption', ts:6, rating:10, genres:['Drama'] },
         });
         await hooks.runFeature('becauseYouWatched');
+        await waitForSelector(window, '#enh-because-you-watched');
         const after = [...window.document.querySelectorAll('#enh-because-you-watched .enh-byw__item a')];
+        assert.equal(after.length, 3, 'the panel really was rebuilt against the larger store');
         assert.equal(after.some(item => item.getAttribute('href').includes('tt0111161')), false,
             'a title IMDb does not list as similar is not a reason, however highly you rated it');
 
@@ -2447,6 +2462,13 @@ await runFixture('person', async (window, hooks) => {
         row.innerHTML = `<a href="/title/${id}/"><img alt="Poster"><span class="ipc-title__text">Film ${index}</span></a>`;
         filmography.appendChild(row);
     });
+    /* A Known for row above the filmography, which is a title card this feature answers
+       like any other. It must not reach the count: a page-wide tally and a filmography
+       tally are indistinguishable without something outside the section to tell them
+       apart, which is what the first version of this test was missing. */
+    const knownFor = document.createElement('section');
+    knownFor.innerHTML = `<div class="ipc-poster-card"><a href="/title/tt0088247/"><img alt="Poster"></a></div>`;
+    filmography.parentElement.insertBefore(knownFor, filmography);
 
     const watchers = [];
     const nativeObserver = window.IntersectionObserver;
@@ -2478,7 +2500,8 @@ await runFixture('person', async (window, hooks) => {
         const line = requireSelector(document, '#enh-filmography-library');
         assert.equal(line.hidden, true, 'nothing is claimed before any row has been answered');
 
-        const rows = Array.from(document.querySelectorAll('[data-testid="Filmography"] li'));
+        const rows = Array.from(document.querySelectorAll('[data-enh-row-integration]'));
+        assert.equal(rows.length, 5, 'the Known for card is claimed too, which is the point');
         watchers.forEach(watcher => watcher.callback(
             rows.filter(row => watcher.watched.has(row)).map(row => ({ isIntersecting:true, target:row }))));
         for (let tick = 0; tick < 40 && line.hidden; tick += 1) {
@@ -2489,7 +2512,7 @@ await runFixture('person', async (window, hooks) => {
         }
         assert.equal(line.hidden, false, 'the count appears once answers arrive');
         assert.equal(line.textContent, '2 of the 4 titles checked here are in your library',
-            'and counts only what was actually checked, not the whole filmography');
+            'the count is of the filmography rows alone, not of every title card on the page');
         assert.equal(line.getAttribute('role'), 'status', 'it announces itself as it changes');
 
         hooks.stopFeature('rowIntegrationState');
@@ -2567,6 +2590,20 @@ await runFixture('chart', async (window, hooks) => {
         'srcset is removed, or the browser keeps choosing the small file and nothing changes');
     assert.equal(enlarged.style.getPropertyValue('--enh-thumb-width'), '134px',
         'the box is sized up front, so nothing reflows when the larger file lands');
+    /* The measurement itself, which no page test can reach: happy-dom reports every box as
+       zero wide, so the branch that reconciles IMDb's declared width against the rendered
+       one is unreachable from the DOM. Doubling a declared width that CSS renders narrower
+       is an overflow rather than a resize, so the smaller of the two wins. */
+    const measured = width => ({
+        getAttribute: name => (name === 'width' ? '200' : null),
+        getBoundingClientRect: () => ({ width }),
+        naturalWidth: 0,
+    });
+    assert.equal(hooks.readThumbnailWidth(measured(60)), 60, 'a narrower rendered box wins');
+    assert.equal(hooks.readThumbnailWidth(measured(400)), 200, 'and a wider one does not');
+    assert.equal(hooks.readThumbnailWidth(measured(0)), 200, 'an unmeasurable box falls back to the attribute');
+    assert.equal(hooks.readThumbnailWidth({ getAttribute: () => null, getBoundingClientRect: () => ({ width:0 }), naturalWidth:0 }), 0,
+        'and nothing known at all means nothing is touched');
 
     hooks.stopFeature('largerThumbnails');
     assert.equal(enlarged.getAttribute('src'), thumbSrc, 'switching it off puts the original source back');

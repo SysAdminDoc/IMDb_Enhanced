@@ -8542,8 +8542,15 @@ test('public documentation matches what the project actually ships', () => {
        from it silently becomes an empty path segment in the report. */
     const checkerSource = fs.readFileSync(path.join(root, 'scripts', 'check-destinations.js'), 'utf8');
     const sample = checkerSource.slice(checkerSource.indexOf('const SAMPLE = {'), checkerSource.indexOf('const MAX_REDIRECTS'));
-    loadScriptTestHooks().URL_TEMPLATE_KEYS.forEach(key => assert(sample.includes(`${key}:`),
-        `the destination checker has no sample value for the ${key} token`));
+    loadScriptTestHooks().URL_TEMPLATE_KEYS.forEach(key => {
+        // A non-empty value, not merely the key: an empty one still produces the malformed
+        // URL this is here to prevent.
+        const line = sample.split('\n').find(entry => entry.trim().startsWith(`${key}:`));
+        assert(line, `the destination checker has no sample value for the ${key} token`);
+        const value = line.slice(line.indexOf(':') + 1).replace(/,\s*$/, '').trim();
+        assert(value && !/^(''|"")$/.test(value),
+            `the destination checker's ${key} sample is empty, which is the malformed URL this prevents`);
+    });
 
     // Every npm script the README names has to exist.
     const scripts = Object.keys(packageJson.scripts || {});

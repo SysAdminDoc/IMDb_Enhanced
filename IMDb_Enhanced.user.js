@@ -11450,20 +11450,35 @@ section[id*="quote" i] .ipc-list-card { padding: 4px 0 !important; margin: 2px 0
     /* Which title's guide a link points at, from the path alone. A link to a different
        title's guide is somebody else's link. */
     function getLinkedGuideId(href) {
-        const path = String(href || '');
-        if (!/\/parentalguide\/?(?:[?#]|$)/.test(path)) return '';
-        return (path.match(/\/title\/(tt\d+)\//) || [])[1] || '';
+        const raw = String(href || '');
+        if (!raw) return '';
+        /* Resolved against the page, and only IMDb's own host counts. Matching the path
+           textually would have answered a link to evil.example/title/tt.../parentalguide/
+           - which a user review can contain - with this title's severities. */
+        let parsed;
+        try { parsed = new URL(raw, location.href); }
+        catch { return ''; }
+        if (parsed.protocol !== 'https:' && parsed.protocol !== 'http:') return '';
+        if (!isIMDbHost(parsed.hostname)) return '';
+        if (!/\/parentalguide\/?$/.test(parsed.pathname)) return '';
+        return (parsed.pathname.match(/\/title\/(tt\d+)\//) || [])[1] || '';
     }
     /* IMDb draws the certificate chip beside the title as a link to the same route, and
        turning "R" into a disclosure for severities is not what anybody clicking a content
-       rating asked for. A link that reads as the guide says so in its own text - which is
-       translated, so this compares against the catalog's word for it rather than English -
-       or is one this extension drew itself. */
+       rating asked for.
+
+       Stated as "not a certificate" rather than "is the words Parents Guide". Matching the
+       words meant comparing IMDb's page language against this extension's catalog
+       language, which are different things: on a Spanish IMDb page the native link reads
+       "Guia para padres" and an English catalog would have stopped recognising it. A
+       certificate is a short code - R, PG-13, TV-MA, 15, U, M/12 - and no locale spells a
+       sentence that way. */
+    const CERTIFICATE_LABEL = /^[A-Z0-9]{1,3}(?:[-/+][A-Z0-9]{1,3})*$/;
     function looksLikeParentsGuideLink(link) {
         if (link.classList?.contains('enh-editorial-subnav__link')) return true;
-        const label = (link.textContent || '').trim().toLowerCase();
-        if (!label) return false;
-        return label === String(t('text_parents_guide')).trim().toLowerCase();
+        const label = (link.textContent || '').trim();
+        if (!label || label.length > 60) return false;
+        return !CERTIFICATE_LABEL.test(label.toUpperCase());
     }
 
     const PARENTS_GUIDE_ROW_LIMIT = 8;
@@ -11579,8 +11594,11 @@ section[id*="quote" i] .ipc-list-card { padding: 4px 0 !important; margin: 2px 0
                    one just clicked: a page can carry more than one link to the same guide,
                    and closing from the second used to leave the first announcing an
                    expanded panel that no longer existed. */
+                const owner = this._owner;
                 this._collapse();
-                if (this._owner !== link) link.setAttribute('aria-expanded', 'false');
+                // _collapse clears the owner's own state; anything else that was clicked
+                // has to be told it is not expanded either.
+                if (owner !== link) link.setAttribute('aria-expanded', 'false');
                 return;
             }
             const panel = makeEl('div', {
@@ -11595,7 +11613,15 @@ section[id*="quote" i] .ipc-list-card { padding: 4px 0 !important; margin: 2px 0
                after a link inside a flex nav made the chips a third column of that nav,
                sharing its row; and a div placed as a sibling inside a metadata list is
                invalid markup as well as misplaced. */
-            const host = link.closest('.enh-editorial-subnav, nav, [data-testid="hero-parent"]')
+            /* Tried in this order, one closest() each. A selector list does NOT express a
+               priority: closest() returns the nearest matching ancestor whichever selector
+               matched it, so the list resolved to the inner nav every time and the panel
+               stayed a flex child of the subnav bar - the exact placement it was supposed
+               to fix. */
+            const host = link.closest('.enh-editorial-subnav')
+                || link.closest('[data-testid="hero-parent"]')
+                || link.closest('ul, ol')
+                || link.closest('nav')
                 || link.parentElement;
             host?.insertAdjacentElement('afterend', panel);
             this._load(imdbId, panel, isCurrent);
@@ -11674,7 +11700,15 @@ section[id*="quote" i] .ipc-list-card { padding: 4px 0 !important; margin: 2px 0
                hundred kilobytes; anything at the cap is not one. */
             const declared = Number(response.headers?.get?.('content-length')) || 0;
             if (declared > PARENTS_GUIDE_HTML_LIMIT) throw failure('schema', t('error_parents_guide_changed'));
-            const html = await response.text();
+            let html = '';
+            try { html = await response.text(); }
+            catch (error) {
+                /* The abort can land here as easily as on the request: the timer and the
+                   route-change cancel both fire while the body is still streaming, and a
+                   DOMException reaching the journal uncategorized reads as a defect. */
+                if (signal?.aborted) throw failure('aborted', t('error_request_aborted'));
+                throw failure('network', getRequestErrorMessage(error));
+            }
             const rows = parseParentsGuideSeverities(html);
             /* Landmark gone means the page is no longer the page this reads - which is
                also what a challenge served as a 200 looks like, and there is no way to
@@ -11801,7 +11835,10 @@ section[id*="quote" i] .ipc-list-card { padding: 4px 0 !important; margin: 2px 0
                 return waitFor('[data-testid="MoreLikeThis"]').then(section => {
                     if (!isCurrent() || !section) return;
                     const ranked = rankLocalRecommendations(
-                        readSimilarTitles(document), marks, getLDData()?.genre);
+                        readSimilarTitles(document), marks,
+                        // ld.genre is a bare string on a single-genre title, which is why
+                        // the store normalizes it too rather than trusting the shape.
+                        normalizeUserMarkGenres(getLDData()?.genre));
                     if (!ranked.length) return;
 
                     addThemedCSS(t => `
@@ -14102,20 +14139,31 @@ section[id*="quote" i] .ipc-list-card { padding: 4px 0 !important; margin: 2px 0
                much of this filmography you already hold. The rows are answered anyway, so
                the count is a reading of answers already in hand rather than a second pass
                of requests. */
-            if (getPageSurface() === 'name') this._mountFilmographySummary();
+            /* Only where the answer means what the line says. Radarr and Sonarr report
+               monitoring, not library membership, so a summary from that probe would read
+               "0 of 20 are in your library" above twenty badges saying Monitored. */
+            if (getPageSurface() === 'name' && this._probe.kind !== 'servarr') {
+                this._mountFilmographySummary();
+            }
             scan();
+        },
+        /* The Filmography section and nothing else. Falling back to main put the line
+           above the person's hero on a page that had not hydrated yet, and on
+           /name/nm.../awards - which is also the name surface - there is no filmography
+           for it to be about at all. No section, no line. */
+        _filmographySection() {
+            return document.querySelector('[data-testid="Filmography"]');
         },
         _mountFilmographySummary() {
             if (document.getElementById('enh-filmography-library')) return;
+            const anchor = this._filmographySection();
+            if (!anchor) return;
             const summary = makeEl('div', {
                 id:'enh-filmography-library',
                 role:'status',
                 'aria-live':'polite',
                 hidden:true,
             });
-            const anchor = document.querySelector('[data-testid="Filmography"]')
-                || document.querySelector('main');
-            if (!anchor) return;
             anchor.insertBefore(summary, anchor.firstChild);
             this._summary = summary;
         },
@@ -14123,11 +14171,33 @@ section[id*="quote" i] .ipc-list-card { padding: 4px 0 !important; margin: 2px 0
            loads in pages, so a bare "3 titles" over a list that is still arriving would be
            a number that quietly means something different every few seconds. */
         _updateFilmographySummary() {
+            if (!this._cache) return;
+            /* Remounted rather than abandoned: IMDb re-renders the Filmography section
+               when the Actor/Producer/Director category changes, which took the line with
+               it and left nothing to put it back. */
+            if (!this._summary?.isConnected) {
+                this._summary = null;
+                this._mountFilmographySummary();
+            }
             const summary = this._summary;
-            if (!summary || !summary.isConnected || !this._cache) return;
-            const answered = this._cache.size;
+            if (!summary) return;
+            /* Counted from the filmography's own rows, not from the page-wide cache. The
+               cache holds every title card this feature has answered anywhere - the Known
+               for row above the filmography included - and a line that says "of the
+               filmography" has to mean the filmography. */
+            const section = this._filmographySection();
+            const rows = section
+                ? [...section.querySelectorAll('[data-enh-row-integration]')]
+                : [];
+            let answered = 0;
+            let held = 0;
+            rows.forEach(row => {
+                const state = this._cache.get(row.dataset.enhRowIntegration);
+                if (!state) return;
+                answered += 1;
+                if (state === 'library') held += 1;
+            });
             if (!answered) { summary.hidden = true; return; }
-            const held = [...this._cache.values()].filter(state => state === 'library').length;
             summary.hidden = false;
             setTextIfChanged(summary, tCount('text_filmography_in_library', held, [answered]));
         },

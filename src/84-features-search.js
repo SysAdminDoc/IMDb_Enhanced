@@ -2006,20 +2006,31 @@
                much of this filmography you already hold. The rows are answered anyway, so
                the count is a reading of answers already in hand rather than a second pass
                of requests. */
-            if (getPageSurface() === 'name') this._mountFilmographySummary();
+            /* Only where the answer means what the line says. Radarr and Sonarr report
+               monitoring, not library membership, so a summary from that probe would read
+               "0 of 20 are in your library" above twenty badges saying Monitored. */
+            if (getPageSurface() === 'name' && this._probe.kind !== 'servarr') {
+                this._mountFilmographySummary();
+            }
             scan();
+        },
+        /* The Filmography section and nothing else. Falling back to main put the line
+           above the person's hero on a page that had not hydrated yet, and on
+           /name/nm.../awards - which is also the name surface - there is no filmography
+           for it to be about at all. No section, no line. */
+        _filmographySection() {
+            return document.querySelector('[data-testid="Filmography"]');
         },
         _mountFilmographySummary() {
             if (document.getElementById('enh-filmography-library')) return;
+            const anchor = this._filmographySection();
+            if (!anchor) return;
             const summary = makeEl('div', {
                 id:'enh-filmography-library',
                 role:'status',
                 'aria-live':'polite',
                 hidden:true,
             });
-            const anchor = document.querySelector('[data-testid="Filmography"]')
-                || document.querySelector('main');
-            if (!anchor) return;
             anchor.insertBefore(summary, anchor.firstChild);
             this._summary = summary;
         },
@@ -2027,11 +2038,33 @@
            loads in pages, so a bare "3 titles" over a list that is still arriving would be
            a number that quietly means something different every few seconds. */
         _updateFilmographySummary() {
+            if (!this._cache) return;
+            /* Remounted rather than abandoned: IMDb re-renders the Filmography section
+               when the Actor/Producer/Director category changes, which took the line with
+               it and left nothing to put it back. */
+            if (!this._summary?.isConnected) {
+                this._summary = null;
+                this._mountFilmographySummary();
+            }
             const summary = this._summary;
-            if (!summary || !summary.isConnected || !this._cache) return;
-            const answered = this._cache.size;
+            if (!summary) return;
+            /* Counted from the filmography's own rows, not from the page-wide cache. The
+               cache holds every title card this feature has answered anywhere - the Known
+               for row above the filmography included - and a line that says "of the
+               filmography" has to mean the filmography. */
+            const section = this._filmographySection();
+            const rows = section
+                ? [...section.querySelectorAll('[data-enh-row-integration]')]
+                : [];
+            let answered = 0;
+            let held = 0;
+            rows.forEach(row => {
+                const state = this._cache.get(row.dataset.enhRowIntegration);
+                if (!state) return;
+                answered += 1;
+                if (state === 'library') held += 1;
+            });
             if (!answered) { summary.hidden = true; return; }
-            const held = [...this._cache.values()].filter(state => state === 'library').length;
             summary.hidden = false;
             setTextIfChanged(summary, tCount('text_filmography_in_library', held, [answered]));
         },

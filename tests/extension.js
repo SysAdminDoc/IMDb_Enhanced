@@ -783,9 +783,13 @@ test('the source archive carries what a rebuild needs and no build output', () =
 
 /* IE-123: both pages forced color-scheme: dark with a hardcoded palette, so a light-mode
    user got a dark page from an extension that offers a light theme everywhere else. The
-   palettes are tokens now, and every foreground/background pair the pages actually draw is
-   measured here rather than eyeballed - including the status tones, which were the pairs
-   most likely to fail once the surfaces went light. */
+   palettes are tokens now, and this measures them.
+
+   Three things the first version of this gate missed, all found by review: it looked for
+   hex only, so an rgba() left in the stylesheet went unseen; it read the <style> block
+   only, so a colour on a style attribute in the body was out of scope entirely; and its
+   list of pairs was hand-written, so a token added later was unmeasured by construction.
+   The foregrounds are derived from the declarations that actually use them now. */
 {
     const luminance = hex => {
         const value = hex.replace('#', '');
@@ -797,44 +801,81 @@ test('the source archive carries what a rebuild needs and no build output', () =
         const [high, low] = [luminance(a), luminance(b)].sort((x, y) => y - x);
         return (high + 0.05) / (low + 0.05);
     };
-    const readTokens = (css, from, to) => {
-        const block = css.slice(css.indexOf(from), css.indexOf(to, css.indexOf(from)));
-        return Object.fromEntries([...block.matchAll(/--([\w-]+)\s*:\s*(#[0-9a-f]{6})/gi)]
-            .map(match => [match[1], match[2]]));
-    };
+    const readTokens = block => Object.fromEntries(
+        [...block.matchAll(/--([\w-]+)\s*:\s*(#[0-9a-f]{6})/gi)].map(match => [match[1], match[2]]));
+    /* Anything a browser reads as a colour, not just a hex triple. Named colours are
+       matched from the CSS list rather than by shape, since "solid" and "none" are not
+       colours and "red" is. */
+    const NAMED = /\b(?:white|black|red|green|blue|yellow|orange|purple|gray|grey|silver|maroon|navy|teal|olive|lime|aqua|fuchsia)\b/i;
+    const ANY_COLOUR = /#[0-9a-f]{3,8}\b|\b(?:rgba?|hsla?|hwb|lab|lch|oklab|oklch|color)\s*\(/i;
 
     [
-        ['recovery.html', ['tx', 'tx2', 'tx3', 'ok', 'warn', 'err', 'danger-tx'], ['bg', 'sf', 'sf2']],
-        ['permissions.html', ['tx', 'tx2', 'tx3', 'link'], ['bg', 'sf', 'sf2']],
-    ].forEach(([file, foregrounds, backgrounds]) => {
-        const css = fs.readFileSync(path.join(root, 'extension', file), 'utf8');
-        assert(/color-scheme:\s*dark light/.test(css),
+        ['recovery.html', ['bg', 'sf', 'sf2']],
+        ['permissions.html', ['bg', 'sf', 'sf2']],
+    ].forEach(([file, backgroundNames]) => {
+        const html = fs.readFileSync(path.join(root, 'extension', file), 'utf8');
+        assert(/color-scheme:\s*light dark/.test(html),
             `${file} must follow the system scheme rather than forcing one`);
-        assert(/@media \(prefers-color-scheme: light\)/.test(css),
+        assert(/@media \(prefers-color-scheme: light\)/.test(html),
             `${file} needs a light palette`);
-        /* No colour may be written anywhere but the two token blocks, or a control keeps
-           its dark value on a light page and no contrast check would ever see it. */
-        const styles = css.slice(css.indexOf('<style>'), css.indexOf('</style>'));
-        const lightEnd = styles.indexOf('}', styles.indexOf('@media (prefers-color-scheme: light)'));
-        const afterTokens = styles.slice(styles.indexOf('}', lightEnd + 1));
-        assert(!/#[0-9a-f]{3,8}\b/i.test(afterTokens),
-            `${file} still writes a colour outside its palette: ${(/#[0-9a-f]{3,8}\b/i.exec(afterTokens) || [])[0]}`);
 
-        const dark = readTokens(styles, ':root {', '@media');
-        const light = readTokens(styles, '@media (prefers-color-scheme: light)', 'body {');
-        [['dark', dark], ['light', light]].forEach(([scheme, tokens]) => {
-            foregrounds.forEach(foreground => {
-                assert(tokens[foreground], `${file} ${scheme} has no --${foreground}`);
-                backgrounds.forEach(background => {
-                    assert(tokens[background], `${file} ${scheme} has no --${background}`);
-                    const ratio = contrast(tokens[foreground], tokens[background]);
-                    assert(ratio >= 4.5,
-                        `${file} ${scheme}: --${foreground} on --${background} is ${ratio.toFixed(2)}:1`);
-                });
+        const styles = html.slice(html.indexOf('<style>'), html.indexOf('</style>'));
+        const lightAt = styles.indexOf('@media (prefers-color-scheme: light)');
+        const lightEnd = styles.indexOf('}', styles.indexOf('}', lightAt) + 1);
+        const dark = readTokens(styles.slice(0, lightAt));
+        const light = readTokens(styles.slice(lightAt, lightEnd));
+        const rules = styles.slice(lightEnd);
+
+        /* No colour outside the two palettes, in any notation. A hardcoded value on a
+           control keeps its dark form on a light page and no contrast check sees it. */
+        // Comments explain the palette and name colours while doing it; they draw nothing.
+        const withoutComments = text => text.replace(/\/\*[\s\S]*?\*\//g, '').replace(/<!--[\s\S]*?-->/g, '');
+        [[rules, 'its stylesheet'], [html.slice(html.indexOf('</style>')), 'a style attribute in its body']]
+            .forEach(([region, where]) => {
+                const scanned = withoutComments(region);
+                const found = ANY_COLOUR.exec(scanned) || NAMED.exec(scanned);
+                assert(!found, `${file} writes a colour outside its palette, in ${where}: ${found && found[0]}`);
             });
-            // The one pair that is a background rather than a foreground.
-            assert(contrast(tokens['on-accent'], tokens.accent) >= 4.5,
-                `${file} ${scheme}: the primary button text is unreadable on the accent`);
+
+        /* Which tokens are foregrounds, and what each is drawn on, are both read from the
+           rules rather than listed here: a token added later cannot be quietly unmeasured,
+           and a foreground that only ever appears on one surface is not checked against
+           surfaces it never touches. A rule that names no background of its own is checked
+           against every page surface, because that is where it could land. */
+        const blocks = [...rules.matchAll(/([^{}]*)\{([^{}]*)\}/g)]
+            .map(match => ({ selector: match[1].trim(), block: match[2] }));
+        /* WCAG 1.4.11 is about boundaries that identify a control and rings that show
+           focus. The line around a panel is decoration and is deliberately not held to
+           it - holding it there would mean drawing 3:1 dividers everywhere, which is a
+           worse-looking page and no more usable. */
+        const INTERACTIVE = /(?:^|[\s,>])(?:button|input|textarea|select|a)|:focus/i;
+        const pairs = [];
+        blocks.forEach(({ selector, block }) => {
+            const own = (/background(?:-color)?:[^;]*var\(--([\w-]+)\)/.exec(block) || [])[1];
+            const surfaces = own ? [own] : backgroundNames;
+            [...block.matchAll(/(?:^|[;\s])color:\s*var\(--([\w-]+)\)/g)]
+                .forEach(match => surfaces.forEach(surface => pairs.push([match[1], surface, 4.5, 'text'])));
+            /* An indicator is not text: WCAG asks 3:1 of a focus ring and a control
+               boundary, and the accent that fills a button is not usable as the ring
+               around it. */
+            if (INTERACTIVE.test(selector)) {
+                [...block.matchAll(/(?:outline|border(?:-color)?):[^;]*var\(--([\w-]+)\)/g)]
+                    .forEach(match => surfaces.forEach(surface => pairs.push([match[1], surface, 3, 'indicator'])));
+            }
+        });
+        assert(pairs.length >= 12, `${file}: the gate found only ${pairs.length} pairs to measure`);
+        assert(pairs.some(([, , , kind]) => kind === 'indicator'),
+            `${file}: no focus ring or control boundary was measured`);
+
+        [['dark', dark], ['light', light]].forEach(([scheme, tokens]) => {
+            backgroundNames.forEach(background => assert(tokens[background],
+                `${file} ${scheme} has no --${background}`));
+            pairs.forEach(([foreground, background, minimum, kind]) => {
+                if (!tokens[foreground] || !tokens[background]) return;
+                const ratio = contrast(tokens[foreground], tokens[background]);
+                assert(ratio >= minimum,
+                    `${file} ${scheme}: --${foreground} as ${kind} on --${background} is ${ratio.toFixed(2)}:1, needs ${minimum}`);
+            });
         });
     });
     console.log('ok - the extension pages follow the system colour scheme with readable contrast in both');
