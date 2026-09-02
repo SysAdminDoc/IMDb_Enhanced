@@ -1172,6 +1172,8 @@
         text_no_importable_rows_skipped_other: 'No importable rows found. $1 rows were skipped.',
         text_no_date: 'No date',
         text_no_date_recorded: 'No viewing or marking date was recorded for this title',
+        text_filmography_in_library_one: '$1 of the $2 titles checked here is in your library',
+        text_filmography_in_library_other: '$1 of the $2 titles checked here are in your library',
         text_no_local_title_marks_yet: 'No local title marks yet. Mark a title Seen or Skip from any card or title page and it shows up here.',
         text_monitored: 'Monitored',
         text_no_matching_title_found: 'No matching title found',
@@ -14011,6 +14013,7 @@ section[id*="quote" i] .ipc-list-card { padding: 4px 0 !important; margin: 2px 0
     reg({
         key: 'rowIntegrationState', name: t('feature_rowIntegrationState_name'), group: 'Features',
         _probe: null,
+        _summary: null,
         _observer: null,
         _rowObserver: null,
         _raf: 0,
@@ -14059,6 +14062,12 @@ section[id*="quote" i] .ipc-list-card { padding: 4px 0 !important; margin: 2px 0
                 .enh-row-integration[data-state="monitored"]::before,
                 .enh-row-integration[data-state="requested"]::before { background: ${t.accent}; }
                 .enh-row-integration[data-state="unavailable"] { color: ${t.red}; border-color: color-mix(in srgb, ${t.red} 35%, transparent); }
+                #enh-filmography-library {
+                    margin: 0 0 10px; padding: 7px 11px; border-radius: 8px;
+                    border: 1px solid ${t.bd1}; background: ${t.sf1}; color: ${t.tx2};
+                    font: 600 12px/1.4 -apple-system, BlinkMacSystemFont, 'Segoe UI', sans-serif;
+                }
+                #enh-filmography-library[hidden] { display: none; }
                 .enh-row-integration[data-state="unavailable"]::before { background: ${t.red}; }
                 /* A poster card has no flow to sit in, so the badge is pinned to the free
                    bottom corner — the one the Seen badge is not using. That badge moves to
@@ -14092,7 +14101,38 @@ section[id*="quote" i] .ipc-list-card { padding: 4px 0 !important; margin: 2px 0
                 });
             }, { rootMargin:'200px' });
             this._observer.observe(document.body, { childList:true, subtree:true });
+            /* IE-146: on a person page the interesting number is not per row, it is how
+               much of this filmography you already hold. The rows are answered anyway, so
+               the count is a reading of answers already in hand rather than a second pass
+               of requests. */
+            if (getPageSurface() === 'name') this._mountFilmographySummary();
             scan();
+        },
+        _mountFilmographySummary() {
+            if (document.getElementById('enh-filmography-library')) return;
+            const summary = makeEl('div', {
+                id:'enh-filmography-library',
+                role:'status',
+                'aria-live':'polite',
+                hidden:true,
+            });
+            const anchor = document.querySelector('[data-testid="Filmography"]')
+                || document.querySelector('main');
+            if (!anchor) return;
+            anchor.insertBefore(summary, anchor.firstChild);
+            this._summary = summary;
+        },
+        /* Counted from what has actually been answered, and it says so. A filmography
+           loads in pages, so a bare "3 titles" over a list that is still arriving would be
+           a number that quietly means something different every few seconds. */
+        _updateFilmographySummary() {
+            const summary = this._summary;
+            if (!summary || !summary.isConnected || !this._cache) return;
+            const answered = this._cache.size;
+            if (!answered) { summary.hidden = true; return; }
+            const held = [...this._cache.values()].filter(state => state === 'library').length;
+            summary.hidden = false;
+            setTextIfChanged(summary, tCount('text_filmography_in_library', held, [answered]));
         },
         /* Marking a row costs a dataset key and an observation. The badge itself is not
            created until the row is actually seen, so a list nobody scrolls carries no
@@ -14158,6 +14198,7 @@ section[id*="quote" i] .ipc-list-card { padding: 4px 0 !important; margin: 2px 0
             if (state !== 'unavailable') this._cache.set(imdbId, state);
             (this._waiting.get(imdbId) || []).forEach(badge => this._paint(badge, state));
             this._waiting.delete(imdbId);
+            this._updateFilmographySummary();
         },
         /* A batch rather than a burst: twenty rows can come into view in one scroll, and
            firing twenty simultaneous requests at somebody's Raspberry Pi is how a local
@@ -14277,6 +14318,8 @@ section[id*="quote" i] .ipc-list-card { padding: 4px 0 !important; margin: 2px 0
             this._waiting = null;
             this._drainToken = null;
             this._probe = null;
+            document.getElementById('enh-filmography-library')?.remove();
+            this._summary = null;
             document.querySelectorAll('.enh-row-integration').forEach(badge => badge.remove());
             document.querySelectorAll('[data-enh-row-integration]').forEach(card => {
                 card.classList.remove('enh-row-integration-host');

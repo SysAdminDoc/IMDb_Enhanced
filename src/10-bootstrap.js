@@ -860,6 +860,8 @@
         text_no_importable_rows_skipped_other: 'No importable rows found. $1 rows were skipped.',
         text_no_date: 'No date',
         text_no_date_recorded: 'No viewing or marking date was recorded for this title',
+        text_filmography_in_library_one: '$1 of the $2 titles checked here is in your library',
+        text_filmography_in_library_other: '$1 of the $2 titles checked here are in your library',
         text_no_local_title_marks_yet: 'No local title marks yet. Mark a title Seen or Skip from any card or title page and it shows up here.',
         text_monitored: 'Monitored',
         text_no_matching_title_found: 'No matching title found',

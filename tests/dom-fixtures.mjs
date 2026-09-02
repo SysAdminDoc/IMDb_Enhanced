@@ -2302,6 +2302,73 @@ await runFixture('person', async (window, hooks) => {
         iso:'1964-09-02',
         deceased:false,
     });
+
+    /* IE-146: on a person page the interesting number is not per row, it is how much of
+       this filmography you already hold. The captured fixture keeps the Filmography
+       section but not its rows, so the rows are built here; the section they mount into
+       is IMDb's own. */
+    const document = window.document;
+    const filmography = requireSelector(document, '[data-testid="Filmography"]');
+    const ids = ['tt0133093', 'tt0234215', 'tt0242653', 'tt1375666'];
+    ids.forEach((id, index) => {
+        const row = document.createElement('li');
+        row.className = 'ipc-metadata-list-summary-item';
+        row.innerHTML = `<a href="/title/${id}/"><img alt="Poster"><span class="ipc-title__text">Film ${index}</span></a>`;
+        filmography.appendChild(row);
+    });
+
+    const watchers = [];
+    const nativeObserver = window.IntersectionObserver;
+    window.IntersectionObserver = class {
+        constructor(callback) { this.callback = callback; this.watched = new Set(); watchers.push(this); }
+        observe(element) { this.watched.add(element); }
+        unobserve(element) { this.watched.delete(element); }
+        disconnect() { this.watched.clear(); }
+    };
+    // Two of the four are in the library; the rest are not.
+    const held = new Set(['tt0133093', 'tt1375666']);
+    window.GM_xmlhttpRequest = options => {
+        const id = /query=(tt\d+)/.exec(options.url)?.[1] || '';
+        window.queueMicrotask(() => options.onload?.({
+            status: 200,
+            finalUrl: options.url,
+            responseText: JSON.stringify({ results: held.has(id)
+                ? [{ id:1, mediaType:'movie', mediaInfo:{ status:5 } }]
+                : [] }),
+        }));
+        return { abort() {} };
+    };
+
+    try {
+        window.GM_setValue('imdb_enh_rowIntegrationState', true);
+        window.GM_setValue('imdb_enh_seerrUrl', 'http://localhost:5055');
+        window.GM_setValue('imdb_enh_seerrApiKey', 'fixture-key');
+        await hooks.runFeature('rowIntegrationState');
+        const line = requireSelector(document, '#enh-filmography-library');
+        assert.equal(line.hidden, true, 'nothing is claimed before any row has been answered');
+
+        const rows = Array.from(document.querySelectorAll('[data-testid="Filmography"] li'));
+        watchers.forEach(watcher => watcher.callback(
+            rows.filter(row => watcher.watched.has(row)).map(row => ({ isIntersecting:true, target:row }))));
+        for (let tick = 0; tick < 40 && line.hidden; tick += 1) {
+            await new Promise(resolve => window.setTimeout(resolve, 2));
+        }
+        for (let tick = 0; tick < 20; tick += 1) {
+            await new Promise(resolve => window.setTimeout(resolve, 2));
+        }
+        assert.equal(line.hidden, false, 'the count appears once answers arrive');
+        assert.equal(line.textContent, '2 of the 4 titles checked here are in your library',
+            'and counts only what was actually checked, not the whole filmography');
+        assert.equal(line.getAttribute('role'), 'status', 'it announces itself as it changes');
+
+        hooks.stopFeature('rowIntegrationState');
+        assert.equal(document.getElementById('enh-filmography-library'), null,
+            'switching it off takes the line away');
+    } finally {
+        window.GM_setValue('imdb_enh_rowIntegrationState', false);
+        window.GM_setValue('imdb_enh_seerrApiKey', '');
+        window.IntersectionObserver = nativeObserver;
+    }
 });
 
 await runFixture('chart', async (window, hooks) => {

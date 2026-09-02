@@ -4,6 +4,7 @@
 
 ### Added
 
+- A person's page says how many of their titles are in your library, counted from the rows the library badge has already answered rather than from a second round of requests. It says how many were checked, so a filmography still loading cannot look like a smaller one.
 - Douban, Kinopoisk and Filmweb are available as external links under Info and research, hidden until you switch one on. All three search by title and year. Kinopoisk's route was checked in a real browser, since it bounces scripted clients to a sign-in check.
 - The episode heatmap and the rating colour coding now use a scale that varies by brightness rather than from red to green. The old scale was the exact pair a red-green colour-blind viewer cannot separate, so a heatmap of a bad season came out looking like a heatmap of a good one. The traditional scale is still there under Experience if you prefer it. In Windows High Contrast the swatches now keep their colours instead of flattening to one system pair, which is safe because every one of them also shows its rating as text.
 - Packaging: an `npm run build-for-amo` script that builds the Firefox add-on and nothing else, which is the script AMO's source verification looks for; the npm version the lockfile was written with is now recorded, so `npm ci` resolves the same tree everywhere; happy-dom moved to 20.13.0.
