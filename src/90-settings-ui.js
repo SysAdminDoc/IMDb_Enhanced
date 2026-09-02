@@ -2206,6 +2206,43 @@
                 onClick: downloadCsv(buildLetterboxdCsv, 'letterboxd-import.csv'),
             }, t('settings_download_marks_letterboxd'))
         ));
+        /* IE-155: Simkl puts calendar sync behind its paid tier and TV Time closed in June
+           2026. TVmaze is keyless, already declared here, and knows every episode's air
+           date by IMDb id, so the file can be written on the device and handed to whatever
+           calendar somebody already uses. Bounded to twenty series a run, newest first:
+           this is a request per show at somebody else's free service. */
+        const calendarButton = makeEl('button', {
+            type:'button', className:'enh-settings-footer-btn', id:'enh-export-calendar',
+            title:t('settings_export_calendar_hint'),
+            onClick: async () => {
+                const shows = collectSeenSeriesIds();
+                if (!shows.length) { showToast(t('toast_no_series_to_export'), 4000); return; }
+                calendarButton.disabled = true;
+                calendarButton.setAttribute('aria-busy', 'true');
+                const original = calendarButton.textContent;
+                setTextIfChanged(calendarButton, t('label_checking'));
+                try {
+                    const gathered = await collectUpcomingEpisodes(shows);
+                    const calendar = buildEpisodeCalendar(gathered);
+                    if (!calendar.events) { showToast(t('toast_no_upcoming_episodes'), 4000); return; }
+                    const blob = new Blob([calendar.text], { type:'text/calendar;charset=utf-8' });
+                    const href = URL.createObjectURL(blob);
+                    const link = makeEl('a', { href, download:'imdb-enhanced-episodes.ics' });
+                    document.body.appendChild(link);
+                    link.click();
+                    link.remove();
+                    setTimeout(() => URL.revokeObjectURL(href), 0);
+                    showToast(tCount('toast_calendar_written', calendar.events, [gathered.length]), 5000);
+                } catch (error) {
+                    showToast(t('toast_calendar_failed', [getRequestErrorMessage(error)]), 4500);
+                } finally {
+                    calendarButton.disabled = false;
+                    calendarButton.removeAttribute('aria-busy');
+                    setTextIfChanged(calendarButton, original);
+                }
+            },
+        }, t('settings_export_calendar'));
+        marksCsvCard.querySelector('.enh-data-actions').appendChild(calendarButton);
         dataPage.appendChild(marksCsvCard);
 
         const backupCard = makeCard(t('settings_backup_restore'), t('settings_a_backup_covers_preferences_sites_and_title'));

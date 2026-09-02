@@ -4,6 +4,7 @@
 
 ### Added
 
+- The Data page can write a calendar file of unaired episodes for the series you have watched, using air dates from TVmaze. It covers up to twenty series a run, newest first, and the file imports into any calendar that reads .ics. TVmaze's credit travels inside the file, as its licence requires. Simkl charges for this and TV Time closed in June 2026, so there was nowhere else to get it.
 - Testing: the CSV round trip is now checked against generated awkward values rather than hand-written examples, and a developer-run mutation check covers the rating maths, the colour ramp and the CSV writer. Writing it found one real gap, in how a title that has been voted down is told apart from one people simply disagree about.
 - A title page can point out which of IMDb's More like this entries you have already seen and rated, best first, under a Because you watched heading. Nothing is fetched and nothing leaves the device: the candidates are IMDb's own list and the ratings are the ones on this machine. It needs at least three rated Seen titles and stays quiet below that, because a recommendation drawn from one film is a guess wearing a reason. Off by default, under Tools.
 - The extension's recovery and permissions pages follow your system colour scheme instead of forcing dark. Dark is still the default; a light-mode system now gets a light page, with every control checked for readable contrast in both.

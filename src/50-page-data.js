@@ -265,7 +265,14 @@
            here is read from, so marking an episode Seen records what it belongs to at no
            cost and with no request. */
         const series = normalizeUserMarkSeries(structuredDataTitleId(ld?.partOfSeries));
+        /* IE-155: a mark made on a series page is the only place this store ever learns
+           that a title IS a series, and the calendar export needs to know which of the
+           marks are shows. Recorded at the moment it is knowable, from the same
+           structured data as everything else here. */
+        const mediaType = getStructuredMediaType(ld);
+        const kind = mediaType === 'series' || mediaType === 'miniseries' ? 'series' : '';
         return {
+            ...(kind ? { kind } : {}),
             ...(year !== null ? { year } : {}),
             ...(genres.length ? { genres } : {}),
             ...(imdbRating !== null ? { imdbRating } : {}),

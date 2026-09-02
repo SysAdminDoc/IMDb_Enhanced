@@ -382,6 +382,9 @@ function loadScriptTestHooks({ withoutDeleteValue = false, withheldCredentials =
         claimDesktopRedirect,
         computeTrimmedMean,
         buildMarksCsv,
+        buildEpisodeCalendar,
+        collectSeenSeriesIds,
+        parseTvmazeEpisodes,
         buildLetterboxdCsv,
         scopedRules,
         setStoredSetting: (key, value) => set(key, value),
@@ -3896,6 +3899,118 @@ test('the reverse-J threshold is a boundary, not a suggestion', () => {
     assert.strictEqual(hooks.computeRatingShape([
         { rating:2, voteCount:8000 }, { rating:1, voteCount:100 }, { rating:10, voteCount:1900 },
     ]).label, 'divisive', 'a bottom made of twos rather than ones does not qualify either');
+});
+
+/* IE-155: a calendar that refuses the file is worse than no file, and the two rules a
+   hand-written .ics writer gets wrong are the escaping and the folding. Both are checked
+   against the text, not against a parser that might be as forgiving as the writer. */
+test('the episode calendar is a file a calendar will actually read', () => {
+    const hooks = loadScriptTestHooks();
+    const shows = [{
+        id: 'tt0903747',
+        title: 'Breaking Bad',
+        episodes: [
+            { season:1, number:2, name:"Cat's in the Bag...", airdate:'2026-09-10' },
+            { season:2, number:13, name:'ABQ', airdate:'2026-09-17' },
+        ],
+    }];
+    const calendar = hooks.buildEpisodeCalendar(shows, Date.UTC(2026, 8, 2, 12, 0, 0));
+    assert.strictEqual(calendar.events, 2);
+    const text = calendar.text;
+
+    assert(text.startsWith('BEGIN:VCALENDAR\r\n'), 'a calendar begins where it says it does');
+    assert(text.endsWith('END:VCALENDAR\r\n'), 'and ends the same way');
+    assert(text.includes('VERSION:2.0\r\n'), 'the version property is required');
+    assert(text.includes('CALSCALE:GREGORIAN'), 'and the calendar scale');
+    assert.strictEqual((text.match(/BEGIN:VEVENT/g) || []).length, 2, 'one event per episode');
+    assert.strictEqual((text.match(/BEGIN:VEVENT/g) || []).length,
+        (text.match(/END:VEVENT/g) || []).length, 'every event is closed');
+    /* Every line ends CRLF, which is the one thing RFC 5545 is unambiguous about. */
+    assert(!/[^\r]\n/.test(text), 'no bare line feed may appear in the file');
+
+    assert(text.includes('DTSTART;VALUE=DATE:20260910'), 'an all-day event carries a date, not a time');
+    /* Exclusive, so the same date at both ends is a zero-length event some calendars drop
+       and others draw wrong. */
+    assert(text.includes('DTEND;VALUE=DATE:20260911'), 'and ends the day after it starts');
+    assert(/DTSTAMP:\d{8}T\d{6}Z/.test(text), 'a stamp in UTC basic format');
+    /* Stable, so re-importing updates the event somebody already has rather than adding a
+       second copy of it. */
+    assert(text.includes('UID:imdb-enhanced-tt0903747-1-2@imdb-enhanced'), 'a stable identity per episode');
+    assert(text.includes('TVmaze'), "the provider's credit travels inside the file, as its licence requires");
+
+    const escapeTest = hooks.buildEpisodeCalendar([{
+        id: 'tt1',
+        // String.raw throughout: these are the characters the escaping is about, and a
+        // conventional literal makes the test say something other than it means.
+        title: String.raw`A; B, C\D`,
+        episodes: [{ season:1, number:1, name:'One\nTwo', airdate:'2026-01-02' }],
+    }], 0).text;
+    const summary = escapeTest.split('\r\n').find(line => line.startsWith('SUMMARY:'));
+    assert.strictEqual(summary, String.raw`SUMMARY:A\; B\, C\\D S01E01 One\nTwo`,
+        'semicolons, commas, backslashes and newlines are escaped, and the backslash first');
+
+    /* Folded at 75 octets, counted as bytes: a line split inside a multi-byte character is
+       a line no parser can put back together. */
+    const long = hooks.buildEpisodeCalendar([{
+        id: 'tt2',
+        title: 'é'.repeat(60),
+        episodes: [{ season:1, number:1, name:'ü'.repeat(60), airdate:'2026-01-02' }],
+    }], 0).text;
+    const encoder = new TextEncoder();
+    long.split('\r\n').forEach(line => assert(encoder.encode(line).length <= 75,
+        `a line is ${encoder.encode(line).length} octets, over the 75 the format allows`));
+    const folded = long.split('\r\n').filter(line => line.startsWith(' '));
+    assert(folded.length > 0, 'the oversized value really was folded');
+    /* Unfolding it has to give the escaped value back, character for character. */
+    const unfolded = long.replace(/\r\n /g, '');
+    assert(unfolded.includes(`SUMMARY:${'é'.repeat(60)} S01E01 ${'ü'.repeat(60)}`),
+        'unfolding must reproduce the value exactly, multi-byte characters included');
+
+    // Nothing to say produces a valid, empty calendar rather than a broken one.
+    const empty = hooks.buildEpisodeCalendar([], 0);
+    assert.strictEqual(empty.events, 0);
+    assert(empty.text.includes('BEGIN:VCALENDAR') && empty.text.includes('END:VCALENDAR'));
+    assert(!empty.text.includes('BEGIN:VEVENT'));
+    // An episode with no announced date is not an event.
+    assert.strictEqual(hooks.buildEpisodeCalendar([{ id:'tt3', title:'X',
+        episodes:[{ season:1, number:1, name:'TBA', airdate:null }] }], 0).events, 0);
+});
+
+/* Which series get asked about, and how many. Both are things the store knows rather than
+   guesses: a mark made on a series page records that it was a series, and an episode mark
+   records the series it belongs to. */
+test('the calendar asks about series the store actually knows are series', () => {
+    const hooks = loadScriptTestHooks();
+    const found = hooks.collectSeenSeriesIds({
+        tt0903747: { state:'watched', title:'Breaking Bad', kind:'series', ts:5 },
+        tt0959621: { state:'watched', title:'Pilot', series:'tt0944947', ts:4 },
+        tt0133093: { state:'watched', title:'The Matrix', ts:3 },
+        tt0068646: { state:'skip', title:'The Godfather', kind:'series', ts:9 },
+    });
+    assert.deepStrictEqual(Array.from(found, entry => entry.id).sort(), ['tt0903747', 'tt0944947'],
+        'a series mark and the series behind an episode mark; a film and a Skip are neither');
+    assert.strictEqual(found.find(entry => entry.id === 'tt0903747').title, 'Breaking Bad');
+
+    /* Bounded, and newest first, so a bounded export covers what somebody is watching now
+       rather than whatever the store happened to enumerate first. */
+    const many = {};
+    for (let index = 0; index < 40; index += 1) {
+        many[`tt900${String(index).padStart(4, '0')}`] =
+            { state:'watched', title:`Show ${index}`, kind:'series', ts:index };
+    }
+    const bounded = hooks.collectSeenSeriesIds(many);
+    assert.strictEqual(bounded.length, 20, 'twenty series a run, no more');
+    assert.strictEqual(bounded[0].title, 'Show 39', 'the most recently marked first');
+
+    /* And the parser behind it: only what is still to come, and only what has a date. */
+    const episodes = hooks.parseTvmazeEpisodes([
+        { season:1, number:1, name:'Aired', airdate:'2020-01-01' },
+        { season:9, number:2, name:'Soon', airdate:'2026-12-01' },
+        { season:9, number:3, name:'Unannounced', airdate:null },
+        { season:'x', number:4, name:'Malformed', airdate:'2026-12-02' },
+    ], '2026-09-02');
+    assert.deepStrictEqual(Array.from(episodes, entry => entry.name), ['Soon'],
+        'past episodes, undated episodes and malformed rows are all left out');
 });
 
 test('an exported CSV reads back into the same marks', () => {

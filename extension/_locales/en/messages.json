@@ -2084,6 +2084,12 @@
   "settings_the_traditional_scale_is_unreadable": {
     "message": "The traditional scale runs red to green, which is the pair a deuteranomalous viewer cannot separate. The default varies by brightness instead, so the order survives."
   },
+  "settings_export_calendar": {
+    "message": "Export episode calendar"
+  },
+  "settings_export_calendar_hint": {
+    "message": "Writes an .ics file of unaired episodes for up to twenty of the series you have watched, using air dates from TVmaze."
+  },
   "settings_search_placeholder": {
     "message": "Search every setting"
   },
@@ -2197,6 +2203,9 @@
   },
   "text_available": {
     "message": "Available"
+  },
+  "text_calendar_name": {
+    "message": "Upcoming episodes"
   },
   "text_because_you_watched": {
     "message": "Because you watched"
@@ -3100,6 +3109,21 @@
   },
   "toast_no_imdb_watched_titles_found_on": {
     "message": "No IMDb Watched titles found on this page. Sign in and open a list, chart, or title that shows the Watched control."
+  },
+  "toast_calendar_failed": {
+    "message": "The calendar could not be written: $1"
+  },
+  "toast_calendar_written_one": {
+    "message": "$1 episode across $2 series"
+  },
+  "toast_calendar_written_other": {
+    "message": "$1 episodes across $2 series"
+  },
+  "toast_no_series_to_export": {
+    "message": "No watched series yet. Mark a series or an episode Seen and it shows up here."
+  },
+  "toast_no_upcoming_episodes": {
+    "message": "TVmaze lists no unaired episodes for the series you have watched."
   },
   "toast_no_marks_to_export": {
     "message": "There are no marks to export yet."

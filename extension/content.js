@@ -1041,6 +1041,8 @@
         settings_ramp_classic: 'Traditional (red to green)',
         settings_rating_colour_ramp: 'Rating colour scale',
         settings_the_traditional_scale_is_unreadable: 'The traditional scale runs red to green, which is the pair a deuteranomalous viewer cannot separate. The default varies by brightness instead, so the order survives.',
+        settings_export_calendar: 'Export episode calendar',
+        settings_export_calendar_hint: 'Writes an .ics file of unaired episodes for up to twenty of the series you have watched, using air dates from TVmaze.',
         settings_search_placeholder: 'Search every setting',
         settings_these_marks_stay_on_this_device_and: 'These marks stay on this device and never change your IMDb account. Import from page copies the IMDb Watched titles visible on the page behind the settings dialog into local Seen marks; existing marks are kept, and nothing is ever sent back to IMDb.',
         settings_this_backup_is_encrypted_enter_its_passphrase: 'This backup is encrypted. Enter its passphrase.',
@@ -1079,6 +1081,7 @@
         text_automatic_matching_is_active: 'Automatic matching is active.',
         text_availability_unavailable: 'Availability unavailable',
         text_available: 'Available',
+        text_calendar_name: 'Upcoming episodes',
         text_because_you_watched: 'Because you watched',
         text_below_avg: 'Below Avg',
         text_broadcast_details_unavailable: 'Broadcast details unavailable',
@@ -1381,6 +1384,11 @@
         toast_copied_rows_some_unrated_other: 'Copied $1 rows as CSV. $2 had no rating listed.',
         toast_no_imdb_title_ids_found: 'No IMDb title IDs found',
         toast_no_imdb_watched_titles_found_on: 'No IMDb Watched titles found on this page. Sign in and open a list, chart, or title that shows the Watched control.',
+        toast_calendar_failed: 'The calendar could not be written: $1',
+        toast_calendar_written_one: '$1 episode across $2 series',
+        toast_calendar_written_other: '$1 episodes across $2 series',
+        toast_no_series_to_export: 'No watched series yet. Mark a series or an episode Seen and it shows up here.',
+        toast_no_upcoming_episodes: 'TVmaze lists no unaired episodes for the series you have watched.',
         toast_no_marks_to_export: 'There are no marks to export yet.',
         toast_no_titles_found_on_this_page: 'No titles found on this page',
         toast_paste_settings_json_before_importing: 'Paste settings JSON before importing',
@@ -3055,6 +3063,8 @@
         const imdbRating = normalizeUserMarkRating(record.imdbRating);
         const runtime = normalizeUserMarkRuntime(record.runtime);
         const series = normalizeUserMarkSeries(record.series);
+        // One value or nothing. Anything else a backup carries is dropped rather than kept.
+        const kind = record.kind === 'series' ? 'series' : '';
         return {
             v: USER_MARK_RECORD_VERSION,
             state,
@@ -3068,6 +3078,7 @@
             ...(imdbRating !== null ? { imdbRating } : {}),
             ...(runtime !== null ? { runtime } : {}),
             ...(series ? { series } : {}),
+            ...(kind ? { kind } : {}),
         };
     }
     /* Control characters are stripped rather than escaped: a note is rendered as text
@@ -3328,6 +3339,136 @@
             [...new Set(listed)].forEach(date => rows.push(csvRow([id, date])));
         });
         return rows.join('\r\n');
+    }
+
+    /* ---- Calendar export ------------------------------------------------------------
+       IE-155: Simkl puts calendar sync behind its paid tier and TV Time closed in June
+       2026, which leaves people who want the next episode in their own calendar with
+       nowhere to get it. TVmaze is already a declared provider here, it is keyless, and it
+       publishes every episode's air date for a show by IMDb id. The file is written on the
+       device and handed straight to whatever calendar the person already uses.
+
+       RFC 5545, properly: every line folded at 75 octets, every text value escaped, and
+       one all-day VEVENT per episode. A calendar that refuses the file is worse than no
+       file, and the escaping rules are exactly where a hand-written writer goes wrong. */
+    const ICS_FOLD_OCTETS = 75;
+    const ICS_TEXT_LIMIT = 300;
+    const CALENDAR_SERIES_LIMIT = 20;
+
+    /* Order matters: the backslash has to be doubled before anything else introduces one,
+       or the escapes added below get escaped again. */
+    function icsText(value) {
+        return toBoundedText(value, ICS_TEXT_LIMIT)
+            .replace(/\\/g, '\\\\')
+            .replace(/;/g, '\\;')
+            .replace(/,/g, '\\,')
+            .replace(/\r\n|\r|\n/g, '\\n');
+    }
+
+    /* Folded by octet, not by character: RFC 5545 counts bytes, and a line split in the
+       middle of a multi-byte character is a line no parser can put back together. */
+    function icsFold(line) {
+        const encoder = new TextEncoder();
+        const out = [];
+        let current = '';
+        let bytes = 0;
+        for (const character of String(line)) {
+            const size = encoder.encode(character).length;
+            // One octet of the continuation's leading space is spent on every folded line.
+            if (bytes + size > (out.length ? ICS_FOLD_OCTETS - 1 : ICS_FOLD_OCTETS)) {
+                out.push(current);
+                current = '';
+                bytes = 0;
+            }
+            current += character;
+            bytes += size;
+        }
+        out.push(current);
+        return out.map((part, index) => (index ? ` ${part}` : part)).join('\r\n');
+    }
+
+    function icsDate(value) {
+        const match = /^(\d{4})-(\d{2})-(\d{2})$/.exec(String(value || '').trim());
+        return match ? `${match[1]}${match[2]}${match[3]}` : '';
+    }
+
+    function icsDayAfter(value) {
+        const stamp = Date.parse(`${value}T00:00:00Z`);
+        if (!Number.isFinite(stamp)) return '';
+        return icsDate(new Date(stamp + 86400000).toISOString().slice(0, 10));
+    }
+
+    function icsStamp(now) {
+        return `${new Date(now).toISOString().replace(/[-:]/g, '').slice(0, 15)}Z`;
+    }
+
+    /* One all-day event per episode. DTEND is the day after DTSTART because an all-day
+       VEVENT's end is exclusive - writing the same date makes a zero-length event that
+       some calendars drop and others draw wrong. */
+    function buildEpisodeCalendar(shows, now = Date.now()) {
+        const stamp = icsStamp(now);
+        const lines = [
+            'BEGIN:VCALENDAR',
+            'VERSION:2.0',
+            `PRODID:-//IMDb Enhanced//${VERSION}//EN`,
+            'CALSCALE:GREGORIAN',
+            'METHOD:PUBLISH',
+            `X-WR-CALNAME:${icsText(t('text_calendar_name'))}`,
+        ];
+        let events = 0;
+        (Array.isArray(shows) ? shows : []).forEach(show => {
+            const title = toBoundedText(show?.title, ICS_TEXT_LIMIT) || String(show?.id || '');
+            (Array.isArray(show?.episodes) ? show.episodes : []).forEach(episode => {
+                const start = icsDate(episode?.airdate);
+                const end = start ? icsDayAfter(episode.airdate) : '';
+                if (!start || !end) return;
+                const season = Number(episode?.season) || 0;
+                const number = Number(episode?.number) || 0;
+                const code = season && number
+                    ? `S${String(season).padStart(2, '0')}E${String(number).padStart(2, '0')}`
+                    : '';
+                const name = toBoundedText(episode?.name, ICS_TEXT_LIMIT);
+                const summary = [title, code, name].filter(Boolean).join(' ');
+                lines.push(
+                    'BEGIN:VEVENT',
+                    /* Stable across exports, so re-importing updates the event a person
+                       already has rather than adding a second copy of it. */
+                    `UID:imdb-enhanced-${show?.id || 'unknown'}-${season}-${number}@imdb-enhanced`,
+                    `DTSTAMP:${stamp}`,
+                    `DTSTART;VALUE=DATE:${start}`,
+                    `DTEND;VALUE=DATE:${end}`,
+                    `SUMMARY:${icsText(summary)}`,
+                    /* TVmaze's data is CC BY-SA and the credit is a condition of using it,
+                       so it travels inside the file rather than only being shown here. */
+                    `DESCRIPTION:${icsText(t('provider_tvmaze_attribution'))}`,
+                    'TRANSP:TRANSPARENT',
+                    'END:VEVENT'
+                );
+                events += 1;
+            });
+        });
+        lines.push('END:VCALENDAR');
+        return { events, text: `${lines.map(icsFold).join('\r\n')}\r\n` };
+    }
+
+    /* Which series to ask about. Two sources, both things the store actually knows rather
+       than guesses: a title marked Seen on a series page records that it was a series, and
+       an episode marked Seen records the series it belongs to. Newest first, so a bounded
+       export covers what somebody is watching now. */
+    function collectSeenSeriesIds(marks = getUserMarks(), limit = CALENDAR_SERIES_LIMIT) {
+        const found = new Map();
+        const entries = Object.entries(marks || {})
+            .filter(([, record]) => record?.state === 'watched')
+            .sort((a, b) => (Number(b[1]?.ts) || 0) - (Number(a[1]?.ts) || 0));
+        for (const [id, record] of entries) {
+            if (record.kind === 'series' && !found.has(id)) {
+                found.set(id, toBoundedText(record.title, USER_MARK_TITLE_LIMIT) || id);
+            }
+            const series = normalizeUserMarkSeries(record.series);
+            if (series && !found.has(series)) found.set(series, '');
+            if (found.size >= limit) break;
+        }
+        return [...found.entries()].slice(0, limit).map(([id, title]) => ({ id, title }));
     }
     // =========================================================================
     //  CSV MARK IMPORT
@@ -5558,7 +5699,14 @@
            here is read from, so marking an episode Seen records what it belongs to at no
            cost and with no request. */
         const series = normalizeUserMarkSeries(structuredDataTitleId(ld?.partOfSeries));
+        /* IE-155: a mark made on a series page is the only place this store ever learns
+           that a title IS a series, and the calendar export needs to know which of the
+           marks are shows. Recorded at the moment it is knowable, from the same
+           structured data as everything else here. */
+        const mediaType = getStructuredMediaType(ld);
+        const kind = mediaType === 'series' || mediaType === 'miniseries' ? 'series' : '';
         return {
+            ...(kind ? { kind } : {}),
             ...(year !== null ? { year } : {}),
             ...(genres.length ? { genres } : {}),
             ...(imdbRating !== null ? { imdbRating } : {}),
@@ -10960,12 +11108,78 @@ section[id*="quote" i] .ipc-list-card { padding: 4px 0 !important; margin: 2px 0
         const code = String(carrier?.country?.code || '').trim().toUpperCase();
         const url = normalizeTrustedUrl(json.url, 'tvmaze.com', '');
         return {
+            /* TVmaze's own id for the show, which is how its episode list is addressed.
+               An entry cached before this existed simply lacks it and is looked up again. */
+            showId: Number.isSafeInteger(Number(json.id)) && Number(json.id) > 0 ? Number(json.id) : 0,
             network: name,
             // Only a real country code, so a malformed one is left off rather than shown.
             country: AVAILABILITY_REGION_PATTERN.test(code) ? code : '',
             streaming: !json.network && Boolean(json.webChannel),
             url,
         };
+    }
+
+    const TVMAZE_EPISODE_LIMIT = 400;
+    /* Only what is still to come, and only what has a date. TVmaze carries episodes with a
+       null airdate for shows whose schedule is not announced; an event with no date is not
+       an event. */
+    function parseTvmazeEpisodes(json, today) {
+        if (!Array.isArray(json)) return [];
+        const cutoff = String(today || '').slice(0, 10);
+        const out = [];
+        for (const item of json.slice(0, TVMAZE_EPISODE_LIMIT)) {
+            const airdate = String(item?.airdate || '').trim();
+            if (!/^\d{4}-\d{2}-\d{2}$/.test(airdate)) continue;
+            if (cutoff && airdate < cutoff) continue;
+            const season = Number(item?.season);
+            const number = Number(item?.number);
+            if (!Number.isSafeInteger(season) || !Number.isSafeInteger(number)) continue;
+            out.push({
+                season,
+                number,
+                name: toBoundedText(item?.name, TVMAZE_TEXT_LIMIT),
+                airdate,
+            });
+        }
+        return out;
+    }
+
+    /* One lookup and one episode list per show, both through the shared cache, so a second
+       export the same week costs nothing. Sequential rather than parallel: this is a free
+       service being asked about twenty shows, and twenty simultaneous requests is how a
+       free service starts refusing them. A show TVmaze does not know is skipped, not an
+       error - most people's history has at least one. */
+    async function collectUpcomingEpisodes(shows, today = new Date().toISOString().slice(0, 10)) {
+        const out = [];
+        for (const show of (Array.isArray(shows) ? shows : []).slice(0, CALENDAR_SERIES_LIMIT)) {
+            const id = String(show?.id || '');
+            if (!id) continue;
+            try {
+                const lookupKey = `tvmaze_${id}`;
+                let lookup = cacheGet(lookupKey);
+                if (!lookup?.showId) {
+                    const response = await httpGet(
+                        `${TVMAZE_ORIGIN}/lookup/shows?imdb=${encodeURIComponent(id)}`,
+                        { headers:{ Accept:'application/json' }, timeout:12000 });
+                    lookup = parseTvmazeShow(parseJSONResponse(response, EXTERNAL_RESPONSE_TEXT_LIMIT));
+                    if (lookup) cacheSet(lookupKey, lookup, PROVIDERS.tvmaze.ttl);
+                }
+                if (!lookup?.showId) continue;
+                const episodesKey = `tvmaze_episodes_${lookup.showId}`;
+                let episodes = cacheGet(episodesKey);
+                if (!Array.isArray(episodes)) {
+                    const response = await httpGet(
+                        `${TVMAZE_ORIGIN}/shows/${lookup.showId}/episodes`,
+                        { headers:{ Accept:'application/json' }, timeout:12000 });
+                    episodes = parseTvmazeEpisodes(
+                        parseJSONResponse(response, EXTERNAL_RESPONSE_TEXT_LIMIT), today);
+                    cacheSet(episodesKey, episodes, PROVIDERS.tvmaze.ttl);
+                }
+                const upcoming = parseTvmazeEpisodes(episodes, today);
+                if (upcoming.length) out.push({ id, title: show.title || id, episodes: upcoming });
+            } catch { /* one show TVmaze cannot answer for is not a failed export */ }
+        }
+        return out;
     }
 
     reg({
@@ -19901,6 +20115,43 @@ ${scopedRules('.enh-zoom', {
                 onClick: downloadCsv(buildLetterboxdCsv, 'letterboxd-import.csv'),
             }, t('settings_download_marks_letterboxd'))
         ));
+        /* IE-155: Simkl puts calendar sync behind its paid tier and TV Time closed in June
+           2026. TVmaze is keyless, already declared here, and knows every episode's air
+           date by IMDb id, so the file can be written on the device and handed to whatever
+           calendar somebody already uses. Bounded to twenty series a run, newest first:
+           this is a request per show at somebody else's free service. */
+        const calendarButton = makeEl('button', {
+            type:'button', className:'enh-settings-footer-btn', id:'enh-export-calendar',
+            title:t('settings_export_calendar_hint'),
+            onClick: async () => {
+                const shows = collectSeenSeriesIds();
+                if (!shows.length) { showToast(t('toast_no_series_to_export'), 4000); return; }
+                calendarButton.disabled = true;
+                calendarButton.setAttribute('aria-busy', 'true');
+                const original = calendarButton.textContent;
+                setTextIfChanged(calendarButton, t('label_checking'));
+                try {
+                    const gathered = await collectUpcomingEpisodes(shows);
+                    const calendar = buildEpisodeCalendar(gathered);
+                    if (!calendar.events) { showToast(t('toast_no_upcoming_episodes'), 4000); return; }
+                    const blob = new Blob([calendar.text], { type:'text/calendar;charset=utf-8' });
+                    const href = URL.createObjectURL(blob);
+                    const link = makeEl('a', { href, download:'imdb-enhanced-episodes.ics' });
+                    document.body.appendChild(link);
+                    link.click();
+                    link.remove();
+                    setTimeout(() => URL.revokeObjectURL(href), 0);
+                    showToast(tCount('toast_calendar_written', calendar.events, [gathered.length]), 5000);
+                } catch (error) {
+                    showToast(t('toast_calendar_failed', [getRequestErrorMessage(error)]), 4500);
+                } finally {
+                    calendarButton.disabled = false;
+                    calendarButton.removeAttribute('aria-busy');
+                    setTextIfChanged(calendarButton, original);
+                }
+            },
+        }, t('settings_export_calendar'));
+        marksCsvCard.querySelector('.enh-data-actions').appendChild(calendarButton);
         dataPage.appendChild(marksCsvCard);
 
         const backupCard = makeCard(t('settings_backup_restore'), t('settings_a_backup_covers_preferences_sites_and_title'));

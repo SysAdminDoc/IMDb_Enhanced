@@ -38,6 +38,8 @@ Third-party lookups omit destination cookies. Responses are rendered as text, ou
 
 **Viewing History Import.** Paste or upload an IMDb or Letterboxd CSV, inspect a count before writing anything, then merge its ratings and viewing dates into local Seen marks. Headers are matched by name, including IMDb's newer Original Title column. Rows with Const or imdbID map directly; Title and Year can match a title already stored on that device. Invalid or unresolved rows are counted and skipped. A title keeps its 100 newest distinct viewing events, and the preview reports any older event that won't be retained. This local import never changes IMDb Watched status or an IMDb list.
 
+**Episode Calendar.** The Data page writes an `.ics` file of unaired episodes for the series you have marked Seen, using air dates from TVmaze. Up to twenty series a run, newest first, cached like every other lookup. TVmaze's credit travels inside the file because its licence asks for it.
+
 **Local Personal Stats.** The Data page turns private marks and imported viewing history into local counts, activity by year, top genres, release decades, personal rating comparisons, and known runtime. Fresh installs get a clear empty state. A year review appears after 10 dated viewings in one year, and missing metadata stays missing instead of being guessed. The calculations never leave the device.
 
 **Parents Guide Severities**. Optional. Clicking the Parents Guide link on a title page expands the five severity ratings in place instead of loading the page, each linking through to its own section. Nothing is requested until you click, and the guide is read from IMDb itself. A verification challenge is reported as a refusal, not an outage.

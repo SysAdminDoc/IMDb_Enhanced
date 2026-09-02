@@ -677,6 +677,8 @@
         const imdbRating = normalizeUserMarkRating(record.imdbRating);
         const runtime = normalizeUserMarkRuntime(record.runtime);
         const series = normalizeUserMarkSeries(record.series);
+        // One value or nothing. Anything else a backup carries is dropped rather than kept.
+        const kind = record.kind === 'series' ? 'series' : '';
         return {
             v: USER_MARK_RECORD_VERSION,
             state,
@@ -690,6 +692,7 @@
             ...(imdbRating !== null ? { imdbRating } : {}),
             ...(runtime !== null ? { runtime } : {}),
             ...(series ? { series } : {}),
+            ...(kind ? { kind } : {}),
         };
     }
     /* Control characters are stripped rather than escaped: a note is rendered as text
@@ -950,4 +953,134 @@
             [...new Set(listed)].forEach(date => rows.push(csvRow([id, date])));
         });
         return rows.join('\r\n');
+    }
+
+    /* ---- Calendar export ------------------------------------------------------------
+       IE-155: Simkl puts calendar sync behind its paid tier and TV Time closed in June
+       2026, which leaves people who want the next episode in their own calendar with
+       nowhere to get it. TVmaze is already a declared provider here, it is keyless, and it
+       publishes every episode's air date for a show by IMDb id. The file is written on the
+       device and handed straight to whatever calendar the person already uses.
+
+       RFC 5545, properly: every line folded at 75 octets, every text value escaped, and
+       one all-day VEVENT per episode. A calendar that refuses the file is worse than no
+       file, and the escaping rules are exactly where a hand-written writer goes wrong. */
+    const ICS_FOLD_OCTETS = 75;
+    const ICS_TEXT_LIMIT = 300;
+    const CALENDAR_SERIES_LIMIT = 20;
+
+    /* Order matters: the backslash has to be doubled before anything else introduces one,
+       or the escapes added below get escaped again. */
+    function icsText(value) {
+        return toBoundedText(value, ICS_TEXT_LIMIT)
+            .replace(/\\/g, '\\\\')
+            .replace(/;/g, '\\;')
+            .replace(/,/g, '\\,')
+            .replace(/\r\n|\r|\n/g, '\\n');
+    }
+
+    /* Folded by octet, not by character: RFC 5545 counts bytes, and a line split in the
+       middle of a multi-byte character is a line no parser can put back together. */
+    function icsFold(line) {
+        const encoder = new TextEncoder();
+        const out = [];
+        let current = '';
+        let bytes = 0;
+        for (const character of String(line)) {
+            const size = encoder.encode(character).length;
+            // One octet of the continuation's leading space is spent on every folded line.
+            if (bytes + size > (out.length ? ICS_FOLD_OCTETS - 1 : ICS_FOLD_OCTETS)) {
+                out.push(current);
+                current = '';
+                bytes = 0;
+            }
+            current += character;
+            bytes += size;
+        }
+        out.push(current);
+        return out.map((part, index) => (index ? ` ${part}` : part)).join('\r\n');
+    }
+
+    function icsDate(value) {
+        const match = /^(\d{4})-(\d{2})-(\d{2})$/.exec(String(value || '').trim());
+        return match ? `${match[1]}${match[2]}${match[3]}` : '';
+    }
+
+    function icsDayAfter(value) {
+        const stamp = Date.parse(`${value}T00:00:00Z`);
+        if (!Number.isFinite(stamp)) return '';
+        return icsDate(new Date(stamp + 86400000).toISOString().slice(0, 10));
+    }
+
+    function icsStamp(now) {
+        return `${new Date(now).toISOString().replace(/[-:]/g, '').slice(0, 15)}Z`;
+    }
+
+    /* One all-day event per episode. DTEND is the day after DTSTART because an all-day
+       VEVENT's end is exclusive - writing the same date makes a zero-length event that
+       some calendars drop and others draw wrong. */
+    function buildEpisodeCalendar(shows, now = Date.now()) {
+        const stamp = icsStamp(now);
+        const lines = [
+            'BEGIN:VCALENDAR',
+            'VERSION:2.0',
+            `PRODID:-//IMDb Enhanced//${VERSION}//EN`,
+            'CALSCALE:GREGORIAN',
+            'METHOD:PUBLISH',
+            `X-WR-CALNAME:${icsText(t('text_calendar_name'))}`,
+        ];
+        let events = 0;
+        (Array.isArray(shows) ? shows : []).forEach(show => {
+            const title = toBoundedText(show?.title, ICS_TEXT_LIMIT) || String(show?.id || '');
+            (Array.isArray(show?.episodes) ? show.episodes : []).forEach(episode => {
+                const start = icsDate(episode?.airdate);
+                const end = start ? icsDayAfter(episode.airdate) : '';
+                if (!start || !end) return;
+                const season = Number(episode?.season) || 0;
+                const number = Number(episode?.number) || 0;
+                const code = season && number
+                    ? `S${String(season).padStart(2, '0')}E${String(number).padStart(2, '0')}`
+                    : '';
+                const name = toBoundedText(episode?.name, ICS_TEXT_LIMIT);
+                const summary = [title, code, name].filter(Boolean).join(' ');
+                lines.push(
+                    'BEGIN:VEVENT',
+                    /* Stable across exports, so re-importing updates the event a person
+                       already has rather than adding a second copy of it. */
+                    `UID:imdb-enhanced-${show?.id || 'unknown'}-${season}-${number}@imdb-enhanced`,
+                    `DTSTAMP:${stamp}`,
+                    `DTSTART;VALUE=DATE:${start}`,
+                    `DTEND;VALUE=DATE:${end}`,
+                    `SUMMARY:${icsText(summary)}`,
+                    /* TVmaze's data is CC BY-SA and the credit is a condition of using it,
+                       so it travels inside the file rather than only being shown here. */
+                    `DESCRIPTION:${icsText(t('provider_tvmaze_attribution'))}`,
+                    'TRANSP:TRANSPARENT',
+                    'END:VEVENT'
+                );
+                events += 1;
+            });
+        });
+        lines.push('END:VCALENDAR');
+        return { events, text: `${lines.map(icsFold).join('\r\n')}\r\n` };
+    }
+
+    /* Which series to ask about. Two sources, both things the store actually knows rather
+       than guesses: a title marked Seen on a series page records that it was a series, and
+       an episode marked Seen records the series it belongs to. Newest first, so a bounded
+       export covers what somebody is watching now. */
+    function collectSeenSeriesIds(marks = getUserMarks(), limit = CALENDAR_SERIES_LIMIT) {
+        const found = new Map();
+        const entries = Object.entries(marks || {})
+            .filter(([, record]) => record?.state === 'watched')
+            .sort((a, b) => (Number(b[1]?.ts) || 0) - (Number(a[1]?.ts) || 0));
+        for (const [id, record] of entries) {
+            if (record.kind === 'series' && !found.has(id)) {
+                found.set(id, toBoundedText(record.title, USER_MARK_TITLE_LIMIT) || id);
+            }
+            const series = normalizeUserMarkSeries(record.series);
+            if (series && !found.has(series)) found.set(series, '');
+            if (found.size >= limit) break;
+        }
+        return [...found.entries()].slice(0, limit).map(([id, title]) => ({ id, title }));
     }

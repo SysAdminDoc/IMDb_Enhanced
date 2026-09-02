@@ -1746,12 +1746,78 @@
         const code = String(carrier?.country?.code || '').trim().toUpperCase();
         const url = normalizeTrustedUrl(json.url, 'tvmaze.com', '');
         return {
+            /* TVmaze's own id for the show, which is how its episode list is addressed.
+               An entry cached before this existed simply lacks it and is looked up again. */
+            showId: Number.isSafeInteger(Number(json.id)) && Number(json.id) > 0 ? Number(json.id) : 0,
             network: name,
             // Only a real country code, so a malformed one is left off rather than shown.
             country: AVAILABILITY_REGION_PATTERN.test(code) ? code : '',
             streaming: !json.network && Boolean(json.webChannel),
             url,
         };
+    }
+
+    const TVMAZE_EPISODE_LIMIT = 400;
+    /* Only what is still to come, and only what has a date. TVmaze carries episodes with a
+       null airdate for shows whose schedule is not announced; an event with no date is not
+       an event. */
+    function parseTvmazeEpisodes(json, today) {
+        if (!Array.isArray(json)) return [];
+        const cutoff = String(today || '').slice(0, 10);
+        const out = [];
+        for (const item of json.slice(0, TVMAZE_EPISODE_LIMIT)) {
+            const airdate = String(item?.airdate || '').trim();
+            if (!/^\d{4}-\d{2}-\d{2}$/.test(airdate)) continue;
+            if (cutoff && airdate < cutoff) continue;
+            const season = Number(item?.season);
+            const number = Number(item?.number);
+            if (!Number.isSafeInteger(season) || !Number.isSafeInteger(number)) continue;
+            out.push({
+                season,
+                number,
+                name: toBoundedText(item?.name, TVMAZE_TEXT_LIMIT),
+                airdate,
+            });
+        }
+        return out;
+    }
+
+    /* One lookup and one episode list per show, both through the shared cache, so a second
+       export the same week costs nothing. Sequential rather than parallel: this is a free
+       service being asked about twenty shows, and twenty simultaneous requests is how a
+       free service starts refusing them. A show TVmaze does not know is skipped, not an
+       error - most people's history has at least one. */
+    async function collectUpcomingEpisodes(shows, today = new Date().toISOString().slice(0, 10)) {
+        const out = [];
+        for (const show of (Array.isArray(shows) ? shows : []).slice(0, CALENDAR_SERIES_LIMIT)) {
+            const id = String(show?.id || '');
+            if (!id) continue;
+            try {
+                const lookupKey = `tvmaze_${id}`;
+                let lookup = cacheGet(lookupKey);
+                if (!lookup?.showId) {
+                    const response = await httpGet(
+                        `${TVMAZE_ORIGIN}/lookup/shows?imdb=${encodeURIComponent(id)}`,
+                        { headers:{ Accept:'application/json' }, timeout:12000 });
+                    lookup = parseTvmazeShow(parseJSONResponse(response, EXTERNAL_RESPONSE_TEXT_LIMIT));
+                    if (lookup) cacheSet(lookupKey, lookup, PROVIDERS.tvmaze.ttl);
+                }
+                if (!lookup?.showId) continue;
+                const episodesKey = `tvmaze_episodes_${lookup.showId}`;
+                let episodes = cacheGet(episodesKey);
+                if (!Array.isArray(episodes)) {
+                    const response = await httpGet(
+                        `${TVMAZE_ORIGIN}/shows/${lookup.showId}/episodes`,
+                        { headers:{ Accept:'application/json' }, timeout:12000 });
+                    episodes = parseTvmazeEpisodes(
+                        parseJSONResponse(response, EXTERNAL_RESPONSE_TEXT_LIMIT), today);
+                    cacheSet(episodesKey, episodes, PROVIDERS.tvmaze.ttl);
+                }
+                const upcoming = parseTvmazeEpisodes(episodes, today);
+                if (upcoming.length) out.push({ id, title: show.title || id, episodes: upcoming });
+            } catch { /* one show TVmaze cannot answer for is not a failed export */ }
+        }
+        return out;
     }
 
     reg({
