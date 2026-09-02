@@ -236,7 +236,7 @@
             const siteRows = [...rows.querySelectorAll('.enh-site-row')];
             const total = siteRows.length;
             const visible = siteRows.filter(row => row.querySelector('[data-field="enabled"]')?.checked).length;
-            count.textContent = total ? `${visible}/${total} visible` : '0 sites';
+            count.textContent = total ? t('text_visible_of_total', [visible, total]) : t('text_no_sites');
             count.title = `${visible} of ${total} destinations appear on IMDb pages`;
             if (add) add.disabled = total >= SITE_LIST_LIMIT;
             updateOrderButtons();
@@ -528,9 +528,9 @@
                     if (!entry.searchable) return;
                     const listed = names.has(entry.lowerName);
                     entry.button.disabled = listed || atLimit;
-                    entry.button.textContent = listed ? 'Added' : 'Add';
+                    entry.button.textContent = listed ? t('label_added') : t('label_add');
                     entry.button.setAttribute('aria-label', listed
-                        ? `${entry.site.name} is already in ${title}`
+                        ? t('text_title_is_already_in_service', [entry.site.name, title])
                         : `Add ${entry.site.name} to ${title}`);
                 });
                 catalog.forEach((groupData, groupIndex) => {
@@ -1318,8 +1318,8 @@
                 const granted = await hasFeatureOrigins(feature.key);
                 access.dataset.state = granted ? 'granted' : 'missing';
                 access.textContent = granted
-                    ? `Site access granted for ${describeFeatureOrigins(feature.key)}`
-                    : `Not working yet: needs access to ${describeFeatureOrigins(feature.key)}.`;
+                    ? t('text_site_access_granted_for', [describeFeatureOrigins(feature.key)])
+                    : t('text_not_working_yet_needs_access_to', [describeFeatureOrigins(feature.key)]);
                 grantButton.hidden = granted;
                 grantButton.setAttribute('aria-label', t('aria_grant_access_to', [feature.name, describeFeatureOrigins(feature.key)]));
             };
@@ -2085,7 +2085,8 @@
                 const payload = getExportSettings();
                 const serialized = JSON.stringify(payload, null, 2);
                 if (serialized.length > SETTINGS_IMPORT_TEXT_LIMIT) {
-                    showToast(t('toast_settings_exceed_the_4_mb_backup'), 5000);
+                    showToast(t('toast_settings_exceed_the_4_mb_backup',
+                        [formatCacheBytes(serialized.length), formatCacheBytes(SETTINGS_IMPORT_TEXT_LIMIT)]), 5000);
                     return;
                 }
                 const copied = copyTextToClipboard(serialized);
@@ -2121,7 +2122,8 @@
             try {
                 const serialized = await createEncryptedBackup(passphrase);
                 if (serialized.length > SETTINGS_IMPORT_TEXT_LIMIT) {
-                    showToast(t('toast_settings_exceed_the_4_mb_backup_2'), 5000);
+                    showToast(t('toast_settings_exceed_the_4_mb_backup_2',
+                        [formatCacheBytes(serialized.length), formatCacheBytes(SETTINGS_IMPORT_TEXT_LIMIT)]), 5000);
                     return;
                 }
                 const copied = copyTextToClipboard(serialized);
@@ -2251,7 +2253,7 @@
             overlay.querySelector('#enh-data-cache-count').textContent =
                 t('text_cache_remaining', [remaining, formatCacheBytes(remainingBytes)]);
             overlay.querySelector('#enh-cache-status').textContent = remaining
-                ? `${remaining} entries remain, using ${formatCacheBytes(remainingBytes)} of ${formatCacheBytes(CACHE_TOTAL_BYTE_BUDGET)}.`
+                ? t('text_cache_entries_remain', [remaining, formatCacheBytes(remainingBytes), formatCacheBytes(CACHE_TOTAL_BYTE_BUDGET)])
                 : t('text_no_cached_entries');
             if (!keys.length) showToast(t('toast_cache_is_already_empty'));
             else if (failed) showToast(t('toast_cleared_cached_entries_could_not_be', [cleared, failed]), 4500);

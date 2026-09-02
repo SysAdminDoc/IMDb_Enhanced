@@ -530,6 +530,14 @@
        and showing an old value for those would be asserting something the current data
        contradicts. Those paths do not throw at all — they fall through — so the absence
        of an error is itself the signal. */
+    /* Which of the three a widget should say. A rate limit is neither an outage nor an
+       absent answer, and it was being reported as the second: "score unavailable" for a
+       service that never got asked. */
+    function unavailableReasonFor(error, blocked) {
+        if (error && classifyFailure(error) === 'rate_limited') return 'rate-limited';
+        return blocked ? 'access' : 'unavailable';
+    }
+
     function isReachabilityFailure(error) {
         if (!error) return false;
         const category = classifyFailure(error);
@@ -559,8 +567,36 @@
     }
 
     function appendUnavailableNote(widget, reason, unavailableText = t('text_score_unavailable')) {
+        /* A service asking for fewer requests is not an outage and not an absent score, and
+           it is the one case with no useful action: a Retry would be refused by the hold
+           that is the whole point of it, and an old value with a date would suggest the
+           answer had changed when nothing has been asked. It says what happened. */
+        if (reason === 'rate-limited') {
+            widget.appendChild(makeEl('div', { className:'enh-score-widget__sub' },
+                t('text_the_service_asked_for_a_pause')));
+            return;
+        }
         if (reason === 'excluded' || reason === 'region') {
             widget.appendChild(makeEl('div', { className:'enh-score-widget__sub' }, unavailableText));
+            return;
+        }
+        /* The same shape for the other keyed source, and for the case where either would
+           do. A widget that says a score is simply unavailable when the answer is a free
+           key the reader could paste in is the least useful thing it could say. */
+        if (reason === 'mdblist-unconfigured' || reason === 'mdblist-rejected' || reason === 'keys-needed') {
+            const rejected = reason === 'mdblist-rejected';
+            widget.appendChild(makeEl('div', { className:'enh-score-widget__sub' },
+                rejected ? t('text_mdblist_rejected_this_key')
+                    : reason === 'keys-needed' ? t('text_needs_an_omdb_or_mdblist_key')
+                    : t('text_needs_an_mdblist_key')));
+            widget.appendChild(makeEl('button', {
+                type:'button',
+                className:'enh-score-stale__retry',
+                onClick: () => {
+                    if (!document.getElementById('enh-settings-overlay')) createSettingsPanel();
+                    if (!settingsOpen) toggleSettings();
+                },
+            }, rejected ? t('text_replace_key') : t('text_add_key')));
             return;
         }
         if (reason === 'omdb-unconfigured' || reason === 'omdb-rejected') {
@@ -647,6 +683,25 @@
         return true;
     }
 
+    /* Two services answer the same two widgets, and which one a person can use is decided
+       by the key they hold. Asked in turn, and only the ones there is a key for: OMDb
+       reports "needs a key" by rendering, which counts as handled, so chaining the two on
+       that answer meant a user with an MDBList key and no OMDb key was never asked at all
+       and was told to go and get an OMDb key instead. */
+    async function renderKeyedScore(feature, field, imdbId, isCurrent) {
+        if (isOmdbConfigured() && await renderOmdbScore(feature, field, imdbId, isCurrent)) return true;
+        if (isMdbListConfigured() && await renderMdbListScore(feature, field, imdbId, isCurrent)) return true;
+        return false;
+    }
+
+    /* What to say when neither answered. Naming a service the reader has no key for is the
+       only actionable thing here, and naming the one they do have a rejected key for beats
+       naming the other. */
+    function keyedScoreReason() {
+        if (isOmdbConfigured() || isMdbListConfigured()) return 'unavailable';
+        return 'keys-needed';
+    }
+
     /* Both score widgets answer from the same OMDb call. Returns true when it put
        something on screen — a score, or the reason there is none — so the caller knows
        whether its own fallback path still has work to do. */
@@ -725,9 +780,8 @@
             /* A build that does not ship the page parser has no search or detail page to
                read, and no origin to read it from, so OMDb is the whole path here. */
             if (!providerAllowedHere('rottenTomatoes')) {
-                if (!await renderOmdbScore(this, 'rt', imdbId, isCurrent)
-                    && !await renderMdbListScore(this, 'rt', imdbId, isCurrent) && isCurrent()) {
-                    this._renderUnavailable('unavailable');
+                if (!await renderKeyedScore(this, 'rt', imdbId, isCurrent) && isCurrent()) {
+                    this._renderUnavailable(keyedScoreReason());
                 }
                 return;
             }
@@ -816,7 +870,7 @@
                next visit retries instead of reading back a stale "unavailable". */
             const blocked = await cacheUnavailableUnlessBlocked(this.key, cacheKey, lookupError);
             if (!isCurrent()) return;
-            this._renderUnavailable(blocked ? 'access' : 'unavailable');
+            this._renderUnavailable(unavailableReasonFor(lookupError, blocked));
         },
         _render(data) {
             document.getElementById('enh-rt-widget')?.remove();
@@ -927,7 +981,8 @@
                one here. */
             if (!providerAllowedHere('letterboxd')) {
                 if (!await renderMdbListScore(this, 'letterboxd', imdbId, isCurrent) && isCurrent()) {
-                    this._renderUnavailable('unavailable');
+                    // Letterboxd has no API of its own, so MDBList is the only key that helps.
+                    this._renderUnavailable(isMdbListConfigured() ? 'unavailable' : 'mdblist-unconfigured');
                 }
                 return;
             }
@@ -984,7 +1039,7 @@
             if (await renderMdbListScore(this, 'letterboxd', imdbId, isCurrent)) return;
             const blocked = await cacheUnavailableUnlessBlocked(this.key, cacheKey, lookupError);
             if (!isCurrent()) return;
-            this._renderUnavailable(blocked ? 'access' : 'unavailable');
+            this._renderUnavailable(unavailableReasonFor(lookupError, blocked));
         },
         _render(data) {
             document.getElementById('enh-lb-widget')?.remove();
@@ -1006,7 +1061,8 @@
                     makeEl('span', { className:'enh-score-widget__badge enh-score-widget__badge--outline' }, 'LB'),
                     makeEl('span', { className:'enh-score-widget__value' }, formatScore(score))
                 ),
-                makeEl('div', { className:'enh-score-widget__sub' }, count ? `${count} ratings` : 'Average rating')
+                makeEl('div', { className:'enh-score-widget__sub' },
+                    count ? tCount('text_rating_count', data.ratingCount) : t('text_average_rating'))
             );
             if (data.via === 'mdblist') {
                 w.appendChild(makeEl('div', { className:'enh-score-widget__sub' }, t('label_via_mdblist')));
@@ -1656,7 +1712,7 @@
             if (await renderStaleScore(this, cacheKey, lookupError, isCurrent)) return;
             const blocked = await cacheUnavailableUnlessBlocked(this.key, cacheKey, lookupError);
             if (!isCurrent()) return;
-            this._renderUnavailable(blocked ? 'access' : 'unavailable');
+            this._renderUnavailable(unavailableReasonFor(lookupError, blocked));
         },
         _render(data) {
             document.getElementById('enh-tvmaze-widget')?.remove();
@@ -1783,7 +1839,7 @@
             if (await renderStaleScore(this, cacheKey, lookupError, isCurrent)) return;
             const blocked = await cacheUnavailableUnlessBlocked(this.key, cacheKey, lookupError);
             if (!isCurrent()) return;
-            this._renderUnavailable(blocked ? 'access' : 'unavailable');
+            this._renderUnavailable(unavailableReasonFor(lookupError, blocked));
         },
         _render(data) {
             document.getElementById('enh-anilist-widget')?.remove();
@@ -1875,9 +1931,8 @@
             /* As with Rotten Tomatoes: no parser in this build means no search endpoint
                and no origin, so OMDb answers or nothing does. */
             if (!providerAllowedHere('metacritic')) {
-                if (!await renderOmdbScore(this, 'metacritic', imdbId, isCurrent)
-                    && !await renderMdbListScore(this, 'metacritic', imdbId, isCurrent) && isCurrent()) {
-                    this._renderUnavailable('unavailable');
+                if (!await renderKeyedScore(this, 'metacritic', imdbId, isCurrent) && isCurrent()) {
+                    this._renderUnavailable(keyedScoreReason());
                 }
                 return;
             }
@@ -1965,7 +2020,7 @@
                next visit retries instead of reading back a stale "unavailable". */
             const blocked = await cacheUnavailableUnlessBlocked(this.key, cacheKey, lookupError);
             if (!isCurrent()) return;
-            this._renderUnavailable(blocked ? 'access' : 'unavailable');
+            this._renderUnavailable(unavailableReasonFor(lookupError, blocked));
         },
         _render(data) {
             document.getElementById('enh-mc-widget')?.remove();
@@ -2203,7 +2258,7 @@
                next visit retries instead of reading back a stale "unavailable". */
             const blocked = await cacheUnavailableUnlessBlocked(this.key, cacheKey, lookupError);
             if (!isCurrent()) return;
-            this._renderUnavailable(blocked ? 'access' : 'unavailable');
+            this._renderUnavailable(unavailableReasonFor(lookupError, blocked));
         },
         _parse(html, url, expected, allowIdentityOverride = false) {
             return parseJustWatchAvailability(html, url, expected, allowIdentityOverride);

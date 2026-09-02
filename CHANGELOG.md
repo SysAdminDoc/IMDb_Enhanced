@@ -10,6 +10,13 @@
 
 ### Changed
 
+- A score now appears if you hold a key for either service. Rotten Tomatoes and Metacritic can be answered by OMDb or by MDBList, but the two were chained so that OMDb reporting "no key" counted as an answer: anyone holding only an MDBList key was never asked and was told to go and get an OMDb key. When neither key is present the widget names both, and a missing or rejected MDBList key now gets the same wording and the same Add key button that OMDb always had.
+
+- Nine more sentences moved into the message catalog, including the two access lines in the settings panel that a screen reader reads out of a live region. The check meant to catch these lost track of where it was whenever it walked past a regular expression containing a bracket, which left it reporting no problems for the wrong reason.
+
+- Two export refusals said settings were past a 4 MB limit that had become roughly 40 MB. Both name the actual size and the actual limit now.
+
+
 - Every version in this changelog has a git tag now, not just the newest two. The README tells you to check out a version and rebuild it to confirm the file that ships matches its source, and that was only possible for the most recent release.
 
 - The request integration is called Seerr now, which is what Overseerr and Jellyseerr were merged into in February 2026. Both older installs still work and the API calls are unchanged; only the wording moved, because naming two retired products reads as an integration nobody maintains.

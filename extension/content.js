@@ -448,6 +448,7 @@
         error_request_aborted: 'Request aborted',
         error_request_failed: 'Request failed',
         error_request_http: 'The service returned an HTTP error',
+        error_request_rate_limited: 'The service asked for fewer requests. It will be left alone for a moment.',
         error_request_network: 'The service could not be reached',
         error_request_timeout: 'The service did not answer in time',
         error_response_not_json: 'Response was not valid JSON',
@@ -586,6 +587,7 @@
         journal_aborted: 'Cancelled by navigation',
         journal_empty: 'No failures recorded.',
         journal_http: 'A lookup service returned an HTTP error',
+        journal_rate_limited: 'A lookup service asked for fewer requests',
         journal_network: 'A lookup could not reach its service',
         journal_parse: 'A response could not be understood',
         journal_permission: 'Access was refused',
@@ -1050,6 +1052,9 @@
         text_more_watch_options: 'More watch options',
         text_movie_sites: 'Movie Sites',
         text_needs_a_tmdb_read_token: 'Needs a TMDB read token',
+        text_mdblist_rejected_this_key: 'MDBList rejected this key',
+        text_needs_an_mdblist_key: 'Needs an MDBList key',
+        text_needs_an_omdb_or_mdblist_key: 'Needs an OMDb or MDBList key',
         text_needs_an_omdb_key: 'Needs an OMDb key',
         text_next_episode: 'Next: $1',
         text_no_cached_entries: 'No cached entries.',
@@ -1117,6 +1122,7 @@
         text_saved_on_this_device: 'Saved on this device',
         text_saved_rotten_tomatoes_match_unavailable: 'Saved Rotten Tomatoes match unavailable',
         text_saving: 'Saving…',
+        text_the_service_asked_for_a_pause: 'That service asked for fewer requests, so it is being left alone for a moment.',
         text_score_unavailable: 'Score unavailable',
         text_scores_availability_and_reference: 'Scores, availability and reference',
         text_search_site_for_title: 'Search $1 for $2',
@@ -1139,6 +1145,17 @@
         text_title_has_already_been_requested: '$1 has already been requested',
         text_title_has_been_requested_through: '$1 has been requested through $2',
         text_title_is_already_available: '$1 is already available',
+        text_average_rating: 'Average rating',
+        text_rating_count_one: '$1 rating',
+        text_rating_count_other: '$1 ratings',
+        aria_has_a_private_local_mark: '$1 has a private local $2 mark; activate to clear',
+        text_no_sites: '0 sites',
+        text_visible_of_total: '$1/$2 visible',
+        label_added: 'Added',
+        label_add: 'Add',
+        text_cache_entries_remain: '$1 entries remain, using $2 of $3.',
+        text_site_access_granted_for: 'Site access granted for $1',
+        text_not_working_yet_needs_access_to: 'Not working yet: needs access to $1.',
         text_title_is_already_in_service: '$1 is already in $2',
         text_title_is_being_processed: '$1 is being processed',
         text_title_is_partly_available: '$1 is partly available',
@@ -1243,8 +1260,8 @@
         toast_settings_copied_omitting_one: 'Settings copied. $1 integration credential was left out. Use Export with credentials to include it.',
         toast_settings_copied_omitting_other: 'Settings copied. $1 integration credentials were left out. Use Export with credentials to include them.',
         toast_settings_could_not_be_read_for: 'Settings could not be read for export. No backup was copied.',
-        toast_settings_exceed_the_4_mb_backup: 'Settings exceed the 4 MB backup limit. Remove stale title marks or oversized destinations first.',
-        toast_settings_exceed_the_4_mb_backup_2: 'Settings exceed the 4 MB backup limit. Remove stale title marks first.',
+        toast_settings_exceed_the_4_mb_backup: 'These settings are $1, past the $2 a backup can hold. Remove stale title marks or oversized destinations first.',
+        toast_settings_exceed_the_4_mb_backup_2: 'These settings are $1, past the $2 a backup can hold. Remove stale title marks first.',
         toast_the_journal_could_not_be_cleared: 'The journal could not be cleared. Check $1.',
         toast_the_match_correction_was_not_saved: 'The match correction was not saved. The previous match has been restored.',
         toast_the_two_passphrases_do_not_match: 'The two passphrases do not match.',
@@ -5484,9 +5501,16 @@
             || normalizeRequestErrorText(response?.message)
             || normalizeRequestErrorText(response?.statusText)
             || '';
-        const error = new Error(detail || REQUEST_FAILURE_TEXT[category] || t('error_request_failed'));
-        error.imdbEnhancedCategory = category;
+        /* A 429 is not an outage and must not be filed as one: it says the service is
+           working and wants fewer requests. The stale-score fallback treats a server error
+           as grounds for showing an old value, which is right for a 500 and wrong here. */
+        const limited = status === 429;
+        const error = new Error(detail
+            || REQUEST_FAILURE_TEXT[limited ? 'rate_limited' : category]
+            || t('error_request_failed'));
+        error.imdbEnhancedCategory = limited ? 'rate_limited' : category;
         error.status = status;
+        if (limited) error.retryAfterMs = readRetryAfter(response) || RATE_LIMIT_DEFAULT_MS;
         /* Carried forward, not dropped. getRequestErrorMessage turns these into the four
            sentences a user is actually shown for a blocked redirect; without it every one
            of those was unreachable and the toast fell through to the worker's own internal
@@ -5506,7 +5530,66 @@
         timeout: t('error_request_timeout'),
         aborted: t('error_request_aborted'),
         http: t('error_request_http'),
+        rate_limited: t('error_request_rate_limited'),
     };
+
+    /* A service that answers 429 is asking to be left alone, and the answer to that is to
+       stop asking rather than to try the next title. AniList publishes ninety requests a
+       minute and currently serves thirty; Wikimedia introduced per-minute buckets in 2026
+       that a browser-origin client shares with everything else on the address. Neither was
+       handled: a 429 was an HTTP failure like any other, so a person opening a filmography
+       sent one request per row into a service that had already said no.
+
+       Held by host, because that is what the limit belongs to, and for as long as the
+       service asked for. Retry-After is seconds or an HTTP date; anything else, or nothing
+       at all, gets a minute, which is the window every one of these limits is stated in. */
+    const RATE_LIMIT_DEFAULT_MS = 60000;
+    const RATE_LIMIT_MAX_MS = 60 * 60 * 1000;
+    const rateLimitHolds = new Map();
+
+    function parseRetryAfter(value, now = Date.now()) {
+        const text = String(value ?? '').trim();
+        if (!text) return 0;
+        if (/^\d+$/.test(text)) {
+            const seconds = Number(text);
+            return Number.isFinite(seconds) ? Math.min(seconds * 1000, RATE_LIMIT_MAX_MS) : 0;
+        }
+        const at = Date.parse(text);
+        if (!Number.isFinite(at)) return 0;
+        return Math.min(Math.max(at - now, 0), RATE_LIMIT_MAX_MS);
+    }
+
+    /* Managers hand back the raw header block as one string; the bridge cannot, so it
+       parses the one header this needs and passes the number. */
+    function readRetryAfter(response) {
+        if (Number.isFinite(Number(response?.retryAfterMs))) return Number(response.retryAfterMs);
+        const raw = String(response?.responseHeaders || '');
+        const match = /^retry-after:\s*(.+)$/im.exec(raw);
+        return match ? parseRetryAfter(match[1]) : 0;
+    }
+
+    function hostOf(url) {
+        try { return new URL(url).hostname; }
+        catch { return ''; }
+    }
+
+    function rateLimitHoldFor(url, now = Date.now()) {
+        const host = hostOf(url);
+        if (!host) return 0;
+        const until = rateLimitHolds.get(host) || 0;
+        if (until <= now) {
+            if (until) rateLimitHolds.delete(host);
+            return 0;
+        }
+        return until - now;
+    }
+
+    function holdRateLimitedHost(url, ms, now = Date.now()) {
+        const host = hostOf(url);
+        if (!host) return;
+        const wait = Math.min(Math.max(Number(ms) || RATE_LIMIT_DEFAULT_MS, 1000), RATE_LIMIT_MAX_MS);
+        rateLimitHolds.set(host, Math.max(rateLimitHolds.get(host) || 0, now + wait));
+    }
     function httpRequest(url, opts = {}) {
         return new Promise((resolve, reject) => {
             const {
@@ -5520,6 +5603,17 @@
                 ...(hasBody ? { 'Content-Type': 'application/json' } : {}),
                 ...providedHeaders,
             };
+            /* Refused here rather than sent: a service that just answered 429 does not
+               need the rest of the filmography to find out it meant it. */
+            const held = rateLimitHoldFor(url);
+            if (held) {
+                const refusal = failure('rate_limited', t('error_request_rate_limited'));
+                refusal.status = 429;
+                refusal.retryAfterMs = held;
+                refusal.requestHost = hostOf(url);
+                reject(refusal);
+                return;
+            }
             let settled = false;
             let requestHandle = null;
             const finish = (handler, value) => {
@@ -5546,10 +5640,12 @@
                     data: hasBody ? JSON.stringify(body) : requestOptions.data,
                     onload: response => {
                         const failed = Number(response?.status) >= 400;
-                        finish(
-                            failed ? reject : resolve,
-                            failed ? describeRequestFailure('http', response, url) : response
-                        );
+                        if (!failed) { finish(resolve, response); return; }
+                        const error = describeRequestFailure('http', response, url);
+                        if (error.imdbEnhancedCategory === 'rate_limited') {
+                            holdRateLimitedHost(url, error.retryAfterMs);
+                        }
+                        finish(reject, error);
                     },
                     /* A script manager hands these callbacks its own response object, not
                        an Error. It has no name and no message, so anything downstream that
@@ -6024,13 +6120,14 @@
        went down. */
     const FAILURE_JOURNAL_ENTRY_VERSION = 1;
     const FAILURE_CATEGORIES = [
-        'selector', 'network', 'http', 'storage', 'parse', 'permission', 'timeout', 'aborted', 'unknown',
+        'selector', 'network', 'http', 'rate_limited', 'storage', 'parse', 'permission', 'timeout', 'aborted', 'unknown',
     ];
     const FAILURE_CATEGORY_SET = new Set(FAILURE_CATEGORIES);
     const FAILURE_CATEGORY_LABELS = {
         selector: t('journal_selector'),
         network: t('journal_network'),
         http: t('journal_http'),
+        rate_limited: t('journal_rate_limited'),
         storage: t('journal_storage'),
         parse: t('journal_parse'),
         permission: t('journal_permission'),
@@ -9187,6 +9284,14 @@ section[id*="quote" i] .ipc-list-card { padding: 4px 0 !important; margin: 2px 0
        and showing an old value for those would be asserting something the current data
        contradicts. Those paths do not throw at all — they fall through — so the absence
        of an error is itself the signal. */
+    /* Which of the three a widget should say. A rate limit is neither an outage nor an
+       absent answer, and it was being reported as the second: "score unavailable" for a
+       service that never got asked. */
+    function unavailableReasonFor(error, blocked) {
+        if (error && classifyFailure(error) === 'rate_limited') return 'rate-limited';
+        return blocked ? 'access' : 'unavailable';
+    }
+
     function isReachabilityFailure(error) {
         if (!error) return false;
         const category = classifyFailure(error);
@@ -9216,8 +9321,36 @@ section[id*="quote" i] .ipc-list-card { padding: 4px 0 !important; margin: 2px 0
     }
 
     function appendUnavailableNote(widget, reason, unavailableText = t('text_score_unavailable')) {
+        /* A service asking for fewer requests is not an outage and not an absent score, and
+           it is the one case with no useful action: a Retry would be refused by the hold
+           that is the whole point of it, and an old value with a date would suggest the
+           answer had changed when nothing has been asked. It says what happened. */
+        if (reason === 'rate-limited') {
+            widget.appendChild(makeEl('div', { className:'enh-score-widget__sub' },
+                t('text_the_service_asked_for_a_pause')));
+            return;
+        }
         if (reason === 'excluded' || reason === 'region') {
             widget.appendChild(makeEl('div', { className:'enh-score-widget__sub' }, unavailableText));
+            return;
+        }
+        /* The same shape for the other keyed source, and for the case where either would
+           do. A widget that says a score is simply unavailable when the answer is a free
+           key the reader could paste in is the least useful thing it could say. */
+        if (reason === 'mdblist-unconfigured' || reason === 'mdblist-rejected' || reason === 'keys-needed') {
+            const rejected = reason === 'mdblist-rejected';
+            widget.appendChild(makeEl('div', { className:'enh-score-widget__sub' },
+                rejected ? t('text_mdblist_rejected_this_key')
+                    : reason === 'keys-needed' ? t('text_needs_an_omdb_or_mdblist_key')
+                    : t('text_needs_an_mdblist_key')));
+            widget.appendChild(makeEl('button', {
+                type:'button',
+                className:'enh-score-stale__retry',
+                onClick: () => {
+                    if (!document.getElementById('enh-settings-overlay')) createSettingsPanel();
+                    if (!settingsOpen) toggleSettings();
+                },
+            }, rejected ? t('text_replace_key') : t('text_add_key')));
             return;
         }
         if (reason === 'omdb-unconfigured' || reason === 'omdb-rejected') {
@@ -9304,6 +9437,25 @@ section[id*="quote" i] .ipc-list-card { padding: 4px 0 !important; margin: 2px 0
         return true;
     }
 
+    /* Two services answer the same two widgets, and which one a person can use is decided
+       by the key they hold. Asked in turn, and only the ones there is a key for: OMDb
+       reports "needs a key" by rendering, which counts as handled, so chaining the two on
+       that answer meant a user with an MDBList key and no OMDb key was never asked at all
+       and was told to go and get an OMDb key instead. */
+    async function renderKeyedScore(feature, field, imdbId, isCurrent) {
+        if (isOmdbConfigured() && await renderOmdbScore(feature, field, imdbId, isCurrent)) return true;
+        if (isMdbListConfigured() && await renderMdbListScore(feature, field, imdbId, isCurrent)) return true;
+        return false;
+    }
+
+    /* What to say when neither answered. Naming a service the reader has no key for is the
+       only actionable thing here, and naming the one they do have a rejected key for beats
+       naming the other. */
+    function keyedScoreReason() {
+        if (isOmdbConfigured() || isMdbListConfigured()) return 'unavailable';
+        return 'keys-needed';
+    }
+
     /* Both score widgets answer from the same OMDb call. Returns true when it put
        something on screen — a score, or the reason there is none — so the caller knows
        whether its own fallback path still has work to do. */
@@ -9382,9 +9534,8 @@ section[id*="quote" i] .ipc-list-card { padding: 4px 0 !important; margin: 2px 0
             /* A build that does not ship the page parser has no search or detail page to
                read, and no origin to read it from, so OMDb is the whole path here. */
             if (!providerAllowedHere('rottenTomatoes')) {
-                if (!await renderOmdbScore(this, 'rt', imdbId, isCurrent)
-                    && !await renderMdbListScore(this, 'rt', imdbId, isCurrent) && isCurrent()) {
-                    this._renderUnavailable('unavailable');
+                if (!await renderKeyedScore(this, 'rt', imdbId, isCurrent) && isCurrent()) {
+                    this._renderUnavailable(keyedScoreReason());
                 }
                 return;
             }
@@ -9473,7 +9624,7 @@ section[id*="quote" i] .ipc-list-card { padding: 4px 0 !important; margin: 2px 0
                next visit retries instead of reading back a stale "unavailable". */
             const blocked = await cacheUnavailableUnlessBlocked(this.key, cacheKey, lookupError);
             if (!isCurrent()) return;
-            this._renderUnavailable(blocked ? 'access' : 'unavailable');
+            this._renderUnavailable(unavailableReasonFor(lookupError, blocked));
         },
         _render(data) {
             document.getElementById('enh-rt-widget')?.remove();
@@ -9584,7 +9735,8 @@ section[id*="quote" i] .ipc-list-card { padding: 4px 0 !important; margin: 2px 0
                one here. */
             if (!providerAllowedHere('letterboxd')) {
                 if (!await renderMdbListScore(this, 'letterboxd', imdbId, isCurrent) && isCurrent()) {
-                    this._renderUnavailable('unavailable');
+                    // Letterboxd has no API of its own, so MDBList is the only key that helps.
+                    this._renderUnavailable(isMdbListConfigured() ? 'unavailable' : 'mdblist-unconfigured');
                 }
                 return;
             }
@@ -9641,7 +9793,7 @@ section[id*="quote" i] .ipc-list-card { padding: 4px 0 !important; margin: 2px 0
             if (await renderMdbListScore(this, 'letterboxd', imdbId, isCurrent)) return;
             const blocked = await cacheUnavailableUnlessBlocked(this.key, cacheKey, lookupError);
             if (!isCurrent()) return;
-            this._renderUnavailable(blocked ? 'access' : 'unavailable');
+            this._renderUnavailable(unavailableReasonFor(lookupError, blocked));
         },
         _render(data) {
             document.getElementById('enh-lb-widget')?.remove();
@@ -9663,7 +9815,8 @@ section[id*="quote" i] .ipc-list-card { padding: 4px 0 !important; margin: 2px 0
                     makeEl('span', { className:'enh-score-widget__badge enh-score-widget__badge--outline' }, 'LB'),
                     makeEl('span', { className:'enh-score-widget__value' }, formatScore(score))
                 ),
-                makeEl('div', { className:'enh-score-widget__sub' }, count ? `${count} ratings` : 'Average rating')
+                makeEl('div', { className:'enh-score-widget__sub' },
+                    count ? tCount('text_rating_count', data.ratingCount) : t('text_average_rating'))
             );
             if (data.via === 'mdblist') {
                 w.appendChild(makeEl('div', { className:'enh-score-widget__sub' }, t('label_via_mdblist')));
@@ -10313,7 +10466,7 @@ section[id*="quote" i] .ipc-list-card { padding: 4px 0 !important; margin: 2px 0
             if (await renderStaleScore(this, cacheKey, lookupError, isCurrent)) return;
             const blocked = await cacheUnavailableUnlessBlocked(this.key, cacheKey, lookupError);
             if (!isCurrent()) return;
-            this._renderUnavailable(blocked ? 'access' : 'unavailable');
+            this._renderUnavailable(unavailableReasonFor(lookupError, blocked));
         },
         _render(data) {
             document.getElementById('enh-tvmaze-widget')?.remove();
@@ -10440,7 +10593,7 @@ section[id*="quote" i] .ipc-list-card { padding: 4px 0 !important; margin: 2px 0
             if (await renderStaleScore(this, cacheKey, lookupError, isCurrent)) return;
             const blocked = await cacheUnavailableUnlessBlocked(this.key, cacheKey, lookupError);
             if (!isCurrent()) return;
-            this._renderUnavailable(blocked ? 'access' : 'unavailable');
+            this._renderUnavailable(unavailableReasonFor(lookupError, blocked));
         },
         _render(data) {
             document.getElementById('enh-anilist-widget')?.remove();
@@ -10532,9 +10685,8 @@ section[id*="quote" i] .ipc-list-card { padding: 4px 0 !important; margin: 2px 0
             /* As with Rotten Tomatoes: no parser in this build means no search endpoint
                and no origin, so OMDb answers or nothing does. */
             if (!providerAllowedHere('metacritic')) {
-                if (!await renderOmdbScore(this, 'metacritic', imdbId, isCurrent)
-                    && !await renderMdbListScore(this, 'metacritic', imdbId, isCurrent) && isCurrent()) {
-                    this._renderUnavailable('unavailable');
+                if (!await renderKeyedScore(this, 'metacritic', imdbId, isCurrent) && isCurrent()) {
+                    this._renderUnavailable(keyedScoreReason());
                 }
                 return;
             }
@@ -10622,7 +10774,7 @@ section[id*="quote" i] .ipc-list-card { padding: 4px 0 !important; margin: 2px 0
                next visit retries instead of reading back a stale "unavailable". */
             const blocked = await cacheUnavailableUnlessBlocked(this.key, cacheKey, lookupError);
             if (!isCurrent()) return;
-            this._renderUnavailable(blocked ? 'access' : 'unavailable');
+            this._renderUnavailable(unavailableReasonFor(lookupError, blocked));
         },
         _render(data) {
             document.getElementById('enh-mc-widget')?.remove();
@@ -10860,7 +11012,7 @@ section[id*="quote" i] .ipc-list-card { padding: 4px 0 !important; margin: 2px 0
                next visit retries instead of reading back a stale "unavailable". */
             const blocked = await cacheUnavailableUnlessBlocked(this.key, cacheKey, lookupError);
             if (!isCurrent()) return;
-            this._renderUnavailable(blocked ? 'access' : 'unavailable');
+            this._renderUnavailable(unavailableReasonFor(lookupError, blocked));
         },
         _parse(html, url, expected, allowIdentityOverride = false) {
             return parseJustWatchAvailability(html, url, expected, allowIdentityOverride);
@@ -12120,7 +12272,7 @@ section[id*="quote" i] .ipc-list-card { padding: 4px 0 !important; margin: 2px 0
                     const stateLabel = action === 'watched' ? 'watched' : 'skipped';
                     btn.setAttribute('aria-pressed', String(active));
                     btn.setAttribute('aria-label', active
-                        ? `${card.dataset.enhMarkTitle} has a private local ${stateLabel} mark; activate to clear`
+                        ? t('aria_has_a_private_local_mark', [card.dataset.enhMarkTitle, stateLabel])
                         : `Save a private ${stateLabel} mark for ${card.dataset.enhMarkTitle}; does not change IMDb Watched`);
                 } else if (action === 'clear') {
                     btn.disabled = !mark;
@@ -16227,7 +16379,7 @@ ${scopedRules('.enh-zoom', {
             const siteRows = [...rows.querySelectorAll('.enh-site-row')];
             const total = siteRows.length;
             const visible = siteRows.filter(row => row.querySelector('[data-field="enabled"]')?.checked).length;
-            count.textContent = total ? `${visible}/${total} visible` : '0 sites';
+            count.textContent = total ? t('text_visible_of_total', [visible, total]) : t('text_no_sites');
             count.title = `${visible} of ${total} destinations appear on IMDb pages`;
             if (add) add.disabled = total >= SITE_LIST_LIMIT;
             updateOrderButtons();
@@ -16519,9 +16671,9 @@ ${scopedRules('.enh-zoom', {
                     if (!entry.searchable) return;
                     const listed = names.has(entry.lowerName);
                     entry.button.disabled = listed || atLimit;
-                    entry.button.textContent = listed ? 'Added' : 'Add';
+                    entry.button.textContent = listed ? t('label_added') : t('label_add');
                     entry.button.setAttribute('aria-label', listed
-                        ? `${entry.site.name} is already in ${title}`
+                        ? t('text_title_is_already_in_service', [entry.site.name, title])
                         : `Add ${entry.site.name} to ${title}`);
                 });
                 catalog.forEach((groupData, groupIndex) => {
@@ -17309,8 +17461,8 @@ ${scopedRules('.enh-zoom', {
                 const granted = await hasFeatureOrigins(feature.key);
                 access.dataset.state = granted ? 'granted' : 'missing';
                 access.textContent = granted
-                    ? `Site access granted for ${describeFeatureOrigins(feature.key)}`
-                    : `Not working yet: needs access to ${describeFeatureOrigins(feature.key)}.`;
+                    ? t('text_site_access_granted_for', [describeFeatureOrigins(feature.key)])
+                    : t('text_not_working_yet_needs_access_to', [describeFeatureOrigins(feature.key)]);
                 grantButton.hidden = granted;
                 grantButton.setAttribute('aria-label', t('aria_grant_access_to', [feature.name, describeFeatureOrigins(feature.key)]));
             };
@@ -18076,7 +18228,8 @@ ${scopedRules('.enh-zoom', {
                 const payload = getExportSettings();
                 const serialized = JSON.stringify(payload, null, 2);
                 if (serialized.length > SETTINGS_IMPORT_TEXT_LIMIT) {
-                    showToast(t('toast_settings_exceed_the_4_mb_backup'), 5000);
+                    showToast(t('toast_settings_exceed_the_4_mb_backup',
+                        [formatCacheBytes(serialized.length), formatCacheBytes(SETTINGS_IMPORT_TEXT_LIMIT)]), 5000);
                     return;
                 }
                 const copied = copyTextToClipboard(serialized);
@@ -18112,7 +18265,8 @@ ${scopedRules('.enh-zoom', {
             try {
                 const serialized = await createEncryptedBackup(passphrase);
                 if (serialized.length > SETTINGS_IMPORT_TEXT_LIMIT) {
-                    showToast(t('toast_settings_exceed_the_4_mb_backup_2'), 5000);
+                    showToast(t('toast_settings_exceed_the_4_mb_backup_2',
+                        [formatCacheBytes(serialized.length), formatCacheBytes(SETTINGS_IMPORT_TEXT_LIMIT)]), 5000);
                     return;
                 }
                 const copied = copyTextToClipboard(serialized);
@@ -18242,7 +18396,7 @@ ${scopedRules('.enh-zoom', {
             overlay.querySelector('#enh-data-cache-count').textContent =
                 t('text_cache_remaining', [remaining, formatCacheBytes(remainingBytes)]);
             overlay.querySelector('#enh-cache-status').textContent = remaining
-                ? `${remaining} entries remain, using ${formatCacheBytes(remainingBytes)} of ${formatCacheBytes(CACHE_TOTAL_BYTE_BUDGET)}.`
+                ? t('text_cache_entries_remain', [remaining, formatCacheBytes(remainingBytes), formatCacheBytes(CACHE_TOTAL_BYTE_BUDGET)])
                 : t('text_no_cached_entries');
             if (!keys.length) showToast(t('toast_cache_is_already_empty'));
             else if (failed) showToast(t('toast_cleared_cached_entries_could_not_be', [cleared, failed]), 4500);

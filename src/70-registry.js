@@ -35,13 +35,14 @@
        went down. */
     const FAILURE_JOURNAL_ENTRY_VERSION = 1;
     const FAILURE_CATEGORIES = [
-        'selector', 'network', 'http', 'storage', 'parse', 'permission', 'timeout', 'aborted', 'unknown',
+        'selector', 'network', 'http', 'rate_limited', 'storage', 'parse', 'permission', 'timeout', 'aborted', 'unknown',
     ];
     const FAILURE_CATEGORY_SET = new Set(FAILURE_CATEGORIES);
     const FAILURE_CATEGORY_LABELS = {
         selector: t('journal_selector'),
         network: t('journal_network'),
         http: t('journal_http'),
+        rate_limited: t('journal_rate_limited'),
         storage: t('journal_storage'),
         parse: t('journal_parse'),
         permission: t('journal_permission'),

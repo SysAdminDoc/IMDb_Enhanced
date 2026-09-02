@@ -34,9 +34,16 @@
             || normalizeRequestErrorText(response?.message)
             || normalizeRequestErrorText(response?.statusText)
             || '';
-        const error = new Error(detail || REQUEST_FAILURE_TEXT[category] || t('error_request_failed'));
-        error.imdbEnhancedCategory = category;
+        /* A 429 is not an outage and must not be filed as one: it says the service is
+           working and wants fewer requests. The stale-score fallback treats a server error
+           as grounds for showing an old value, which is right for a 500 and wrong here. */
+        const limited = status === 429;
+        const error = new Error(detail
+            || REQUEST_FAILURE_TEXT[limited ? 'rate_limited' : category]
+            || t('error_request_failed'));
+        error.imdbEnhancedCategory = limited ? 'rate_limited' : category;
         error.status = status;
+        if (limited) error.retryAfterMs = readRetryAfter(response) || RATE_LIMIT_DEFAULT_MS;
         /* Carried forward, not dropped. getRequestErrorMessage turns these into the four
            sentences a user is actually shown for a blocked redirect; without it every one
            of those was unreachable and the toast fell through to the worker's own internal
@@ -56,7 +63,66 @@
         timeout: t('error_request_timeout'),
         aborted: t('error_request_aborted'),
         http: t('error_request_http'),
+        rate_limited: t('error_request_rate_limited'),
     };
+
+    /* A service that answers 429 is asking to be left alone, and the answer to that is to
+       stop asking rather than to try the next title. AniList publishes ninety requests a
+       minute and currently serves thirty; Wikimedia introduced per-minute buckets in 2026
+       that a browser-origin client shares with everything else on the address. Neither was
+       handled: a 429 was an HTTP failure like any other, so a person opening a filmography
+       sent one request per row into a service that had already said no.
+
+       Held by host, because that is what the limit belongs to, and for as long as the
+       service asked for. Retry-After is seconds or an HTTP date; anything else, or nothing
+       at all, gets a minute, which is the window every one of these limits is stated in. */
+    const RATE_LIMIT_DEFAULT_MS = 60000;
+    const RATE_LIMIT_MAX_MS = 60 * 60 * 1000;
+    const rateLimitHolds = new Map();
+
+    function parseRetryAfter(value, now = Date.now()) {
+        const text = String(value ?? '').trim();
+        if (!text) return 0;
+        if (/^\d+$/.test(text)) {
+            const seconds = Number(text);
+            return Number.isFinite(seconds) ? Math.min(seconds * 1000, RATE_LIMIT_MAX_MS) : 0;
+        }
+        const at = Date.parse(text);
+        if (!Number.isFinite(at)) return 0;
+        return Math.min(Math.max(at - now, 0), RATE_LIMIT_MAX_MS);
+    }
+
+    /* Managers hand back the raw header block as one string; the bridge cannot, so it
+       parses the one header this needs and passes the number. */
+    function readRetryAfter(response) {
+        if (Number.isFinite(Number(response?.retryAfterMs))) return Number(response.retryAfterMs);
+        const raw = String(response?.responseHeaders || '');
+        const match = /^retry-after:\s*(.+)$/im.exec(raw);
+        return match ? parseRetryAfter(match[1]) : 0;
+    }
+
+    function hostOf(url) {
+        try { return new URL(url).hostname; }
+        catch { return ''; }
+    }
+
+    function rateLimitHoldFor(url, now = Date.now()) {
+        const host = hostOf(url);
+        if (!host) return 0;
+        const until = rateLimitHolds.get(host) || 0;
+        if (until <= now) {
+            if (until) rateLimitHolds.delete(host);
+            return 0;
+        }
+        return until - now;
+    }
+
+    function holdRateLimitedHost(url, ms, now = Date.now()) {
+        const host = hostOf(url);
+        if (!host) return;
+        const wait = Math.min(Math.max(Number(ms) || RATE_LIMIT_DEFAULT_MS, 1000), RATE_LIMIT_MAX_MS);
+        rateLimitHolds.set(host, Math.max(rateLimitHolds.get(host) || 0, now + wait));
+    }
     function httpRequest(url, opts = {}) {
         return new Promise((resolve, reject) => {
             const {
@@ -70,6 +136,17 @@
                 ...(hasBody ? { 'Content-Type': 'application/json' } : {}),
                 ...providedHeaders,
             };
+            /* Refused here rather than sent: a service that just answered 429 does not
+               need the rest of the filmography to find out it meant it. */
+            const held = rateLimitHoldFor(url);
+            if (held) {
+                const refusal = failure('rate_limited', t('error_request_rate_limited'));
+                refusal.status = 429;
+                refusal.retryAfterMs = held;
+                refusal.requestHost = hostOf(url);
+                reject(refusal);
+                return;
+            }
             let settled = false;
             let requestHandle = null;
             const finish = (handler, value) => {
@@ -96,10 +173,12 @@
                     data: hasBody ? JSON.stringify(body) : requestOptions.data,
                     onload: response => {
                         const failed = Number(response?.status) >= 400;
-                        finish(
-                            failed ? reject : resolve,
-                            failed ? describeRequestFailure('http', response, url) : response
-                        );
+                        if (!failed) { finish(resolve, response); return; }
+                        const error = describeRequestFailure('http', response, url);
+                        if (error.imdbEnhancedCategory === 'rate_limited') {
+                            holdRateLimitedHost(url, error.retryAfterMs);
+                        }
+                        finish(reject, error);
                     },
                     /* A script manager hands these callbacks its own response object, not
                        an Error. It has no name and no message, so anything downstream that

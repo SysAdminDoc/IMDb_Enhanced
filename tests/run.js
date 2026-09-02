@@ -301,6 +301,14 @@ function loadScriptTestHooks({ withoutDeleteValue = false, withheldCredentials =
         castAgeAtRelease,
         CAST_AGE_LIMIT,
         fetchTmdbAvailability,
+        parseRetryAfter,
+        readRetryAfter,
+        rateLimitHoldFor,
+        holdRateLimitedHost,
+        isReachabilityFailure,
+        unavailableReasonFor,
+        classifyFailure,
+        httpRequest,
         parseOmdbRatings,
         fetchOmdbRatings,
         parseMdbListRatings,
@@ -5911,8 +5919,12 @@ test('an unreachable provider falls back to a labelled cached value', () => {
        match the mutant. They are exact rather than behavioural because rendering these
        needs a real rating bar; the behaviour itself was verified in a loaded extension
        with the grant withheld against a live provider. */
-    assert.strictEqual((script.match(/this\._renderUnavailable\(blocked \? 'access' : 'unavailable'\)/g) || []).length, scoreSources,
+    /* The three-way choice moved into a helper when a rate limit became its own answer, so
+       what is counted is the call to it. Still exact, and still one per score source. */
+    assert.strictEqual((script.match(/this\._renderUnavailable\(unavailableReasonFor\(lookupError, blocked\)\)/g) || []).length, scoreSources,
         'every score lookup must distinguish a missing grant from an outage when it gives up');
+    assert(/function unavailableReasonFor\(error, blocked\) \{[\s\S]{0,200}?'rate-limited'[\s\S]{0,120}?blocked \? 'access' : 'unavailable'/.test(script),
+        'and that helper must still tell a missing grant from an outage, not only a rate limit');
     assert(script.includes("if (reason !== 'access') {"),
         'the unavailable note must keep a branch for a missing grant');
     assert(script.includes("'Site access not granted'"), 'and say so in those words');
@@ -6619,8 +6631,11 @@ test('external access is requested per feature, not demanded at install', () => 
     const body = featureRow.slice(0, featureRow.indexOf('const FEATURE_DEPENDENTS'));
     assert(body.includes('await hasFeatureOrigins(feature.key)'), 'the row must report the real access state');
     assert(body.includes('openOptionsPage()'), 'the row must offer a route to the only surface that can grant');
-    assert(body.includes('Not working yet: needs access to'),
+    // The sentence moved into the catalog; the row names the key and the words live there.
+    assert(body.includes("t('text_not_working_yet_needs_access_to'"),
         'a feature that is on but cannot reach its service must say so rather than look broken');
+    assert(/needs access to \$1/.test(messageCatalog.text_not_working_yet_needs_access_to || ''),
+        'and the sentence it resolves to must name the service');
     assert(body.includes('releaseFeatureOrigins(feature.key)'),
         'disabling a feature must hand back access nothing else needs');
     assert(body.includes("document.addEventListener('imdb-enhanced:permissions-changed', paintAccess)"),
@@ -7212,6 +7227,8 @@ test('the permissions popup fills its copy from the installed locale', () => {
    The innermost call is the one that decides, which is what keeps `showToast(t('key'))`
    from reporting its own catalog key: that key belongs to t, not to showToast. */
 const SHOWN_CALLS = new Set(['showToast', 'setTextIfChanged', 'say']);
+/* The two that take a key rather than a sentence. */
+const CATALOG_CALLS = new Set(['t', 'tCount']);
 const readableStrings = source => {
     const found = [];
     const callStack = [];
@@ -7219,9 +7236,56 @@ const readableStrings = source => {
     const identifierBefore = position => {
         let end = position;
         while (end > 0 && /\s/.test(source[end - 1])) end -= 1;
+        // showToast?.(...) is the same call as showToast(...); the optional-call token sits
+        // between the name and the parenthesis and used to hide it.
+        if (source.slice(end - 2, end) === '?.') {
+            end -= 2;
+            while (end > 0 && /\s/.test(source[end - 1])) end -= 1;
+        }
         let start = end;
         while (start > 0 && /[\w$]/.test(source[start - 1])) start -= 1;
         return source.slice(start, end);
+    };
+    /* A slash is a regex only in operator position. Without this the walker read the
+       parentheses inside /\(/ and /["']/ as code: twenty-three frames were left unbalanced
+       at the end of the shipped script, every one of them silently, because popping an
+       empty stack throws nothing. A desynced stack reports the wrong enclosing call, which
+       makes this gate quietly permissive — the exact failure it exists to prevent.
+       (CLAUDE.md, 2026-09-01: "a naive brace counter says the file is unbalanced, because
+       return /re/.test(x) looks like a division".) */
+    const REGEX_PRECEDING_KEYWORDS = new Set([
+        'return', 'typeof', 'instanceof', 'in', 'of', 'new', 'delete', 'void', 'case',
+        'do', 'else', 'yield', 'await', 'throw',
+    ]);
+    const startsRegex = position => {
+        let back = position - 1;
+        while (back >= 0 && /\s/.test(source[back])) back -= 1;
+        if (back < 0) return true;
+        const prev = source[back];
+        if (/[\w$)\]]/.test(prev)) {
+            if (prev !== ')' && prev !== ']') {
+                let start = back;
+                while (start > 0 && /[\w$]/.test(source[start - 1])) start -= 1;
+                return REGEX_PRECEDING_KEYWORDS.has(source.slice(start, back + 1));
+            }
+            return false;
+        }
+        return true;
+    };
+    const skipRegex = position => {
+        let at = position + 1;
+        let inClass = false;
+        while (at < source.length) {
+            const c = source[at];
+            if (c === '\\') { at += 2; continue; }
+            if (c === '\n') return -1;
+            if (inClass) { if (c === ']') inClass = false; }
+            else if (c === '[') inClass = true;
+            else if (c === '/') { at += 1; break; }
+            at += 1;
+        }
+        while (at < source.length && /[a-z]/.test(source[at])) at += 1;
+        return at;
     };
     let index = 0;
     let line = 1;
@@ -7240,6 +7304,10 @@ const readableStrings = source => {
         if (ch === '/' && source[index + 1] === '/') {
             while (index < source.length && source[index] !== '\n') index += 1;
             continue;
+        }
+        if (ch === '/' && source[index + 1] !== '/' && source[index + 1] !== '*' && startsRegex(index)) {
+            const after = skipRegex(index);
+            if (after > index) { index = after; continue; }
         }
         if (ch === '/' && source[index + 1] === '*') {
             index += 2;
@@ -7302,6 +7370,9 @@ const readableStrings = source => {
         }
         index += 1;
     }
+    /* Balanced in, balanced out. An unclosed frame means the walker lost track of where it
+       was, and every judgement made after that point is against the wrong call. */
+    found.unbalanced = callStack.length;
     return found;
 };
 
@@ -7336,6 +7407,27 @@ test('every sentence in the source comes from the catalog', () => {
        toast, a status line. A selector, a key, a class name and a URL are none of them. */
     const SHOWN = /(?:\b(?:label|title|placeholder|alt)\s*:\s*|textContent\s*=\s*|setTextIfChanged\([^,]+,\s*|showToast\(\s*|say\(\s*|setAttribute\('aria-label',\s*|'aria-label'\s*:\s*|make(?:Card|FeatureCard|FeatureSummaryCard)\(\s*|register\(\s*|\}, )$/;
 
+    /* The call stack answers "which function is this an argument to". It cannot answer
+       "which property is this being assigned to", and `node.textContent = ok ? `a` : `b``
+       is the same bug at a different sink: what sits in front of each branch is the
+       conditional, not the assignment. Peel the branches off and ask again. Bounded, and
+       only ever used to widen what is checked, so the worst a wrong peel can do is check
+       a string that did not need it. */
+    const withoutConditionalBranches = before => {
+        let text = before;
+        for (let round = 0; round < 8; round += 1) {
+            const peeled = text
+                .replace(/\s*[?:]\s*$/, '')
+                .replace(/`[^`]*`\s*$/, '')
+                .replace(/'[^'\n]*'\s*$/, '')
+                .replace(/"[^"\n]*"\s*$/, '')
+                .replace(/[\w$.?![\]()]+\s*$/, match => (/[?:]\s*$/.test(text) ? match : ''));
+            if (peeled === text) return text;
+            text = peeled;
+        }
+        return text;
+    };
+
     const readsLikeSomethingShown = text => {
         if (!text || text.length < 3) return false;
         if (BRANDS.has(text) || DELIBERATE.has(text)) return false;
@@ -7361,12 +7453,28 @@ test('every sentence in the source comes from the catalog', () => {
         const sitesEnd = lines.findIndex(line => line.includes('const CATALOG_ROW_COLORS = ['));
         const catalogStart = lines.findIndex(line => line.includes('const MESSAGES = Object.freeze({'));
         const catalogEnd = lines.findIndex((line, index) => index > catalogStart && /^    \}\);$/.test(line));
-        readableStrings(source).forEach(entry => {
+        const scanned = readableStrings(source);
+        /* The walker has to come back to where it started. It did not before it learned
+           about regex literals: /\(/ and /["']/ in the page scrapers left twenty-three
+           frames open on the shipped script, and a stack that deep reports the wrong
+           enclosing call for everything after it — silently, because popping an empty
+           stack throws nothing. A gate that cannot say it lost track is a gate that
+           reports zero problems for the wrong reason. */
+        assert.strictEqual(scanned.unbalanced, 0,
+            `${name}: the source walk ended with ${scanned.unbalanced} unclosed frames, so its call tracking is wrong`);
+        scanned.forEach(entry => {
             if (catalogStart >= 0 && entry.line > catalogStart && entry.line <= catalogEnd + 1) return;
             if (sitesStart >= 0 && entry.line > sitesStart && entry.line <= sitesEnd + 1) return;
             if (!readsLikeSomethingShown(entry.text)) return;
             if (entry.after.startsWith(':')) return;
-            if (entry.before !== '`markup`' && !SHOWN.test(entry.before) && !SHOWN_CALLS.has(entry.call)) return;
+            /* An argument to the lookup is a key, whatever sits further back. Peeling a
+               conditional can reach past t( into the shown call around it, and every key
+               in the catalog reads like a sentence to the test above. */
+            if (CATALOG_CALLS.has(entry.call)) return;
+            if (entry.before !== '`markup`'
+                && !SHOWN.test(entry.before)
+                && !SHOWN.test(withoutConditionalBranches(entry.before))
+                && !SHOWN_CALLS.has(entry.call)) return;
             stranded.push(`${name}:${entry.line}: ${entry.text}`);
         });
     });
@@ -7415,6 +7523,40 @@ test('no route or selector logic matches a translated string', () => {
    sources, omits the ones it has nothing for, and carries two numbers per entry: `value` in
    the source's own scale and `score` normalised to 0-100. The widgets show each source in
    its own scale, so reading `score` would turn 4.2 stars into 84. */
+/* IE-139: a 429 says the service is working and wants fewer requests. It was filed as an
+   ordinary HTTP failure, so opening a filmography sent one request per row into a service
+   that had already refused. AniList serves thirty a minute against a published ninety, and
+   Wikimedia added per-minute buckets in 2026 that a browser-origin client shares. */
+test('a service that asks for fewer requests is left alone for as long as it asked', () => {
+    const hooks = loadScriptTestHooks();
+    assert.strictEqual(hooks.parseRetryAfter('120'), 120000, 'seconds are the common form');
+    assert.strictEqual(hooks.parseRetryAfter('0'), 0);
+    assert.strictEqual(hooks.parseRetryAfter(''), 0, 'an absent header is no answer');
+    assert.strictEqual(hooks.parseRetryAfter('later'), 0, 'and neither is an unparseable one');
+    const at = new Date(Date.now() + 30000).toUTCString();
+    const dated = hooks.parseRetryAfter(at);
+    assert(dated > 25000 && dated <= 30000, `an HTTP date is honoured too, got ${dated}`);
+    assert.strictEqual(hooks.parseRetryAfter('999999999'), 60 * 60 * 1000,
+        'a value that would silence a provider for the session is capped');
+
+    // The header the managers hand back is the raw block, so it is read out of that.
+    assert.strictEqual(
+        hooks.readRetryAfter({ responseHeaders:'content-type: application/json\r\nRetry-After: 45\r\n' }),
+        45000,
+        'the header is found in a raw response block whatever case it is written in');
+    // The bridge cannot pass a block, so it passes the number it parsed.
+    assert.strictEqual(hooks.readRetryAfter({ retryAfterMs:9000 }), 9000);
+
+    assert.strictEqual(hooks.rateLimitHoldFor('https://graphql.anilist.co/'), 0,
+        'nothing is held before anything has been refused');
+    hooks.holdRateLimitedHost('https://graphql.anilist.co/', 30000);
+    const held = hooks.rateLimitHoldFor('https://graphql.anilist.co/');
+    assert(held > 25000 && held <= 30000, `the host is held for what it asked for, got ${held}`);
+    assert.strictEqual(hooks.rateLimitHoldFor('https://api.themoviedb.org/3/find/tt1'), 0,
+        'and the hold belongs to that host, not to every provider');
+});
+
+
 test('MDBList ratings are read by source name, in each source\'s own scale', () => {
     const hooks = loadScriptTestHooks();
     const full = hooks.parseMdbListRatings({
@@ -7448,6 +7590,31 @@ test('MDBList ratings are read by source name, in each source\'s own scale', () 
         'the source name is matched without regard to case');
     assert.strictEqual(hooks.parseMdbListRatings({ ratings:[{ source:'tomatoes', value:900 }] }).rt, null,
         'a value outside the scale is refused rather than rendered');
+});
+
+/* Adversarial review found this live: renderOmdbScore reports "needs a key" by rendering,
+   which counts as handled, so chaining the two sources on that answer meant a user holding
+   only an MDBList key was never asked and was told to go and get an OMDb key. */
+test('a key for either service is enough to get a score', () => {
+    const start = script.indexOf('async function renderKeyedScore');
+    assert(start > 0, 'the shared keyed-score path must exist');
+    const chain = script.slice(start, script.indexOf('function keyedScoreReason', start));
+    assert(/isOmdbConfigured\(\) && await renderOmdbScore/.test(chain),
+        'OMDb is only asked when there is an OMDb key to ask with');
+    assert(/isMdbListConfigured\(\) && await renderMdbListScore/.test(chain),
+        'and MDBList when there is an MDBList key, rather than only after OMDb has answered');
+    // The store-profile branches must go through that, not chain the two renderers.
+    assert(!/renderOmdbScore\([^)]*\)\s*\n\s*&& !await renderMdbListScore/.test(script),
+        'neither widget may make one source depend on the other having no key');
+    assert.strictEqual((script.match(/renderKeyedScore\(this, '(?:rt|metacritic)'/g) || []).length, 2,
+        'both keyed widgets ask through it');
+
+    // And what it says when neither key is present names one the reader can actually get.
+    assert(/text_needs_an_omdb_or_mdblist_key/.test(script), 'the no-key state names both services');
+    assert(/reason === 'mdblist-unconfigured' \|\| reason === 'mdblist-rejected' \|\| reason === 'keys-needed'/.test(script),
+        'and a rejected or absent MDBList key gets the same treatment OMDb already had');
+    assert(/Needs an MDBList key/.test(messageCatalog.text_needs_an_mdblist_key || ''),
+        'with wording that says what is missing');
 });
 
 test('MDBList is asked for nothing at all without a key', async () => {
@@ -7688,6 +7855,14 @@ test('public documentation matches what the project actually ships', () => {
     const readmeDefaults = (/The defaults \(([^)]+)\)/.exec(readme)?.[1] || '').split(', ').filter(Boolean);
     assert.deepStrictEqual(readmeDefaults, shippedDefaults,
         'the README must name exactly the watch destinations the build ships, in the same order');
+
+    /* The backup limit is derived from the storage bounds now, so any prose naming a fixed
+       megabyte figure is a claim that stops being true the moment a bound moves. It said
+       4 MB against a limit ten times that. */
+    assert(!/4 ?MB/.test(readme), 'the README must not name a fixed backup size the code derives');
+    Object.entries(messageCatalog).forEach(([key, text]) => {
+        assert(!/4 ?MB backup limit/.test(text), `${key} still names a fixed backup size`);
+    });
 
     // The vote-distribution widget was retired in v2.14.0; only the ratings-route
     // comparison survives, and the README must not promise the widget.
@@ -7972,6 +8147,28 @@ asyncTest('a store at every bound survives the encrypted backup path', async () 
         'and the decrypted payload must still be one the importer accepts');
 });
 
+asyncTest('a held service is refused here rather than asked again', async () => {
+    const hooks = loadScriptTestHooks();
+    hooks.holdRateLimitedHost('https://graphql.anilist.co/', 30000);
+    const before = hooks.getCapturedRequests().length;
+    /* Bounded: the sandbox records a request and never answers it, so a hold that is not
+       enforced leaves this promise pending forever rather than failing. */
+    const error = await Promise.race([
+        hooks.httpRequest('https://graphql.anilist.co/', {}).then(() => null, failed => failed),
+        new Promise(resolve => setTimeout(() => resolve('sent'), 2000)),
+    ]);
+    assert.notStrictEqual(error, 'sent', 'a held host must be refused here, not asked and waited on');
+    assert(error, 'a request to a held host must not resolve');
+    assert.strictEqual(hooks.classifyFailure(error), 'rate_limited',
+        'and it is journaled as a rate limit, not as an outage');
+    assert.strictEqual(hooks.getCapturedRequests().length, before,
+        'nothing may actually be sent to a service that just said no');
+    assert.strictEqual(hooks.isReachabilityFailure(error), false,
+        'a stale score with a Retry would offer an action the hold refuses');
+    assert.strictEqual(hooks.unavailableReasonFor(error, false), 'rate-limited',
+        'and the widget says what happened rather than calling the score unavailable');
+});
+
 asyncTest('an encrypted backup round-trips credentials under its passphrase', async () => {
     const hooks = loadScriptTestHooks();
     hooks.seedStoredSetting('radarrApiKey', 'radarr-secret-value');
@@ -8163,9 +8360,17 @@ test('the assembled userscript keeps its metadata first and its closing brace la
 });
 
 (async () => {
+    /* Set first and cleared last. An async test whose promise never settles does not throw
+       and does not hang the process: node exits as soon as the event loop empties, so the
+       loop below simply stopped, the remaining tests never ran, and the run reported
+       success. Found by mutating a rate-limit guard whose test then waited forever on a
+       request the sandbox never answers, and watching the suite stay green. */
+    process.exitCode = 1;
+    let finished = 0;
     for (const { name, fn } of asyncTests) {
         try {
             await fn();
+            finished += 1;
             console.log(`ok - ${name}`);
         } catch (error) {
             console.error(`not ok - ${name}`);
@@ -8173,5 +8378,10 @@ test('the assembled userscript keeps its metadata first and its closing brace la
             process.exit(1);
         }
     }
+    if (finished !== asyncTests.length) {
+        console.error(`not ok - only ${finished} of ${asyncTests.length} async tests ran`);
+        process.exit(1);
+    }
     console.log('All tests passed.');
+    process.exitCode = 0;
 })();

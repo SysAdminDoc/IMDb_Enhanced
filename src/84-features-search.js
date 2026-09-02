@@ -885,7 +885,7 @@
                     const stateLabel = action === 'watched' ? 'watched' : 'skipped';
                     btn.setAttribute('aria-pressed', String(active));
                     btn.setAttribute('aria-label', active
-                        ? `${card.dataset.enhMarkTitle} has a private local ${stateLabel} mark; activate to clear`
+                        ? t('aria_has_a_private_local_mark', [card.dataset.enhMarkTitle, stateLabel])
                         : `Save a private ${stateLabel} mark for ${card.dataset.enhMarkTitle}; does not change IMDb Watched`);
                 } else if (action === 'clear') {
                     btn.disabled = !mark;

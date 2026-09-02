@@ -202,6 +202,19 @@ function isHttpUrl(value) {
     return Boolean(describeRequestUrl(value));
 }
 
+/* Seconds, or an HTTP date. Anything else is no answer, and the caller falls back to the
+   minute every one of these limits is stated in. Capped so a hostile or broken value
+   cannot silence a provider for the rest of the session. */
+function parseRetryAfterHeader(value) {
+    const text = String(value ?? '').trim();
+    if (!text) return 0;
+    const cap = 60 * 60 * 1000;
+    if (/^\d+$/.test(text)) return Math.min(Number(text) * 1000, cap);
+    const at = Date.parse(text);
+    if (!Number.isFinite(at)) return 0;
+    return Math.min(Math.max(at - Date.now(), 0), cap);
+}
+
 function normalizeHeaders(value) {
     if (!value || typeof value !== 'object' || Array.isArray(value)) return {};
     const headers = {};
@@ -416,6 +429,12 @@ async function sendHttpRequest(message, sender, sendResponse) {
             status: response.status,
             responseText: text,
             responseURL: finalUrl,
+            /* One header, parsed to a number. The page has no business reading a response
+               header block, and this is the only one anything here acts on: a service
+               answering 429 is saying how long to wait. */
+            ...(response.status === 429
+                ? { retryAfterMs: parseRetryAfterHeader(response.headers.get('Retry-After')) }
+                : {}),
         });
     }).catch(error => {
         const aborted = error?.name === 'AbortError';

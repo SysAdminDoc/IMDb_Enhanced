@@ -332,6 +332,9 @@
   "error_request_http": {
     "message": "[!! The service returned an HTTP error !!]"
   },
+  "error_request_rate_limited": {
+    "message": "[!! The service asked for fewer requests. It will be left alone for a moment. !!]"
+  },
   "error_request_network": {
     "message": "[!! The service could not be reached !!]"
   },
@@ -745,6 +748,9 @@
   },
   "journal_http": {
     "message": "[!! A lookup service returned an HTTP error !!]"
+  },
+  "journal_rate_limited": {
+    "message": "[!! A lookup service asked for fewer requests !!]"
   },
   "journal_network": {
     "message": "[!! A lookup could not reach its service !!]"
@@ -2138,6 +2144,15 @@
   "text_needs_a_tmdb_read_token": {
     "message": "[!! Needs a TMDB read token !!]"
   },
+  "text_mdblist_rejected_this_key": {
+    "message": "[!! MDBList rejected this key !!]"
+  },
+  "text_needs_an_mdblist_key": {
+    "message": "[!! Needs an MDBList key !!]"
+  },
+  "text_needs_an_omdb_or_mdblist_key": {
+    "message": "[!! Needs an OMDb or MDBList key !!]"
+  },
   "text_needs_an_omdb_key": {
     "message": "[!! Needs an OMDb key !!]"
   },
@@ -2339,6 +2354,9 @@
   "text_saving": {
     "message": "[!! Saving… !!]"
   },
+  "text_the_service_asked_for_a_pause": {
+    "message": "[!! That service asked for fewer requests, so it is being left alone for a moment. !!]"
+  },
   "text_score_unavailable": {
     "message": "[!! Score unavailable !!]"
   },
@@ -2404,6 +2422,36 @@
   },
   "text_title_is_already_available": {
     "message": "[!! $1 is already available !!]"
+  },
+  "text_average_rating": {
+    "message": "[!! Average rating !!]"
+  },
+  "text_rating_count_one": {
+    "message": "[!! $1 rating !!]"
+  },
+  "text_rating_count_other": {
+    "message": "[!! $1 ratings !!]"
+  },
+  "aria_has_a_private_local_mark": {
+    "message": "[!! $1 has a private local $2 mark; activate to clear !!]"
+  },
+  "text_no_sites": {
+    "message": "[!! 0 sites !!]"
+  },
+  "text_visible_of_total": {
+    "message": "[!! $1/$2 visible !!]"
+  },
+  "label_added": {
+    "message": "[!! Added !!]"
+  },
+  "text_cache_entries_remain": {
+    "message": "[!! $1 entries remain, using $2 of $3. !!]"
+  },
+  "text_site_access_granted_for": {
+    "message": "[!! Site access granted for $1 !!]"
+  },
+  "text_not_working_yet_needs_access_to": {
+    "message": "[!! Not working yet: needs access to $1. !!]"
   },
   "text_title_is_already_in_service": {
     "message": "[!! $1 is already in $2 !!]"
@@ -2718,10 +2766,10 @@
     "message": "[!! Settings could not be read for export. No backup was copied. !!]"
   },
   "toast_settings_exceed_the_4_mb_backup": {
-    "message": "[!! Settings exceed the 4 MB backup limit. Remove stale title marks or oversized destinations first. !!]"
+    "message": "[!! These settings are $1, past the $2 a backup can hold. Remove stale title marks or oversized destinations first. !!]"
   },
   "toast_settings_exceed_the_4_mb_backup_2": {
-    "message": "[!! Settings exceed the 4 MB backup limit. Remove stale title marks first. !!]"
+    "message": "[!! These settings are $1, past the $2 a backup can hold. Remove stale title marks first. !!]"
   },
   "toast_the_journal_could_not_be_cleared": {
     "message": "[!! The journal could not be cleared. Check $1. !!]"

@@ -2154,7 +2154,10 @@ await runFixture('chart', async (window, hooks) => {
         window.GM_xmlhttpRequest = options => { sent.push(options); return { abort() {} }; };
         await hooks.runFeature('inlineRTScore');
         const rt = await waitForSelector(window, '#enh-rt-widget');
-        assert.match(rt.textContent, /Needs an OMDb key/);
+        /* Two services answer this widget, so a build with neither key names both rather
+           than sending the reader after one of them. */
+        assert.match(rt.textContent, /Needs an OMDb or MDBList key/);
+        assert.match(rt.textContent, /Add key/, 'and offers the way to fix it');
         assert.equal(sent.length, 0, 'and nothing may be requested without one');
 
         /* Storing a key changes which services the feature contacts, so every row that
