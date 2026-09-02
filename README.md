@@ -118,7 +118,7 @@ since Mozilla continues to support the Manifest V2 userscript managers.
 
 ## Configuration
 
-Click the gear icon on any covered IMDb page to open the six-section settings workspace. Changes save automatically with visible feedback, the vertical navigation supports arrow/Home/End keys, and the dialog traps focus until it is closed.
+Click the gear icon on any covered IMDb page to open the six-section settings workspace. A search box at the top matches every feature by name, description, or keyword across all six pages, so you can find a setting without knowing which page owns it. Changes save automatically with visible feedback, the vertical navigation supports arrow/Home/End keys, and the dialog traps focus until it is closed.
 
 ![IMDb Enhanced Experience settings](design/mockups/14-redesign-experience-1536x1024.png)
 

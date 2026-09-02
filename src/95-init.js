@@ -317,6 +317,7 @@
                 // optional origin, so it needs to know which feature wants what.
                 FEATURE_ORIGIN_GROUPS,
                 FEATURE_DETAILS,
+                FEATURE_KEYWORDS,
                 getFeatureOrigins,
                 describeFeatureOrigins,
                 describeFeatureConsent,

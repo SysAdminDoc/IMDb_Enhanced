@@ -1279,6 +1279,11 @@
                     <button type="button" class="enh-settings-close" title="${t('aria_close_settings')}" aria-label="${t('aria_close_settings')}">×</button>
                 </div>
             </div>
+            <div class="enh-settings-search">
+                <input type="search" id="enh-settings-search" class="enh-servarr-input" autocomplete="off"
+                    placeholder="${t('settings_search_placeholder')}" aria-label="${t('aria_search_settings')}">
+                <span class="enh-settings-search__count" id="enh-settings-search-count" role="status" aria-live="polite"></span>
+            </div>
             <div class="enh-settings-shell">
                 <nav class="enh-settings-nav" id="enh-settings-nav" role="tablist" aria-label="${t('aria_settings_sections')}" aria-orientation="vertical"></nav>
                 <div class="enh-settings-main">
@@ -1349,7 +1354,87 @@
             body.appendChild(section);
             return section;
         };
+        /* IE-142: 56 features across six pages, findable only by knowing which page owns
+           one. Search reads the name, the description and a catalogued keyword list per
+           feature, and it looks across every page rather than only the open one — the
+           whole point is not having to guess the page first. */
+        const searchInput = overlay.querySelector('#enh-settings-search');
+        const searchCount = overlay.querySelector('#enh-settings-search-count');
+        let searchQuery = '';
+        const resetSearchVisibility = () => {
+            body.querySelectorAll('.enh-settings-card').forEach(card => { card.hidden = false; });
+            body.querySelectorAll('.enh-settings-row[data-feature-key]').forEach(row => { row.hidden = false; });
+        };
+        const clearSearch = () => {
+            searchQuery = '';
+            searchInput.value = '';
+            searchCount.textContent = '';
+            resetSearchVisibility();
+        };
+        const applySearch = () => {
+            if (!searchQuery) {
+                resetSearchVisibility();
+                searchCount.textContent = '';
+                // searchQuery is already empty, so this cannot re-enter clearSearch.
+                showPage(activeSettingsPage);
+                return;
+            }
+            let matches = 0;
+            pages.forEach(page => {
+                let pageHasSomething = false;
+                page.querySelectorAll('.enh-settings-card').forEach(card => {
+                    const heading = card.querySelector('.enh-settings-card-title')?.textContent || '';
+                    const description = card.querySelector('.enh-settings-card-description')?.textContent || '';
+                    /* A card that matches by its own heading shows every row it holds: the
+                       rows under "Clean up" are what somebody searching for that wanted. */
+                    const cardMatches = `${heading} ${description}`.toLowerCase().includes(searchQuery)
+                        || (card.dataset.searchText || '').includes(searchQuery);
+                    const rows = card.querySelectorAll('.enh-settings-row[data-feature-key]');
+                    let rowMatches = 0;
+                    rows.forEach(row => {
+                        const hit = cardMatches || (row.dataset.searchText || '').includes(searchQuery);
+                        row.hidden = !hit;
+                        if (hit) rowMatches += 1;
+                    });
+                    const visible = cardMatches || rowMatches > 0;
+                    card.hidden = !visible;
+                    if (!visible) return;
+                    pageHasSomething = true;
+                    matches += rows.length ? rowMatches : 1;
+                });
+                page.hidden = !pageHasSomething;
+            });
+            searchCount.textContent = tCount('text_settings_search_matches', matches);
+        };
+        /* Both shapes a feature control takes: a row inside a card, and a card whose only
+           control was hoisted into its own header. Comma-joined so the browser returns
+           whichever comes first in the document rather than whichever is listed first. */
+        const firstResultControl = () => body.querySelector([
+            '.enh-settings-page:not([hidden]) .enh-settings-card:not([hidden]) .enh-settings-row:not([hidden]) input',
+            '.enh-settings-page:not([hidden]) .enh-settings-card[data-feature-key]:not([hidden]) .enh-settings-card-actions input',
+        ].join(','));
+        searchInput.addEventListener('input', () => {
+            searchQuery = searchInput.value.trim().toLowerCase();
+            applySearch();
+        });
+        /* Not on every keystroke: moving focus out of the box as somebody types is a box
+           they cannot type in. Enter and Down are the two keys that mean "go to it". */
+        searchInput.addEventListener('keydown', event => {
+            if (event.key === 'Escape' && searchQuery) {
+                event.stopPropagation();
+                clearSearch();
+                applySearch();
+                return;
+            }
+            if (event.key !== 'Enter' && event.key !== 'ArrowDown') return;
+            const first = firstResultControl();
+            if (!first) return;
+            event.preventDefault();
+            first.focus();
+        });
         const showPage = (id, focus = false) => {
+            // Picking a section is leaving the search behind, not searching within it.
+            if (searchQuery) clearSearch();
             if (!pages.has(id)) id = 'experience';
             activeSettingsPage = id;
             pages.forEach((page, pageId) => { page.hidden = pageId !== id; });
@@ -1373,7 +1458,16 @@
         const makeFeatureRow = feature => {
             const detail = FEATURE_DETAILS[feature.key] || '';
             const helpId = `enh-help-${feature.key}`;
-            const row = makeEl('div', { className:'enh-settings-row', ...(detail ? { title:detail } : {}) },
+            const keywords = FEATURE_KEYWORDS[feature.key] || '';
+            const row = makeEl('div', {
+                className:'enh-settings-row',
+                dataset:{
+                    featureKey: feature.key,
+                    // Folded once at build time rather than on every keystroke of a search.
+                    searchText: `${feature.name} ${detail} ${keywords}`.toLowerCase(),
+                },
+                ...(detail ? { title:detail } : {}),
+            },
                 makeEl('div', { className:'enh-settings-row-copy' },
                     makeEl('span', { className:'enh-settings-label' }, feature.name),
                     makeEl('span', { className:'enh-settings-help', id:helpId }, detail)
@@ -1490,6 +1584,11 @@
                 makeEl('span', { className:'enh-settings-route-badge' }, badge), toggle
             );
             card.querySelector('.enh-settings-card-header').appendChild(actions);
+            /* Only the toggle survives this card; the row it came from is discarded, so
+               the card has to carry the search text itself or these features would be the
+               ones the search could never find. */
+            card.dataset.featureKey = row.dataset.featureKey;
+            card.dataset.searchText = row.dataset.searchText;
             return card;
         };
 

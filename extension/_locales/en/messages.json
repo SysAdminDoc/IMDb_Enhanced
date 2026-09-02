@@ -197,6 +197,9 @@
   "aria_season_progress": {
     "message": "Season progress"
   },
+  "aria_search_settings": {
+    "message": "Search settings"
+  },
   "aria_settings_sections": {
     "message": "Settings sections"
   },
@@ -383,11 +386,17 @@
   "feature_castAges_detail": {
     "message": "Shows a living person’s current age next to their birth date, and roughly how old each billed actor was when a title came out. IMDb already prints the age at death for people who have died; the cast ages come from Wikidata and are approximate."
   },
+  "feature_castAges_keywords": {
+    "message": "actors, age at release, birth year, people"
+  },
   "feature_castAges_name": {
     "message": "Person age"
   },
   "feature_collapsibleSections_detail": {
     "message": "Adds per-section collapse controls and remembers each state."
+  },
+  "feature_collapsibleSections_keywords": {
+    "message": "fold, accordion, hide sections, tidy"
   },
   "feature_collapsibleSections_name": {
     "message": "Collapsible sections"
@@ -395,11 +404,17 @@
   "feature_collectionPanel_detail": {
     "message": "On a film that belongs to a series, lists the other films in it in order, with the one you are on marked. Off by default, and asks nothing on a title that is in no series."
   },
+  "feature_collectionPanel_keywords": {
+    "message": "franchise, sequels, watch order, series"
+  },
   "feature_collectionPanel_name": {
     "message": "Franchise watch order"
   },
   "feature_compactHeader_detail": {
     "message": "Slims the IMDb header and keeps it visible while you scroll."
+  },
+  "feature_compactHeader_keywords": {
+    "message": "navigation, sticky, toolbar, slim, menu bar"
   },
   "feature_compactHeader_name": {
     "message": "Compact header"
@@ -407,11 +422,17 @@
   "feature_dimLowRated_detail": {
     "message": "Fades the artwork of titles rated below your threshold on lists, charts, and search results. Text and controls stay fully readable, and hovering restores the image."
   },
+  "feature_dimLowRated_keywords": {
+    "message": "fade, grey out, threshold, bad films"
+  },
   "feature_dimLowRated_name": {
     "message": "Dim low-rated titles"
   },
   "feature_editorialTitleSurface_detail": {
     "message": "Rebuilds title pages into a stable editorial hero with dedicated action, rating, and research regions."
+  },
+  "feature_editorialTitleSurface_keywords": {
+    "message": "hero, layout, redesign, magazine, title page"
   },
   "feature_editorialTitleSurface_name": {
     "message": "Editorial title layout"
@@ -419,11 +440,17 @@
   "feature_enhancedRatingDisplay_detail": {
     "message": "Elevates IMDb rating and popularity blocks with clearer emphasis."
   },
+  "feature_enhancedRatingDisplay_keywords": {
+    "message": "stars, votes, average, score display"
+  },
   "feature_enhancedRatingDisplay_name": {
     "message": "Refined rating display"
   },
   "feature_episodeHeatmap_detail": {
     "message": "Colours IMDb’s own season×episode grid by rating and adds season averages, on the Ratings tab of a series."
+  },
+  "feature_episodeHeatmap_keywords": {
+    "message": "grid, season quality, colour map, chart"
   },
   "feature_episodeHeatmap_name": {
     "message": "Episode heatmap colours"
@@ -431,11 +458,17 @@
   "feature_episodeSubtitles_detail": {
     "message": "Adds a subtitle link to every episode on an episode list, plus a button that copies them all for the loaded season."
   },
+  "feature_episodeSubtitles_keywords": {
+    "message": "subtitles, captions, srt, bulk, download"
+  },
   "feature_episodeSubtitles_name": {
     "message": "Per-episode subtitle links"
   },
   "feature_expandSummaries_detail": {
     "message": "Releases IMDb’s line clamp so long summaries and biographies read in full without a per-block click."
+  },
+  "feature_expandSummaries_keywords": {
+    "message": "plot, synopsis, read more, truncated"
   },
   "feature_expandSummaries_name": {
     "message": "Expand truncated summaries"
@@ -443,11 +476,17 @@
   "feature_expandedLinkMenu_detail": {
     "message": "Groups additional movie, review, subtitle, and TV lookup links."
   },
+  "feature_expandedLinkMenu_keywords": {
+    "message": "dropdown, more links, overflow, menu"
+  },
   "feature_expandedLinkMenu_name": {
     "message": "Expanded link menu"
   },
   "feature_externalLinks_detail": {
     "message": "Adds trusted research and trailer links near the title."
+  },
+  "feature_externalLinks_keywords": {
+    "message": "trakt, tmdb, wikipedia, research, destinations"
   },
   "feature_externalLinks_name": {
     "message": "External links bar"
@@ -455,11 +494,17 @@
   "feature_imageZoom_detail": {
     "message": "Hovering or tabbing to a poster or a cast photo shows a larger version beside it, requested at a bounded size rather than the full original. Escape closes it."
   },
+  "feature_imageZoom_keywords": {
+    "message": "poster, enlarge, magnify, photos, hover"
+  },
   "feature_imageZoom_name": {
     "message": "Poster and cast photo zoom"
   },
   "feature_inlineAnimeScore_detail": {
     "message": "On anime titles, shows the AniList community average beside the other scores. Off by default, and nothing is requested for a title that is not anime."
+  },
+  "feature_inlineAnimeScore_keywords": {
+    "message": "anilist, myanimelist, anime, japanese"
   },
   "feature_inlineAnimeScore_name": {
     "message": "AniList anime scores"
@@ -467,11 +512,17 @@
   "feature_inlineLetterboxdScore_detail": {
     "message": "Shows Letterboxd average ratings inline for films when available."
   },
+  "feature_inlineLetterboxdScore_keywords": {
+    "message": "letterboxd, community, film diary, stars"
+  },
   "feature_inlineLetterboxdScore_name": {
     "message": "Letterboxd scores"
   },
   "feature_inlineMetacriticScore_detail": {
     "message": "Shows Metacritic score feedback inline when available."
+  },
+  "feature_inlineMetacriticScore_keywords": {
+    "message": "metacritic, metascore, critics, reviews"
   },
   "feature_inlineMetacriticScore_name": {
     "message": "Metacritic scores"
@@ -479,11 +530,17 @@
   "feature_inlineRTScore_detail": {
     "message": "Shows Rotten Tomatoes score feedback inline when available."
   },
+  "feature_inlineRTScore_keywords": {
+    "message": "rotten tomatoes, tomatometer, critics, popcorn"
+  },
   "feature_inlineRTScore_name": {
     "message": "Rotten Tomatoes scores"
   },
   "feature_keyboardShortcuts_detail": {
     "message": "Optional. Enables ? for settings, c to copy, r for rating, and t for top."
+  },
+  "feature_keyboardShortcuts_keywords": {
+    "message": "hotkeys, keys, accessibility, commands"
   },
   "feature_keyboardShortcuts_name": {
     "message": "Optional keyboard shortcuts"
@@ -491,11 +548,17 @@
   "feature_listMultiSearch_detail": {
     "message": "Builds a popup-safe queue of up to 20 title links on watchlist, list, and chart pages."
   },
+  "feature_listMultiSearch_keywords": {
+    "message": "bulk, open many, tabs, batch search"
+  },
   "feature_listMultiSearch_name": {
     "message": "List multi-search"
   },
   "feature_listRoulette_detail": {
     "message": "Adds a button to watchlists, lists, and charts that picks one title at random and scrolls to it. It never opens anything."
+  },
+  "feature_listRoulette_keywords": {
+    "message": "random, pick for me, shuffle, surprise"
   },
   "feature_listRoulette_name": {
     "message": "Pick something to watch"
@@ -506,8 +569,14 @@
   "feature_listRuntimeSummary_detail": {
     "message": "Totals how long the titles on a watchlist, list, or chart would take to watch, and says how many had no runtime listed."
   },
+  "feature_collectionExport_keywords": {
+    "message": "csv, spreadsheet, download list, backup"
+  },
   "feature_collectionExport_name": {
     "message": "Copy a list as CSV"
+  },
+  "feature_listRuntimeSummary_keywords": {
+    "message": "total time, hours, duration, how long"
   },
   "feature_listRuntimeSummary_name": {
     "message": "List runtime summary"
@@ -515,11 +584,17 @@
   "feature_markLinkTint_detail": {
     "message": "Underlines links to titles you have marked, in the mark colour, anywhere they appear on a page. Needs private marks."
   },
+  "feature_markLinkTint_keywords": {
+    "message": "highlight, colour seen, visited, links"
+  },
   "feature_markLinkTint_name": {
     "message": "Show marks on plain title links"
   },
   "feature_airsOn_detail": {
     "message": "Shows which network or streaming service a series airs on, from TVmaze. Series only, and nothing is requested for a film."
+  },
+  "feature_airsOn_keywords": {
+    "message": "network, channel, broadcaster, next episode"
   },
   "feature_airsOn_name": {
     "message": "Where a series airs"
@@ -527,11 +602,17 @@
   "feature_markFilters_detail": {
     "message": "Adds an All / Unseen / Seen / Skipped filter with counts to lists, charts, watchlists, search results, and filmographies. Needs private marks."
   },
+  "feature_markFilters_keywords": {
+    "message": "filter, hide seen, unwatched, narrow"
+  },
   "feature_markFilters_name": {
     "message": "Filter by private marks"
   },
   "feature_mediaServerIntegration_detail": {
     "message": "Checks configured local Plex, Jellyfin, and Emby servers and shows whether the title is already in your library."
+  },
+  "feature_mediaServerIntegration_keywords": {
+    "message": "plex, jellyfin, emby, library, local server"
   },
   "feature_mediaServerIntegration_name": {
     "message": "Plex/Jellyfin/Emby indicator"
@@ -539,11 +620,17 @@
   "feature_modernUI_detail": {
     "message": "Applies the selected theme, typography, focus, and component treatment."
   },
+  "feature_modernUI_keywords": {
+    "message": "theme, dark mode, colours, skin, restyle"
+  },
   "feature_modernUI_name": {
     "message": "Modern IMDb skin"
   },
   "feature_movieChatBoard_detail": {
     "message": "Adds a message board for the title at the bottom of the page, hosted by MovieChat. Nothing is loaded until you scroll to it, and if the board cannot be shown the section becomes a plain link."
+  },
+  "feature_movieChatBoard_keywords": {
+    "message": "message board, discussion, forum, comments"
   },
   "feature_movieChatBoard_name": {
     "message": "MovieChat message board"
@@ -551,11 +638,17 @@
   "feature_quickCopyID_detail": {
     "message": "Adds a visible IMDb ID copy button beside the title."
   },
+  "feature_quickCopyID_keywords": {
+    "message": "imdb id, tt number, clipboard, identifier"
+  },
   "feature_quickCopyID_name": {
     "message": "Quick copy IMDb ID"
   },
   "feature_quickNav_detail": {
     "message": "Adds a right-side section navigator on wide screens."
+  },
+  "feature_quickNav_keywords": {
+    "message": "jump, contents, anchors, scroll, sections"
   },
   "feature_quickNav_name": {
     "message": "Section navigator"
@@ -563,11 +656,17 @@
   "feature_ratingColorCoding_detail": {
     "message": "Adds a small quality label beside the IMDb score."
   },
+  "feature_ratingColorCoding_keywords": {
+    "message": "colour, green red, highlight, heat"
+  },
   "feature_ratingColorCoding_name": {
     "message": "Rating quality labels"
   },
   "feature_ratingGap_detail": {
     "message": "On the Ratings tab, compares IMDb’s weighted rating with the unweighted mean of the raw votes."
+  },
+  "feature_ratingGap_keywords": {
+    "message": "weighted, unweighted, mean, vote manipulation"
   },
   "feature_ratingGap_name": {
     "message": "Weighted vs unweighted rating"
@@ -575,11 +674,17 @@
   "feature_rowIntegrationState_detail": {
     "message": "Shows whether each title in a list, chart, or filmography is already in your library, monitored, or requested. One lookup per title, made only once you scroll to the row, using whichever local service you have configured."
   },
+  "feature_rowIntegrationState_keywords": {
+    "message": "plex, jellyfin, radarr, Seerr, Overseerr, badge"
+  },
   "feature_rowIntegrationState_name": {
     "message": "Library status on list rows"
   },
   "feature_removeAds_detail": {
     "message": "Hides current IMDb ad placements, sponsored shells, and tracking pixels as early as the page allows."
+  },
+  "feature_removeAds_keywords": {
+    "message": "advertising, banners, promotions, clutter"
   },
   "feature_removeAds_name": {
     "message": "Hide ads and sponsored shells"
@@ -587,11 +692,17 @@
   "feature_removeAppBanner_detail": {
     "message": "Hides app-install prompts shown on desktop pages."
   },
+  "feature_removeAppBanner_keywords": {
+    "message": "mobile, install, download, smart banner"
+  },
   "feature_removeAppBanner_name": {
     "message": "Hide app banners"
   },
   "feature_removeFeaturedReview_detail": {
     "message": "Hides the user reviews shown on a title page. The heading, the count and the link through to all of them stay."
+  },
+  "feature_removeFeaturedReview_keywords": {
+    "message": "user reviews, opinions, comments, featured"
   },
   "feature_removeFeaturedReview_name": {
     "message": "Hide reviews on title pages"
@@ -599,11 +710,17 @@
   "feature_removeContribution_detail": {
     "message": "Removes contribution calls to action from detail pages."
   },
+  "feature_removeContribution_keywords": {
+    "message": "edit, submit, volunteer, add data"
+  },
   "feature_removeContribution_name": {
     "message": "Hide contribution prompts"
   },
   "feature_removeNewsSection_detail": {
     "message": "Keeps the page focused by removing IMDb news modules."
+  },
+  "feature_removeNewsSection_keywords": {
+    "message": "articles, headlines, stories, clutter"
   },
   "feature_removeNewsSection_name": {
     "message": "Hide news modules"
@@ -611,11 +728,17 @@
   "feature_removeProUpsell_detail": {
     "message": "Hides explicit IMDbPro prompts and links from title and name pages while preserving list controls."
   },
+  "feature_removeProUpsell_keywords": {
+    "message": "imdbpro, upsell, subscription, marketing"
+  },
   "feature_removeProUpsell_name": {
     "message": "Hide IMDbPro upsells"
   },
   "feature_removeRelatedInterests_detail": {
     "message": "Hides broad interest recommendations that dilute title and cast pages."
+  },
+  "feature_removeRelatedInterests_keywords": {
+    "message": "interests, topics, tags, suggestions"
   },
   "feature_removeRelatedInterests_name": {
     "message": "Hide related interests"
@@ -623,11 +746,17 @@
   "feature_removeSponsoredRecs_detail": {
     "message": "Suppresses sponsored recommendation blocks where IMDb inserts them."
   },
+  "feature_removeSponsoredRecs_keywords": {
+    "message": "sponsored, promoted, recommendations, adverts"
+  },
   "feature_removeSponsoredRecs_name": {
     "message": "Hide sponsored recommendations"
   },
   "feature_restoreImageContextMenu_detail": {
     "message": "IMDb blocks the right-click menu over gallery images, so Save image as does nothing there. This lets the browser show its own menu again."
+  },
+  "feature_restoreImageContextMenu_keywords": {
+    "message": "right click, save image, copy image, menu"
   },
   "feature_restoreImageContextMenu_name": {
     "message": "Right-click on images"
@@ -635,11 +764,17 @@
   "feature_searchButtons_detail": {
     "message": "Adds prominent, keyboard-friendly watch-site links near the title."
   },
+  "feature_searchButtons_keywords": {
+    "message": "streaming, where to watch, quick search, sites"
+  },
   "feature_searchButtons_name": {
     "message": "Watch search buttons"
   },
   "feature_seasonProgress_detail": {
     "message": "Shows how much of the loaded season you have marked seen, links to the next unmarked episode, and marks or clears the whole loaded season in one step with an undo. Needs private marks."
+  },
+  "feature_seasonProgress_keywords": {
+    "message": "progress, how many watched, completion, bar"
   },
   "feature_seasonProgress_name": {
     "message": "Season progress and batch marking"
@@ -647,11 +782,17 @@
   "feature_servarrIntegration_detail": {
     "message": "Adds optional local Radarr/Sonarr quick-add buttons with library status indicator when API settings are configured."
   },
+  "feature_servarrIntegration_keywords": {
+    "message": "radarr, sonarr, Seerr, Overseerr, Jellyseerr, download"
+  },
   "feature_servarrIntegration_name": {
     "message": "Servarr quick-add"
   },
   "feature_spoilerBlur_detail": {
     "message": "Softens long plot text until you intentionally reveal it."
+  },
+  "feature_spoilerBlur_keywords": {
+    "message": "blur, hide plot, reveal, spoilers"
   },
   "feature_spoilerBlur_name": {
     "message": "Spoiler blur on plot"
@@ -659,11 +800,17 @@
   "feature_streamAvailability_detail": {
     "message": "Shows one-glance JustWatch streaming providers when available."
   },
+  "feature_streamAvailability_keywords": {
+    "message": "where to watch, justwatch, streaming, netflix"
+  },
   "feature_streamAvailability_name": {
     "message": "Streaming availability"
   },
   "feature_subtitleLinks_detail": {
     "message": "Adds subtitle lookup links in the details section."
+  },
+  "feature_subtitleLinks_keywords": {
+    "message": "subtitles, captions, opensubtitles, srt"
   },
   "feature_subtitleLinks_name": {
     "message": "Subtitle links"
@@ -671,11 +818,17 @@
   "feature_titleNotes_detail": {
     "message": "Adds a private note field to title pages, saved on this device and included in backups. Never sent anywhere."
   },
+  "feature_titleNotes_keywords": {
+    "message": "notes, memo, annotation, comments"
+  },
   "feature_titleNotes_name": {
     "message": "Private title notes"
   },
   "feature_trailerPopover_detail": {
     "message": "Adds an in-page trailer modal backed by a click-to-fetch YouTube lookup."
+  },
+  "feature_trailerPopover_keywords": {
+    "message": "youtube, video, preview, play"
   },
   "feature_trailerPopover_name": {
     "message": "Trailer popover"
@@ -683,11 +836,17 @@
   "feature_tvEpisodeTools_detail": {
     "message": "Surfaces the highest-rated episodes; synopsis blur remains opt-in through Spoiler blur on plot."
   },
+  "feature_tvEpisodeTools_keywords": {
+    "message": "episodes, season, series, television"
+  },
   "feature_tvEpisodeTools_name": {
     "message": "TV episode tools"
   },
   "feature_tvShowEnhancements_detail": {
     "message": "Adds TV-specific lookup shortcuts on series pages."
+  },
+  "feature_tvShowEnhancements_keywords": {
+    "message": "series, seasons, show, television"
   },
   "feature_tvShowEnhancements_name": {
     "message": "TV show quick links"
@@ -695,11 +854,17 @@
   "feature_watchedMarking_detail": {
     "message": "Adds private Seen and Skip marks on title cards across titles, charts, lists, watchlists, filmographies, and search results. Marks stay on this device and do not change IMDb Watched."
   },
+  "feature_watchedMarking_keywords": {
+    "message": "seen, skip, history, tracking, private"
+  },
   "feature_watchedMarking_name": {
     "message": "Private seen / skip marks"
   },
   "feature_watchlistAlerts_detail": {
     "message": "Notices when something on your watchlist becomes available on a service you picked, and tells you once a day. Needs a TMDB token, works only in the extension, and keeps a bounded list of the most recent watchlist page you opened."
+  },
+  "feature_watchlistAlerts_keywords": {
+    "message": "notifications, streaming alerts, availability, new on"
   },
   "feature_watchlistAlerts_name": {
     "message": "Watchlist streaming alerts"
@@ -707,11 +872,17 @@
   "feature_watchlistBatch_detail": {
     "message": "Adds a watchlist-page button that copies all visible IMDb title IDs."
   },
+  "feature_watchlistBatch_keywords": {
+    "message": "bulk, select many, add remove, watchlist"
+  },
   "feature_watchlistBatch_name": {
     "message": "Watchlist batch ID copy"
   },
   "feature_widerLayout_detail": {
     "message": "Uses more horizontal room across normal desktop window sizes."
+  },
+  "feature_widerLayout_keywords": {
+    "message": "width, full screen, margins, wide"
   },
   "feature_widerLayout_name": {
     "message": "Wider desktop layout"
@@ -1844,6 +2015,9 @@
   "settings_the_last_20_feature_failures_kept_across": {
     "message": "The last 20 feature failures, kept across reloads so an intermittent problem can be seen. Each entry records when, which feature, which kind of page, and what category of failure — never a title, address, or message."
   },
+  "settings_search_placeholder": {
+    "message": "Search every setting"
+  },
   "settings_these_marks_stay_on_this_device_and": {
     "message": "These marks stay on this device and never change your IMDb account. Import from page copies the IMDb Watched titles visible on the page behind the settings dialog into local Seen marks; existing marks are kept, and nothing is ever sent back to IMDb."
   },
@@ -2452,6 +2626,12 @@
   },
   "text_server_lacks_title": {
     "message": "$1: not found"
+  },
+  "text_settings_search_matches_one": {
+    "message": "$1 match"
+  },
+  "text_settings_search_matches_other": {
+    "message": "$1 matches"
   },
   "text_settings_saved": {
     "message": "Saved"

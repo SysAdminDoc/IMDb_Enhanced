@@ -838,6 +838,16 @@ ${scopedRules('.enh-zoom', {
 }
 .enh-settings-close:hover { background: ${t.sf2}; color: ${t.tx0}; border-color: ${t.bd2}; }
 
+.enh-settings-search {
+    display: flex; align-items: center; gap: 10px;
+    padding: 10px 18px; border-bottom: 1px solid ${t.bd0}; background: ${t.sf0};
+}
+.enh-settings-search input { flex: 1 1 auto; min-width: 0; }
+.enh-settings-search__count {
+    color: ${t.tx3}; white-space: nowrap;
+    font: 600 11px/1.3 -apple-system, BlinkMacSystemFont, 'Segoe UI', sans-serif;
+}
+.enh-settings-search__count:empty { display: none; }
 .enh-settings-shell { display: flex; min-height: 0; flex: 1; }
 .enh-settings-nav {
     width: 216px; flex: 0 0 216px;

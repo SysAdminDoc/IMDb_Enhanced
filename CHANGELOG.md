@@ -4,6 +4,7 @@
 
 ### Added
 
+- The settings panel has a search box. It matches a feature by its name, its description, or a keyword list written for it, and it looks across all six pages rather than the one you happen to have open, so "plex", "tomatometer" and "hotkeys" each land on the right row. Enter jumps focus to the first result; clearing the box puts the page back.
 - The private marks panel sorts, filters and pages. Sort by last viewing, title or state; narrow to Seen, Skip, note-only, or just the records carrying a note; rows come a hundred at a time with a count. Every row now says when the title was last watched, or when it was marked if it never was. A store at its 5,000-record limit draws the same hundred rows as a store of ten.
 - Rows in a list, chart or filmography can carry a library-status badge: in library, monitored, requested, or nothing found. It uses whichever local service you already have configured, asks about a title only once you have scrolled to its row, and asks once per title however many rows repeat it. A title you never scroll to is never looked up. The badge reports state and offers no action, because a list is the worst possible place for a stray write. Off by default, under Integrations.
 

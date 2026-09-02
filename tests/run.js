@@ -405,6 +405,7 @@ function loadScriptTestHooks({ withoutDeleteValue = false, withheldCredentials =
         getFeatureKeys: () => features.map(feature => feature.key),
         getFeatureNames: () => features.map(feature => [feature.key, feature.name]),
         FEATURE_DETAILS,
+        FEATURE_KEYWORDS,
         SETTINGS_IMPORT_TEXT_LIMIT,
         CACHE_ENTRY_TEXT_LIMIT,
         SETTING_TEXT_LIMIT,
@@ -2786,7 +2787,15 @@ test('polish: focus rings, scoped layout rules, and reachable help copy', () => 
     // Density is fine; hiding the copy from assistive technology as well is not.
     assert(!/\.enh-settings-card--compact \.enh-settings-help \{ display: none; \}/.test(script), 'help copy must stay in the accessibility tree');
     assert(script.includes("'aria-describedby':helpId"), 'each toggle should point at its description');
-    assert(/className:'enh-settings-row', \.\.\.\(detail \? \{ title:detail \}/.test(script), 'the row should carry the description as a tooltip');
+    /* Scoped to makeFeatureRow rather than pinned to the property order beside it: the
+       claim is that the row gets the description as a tooltip, not that the tooltip is
+       written on the same line as the class name. */
+    const featureRow = script.slice(
+        script.indexOf('const makeFeatureRow = feature =>'),
+        script.indexOf('const toggle = makeEl(`label`, { className:`enh-toggle` });'.replace(/`/g, "'")));
+    assert(featureRow.length > 200, 'makeFeatureRow should be locatable');
+    assert(/\.\.\.\(detail \? \{ title:detail \} : \{\}\)/.test(featureRow),
+        'the row should carry the description as a tooltip');
 
     // Status pills derive both surface and foreground from the theme, like every peer.
     assert(!/rgba\(34,197,94/.test(script) && !/rgba\(239,68,68/.test(script), 'status pills must not hardcode colours');
@@ -7190,12 +7199,17 @@ test('every feature and provider gets its words from the catalog', () => {
         assert(hooks.FEATURE_DETAILS[key], `${key} is named here but has no description`);
         expected.add(`feature_${key}_name`);
         expected.add(`feature_${key}_detail`);
+        expected.add(`feature_${key}_keywords`);
     });
     hooks.getFeatureNames().forEach(([key, name]) => {
         expected.add(`feature_${key}_name`);
         expected.add(`feature_${key}_detail`);
+        /* IE-142: the settings search matches these, so a feature with none is a feature
+           nobody can find by typing what it does rather than what it is called. */
+        expected.add(`feature_${key}_keywords`);
         assert(declared.has(`feature_${key}_name`), `${key} has no catalog entry for its label`);
         assert(declared.has(`feature_${key}_detail`), `${key} has no catalog entry for its description`);
+        assert(declared.has(`feature_${key}_keywords`), `${key} has no catalog entry for its search keywords`);
         // t returns the key itself when nothing carries it, which is what a broken lookup shows.
         assert.notStrictEqual(name, `feature_${key}_name`, `${key} renders its own catalog key as a label`);
         assert(name && name.trim(), `${key} has no label`);
@@ -7229,6 +7243,33 @@ test('every feature and provider gets its words from the catalog', () => {
         .filter(key => /^(feature|provider)_/.test(key) && !expected.has(key));
     assert.deepStrictEqual(stranded, [],
         'the catalog carries feature or provider text for something that no longer exists');
+});
+
+/* IE-142: keywords exist so somebody can find a feature by what they call it rather than
+   by what this project called it. A keyword list that only repeats the name buys nothing,
+   so that is the property tested rather than the mere presence of a string. */
+test('every feature can be searched for by a word that is not in its name', () => {
+    const hooks = loadScriptTestHooks();
+    const thin = [];
+    const echoes = [];
+    hooks.getFeatureNames().forEach(([key, name]) => {
+        const words = String(hooks.FEATURE_KEYWORDS[key] || '')
+            .split(',').map(word => word.trim().toLowerCase()).filter(Boolean);
+        if (words.length < 2) thin.push(key);
+        const haystack = String(name).toLowerCase();
+        if (!words.some(word => !haystack.includes(word))) echoes.push(key);
+    });
+    assert.deepStrictEqual(thin, [], 'every feature needs at least two search keywords');
+    assert.deepStrictEqual(echoes, [],
+        'every feature needs at least one keyword that its own name does not already contain');
+
+    /* And the search has to actually reach them: the row carries a folded haystack built
+       from the name, the description and the keywords, matched as a substring. */
+    const panel = script.slice(
+        script.indexOf('const makeFeatureRow = feature =>'),
+        script.indexOf('const makeFeatureCard ='));
+    assert(/searchText: `\$\{feature\.name\} \$\{detail\} \$\{keywords\}`\.toLowerCase\(\)/.test(panel),
+        'the row should fold name, description and keywords into one searchable string');
 });
 
 /* The recovery page keeps its English in the markup on purpose: it exists to be usable

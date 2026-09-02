@@ -412,6 +412,7 @@
         aria_search_queue: '$1 search queue',
         aria_season_averages: 'Season averages',
         aria_season_progress: 'Season progress',
+        aria_search_settings: 'Search settings',
         aria_settings_sections: 'Settings sections',
         aria_show_destination_on_imdb_pages: 'Show destination on IMDb pages',
         aria_show_on_imdb_pages: 'Show $1 on IMDb pages',
@@ -474,116 +475,172 @@
         error_settings_not_an_object: 'Settings JSON must be an object.',
         error_settings_unreadable: 'Current settings could not be read; no changes were made.',
         feature_castAges_detail: 'Shows a living person’s current age next to their birth date, and roughly how old each billed actor was when a title came out. IMDb already prints the age at death for people who have died; the cast ages come from Wikidata and are approximate.',
+        feature_castAges_keywords: 'actors, age at release, birth year, people',
         feature_castAges_name: 'Person age',
         feature_collapsibleSections_detail: 'Adds per-section collapse controls and remembers each state.',
+        feature_collapsibleSections_keywords: 'fold, accordion, hide sections, tidy',
         feature_collapsibleSections_name: 'Collapsible sections',
         feature_collectionPanel_detail: 'On a film that belongs to a series, lists the other films in it in order, with the one you are on marked. Off by default, and asks nothing on a title that is in no series.',
+        feature_collectionPanel_keywords: 'franchise, sequels, watch order, series',
         feature_collectionPanel_name: 'Franchise watch order',
         feature_compactHeader_detail: 'Slims the IMDb header and keeps it visible while you scroll.',
+        feature_compactHeader_keywords: 'navigation, sticky, toolbar, slim, menu bar',
         feature_compactHeader_name: 'Compact header',
         feature_dimLowRated_detail: 'Fades the artwork of titles rated below your threshold on lists, charts, and search results. Text and controls stay fully readable, and hovering restores the image.',
+        feature_dimLowRated_keywords: 'fade, grey out, threshold, bad films',
         feature_dimLowRated_name: 'Dim low-rated titles',
         feature_editorialTitleSurface_detail: 'Rebuilds title pages into a stable editorial hero with dedicated action, rating, and research regions.',
+        feature_editorialTitleSurface_keywords: 'hero, layout, redesign, magazine, title page',
         feature_editorialTitleSurface_name: 'Editorial title layout',
         feature_enhancedRatingDisplay_detail: 'Elevates IMDb rating and popularity blocks with clearer emphasis.',
+        feature_enhancedRatingDisplay_keywords: 'stars, votes, average, score display',
         feature_enhancedRatingDisplay_name: 'Refined rating display',
         feature_episodeHeatmap_detail: 'Colours IMDb’s own season×episode grid by rating and adds season averages, on the Ratings tab of a series.',
+        feature_episodeHeatmap_keywords: 'grid, season quality, colour map, chart',
         feature_episodeHeatmap_name: 'Episode heatmap colours',
         feature_episodeSubtitles_detail: 'Adds a subtitle link to every episode on an episode list, plus a button that copies them all for the loaded season.',
+        feature_episodeSubtitles_keywords: 'subtitles, captions, srt, bulk, download',
         feature_episodeSubtitles_name: 'Per-episode subtitle links',
         feature_expandSummaries_detail: 'Releases IMDb’s line clamp so long summaries and biographies read in full without a per-block click.',
+        feature_expandSummaries_keywords: 'plot, synopsis, read more, truncated',
         feature_expandSummaries_name: 'Expand truncated summaries',
         feature_expandedLinkMenu_detail: 'Groups additional movie, review, subtitle, and TV lookup links.',
+        feature_expandedLinkMenu_keywords: 'dropdown, more links, overflow, menu',
         feature_expandedLinkMenu_name: 'Expanded link menu',
         feature_externalLinks_detail: 'Adds trusted research and trailer links near the title.',
+        feature_externalLinks_keywords: 'trakt, tmdb, wikipedia, research, destinations',
         feature_externalLinks_name: 'External links bar',
         feature_imageZoom_detail: 'Hovering or tabbing to a poster or a cast photo shows a larger version beside it, requested at a bounded size rather than the full original. Escape closes it.',
+        feature_imageZoom_keywords: 'poster, enlarge, magnify, photos, hover',
         feature_imageZoom_name: 'Poster and cast photo zoom',
         feature_inlineAnimeScore_detail: 'On anime titles, shows the AniList community average beside the other scores. Off by default, and nothing is requested for a title that is not anime.',
+        feature_inlineAnimeScore_keywords: 'anilist, myanimelist, anime, japanese',
         feature_inlineAnimeScore_name: 'AniList anime scores',
         feature_inlineLetterboxdScore_detail: 'Shows Letterboxd average ratings inline for films when available.',
+        feature_inlineLetterboxdScore_keywords: 'letterboxd, community, film diary, stars',
         feature_inlineLetterboxdScore_name: 'Letterboxd scores',
         feature_inlineMetacriticScore_detail: 'Shows Metacritic score feedback inline when available.',
+        feature_inlineMetacriticScore_keywords: 'metacritic, metascore, critics, reviews',
         feature_inlineMetacriticScore_name: 'Metacritic scores',
         feature_inlineRTScore_detail: 'Shows Rotten Tomatoes score feedback inline when available.',
+        feature_inlineRTScore_keywords: 'rotten tomatoes, tomatometer, critics, popcorn',
         feature_inlineRTScore_name: 'Rotten Tomatoes scores',
         feature_keyboardShortcuts_detail: 'Optional. Enables ? for settings, c to copy, r for rating, and t for top.',
+        feature_keyboardShortcuts_keywords: 'hotkeys, keys, accessibility, commands',
         feature_keyboardShortcuts_name: 'Optional keyboard shortcuts',
         feature_listMultiSearch_detail: 'Builds a popup-safe queue of up to 20 title links on watchlist, list, and chart pages.',
+        feature_listMultiSearch_keywords: 'bulk, open many, tabs, batch search',
         feature_listMultiSearch_name: 'List multi-search',
         feature_listRoulette_detail: 'Adds a button to watchlists, lists, and charts that picks one title at random and scrolls to it. It never opens anything.',
+        feature_listRoulette_keywords: 'random, pick for me, shuffle, surprise',
         feature_listRoulette_name: 'Pick something to watch',
         feature_collectionExport_detail: 'Copies the rows loaded on a watchlist, list or chart as a CSV using IMDb column names, so it reads back into IMDb and into this extension. Only the rows on screen are included, and it says how many had no rating.',
         feature_listRuntimeSummary_detail: 'Totals how long the titles on a watchlist, list, or chart would take to watch, and says how many had no runtime listed.',
+        feature_collectionExport_keywords: 'csv, spreadsheet, download list, backup',
         feature_collectionExport_name: 'Copy a list as CSV',
+        feature_listRuntimeSummary_keywords: 'total time, hours, duration, how long',
         feature_listRuntimeSummary_name: 'List runtime summary',
         feature_markLinkTint_detail: 'Underlines links to titles you have marked, in the mark colour, anywhere they appear on a page. Needs private marks.',
+        feature_markLinkTint_keywords: 'highlight, colour seen, visited, links',
         feature_markLinkTint_name: 'Show marks on plain title links',
         feature_airsOn_detail: 'Shows which network or streaming service a series airs on, from TVmaze. Series only, and nothing is requested for a film.',
+        feature_airsOn_keywords: 'network, channel, broadcaster, next episode',
         feature_airsOn_name: 'Where a series airs',
         feature_markFilters_detail: 'Adds an All / Unseen / Seen / Skipped filter with counts to lists, charts, watchlists, search results, and filmographies. Needs private marks.',
+        feature_markFilters_keywords: 'filter, hide seen, unwatched, narrow',
         feature_markFilters_name: 'Filter by private marks',
         feature_mediaServerIntegration_detail: 'Checks configured local Plex, Jellyfin, and Emby servers and shows whether the title is already in your library.',
+        feature_mediaServerIntegration_keywords: 'plex, jellyfin, emby, library, local server',
         feature_mediaServerIntegration_name: 'Plex/Jellyfin/Emby indicator',
         feature_modernUI_detail: 'Applies the selected theme, typography, focus, and component treatment.',
+        feature_modernUI_keywords: 'theme, dark mode, colours, skin, restyle',
         feature_modernUI_name: 'Modern IMDb skin',
         feature_movieChatBoard_detail: 'Adds a message board for the title at the bottom of the page, hosted by MovieChat. Nothing is loaded until you scroll to it, and if the board cannot be shown the section becomes a plain link.',
+        feature_movieChatBoard_keywords: 'message board, discussion, forum, comments',
         feature_movieChatBoard_name: 'MovieChat message board',
         feature_quickCopyID_detail: 'Adds a visible IMDb ID copy button beside the title.',
+        feature_quickCopyID_keywords: 'imdb id, tt number, clipboard, identifier',
         feature_quickCopyID_name: 'Quick copy IMDb ID',
         feature_quickNav_detail: 'Adds a right-side section navigator on wide screens.',
+        feature_quickNav_keywords: 'jump, contents, anchors, scroll, sections',
         feature_quickNav_name: 'Section navigator',
         feature_ratingColorCoding_detail: 'Adds a small quality label beside the IMDb score.',
+        feature_ratingColorCoding_keywords: 'colour, green red, highlight, heat',
         feature_ratingColorCoding_name: 'Rating quality labels',
         feature_ratingGap_detail: 'On the Ratings tab, compares IMDb’s weighted rating with the unweighted mean of the raw votes.',
+        feature_ratingGap_keywords: 'weighted, unweighted, mean, vote manipulation',
         feature_ratingGap_name: 'Weighted vs unweighted rating',
         feature_rowIntegrationState_detail: 'Shows whether each title in a list, chart, or filmography is already in your library, monitored, or requested. One lookup per title, made only once you scroll to the row, using whichever local service you have configured.',
+        feature_rowIntegrationState_keywords: 'plex, jellyfin, radarr, Seerr, Overseerr, badge',
         feature_rowIntegrationState_name: 'Library status on list rows',
         feature_removeAds_detail: 'Hides current IMDb ad placements, sponsored shells, and tracking pixels as early as the page allows.',
+        feature_removeAds_keywords: 'advertising, banners, promotions, clutter',
         feature_removeAds_name: 'Hide ads and sponsored shells',
         feature_removeAppBanner_detail: 'Hides app-install prompts shown on desktop pages.',
+        feature_removeAppBanner_keywords: 'mobile, install, download, smart banner',
         feature_removeAppBanner_name: 'Hide app banners',
         feature_removeFeaturedReview_detail: 'Hides the user reviews shown on a title page. The heading, the count and the link through to all of them stay.',
+        feature_removeFeaturedReview_keywords: 'user reviews, opinions, comments, featured',
         feature_removeFeaturedReview_name: 'Hide reviews on title pages',
         feature_removeContribution_detail: 'Removes contribution calls to action from detail pages.',
+        feature_removeContribution_keywords: 'edit, submit, volunteer, add data',
         feature_removeContribution_name: 'Hide contribution prompts',
         feature_removeNewsSection_detail: 'Keeps the page focused by removing IMDb news modules.',
+        feature_removeNewsSection_keywords: 'articles, headlines, stories, clutter',
         feature_removeNewsSection_name: 'Hide news modules',
         feature_removeProUpsell_detail: 'Hides explicit IMDbPro prompts and links from title and name pages while preserving list controls.',
+        feature_removeProUpsell_keywords: 'imdbpro, upsell, subscription, marketing',
         feature_removeProUpsell_name: 'Hide IMDbPro upsells',
         feature_removeRelatedInterests_detail: 'Hides broad interest recommendations that dilute title and cast pages.',
+        feature_removeRelatedInterests_keywords: 'interests, topics, tags, suggestions',
         feature_removeRelatedInterests_name: 'Hide related interests',
         feature_removeSponsoredRecs_detail: 'Suppresses sponsored recommendation blocks where IMDb inserts them.',
+        feature_removeSponsoredRecs_keywords: 'sponsored, promoted, recommendations, adverts',
         feature_removeSponsoredRecs_name: 'Hide sponsored recommendations',
         feature_restoreImageContextMenu_detail: 'IMDb blocks the right-click menu over gallery images, so Save image as does nothing there. This lets the browser show its own menu again.',
+        feature_restoreImageContextMenu_keywords: 'right click, save image, copy image, menu',
         feature_restoreImageContextMenu_name: 'Right-click on images',
         feature_searchButtons_detail: 'Adds prominent, keyboard-friendly watch-site links near the title.',
+        feature_searchButtons_keywords: 'streaming, where to watch, quick search, sites',
         feature_searchButtons_name: 'Watch search buttons',
         feature_seasonProgress_detail: 'Shows how much of the loaded season you have marked seen, links to the next unmarked episode, and marks or clears the whole loaded season in one step with an undo. Needs private marks.',
+        feature_seasonProgress_keywords: 'progress, how many watched, completion, bar',
         feature_seasonProgress_name: 'Season progress and batch marking',
         feature_servarrIntegration_detail: 'Adds optional local Radarr/Sonarr quick-add buttons with library status indicator when API settings are configured.',
+        feature_servarrIntegration_keywords: 'radarr, sonarr, Seerr, Overseerr, Jellyseerr, download',
         feature_servarrIntegration_name: 'Servarr quick-add',
         feature_spoilerBlur_detail: 'Softens long plot text until you intentionally reveal it.',
+        feature_spoilerBlur_keywords: 'blur, hide plot, reveal, spoilers',
         feature_spoilerBlur_name: 'Spoiler blur on plot',
         feature_streamAvailability_detail: 'Shows one-glance JustWatch streaming providers when available.',
+        feature_streamAvailability_keywords: 'where to watch, justwatch, streaming, netflix',
         feature_streamAvailability_name: 'Streaming availability',
         feature_subtitleLinks_detail: 'Adds subtitle lookup links in the details section.',
+        feature_subtitleLinks_keywords: 'subtitles, captions, opensubtitles, srt',
         feature_subtitleLinks_name: 'Subtitle links',
         feature_titleNotes_detail: 'Adds a private note field to title pages, saved on this device and included in backups. Never sent anywhere.',
+        feature_titleNotes_keywords: 'notes, memo, annotation, comments',
         feature_titleNotes_name: 'Private title notes',
         feature_trailerPopover_detail: 'Adds an in-page trailer modal backed by a click-to-fetch YouTube lookup.',
+        feature_trailerPopover_keywords: 'youtube, video, preview, play',
         feature_trailerPopover_name: 'Trailer popover',
         feature_tvEpisodeTools_detail: 'Surfaces the highest-rated episodes; synopsis blur remains opt-in through Spoiler blur on plot.',
+        feature_tvEpisodeTools_keywords: 'episodes, season, series, television',
         feature_tvEpisodeTools_name: 'TV episode tools',
         feature_tvShowEnhancements_detail: 'Adds TV-specific lookup shortcuts on series pages.',
+        feature_tvShowEnhancements_keywords: 'series, seasons, show, television',
         feature_tvShowEnhancements_name: 'TV show quick links',
         feature_watchedMarking_detail: 'Adds private Seen and Skip marks on title cards across titles, charts, lists, watchlists, filmographies, and search results. Marks stay on this device and do not change IMDb Watched.',
+        feature_watchedMarking_keywords: 'seen, skip, history, tracking, private',
         feature_watchedMarking_name: 'Private seen / skip marks',
         feature_watchlistAlerts_detail: 'Notices when something on your watchlist becomes available on a service you picked, and tells you once a day. Needs a TMDB token, works only in the extension, and keeps a bounded list of the most recent watchlist page you opened.',
+        feature_watchlistAlerts_keywords: 'notifications, streaming alerts, availability, new on',
         feature_watchlistAlerts_name: 'Watchlist streaming alerts',
         feature_watchlistBatch_detail: 'Adds a watchlist-page button that copies all visible IMDb title IDs.',
+        feature_watchlistBatch_keywords: 'bulk, select many, add remove, watchlist',
         feature_watchlistBatch_name: 'Watchlist batch ID copy',
         feature_widerLayout_detail: 'Uses more horizontal room across normal desktop window sizes.',
+        feature_widerLayout_keywords: 'width, full screen, margins, wide',
         feature_widerLayout_name: 'Wider desktop layout',
         field_a_private_note_about_this_title: 'A private note about this title. Stored on this device only.',
         field_const_your_rating_date_rated_title: 'Const,Your Rating,Date Rated,Title\ntt0133093,9,2026-08-31,The Matrix',
@@ -961,6 +1018,7 @@
         settings_stored_in: 'Stored in $1.',
         settings_the_encrypted_backup_could_not_be_created: 'The encrypted backup could not be created.',
         settings_the_last_20_feature_failures_kept_across: 'The last 20 feature failures, kept across reloads so an intermittent problem can be seen. Each entry records when, which feature, which kind of page, and what category of failure — never a title, address, or message.',
+        settings_search_placeholder: 'Search every setting',
         settings_these_marks_stay_on_this_device_and: 'These marks stay on this device and never change your IMDb account. Import from page copies the IMDb Watched titles visible on the page behind the settings dialog into local Seen marks; existing marks are kept, and nothing is ever sent back to IMDb.',
         settings_this_backup_is_encrypted_enter_its_passphrase: 'This backup is encrypted. Enter its passphrase.',
         settings_this_build_cannot_update_itself_so_it: 'This build cannot update itself, so it checks once a day whether a newer release has been published.',
@@ -1164,6 +1222,8 @@
         text_seen_of_loaded: 'Seen $1/$2 loaded',
         text_server_has_title: '$1: already in library',
         text_server_lacks_title: '$1: not found',
+        text_settings_search_matches_one: '$1 match',
+        text_settings_search_matches_other: '$1 matches',
         text_settings_saved: 'Saved',
         text_site_search_queue: '$1 search queue',
         text_skip_titles_i_have_marked: 'Skip titles I have marked',
@@ -2124,6 +2184,71 @@
         'title-cast', 'UserReviews', 'MoreLikeThis', 'Details', 'BoxOffice',
         'TechSpecs', 'DidYouKnow', 'videos-section', 'Photos',
     ];
+
+    /* IE-142: 56 features across six pages, and the only way to find one was to know
+       which page it lived on. Search matches these as well as the name and the
+       description, so somebody looking for "plex" or "tomatometer" or "hotkeys" lands on
+       the right row without knowing what this project decided to call it. They are
+       catalogued like every other string, because a translated panel needs translated
+       search terms to be searchable at all. */
+    const FEATURE_KEYWORDS = {
+        removeAds: t('feature_removeAds_keywords'),
+        removeProUpsell: t('feature_removeProUpsell_keywords'),
+        removeNewsSection: t('feature_removeNewsSection_keywords'),
+        removeRelatedInterests: t('feature_removeRelatedInterests_keywords'),
+        removeContribution: t('feature_removeContribution_keywords'),
+        removeSponsoredRecs: t('feature_removeSponsoredRecs_keywords'),
+        removeFeaturedReview: t('feature_removeFeaturedReview_keywords'),
+        removeAppBanner: t('feature_removeAppBanner_keywords'),
+        modernUI: t('feature_modernUI_keywords'),
+        editorialTitleSurface: t('feature_editorialTitleSurface_keywords'),
+        compactHeader: t('feature_compactHeader_keywords'),
+        enhancedRatingDisplay: t('feature_enhancedRatingDisplay_keywords'),
+        widerLayout: t('feature_widerLayout_keywords'),
+        ratingColorCoding: t('feature_ratingColorCoding_keywords'),
+        inlineRTScore: t('feature_inlineRTScore_keywords'),
+        inlineLetterboxdScore: t('feature_inlineLetterboxdScore_keywords'),
+        watchlistAlerts: t('feature_watchlistAlerts_keywords'),
+        collectionPanel: t('feature_collectionPanel_keywords'),
+        movieChatBoard: t('feature_movieChatBoard_keywords'),
+        restoreImageContextMenu: t('feature_restoreImageContextMenu_keywords'),
+        imageZoom: t('feature_imageZoom_keywords'),
+        airsOn: t('feature_airsOn_keywords'),
+        inlineAnimeScore: t('feature_inlineAnimeScore_keywords'),
+        inlineMetacriticScore: t('feature_inlineMetacriticScore_keywords'),
+        streamAvailability: t('feature_streamAvailability_keywords'),
+        collapsibleSections: t('feature_collapsibleSections_keywords'),
+        expandSummaries: t('feature_expandSummaries_keywords'),
+        spoilerBlur: t('feature_spoilerBlur_keywords'),
+        quickNav: t('feature_quickNav_keywords'),
+        searchButtons: t('feature_searchButtons_keywords'),
+        externalLinks: t('feature_externalLinks_keywords'),
+        trailerPopover: t('feature_trailerPopover_keywords'),
+        expandedLinkMenu: t('feature_expandedLinkMenu_keywords'),
+        watchedMarking: t('feature_watchedMarking_keywords'),
+        markLinkTint: t('feature_markLinkTint_keywords'),
+        titleNotes: t('feature_titleNotes_keywords'),
+        dimLowRated: t('feature_dimLowRated_keywords'),
+        markFilters: t('feature_markFilters_keywords'),
+        servarrIntegration: t('feature_servarrIntegration_keywords'),
+        mediaServerIntegration: t('feature_mediaServerIntegration_keywords'),
+        rowIntegrationState: t('feature_rowIntegrationState_keywords'),
+        tvEpisodeTools: t('feature_tvEpisodeTools_keywords'),
+        ratingGap: t('feature_ratingGap_keywords'),
+        episodeHeatmap: t('feature_episodeHeatmap_keywords'),
+        tvShowEnhancements: t('feature_tvShowEnhancements_keywords'),
+        subtitleLinks: t('feature_subtitleLinks_keywords'),
+        episodeSubtitles: t('feature_episodeSubtitles_keywords'),
+        watchlistBatch: t('feature_watchlistBatch_keywords'),
+        collectionExport: t('feature_collectionExport_keywords'),
+        listRuntimeSummary: t('feature_listRuntimeSummary_keywords'),
+        seasonProgress: t('feature_seasonProgress_keywords'),
+        listRoulette: t('feature_listRoulette_keywords'),
+        listMultiSearch: t('feature_listMultiSearch_keywords'),
+        castAges: t('feature_castAges_keywords'),
+        quickCopyID: t('feature_quickCopyID_keywords'),
+        keyboardShortcuts: t('feature_keyboardShortcuts_keywords'),
+    };
 
     const FEATURE_DETAILS = {
         removeAds: t('feature_removeAds_detail'),
@@ -16147,6 +16272,16 @@ ${scopedRules('.enh-zoom', {
 }
 .enh-settings-close:hover { background: ${t.sf2}; color: ${t.tx0}; border-color: ${t.bd2}; }
 
+.enh-settings-search {
+    display: flex; align-items: center; gap: 10px;
+    padding: 10px 18px; border-bottom: 1px solid ${t.bd0}; background: ${t.sf0};
+}
+.enh-settings-search input { flex: 1 1 auto; min-width: 0; }
+.enh-settings-search__count {
+    color: ${t.tx3}; white-space: nowrap;
+    font: 600 11px/1.3 -apple-system, BlinkMacSystemFont, 'Segoe UI', sans-serif;
+}
+.enh-settings-search__count:empty { display: none; }
 .enh-settings-shell { display: flex; min-height: 0; flex: 1; }
 .enh-settings-nav {
     width: 216px; flex: 0 0 216px;
@@ -18071,6 +18206,11 @@ ${scopedRules('.enh-zoom', {
                     <button type="button" class="enh-settings-close" title="${t('aria_close_settings')}" aria-label="${t('aria_close_settings')}">×</button>
                 </div>
             </div>
+            <div class="enh-settings-search">
+                <input type="search" id="enh-settings-search" class="enh-servarr-input" autocomplete="off"
+                    placeholder="${t('settings_search_placeholder')}" aria-label="${t('aria_search_settings')}">
+                <span class="enh-settings-search__count" id="enh-settings-search-count" role="status" aria-live="polite"></span>
+            </div>
             <div class="enh-settings-shell">
                 <nav class="enh-settings-nav" id="enh-settings-nav" role="tablist" aria-label="${t('aria_settings_sections')}" aria-orientation="vertical"></nav>
                 <div class="enh-settings-main">
@@ -18141,7 +18281,87 @@ ${scopedRules('.enh-zoom', {
             body.appendChild(section);
             return section;
         };
+        /* IE-142: 56 features across six pages, findable only by knowing which page owns
+           one. Search reads the name, the description and a catalogued keyword list per
+           feature, and it looks across every page rather than only the open one — the
+           whole point is not having to guess the page first. */
+        const searchInput = overlay.querySelector('#enh-settings-search');
+        const searchCount = overlay.querySelector('#enh-settings-search-count');
+        let searchQuery = '';
+        const resetSearchVisibility = () => {
+            body.querySelectorAll('.enh-settings-card').forEach(card => { card.hidden = false; });
+            body.querySelectorAll('.enh-settings-row[data-feature-key]').forEach(row => { row.hidden = false; });
+        };
+        const clearSearch = () => {
+            searchQuery = '';
+            searchInput.value = '';
+            searchCount.textContent = '';
+            resetSearchVisibility();
+        };
+        const applySearch = () => {
+            if (!searchQuery) {
+                resetSearchVisibility();
+                searchCount.textContent = '';
+                // searchQuery is already empty, so this cannot re-enter clearSearch.
+                showPage(activeSettingsPage);
+                return;
+            }
+            let matches = 0;
+            pages.forEach(page => {
+                let pageHasSomething = false;
+                page.querySelectorAll('.enh-settings-card').forEach(card => {
+                    const heading = card.querySelector('.enh-settings-card-title')?.textContent || '';
+                    const description = card.querySelector('.enh-settings-card-description')?.textContent || '';
+                    /* A card that matches by its own heading shows every row it holds: the
+                       rows under "Clean up" are what somebody searching for that wanted. */
+                    const cardMatches = `${heading} ${description}`.toLowerCase().includes(searchQuery)
+                        || (card.dataset.searchText || '').includes(searchQuery);
+                    const rows = card.querySelectorAll('.enh-settings-row[data-feature-key]');
+                    let rowMatches = 0;
+                    rows.forEach(row => {
+                        const hit = cardMatches || (row.dataset.searchText || '').includes(searchQuery);
+                        row.hidden = !hit;
+                        if (hit) rowMatches += 1;
+                    });
+                    const visible = cardMatches || rowMatches > 0;
+                    card.hidden = !visible;
+                    if (!visible) return;
+                    pageHasSomething = true;
+                    matches += rows.length ? rowMatches : 1;
+                });
+                page.hidden = !pageHasSomething;
+            });
+            searchCount.textContent = tCount('text_settings_search_matches', matches);
+        };
+        /* Both shapes a feature control takes: a row inside a card, and a card whose only
+           control was hoisted into its own header. Comma-joined so the browser returns
+           whichever comes first in the document rather than whichever is listed first. */
+        const firstResultControl = () => body.querySelector([
+            '.enh-settings-page:not([hidden]) .enh-settings-card:not([hidden]) .enh-settings-row:not([hidden]) input',
+            '.enh-settings-page:not([hidden]) .enh-settings-card[data-feature-key]:not([hidden]) .enh-settings-card-actions input',
+        ].join(','));
+        searchInput.addEventListener('input', () => {
+            searchQuery = searchInput.value.trim().toLowerCase();
+            applySearch();
+        });
+        /* Not on every keystroke: moving focus out of the box as somebody types is a box
+           they cannot type in. Enter and Down are the two keys that mean "go to it". */
+        searchInput.addEventListener('keydown', event => {
+            if (event.key === 'Escape' && searchQuery) {
+                event.stopPropagation();
+                clearSearch();
+                applySearch();
+                return;
+            }
+            if (event.key !== 'Enter' && event.key !== 'ArrowDown') return;
+            const first = firstResultControl();
+            if (!first) return;
+            event.preventDefault();
+            first.focus();
+        });
         const showPage = (id, focus = false) => {
+            // Picking a section is leaving the search behind, not searching within it.
+            if (searchQuery) clearSearch();
             if (!pages.has(id)) id = 'experience';
             activeSettingsPage = id;
             pages.forEach((page, pageId) => { page.hidden = pageId !== id; });
@@ -18165,7 +18385,16 @@ ${scopedRules('.enh-zoom', {
         const makeFeatureRow = feature => {
             const detail = FEATURE_DETAILS[feature.key] || '';
             const helpId = `enh-help-${feature.key}`;
-            const row = makeEl('div', { className:'enh-settings-row', ...(detail ? { title:detail } : {}) },
+            const keywords = FEATURE_KEYWORDS[feature.key] || '';
+            const row = makeEl('div', {
+                className:'enh-settings-row',
+                dataset:{
+                    featureKey: feature.key,
+                    // Folded once at build time rather than on every keystroke of a search.
+                    searchText: `${feature.name} ${detail} ${keywords}`.toLowerCase(),
+                },
+                ...(detail ? { title:detail } : {}),
+            },
                 makeEl('div', { className:'enh-settings-row-copy' },
                     makeEl('span', { className:'enh-settings-label' }, feature.name),
                     makeEl('span', { className:'enh-settings-help', id:helpId }, detail)
@@ -18282,6 +18511,11 @@ ${scopedRules('.enh-zoom', {
                 makeEl('span', { className:'enh-settings-route-badge' }, badge), toggle
             );
             card.querySelector('.enh-settings-card-header').appendChild(actions);
+            /* Only the toggle survives this card; the row it came from is discarded, so
+               the card has to carry the search text itself or these features would be the
+               ones the search could never find. */
+            card.dataset.featureKey = row.dataset.featureKey;
+            card.dataset.searchText = row.dataset.searchText;
             return card;
         };
 
@@ -19550,6 +19784,7 @@ ${scopedRules('.enh-zoom', {
                 // optional origin, so it needs to know which feature wants what.
                 FEATURE_ORIGIN_GROUPS,
                 FEATURE_DETAILS,
+                FEATURE_KEYWORDS,
                 getFeatureOrigins,
                 describeFeatureOrigins,
                 describeFeatureConsent,

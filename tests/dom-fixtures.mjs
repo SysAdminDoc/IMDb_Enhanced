@@ -1924,6 +1924,62 @@ await runFixture('title', async (window, hooks) => {
     assert.deepEqual(Object.keys(hooks.getUserMarks()), ['tt1375666'],
         'and pressing it anyway must not resurrect the store from before that write');
 
+    /* IE-142: 56 features over six pages, findable only by knowing which page owned one.
+       The search has to reach across all of them, and it has to match on something other
+       than the name — the point is finding "plex" without knowing the feature is called
+       "Plex/Jellyfin/Emby indicator". */
+    const searchBox = requireSelector(window.document, '#enh-settings-search');
+    /* Two shapes: a row inside a card, and a summary card that is itself one feature's
+       control. Both carry the feature key, so both are results. */
+    const visibleRows = () => Array.from(window.document.querySelectorAll([
+        '.enh-settings-page:not([hidden]) .enh-settings-card:not([hidden]) .enh-settings-row[data-feature-key]:not([hidden])',
+        '.enh-settings-page:not([hidden]) .enh-settings-card[data-feature-key]:not([hidden])',
+    ].join(',')));
+    const search = text => {
+        searchBox.value = text;
+        searchBox.dispatchEvent(new window.Event('input', { bubbles:true }));
+    };
+    const pageOf = row => row.closest('.enh-settings-page').id;
+
+    const beforeSearch = visibleRows().length;
+    assert.ok(beforeSearch > 0, 'the open page should show feature rows before any search');
+
+    search('tomatometer');
+    const tomato = visibleRows();
+    assert.equal(tomato.length, 1, 'a keyword that belongs to one feature finds exactly that one');
+    assert.equal(tomato[0].dataset.featureKey, 'inlineRTScore',
+        'and it is the feature whose keywords carry it, not one whose name does');
+    assert.equal(tomato[0].textContent.toLowerCase().includes('tomatometer'), false,
+        'the word searched for is deliberately not in the name it found');
+
+    /* Across pages, not within the open one: "plex" belongs to Integrations while the
+       panel opens on Experience. */
+    search('plex');
+    const plexRows = visibleRows();
+    assert.ok(plexRows.length >= 2, 'plex should reach both the title-page indicator and the row badges');
+    assert.equal(plexRows.every(row => pageOf(row) === 'enh-settings-page-integrations'), true,
+        'and finds them on a page the panel was not showing');
+
+    search('hotkeys');
+    assert.deepEqual(visibleRows().map(row => row.dataset.featureKey), ['keyboardShortcuts'],
+        'a synonym nobody would have guessed the name from still finds the feature');
+
+    // Enter is what moves focus into the results; typing must not keep stealing it.
+    searchBox.focus();
+    searchBox.dispatchEvent(new window.KeyboardEvent('keydown', { key:'Enter', bubbles:true, cancelable:true }));
+    assert.equal(window.document.activeElement.closest('.enh-settings-row')?.dataset.featureKey,
+        'keyboardShortcuts', 'Enter puts focus on the first result');
+
+    search('zzzzznothing');
+    assert.equal(visibleRows().length, 0, 'a query nothing matches shows nothing');
+    assert.equal(requireSelector(window.document, '#enh-settings-search-count').textContent, '0 matches');
+
+    search('');
+    assert.equal(visibleRows().length, beforeSearch,
+        'clearing the box puts the page back exactly as it was');
+    assert.equal(requireSelector(window.document, '#enh-settings-search-count').textContent, '',
+        'and drops the result count with it');
+
     /* IE-141: the store holds up to 5,000 records and the panel drew every one on open.
        The point of the change is that the DOM stops growing with the store, so the store
        is filled to its limit and the row count is what gets asserted. */
