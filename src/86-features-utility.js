@@ -371,12 +371,24 @@
                 const stored = getUserMarks(true);
                 const touched = new Set(rows.map(row => row.id));
                 const evicted = Object.keys(before).filter(id => !touched.has(id) && !stored[id]).length;
+                /* Which verb, and how many forms the count needs, are two separate
+                   questions and both belong to the language. The key names the action;
+                   tCount picks the form. */
+                const seen = state === 'watched';
+                /* Each key written out rather than chosen into a variable: the check that
+                   the catalog carries nothing unused, and nothing unused is asked for,
+                   reads these call sites literally. A key assembled at runtime is one
+                   neither half of that can see. */
                 setTextIfChanged(note, evicted
-                    ? `${state === 'watched' ? 'Marked' : 'Cleared'} ${rows.length} loaded episodes; ${evicted} of your oldest marks were pushed out by the ${USER_MARKS_MAX}-mark limit.`
-                    : `${state === 'watched' ? 'Marked' : 'Cleared'} ${rows.length} loaded episodes.`);
-                showToast(state === 'watched'
-                    ? `Marked ${rows.length} loaded episodes seen. Undo is in the season bar.`
-                    : `Cleared ${rows.length} loaded episodes. Undo is in the season bar.`, 5000);
+                    ? (seen
+                        ? tCount('text_season_marked_evicted', rows.length, [evicted, USER_MARKS_MAX])
+                        : tCount('text_season_cleared_evicted', rows.length, [evicted, USER_MARKS_MAX]))
+                    : (seen
+                        ? tCount('text_season_marked', rows.length)
+                        : tCount('text_season_cleared', rows.length)));
+                showToast(seen
+                    ? tCount('toast_season_marked', rows.length)
+                    : tCount('toast_season_cleared', rows.length), 5000);
             };
             this._undo = () => {
                 if (!this._pending) return;
@@ -841,7 +853,7 @@
                     title:t('text_copy_value', [imdbId]), 'aria-label': t('aria_copy_imdb_id', [imdbId]),
                     innerHTML: `<svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.5" stroke-linecap="round" stroke-linejoin="round"><rect x="9" y="9" width="13" height="13" rx="2"/><path d="M5 15H4a2 2 0 0 1-2-2V4a2 2 0 0 1 2-2h9a2 2 0 0 1 2 2v1"/></svg><span>${imdbId}</span>`,
                     onClick: () => showToast(copyTextToClipboard(imdbId)
-                        ? `Copied ${imdbId}`
+                        ? t('toast_copied_value', [imdbId])
                         : COPY_FAILURE_MESSAGE, 4500)
                 });
                 appendTitleStackItem(btn, TITLE_STACK_ORDER.quickCopyID);
@@ -866,7 +878,7 @@
                 else if (e.key === 'c') {
                     const id = getIMDbID();
                     if (id) showToast(copyTextToClipboard(id)
-                        ? `Copied ${id}`
+                        ? t('toast_copied_value', [id])
                         : COPY_FAILURE_MESSAGE, 4500);
                 }
                 else if (e.key === 'r') { document.querySelector('[data-testid="hero-rating-bar__aggregate-rating"]')?.scrollIntoView({ behavior:getEnhancementScrollBehavior(), block:'center' }); }

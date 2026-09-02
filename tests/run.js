@@ -5024,8 +5024,12 @@ test('the FMHY catalog keeps homepage-only entries out of IMDb search buttons', 
     /* save() validates every row, so an incomplete row left elsewhere in the editor also
        fails an Add. Blaming storage for that sends the user after the wrong thing. */
     const addHandler = script.slice(script.indexOf("className:'enh-site-catalog__add'"));
-    assert(/lastSaveFailure === 'validation'[\s\S]{0,160}?incomplete site row/.test(addHandler.slice(0, 1600)),
+    // Matched on the catalog key rather than the English, which is where that sentence
+    // lives now; pinning the words here is the thing the i18n gate exists to stop.
+    assert(/lastSaveFailure === 'validation'[\s\S]{0,200}?toast_finish_or_remove_the_incomplete_site_3/.test(addHandler.slice(0, 1600)),
         'a failed catalog add must distinguish an invalid row from a storage failure');
+    assert(/incomplete site row before adding \$1/.test(messageCatalog.toast_finish_or_remove_the_incomplete_site_3 || ''),
+        'and the sentence it resolves to must still name what went wrong');
     /* Filtering hides entries with the hidden property. The UA stylesheet's [hidden]
        rule loses to the entry's own display declaration, so without this the filter
        leaves every entry of a matching group on screen. */
@@ -5654,7 +5658,15 @@ test('season progress counts the loaded season and batches marks in one transact
     assert(body.includes('USER_MARKS_MAX'), 'the batch must account for the mark ceiling');
     assert(/const evicted = Object\.keys\(before\)\.filter\(id => !touched\.has\(id\) && !stored\[id\]\)\.length/.test(body),
         'the batch must count the marks the ceiling actually pushed out');
-    assert(body.includes('were pushed out by the'), 'and say so rather than claim a clean success');
+    // The sentence moved into the catalog, so the call site names a key and the words are
+    // checked where they now live, in both forms the count can take.
+    assert(/tCount\('text_season_(?:marked|cleared)_evicted'/.test(body),
+        'the batch must reach for the message that reports an eviction');
+    ['text_season_marked_evicted_one', 'text_season_marked_evicted_other',
+        'text_season_cleared_evicted_one', 'text_season_cleared_evicted_other'].forEach(key => {
+        assert(/were pushed out by the \$3-mark limit/.test(messageCatalog[key] || ''),
+            `${key} must say so rather than claim a clean success`);
+    });
     // Clearing a season must not take notes with it.
     assert(/normalizeUserNote\(marks\[row\.id\]\?\.note\)/.test(body), 'clearing must preserve a note');
     // No confirmation dialog anywhere.
@@ -7124,8 +7136,26 @@ test('the permissions popup fills its copy from the installed locale', () => {
    Adding a hard-coded sentence to a feature is what this catches, months from now, when
    nobody remembers the rule. The exclusions are named individually below and each one is
    a decision rather than a rule. */
+/* Which call a literal sits in, judged by tracking the open parentheses as the source is
+   walked, because the characters immediately in front of a literal are not enough. Four
+   sentences shipped inside `showToast(state === 'watched' ? `one` : `other`)`: what sat in
+   front of each backtick was "? ", the before-context matched nothing, and a check whose
+   whole purpose is to notice a hard-coded sentence said there were none.
+
+   The innermost call is the one that decides, which is what keeps `showToast(t('key'))`
+   from reporting its own catalog key: that key belongs to t, not to showToast. */
+const SHOWN_CALLS = new Set(['showToast', 'setTextIfChanged', 'say']);
 const readableStrings = source => {
     const found = [];
+    const callStack = [];
+    const enclosingCall = () => callStack[callStack.length - 1] || '';
+    const identifierBefore = position => {
+        let end = position;
+        while (end > 0 && /\s/.test(source[end - 1])) end -= 1;
+        let start = end;
+        while (start > 0 && /[\w$]/.test(source[start - 1])) start -= 1;
+        return source.slice(start, end);
+    };
     let index = 0;
     let line = 1;
     const isEscaped = position => {
@@ -7136,6 +7166,10 @@ const readableStrings = source => {
     while (index < source.length) {
         const ch = source[index];
         if (ch === '\n') { line += 1; index += 1; continue; }
+        /* Counted here rather than by a separate pass, so the parentheses inside comments,
+           strings and template substitutions are the ones this loop already steps over. */
+        if (ch === '(') { callStack.push(identifierBefore(index)); index += 1; continue; }
+        if (ch === ')') { callStack.pop(); index += 1; continue; }
         if (ch === '/' && source[index + 1] === '/') {
             while (index < source.length && source[index] !== '\n') index += 1;
             continue;
@@ -7164,6 +7198,7 @@ const readableStrings = source => {
                     text: source.slice(openedAt + 1, index).replace(/\\'/g, "'").replace(/\\"/g, '"'),
                     before: source.slice(Math.max(0, openedAt - 60), openedAt),
                     after: source.slice(index + 1, index + 3),
+                    call: enclosingCall(),
                 });
                 index += 1;
             }
@@ -7184,7 +7219,7 @@ const readableStrings = source => {
             [
                 ...body.matchAll(/(?:aria-label|title|placeholder|alt)="([^"${}]*)"/g),
                 ...body.matchAll(/>([^<>${}]+)</g),
-            ].forEach(match => found.push({ line:openLine, text:match[1].trim(), before:'`markup`', after:'' }));
+            ].forEach(match => found.push({ line:openLine, text:match[1].trim(), before:'`markup`', after:'', call:enclosingCall() }));
             /* And the plain kind: the chunks between its substitutions are the sentence
                someone reads, so they are judged by where the literal itself sits. */
             if (!/[<>]/.test(body)) {
@@ -7193,6 +7228,7 @@ const readableStrings = source => {
                     text: chunk.trim(),
                     before: source.slice(Math.max(0, start - 60), start),
                     after: '',
+                    call: enclosingCall(),
                 }));
             }
             continue;
@@ -7263,7 +7299,7 @@ test('every sentence in the source comes from the catalog', () => {
             if (sitesStart >= 0 && entry.line > sitesStart && entry.line <= sitesEnd + 1) return;
             if (!readsLikeSomethingShown(entry.text)) return;
             if (entry.after.startsWith(':')) return;
-            if (entry.before !== '`markup`' && !SHOWN.test(entry.before)) return;
+            if (entry.before !== '`markup`' && !SHOWN.test(entry.before) && !SHOWN_CALLS.has(entry.call)) return;
             stranded.push(`${name}:${entry.line}: ${entry.text}`);
         });
     });

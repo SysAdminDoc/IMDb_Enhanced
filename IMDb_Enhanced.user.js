@@ -936,6 +936,23 @@
         toast_enter_a_name_valid_http_s: 'Enter a name, valid HTTP(S) URL, category, and supported template tokens',
         toast_episode_synopsis_revealed: 'Episode synopsis revealed',
         toast_failure_journal_cleared: 'Failure journal cleared',
+        text_season_marked_one: 'Marked $1 loaded episode.',
+        text_season_marked_other: 'Marked $1 loaded episodes.',
+        text_season_cleared_one: 'Cleared $1 loaded episode.',
+        text_season_cleared_other: 'Cleared $1 loaded episodes.',
+        text_season_marked_evicted_one: 'Marked $1 loaded episode; $2 of your oldest marks were pushed out by the $3-mark limit.',
+        text_season_marked_evicted_other: 'Marked $1 loaded episodes; $2 of your oldest marks were pushed out by the $3-mark limit.',
+        text_season_cleared_evicted_one: 'Cleared $1 loaded episode; $2 of your oldest marks were pushed out by the $3-mark limit.',
+        text_season_cleared_evicted_other: 'Cleared $1 loaded episodes; $2 of your oldest marks were pushed out by the $3-mark limit.',
+        toast_season_marked_one: 'Marked $1 loaded episode seen. Undo is in the season bar.',
+        toast_season_marked_other: 'Marked $1 loaded episodes seen. Undo is in the season bar.',
+        toast_season_cleared_one: 'Cleared $1 loaded episode. Undo is in the season bar.',
+        toast_season_cleared_other: 'Cleared $1 loaded episodes. Undo is in the season bar.',
+        toast_copied_subtitle_links_one: 'Copied subtitle links for $1 loaded episode',
+        toast_copied_subtitle_links_other: 'Copied subtitle links for $1 loaded episodes',
+        toast_copied_value: 'Copied $1',
+        toast_could_not_save_destination: 'Could not save $1. Check $2.',
+        toast_finish_or_remove_the_incomplete_site_3: 'Finish or remove the incomplete site row before adding $1',
         toast_finish_or_remove_the_incomplete_site: 'Finish or remove the incomplete site row before changing the order',
         toast_finish_or_remove_the_incomplete_site_2: 'Finish or remove the incomplete site row before changing the list',
         toast_grant_then_reload: 'Grant site access on the page that just opened, then reload this one.',
@@ -13162,7 +13179,7 @@ section[id*="quote" i] .ipc-list-card { padding: 4px 0 !important; margin: 2px 0
                     const text = buildEpisodeSubtitleExport(rows);
                     if (!text) { showToast(t('toast_no_episodes_are_loaded_to_export')); return; }
                     showToast(copyTextToClipboard(text)
-                        ? `Copied subtitle links for ${rows.length} loaded episodes`
+                        ? tCount('toast_copied_subtitle_links', rows.length)
                         : COPY_FAILURE_MESSAGE, 3000);
                 },
             }, t('text_copy_subtitle_links_for_this_season'));
@@ -13563,12 +13580,24 @@ section[id*="quote" i] .ipc-list-card { padding: 4px 0 !important; margin: 2px 0
                 const stored = getUserMarks(true);
                 const touched = new Set(rows.map(row => row.id));
                 const evicted = Object.keys(before).filter(id => !touched.has(id) && !stored[id]).length;
+                /* Which verb, and how many forms the count needs, are two separate
+                   questions and both belong to the language. The key names the action;
+                   tCount picks the form. */
+                const seen = state === 'watched';
+                /* Each key written out rather than chosen into a variable: the check that
+                   the catalog carries nothing unused, and nothing unused is asked for,
+                   reads these call sites literally. A key assembled at runtime is one
+                   neither half of that can see. */
                 setTextIfChanged(note, evicted
-                    ? `${state === 'watched' ? 'Marked' : 'Cleared'} ${rows.length} loaded episodes; ${evicted} of your oldest marks were pushed out by the ${USER_MARKS_MAX}-mark limit.`
-                    : `${state === 'watched' ? 'Marked' : 'Cleared'} ${rows.length} loaded episodes.`);
-                showToast(state === 'watched'
-                    ? `Marked ${rows.length} loaded episodes seen. Undo is in the season bar.`
-                    : `Cleared ${rows.length} loaded episodes. Undo is in the season bar.`, 5000);
+                    ? (seen
+                        ? tCount('text_season_marked_evicted', rows.length, [evicted, USER_MARKS_MAX])
+                        : tCount('text_season_cleared_evicted', rows.length, [evicted, USER_MARKS_MAX]))
+                    : (seen
+                        ? tCount('text_season_marked', rows.length)
+                        : tCount('text_season_cleared', rows.length)));
+                showToast(seen
+                    ? tCount('toast_season_marked', rows.length)
+                    : tCount('toast_season_cleared', rows.length), 5000);
             };
             this._undo = () => {
                 if (!this._pending) return;
@@ -14033,7 +14062,7 @@ section[id*="quote" i] .ipc-list-card { padding: 4px 0 !important; margin: 2px 0
                     title:t('text_copy_value', [imdbId]), 'aria-label': t('aria_copy_imdb_id', [imdbId]),
                     innerHTML: `<svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.5" stroke-linecap="round" stroke-linejoin="round"><rect x="9" y="9" width="13" height="13" rx="2"/><path d="M5 15H4a2 2 0 0 1-2-2V4a2 2 0 0 1 2-2h9a2 2 0 0 1 2 2v1"/></svg><span>${imdbId}</span>`,
                     onClick: () => showToast(copyTextToClipboard(imdbId)
-                        ? `Copied ${imdbId}`
+                        ? t('toast_copied_value', [imdbId])
                         : COPY_FAILURE_MESSAGE, 4500)
                 });
                 appendTitleStackItem(btn, TITLE_STACK_ORDER.quickCopyID);
@@ -14058,7 +14087,7 @@ section[id*="quote" i] .ipc-list-card { padding: 4px 0 !important; margin: 2px 0
                 else if (e.key === 'c') {
                     const id = getIMDbID();
                     if (id) showToast(copyTextToClipboard(id)
-                        ? `Copied ${id}`
+                        ? t('toast_copied_value', [id])
                         : COPY_FAILURE_MESSAGE, 4500);
                 }
                 else if (e.key === 'r') { document.querySelector('[data-testid="hero-rating-bar__aggregate-rating"]')?.scrollIntoView({ behavior:getEnhancementScrollBehavior(), block:'center' }); }
@@ -16098,8 +16127,8 @@ ${scopedRules('.enh-zoom', {
                                        Telling them to check storage sends them after the
                                        wrong thing entirely. */
                                     showToast(lastSaveFailure === 'validation'
-                                        ? `Finish or remove the incomplete site row before adding ${site.name}`
-                                        : `Could not save ${site.name}. Check ${STORAGE_HOST_LABEL}.`, 4500);
+                                        ? t('toast_finish_or_remove_the_incomplete_site_3', [site.name])
+                                        : t('toast_could_not_save_destination', [site.name, STORAGE_HOST_LABEL]), 4500);
                                     return;
                                 }
                                 addedCount += 1;

@@ -557,8 +557,8 @@
                                        Telling them to check storage sends them after the
                                        wrong thing entirely. */
                                     showToast(lastSaveFailure === 'validation'
-                                        ? `Finish or remove the incomplete site row before adding ${site.name}`
-                                        : `Could not save ${site.name}. Check ${STORAGE_HOST_LABEL}.`, 4500);
+                                        ? t('toast_finish_or_remove_the_incomplete_site_3', [site.name])
+                                        : t('toast_could_not_save_destination', [site.name, STORAGE_HOST_LABEL]), 4500);
                                     return;
                                 }
                                 addedCount += 1;

@@ -10,6 +10,8 @@
 
 ### Fixed
 
+- Eight sentences that were written into the code instead of the message catalog now come from it, so a translated build shows them translated. They cover the season bar's mark and clear messages, the subtitle-link copy, the copied-ID confirmations, and two of the destination-editor errors. The check that is supposed to catch this could not see them: it judged a piece of text by the characters immediately in front of it, and behind a conditional those characters are the conditional. It reads the call a sentence sits in now.
+
 - The setting that opens phone links on the desktop site has a switch now. It was on by default, the README said you could turn it off, and there was nowhere to do it: hand-editing a settings backup and importing it was the only way. It sits under Tools. The redirect itself runs before any feature starts, on a page the feature list never reaches, which is why it is a plain control rather than one of them.
 
 - The extension's daily update check is now declared like every other host this build can reach. It reads the published version number from GitHub once a day so the panel can say when a newer build exists, and it was the one request that appeared in no manifest and no privacy list, because GitHub answers a background worker without asking for a permission first. It is named in the provider registry and in the README now, and the build refuses to produce a worker that contacts a host nothing declares. Turning off the update notice stops the request.

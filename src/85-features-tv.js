@@ -491,7 +491,7 @@
                     const text = buildEpisodeSubtitleExport(rows);
                     if (!text) { showToast(t('toast_no_episodes_are_loaded_to_export')); return; }
                     showToast(copyTextToClipboard(text)
-                        ? `Copied subtitle links for ${rows.length} loaded episodes`
+                        ? tCount('toast_copied_subtitle_links', rows.length)
                         : COPY_FAILURE_MESSAGE, 3000);
                 },
             }, t('text_copy_subtitle_links_for_this_season'));

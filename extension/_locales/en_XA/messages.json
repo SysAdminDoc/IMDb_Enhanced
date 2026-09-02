@@ -2549,6 +2549,57 @@
   "toast_failure_journal_cleared": {
     "message": "[!! Failure journal cleared !!]"
   },
+  "text_season_marked_one": {
+    "message": "[!! Marked $1 loaded episode. !!]"
+  },
+  "text_season_marked_other": {
+    "message": "[!! Marked $1 loaded episodes. !!]"
+  },
+  "text_season_cleared_one": {
+    "message": "[!! Cleared $1 loaded episode. !!]"
+  },
+  "text_season_cleared_other": {
+    "message": "[!! Cleared $1 loaded episodes. !!]"
+  },
+  "text_season_marked_evicted_one": {
+    "message": "[!! Marked $1 loaded episode; $2 of your oldest marks were pushed out by the $3-mark limit. !!]"
+  },
+  "text_season_marked_evicted_other": {
+    "message": "[!! Marked $1 loaded episodes; $2 of your oldest marks were pushed out by the $3-mark limit. !!]"
+  },
+  "text_season_cleared_evicted_one": {
+    "message": "[!! Cleared $1 loaded episode; $2 of your oldest marks were pushed out by the $3-mark limit. !!]"
+  },
+  "text_season_cleared_evicted_other": {
+    "message": "[!! Cleared $1 loaded episodes; $2 of your oldest marks were pushed out by the $3-mark limit. !!]"
+  },
+  "toast_season_marked_one": {
+    "message": "[!! Marked $1 loaded episode seen. Undo is in the season bar. !!]"
+  },
+  "toast_season_marked_other": {
+    "message": "[!! Marked $1 loaded episodes seen. Undo is in the season bar. !!]"
+  },
+  "toast_season_cleared_one": {
+    "message": "[!! Cleared $1 loaded episode. Undo is in the season bar. !!]"
+  },
+  "toast_season_cleared_other": {
+    "message": "[!! Cleared $1 loaded episodes. Undo is in the season bar. !!]"
+  },
+  "toast_copied_subtitle_links_one": {
+    "message": "[!! Copied subtitle links for $1 loaded episode !!]"
+  },
+  "toast_copied_subtitle_links_other": {
+    "message": "[!! Copied subtitle links for $1 loaded episodes !!]"
+  },
+  "toast_copied_value": {
+    "message": "[!! Copied $1 !!]"
+  },
+  "toast_could_not_save_destination": {
+    "message": "[!! Could not save $1. Check $2. !!]"
+  },
+  "toast_finish_or_remove_the_incomplete_site_3": {
+    "message": "[!! Finish or remove the incomplete site row before adding $1 !!]"
+  },
   "toast_finish_or_remove_the_incomplete_site": {
     "message": "[!! Finish or remove the incomplete site row before changing the order !!]"
   },
