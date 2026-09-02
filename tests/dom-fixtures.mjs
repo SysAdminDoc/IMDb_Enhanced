@@ -53,6 +53,7 @@ const instrumented = userscript.replace(/\}\)\(\);\s*$/, `globalThis.__imdbEnhan
     getWatchlistServices,
     boundedImageVariant,
     parseParentsGuideSeverities,
+    rankLocalRecommendations,
     getFeatureFailures,
     createSettingsPanel,
     toggleSettings,
@@ -2295,6 +2296,91 @@ await runFixture('title', async (window, hooks) => {
     assert.equal(fetches.length, 1, 'and the click handler goes with it');
     window.GM_setValue('imdb_enh_parentsGuideSeverity', false);
     hooks.stopFeature('editorialTitleSurface');
+});
+
+/* IE-154: no browser extension computes a recommendation on the device, and this one does
+   not have to. IMDb publishes the similar-titles list; the store holds what you watched
+   and how you rated it; the intersection is a recommendation with a reason. The two things
+   worth getting wrong are the threshold and where the candidates come from. */
+await runFixture('title', async (window, hooks) => {
+    const document = window.document;
+    const section = requireSelector(document, '[data-testid="MoreLikeThis"]');
+    [
+        ['tt0083658', 'Blade Runner'],
+        ['tt0088247', 'The Terminator'],
+        ['tt0090605', 'Aliens'],
+        ['tt1375666', 'Inception'],
+        ['tt0078748', 'Alien'],
+    ].forEach(([id, title]) => {
+        const card = document.createElement('div');
+        card.innerHTML = `<a href="/title/${id}/"><span class="ipc-title__text">${title}</span></a>`;
+        section.appendChild(card);
+    });
+
+    const marks = {
+        // Seen and rated: these are the ones that can be a reason.
+        tt0083658: { state:'watched', title:'Blade Runner', ts:1, rating:9, genres:['Sci-Fi', 'Drama'] },
+        tt0088247: { state:'watched', title:'The Terminator', ts:2, rating:9, genres:['Action'] },
+        tt0090605: { state:'watched', title:'Aliens', ts:3, rating:8, genres:['Sci-Fi'] },
+        // Seen but never rated, and a Skip: neither is a reason to recommend anything.
+        tt1375666: { state:'watched', title:'Inception', ts:4 },
+        tt0078748: { state:'skip', title:'Alien', ts:5, rating:10 },
+    };
+
+    try {
+        window.GM_setValue('imdb_enh_becauseYouWatched', true);
+
+        /* Below the threshold it says nothing at all: one film is not a taste, and a line
+           drawn from it would be a guess dressed as a reason. */
+        window.GM_setValue('imdb_enh_userMarks', { tt0083658: marks.tt0083658 });
+        await hooks.runFeature('becauseYouWatched');
+        assert.equal(document.getElementById('enh-because-you-watched'), null,
+            'one rated title is not enough history to draw a conclusion from');
+
+        window.GM_setValue('imdb_enh_userMarks', marks);
+        await hooks.runFeature('becauseYouWatched');
+        const panel = await waitForSelector(window, '#enh-because-you-watched');
+        const items = [...panel.querySelectorAll('.enh-byw__item a')];
+        assert.deepEqual(items.map(item => item.getAttribute('href')), [
+            '/title/tt0083658/', '/title/tt0088247/', '/title/tt0090605/',
+        ], 'only the titles you have seen AND rated, your best rating first');
+        assert.equal(items[0].getAttribute('aria-label'), 'You rated Blade Runner 9 out of 10');
+        assert.equal(panel.parentElement, section,
+            'it sits in IMDb own similar-titles section, where the list it reads lives');
+
+        /* The candidates are IMDb's, never the whole store: a rated Seen title IMDb does
+           not call similar to this one must not appear. */
+        assert.equal(items.some(item => item.getAttribute('href').includes('tt0111161')), false);
+        window.GM_setValue('imdb_enh_userMarks', {
+            ...marks,
+            tt0111161: { state:'watched', title:'The Shawshank Redemption', ts:6, rating:10, genres:['Drama'] },
+        });
+        await hooks.runFeature('becauseYouWatched');
+        const after = [...window.document.querySelectorAll('#enh-because-you-watched .enh-byw__item a')];
+        assert.equal(after.some(item => item.getAttribute('href').includes('tt0111161')), false,
+            'a title IMDb does not list as similar is not a reason, however highly you rated it');
+
+        hooks.stopFeature('becauseYouWatched');
+        assert.equal(document.getElementById('enh-because-you-watched'), null, 'switching it off removes it');
+    } finally {
+        window.GM_setValue('imdb_enh_becauseYouWatched', false);
+        window.GM_setValue('imdb_enh_userMarks', {});
+    }
+
+    /* The ranking itself, without a page: genre overlap with the title on screen breaks a
+       tie between two equal ratings, because two nines are not equally good reasons when
+       one of them shares nothing with what you are looking at. */
+    const tied = hooks.rankLocalRecommendations(
+        [{ id:'tt1' }, { id:'tt2' }],
+        {
+            tt1: { state:'watched', title:'Unrelated', rating:9, genres:['Comedy'] },
+            tt2: { state:'watched', title:'Related', rating:9, genres:['Sci-Fi', 'Action'] },
+        },
+        ['Sci-Fi', 'Action']);
+    assert.deepEqual(Array.from(tied, entry => entry.title), ['Related', 'Unrelated']);
+    assert.equal(hooks.rankLocalRecommendations([{ id:'tt1' }], { tt1:{ state:'watched', rating:0 } }).length, 0,
+        'a rating of zero is not a rating');
+    assert.equal(hooks.rankLocalRecommendations(null, null).length, 0, 'and nothing at all is not a crash');
 });
 
 await runFixture('title-ratings', async (window, hooks) => {

@@ -203,6 +203,9 @@
   "aria_rating_colour_ramp": {
     "message": "Rating colour scale"
   },
+  "aria_you_rated_title": {
+    "message": "You rated $1 $2 out of 10"
+  },
   "aria_search_settings": {
     "message": "Search settings"
   },
@@ -703,6 +706,15 @@
   },
   "feature_parentsGuideSeverity_name": {
     "message": "Parents guide severities"
+  },
+  "feature_becauseYouWatched_detail": {
+    "message": "Marks the titles in IMDb’s More like this list that you have already seen and rated, best first. Needs at least three rated Seen titles on this device and stays silent below that. Nothing is fetched and nothing leaves the device."
+  },
+  "feature_becauseYouWatched_keywords": {
+    "message": "recommend, suggestions, similar, for you, taste"
+  },
+  "feature_becauseYouWatched_name": {
+    "message": "Because you watched"
   },
   "feature_largerThumbnails_detail": {
     "message": "Draws list, cast and filmography thumbnails at twice their usual size, asking IMDb for a larger rendering of the same picture rather than stretching the small one."
@@ -2185,6 +2197,9 @@
   },
   "text_available": {
     "message": "Available"
+  },
+  "text_because_you_watched": {
+    "message": "Because you watched"
   },
   "text_below_avg": {
     "message": "Below Avg"

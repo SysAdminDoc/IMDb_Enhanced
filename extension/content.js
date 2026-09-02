@@ -414,6 +414,7 @@
         aria_season_progress: 'Season progress',
         aria_parents_guide_severities: 'Parents guide severity ratings',
         aria_rating_colour_ramp: 'Rating colour scale',
+        aria_you_rated_title: 'You rated $1 $2 out of 10',
         aria_search_settings: 'Search settings',
         aria_severity_for_category: '$1 for $2',
         aria_settings_sections: 'Settings sections',
@@ -581,6 +582,9 @@
         feature_parentsGuideSeverity_detail: 'Adds the five Parents Guide severity ratings to the title page. Nothing is read until you click the Parents Guide link, and the guide is fetched from IMDb itself, not from a third party.',
         feature_parentsGuideSeverity_keywords: 'parental, age rating, content warning, sex, violence, profanity',
         feature_parentsGuideSeverity_name: 'Parents guide severities',
+        feature_becauseYouWatched_detail: 'Marks the titles in IMDb’s More like this list that you have already seen and rated, best first. Needs at least three rated Seen titles on this device and stays silent below that. Nothing is fetched and nothing leaves the device.',
+        feature_becauseYouWatched_keywords: 'recommend, suggestions, similar, for you, taste',
+        feature_becauseYouWatched_name: 'Because you watched',
         feature_largerThumbnails_detail: 'Draws list, cast and filmography thumbnails at twice their usual size, asking IMDb for a larger rendering of the same picture rather than stretching the small one.',
         feature_largerThumbnails_keywords: 'bigger, posters, images, thumbnails, upscale, small',
         feature_largerThumbnails_name: 'Larger card thumbnails',
@@ -1075,6 +1079,7 @@
         text_automatic_matching_is_active: 'Automatic matching is active.',
         text_availability_unavailable: 'Availability unavailable',
         text_available: 'Available',
+        text_because_you_watched: 'Because you watched',
         text_below_avg: 'Below Avg',
         text_broadcast_details_unavailable: 'Broadcast details unavailable',
         text_board_could_not_be_shown: 'The board could not be shown here. Open it on MovieChat instead.',
@@ -2195,6 +2200,7 @@
         watchedMarking: true, userMarks: {}, titleNotes: true, scoreCorrections: {},
         parentsGuideSeverity: false,
         largerThumbnails: false,
+        becauseYouWatched: false,
         servarrIntegration: false,
         seerrUrl: 'http://localhost:5055', seerrApiKey: '',
         radarrUrl: 'http://localhost:7878', radarrApiKey: '',
@@ -2291,6 +2297,7 @@
         rowIntegrationState: t('feature_rowIntegrationState_keywords'),
         parentsGuideSeverity: t('feature_parentsGuideSeverity_keywords'),
         largerThumbnails: t('feature_largerThumbnails_keywords'),
+        becauseYouWatched: t('feature_becauseYouWatched_keywords'),
         tvEpisodeTools: t('feature_tvEpisodeTools_keywords'),
         ratingGap: t('feature_ratingGap_keywords'),
         episodeHeatmap: t('feature_episodeHeatmap_keywords'),
@@ -2348,6 +2355,7 @@
         mediaServerIntegration: t('feature_mediaServerIntegration_detail'),
         parentsGuideSeverity: t('feature_parentsGuideSeverity_detail'),
         largerThumbnails: t('feature_largerThumbnails_detail'),
+        becauseYouWatched: t('feature_becauseYouWatched_detail'),
         rowIntegrationState: t('feature_rowIntegrationState_detail'),
         tvEpisodeTools: t('feature_tvEpisodeTools_detail'),
         tvShowEnhancements: t('feature_tvShowEnhancements_detail'),
@@ -11962,6 +11970,143 @@ section[id*="quote" i] .ipc-list-card { padding: 4px 0 !important; margin: 2px 0
             this._state = 'idle';
         }
     });
+
+    /* ---- Because you watched -------------------------------------------------------
+       IE-154: no extension computes a recommendation on the device, and this one does not
+       need to. IMDb already publishes a similar-titles list on every title page, and the
+       store already holds what you have seen and how you rated it. The intersection of
+       those two is a recommendation with a reason attached, and it needs no request, no
+       account, and no model: the titles named are ones IMDb says are like this one and
+       that you told this device you liked. */
+    const RECOMMENDATION_MIN_HISTORY = 3;
+    const RECOMMENDATION_LIMIT = 5;
+    const RECOMMENDATION_SCAN_LIMIT = 40;
+
+    /* How much local history there is to reason from. Below the threshold the feature
+       says nothing at all rather than drawing a conclusion from one film. */
+    function countRatedSeenMarks(marks) {
+        let count = 0;
+        for (const id in marks) {
+            if (!Object.prototype.hasOwnProperty.call(marks, id)) continue;
+            const record = marks[id];
+            if (record?.state !== 'watched') continue;
+            if (Number.isFinite(Number(record.rating)) && Number(record.rating) > 0) count += 1;
+        }
+        return count;
+    }
+
+    /* Pure, so the ranking can be tested without a page: which of the titles IMDb calls
+       similar are ones you have already seen and rated, best first. Your own rating leads,
+       because it is the only signal here that is actually yours; genre overlap with the
+       title on screen breaks ties, since two nines are not equally good reasons when one
+       of them shares nothing with what you are looking at. */
+    function rankLocalRecommendations(similar, marks, genres = []) {
+        const wanted = new Set((Array.isArray(genres) ? genres : [])
+            .map(genre => String(genre || '').trim().toLowerCase()).filter(Boolean));
+        const seen = new Set();
+        const out = [];
+        for (const entry of (Array.isArray(similar) ? similar : []).slice(0, RECOMMENDATION_SCAN_LIMIT)) {
+            const id = String(entry?.id || '');
+            if (!id || seen.has(id)) continue;
+            const record = marks?.[id];
+            if (record?.state !== 'watched') continue;
+            const rating = Number(record.rating);
+            if (!Number.isFinite(rating) || rating <= 0) continue;
+            seen.add(id);
+            const shared = (Array.isArray(record.genres) ? record.genres : [])
+                .filter(genre => wanted.has(String(genre || '').trim().toLowerCase())).length;
+            out.push({ id, title: record.title || entry.title || id, rating, shared });
+        }
+        return out
+            .sort((a, b) => b.rating - a.rating
+                || b.shared - a.shared
+                || String(a.title).localeCompare(String(b.title)))
+            .slice(0, RECOMMENDATION_LIMIT);
+    }
+
+    /* IMDb's own list, read from the section it draws it in. Nothing is requested and
+       nothing outside that section is considered: the point is that the candidates are
+       IMDb's, not this extension's guess at what is similar. */
+    function readSimilarTitles(root = document) {
+        const section = root?.querySelector?.('[data-testid="MoreLikeThis"]');
+        if (!section) return [];
+        const found = [];
+        const seen = new Set();
+        const links = section.querySelectorAll('a[href*="/title/tt"]');
+        for (let index = 0; index < links.length && found.length < RECOMMENDATION_SCAN_LIMIT; index++) {
+            const link = links[index];
+            const id = getLinkedTitleId(link.href);
+            if (!id || seen.has(id)) continue;
+            seen.add(id);
+            const label = link.querySelector('.ipc-title__text')?.textContent
+                || link.querySelector('img[alt]')?.alt
+                || link.textContent
+                || '';
+            found.push({ id, title: label.trim().replace(/\s+/g, ' ').replace(/^\d+\.\s*/, '').slice(0, 200) });
+        }
+        return found;
+    }
+
+    reg({
+        key: 'becauseYouWatched', name: t('feature_becauseYouWatched_name'), group: 'Features',
+        init() {
+            if (!isIMDbHost()) return;
+            const isCurrent = createFeatureGuard(this);
+            waitForTitleSurface().then(() => {
+                if (!isCurrent()) return;
+                if (document.getElementById('enh-because-you-watched')) return;
+                const marks = getUserMarks();
+                if (countRatedSeenMarks(marks) < RECOMMENDATION_MIN_HISTORY) return;
+                return waitFor('[data-testid="MoreLikeThis"]').then(section => {
+                    if (!isCurrent() || !section) return;
+                    const ranked = rankLocalRecommendations(
+                        readSimilarTitles(document), marks, getLDData()?.genre);
+                    if (!ranked.length) return;
+
+                    addThemedCSS(t => `
+                        #enh-because-you-watched {
+                            margin: 8px 0 14px; padding: 10px 12px;
+                            border: 1px solid ${t.bd1}; border-radius: 10px;
+                            background: ${t.sf1}; color: ${t.tx2};
+                            font: 600 12px/1.5 -apple-system, BlinkMacSystemFont, 'Segoe UI', sans-serif;
+                        }
+                        .enh-byw__heading { color: ${t.tx3}; font: 700 10px/1 -apple-system, BlinkMacSystemFont, 'Segoe UI', sans-serif; letter-spacing: .08em; text-transform: uppercase; }
+                        .enh-byw__list { margin: 6px 0 0; padding: 0; list-style: none; display: flex; flex-wrap: wrap; gap: 6px; }
+                        .enh-byw__item a {
+                            display: inline-flex; align-items: baseline; gap: 6px;
+                            padding: 4px 9px; border-radius: 7px;
+                            border: 1px solid ${t.bd1}; background: ${t.sf0};
+                            color: ${t.tx1} !important; text-decoration: none !important;
+                        }
+                        .enh-byw__item a:hover { border-color: ${t.accentBorder}; color: ${t.accent} !important; }
+                        .enh-byw__score { color: ${t.tx3}; font-weight: 800; }
+                    `, 'enh-becauseYouWatched');
+
+                    const list = makeEl('ul', { className:'enh-byw__list' });
+                    ranked.forEach(entry => {
+                        list.appendChild(makeEl('li', { className:'enh-byw__item' },
+                            makeEl('a', {
+                                href:`/title/${entry.id}/`,
+                                'aria-label':t('aria_you_rated_title', [entry.title, formatScore(entry.rating)]),
+                            },
+                                makeEl('span', {}, entry.title),
+                                makeEl('span', { className:'enh-byw__score' }, formatScore(entry.rating))
+                            )
+                        ));
+                    });
+                    const panel = makeEl('div', { id:'enh-because-you-watched', role:'note' },
+                        makeEl('div', { className:'enh-byw__heading' }, t('text_because_you_watched')),
+                        list
+                    );
+                    section.insertBefore(panel, section.firstElementChild?.nextSibling || null);
+                });
+            }).catch(() => {});
+        },
+        destroy() {
+            removeCSS('enh-becauseYouWatched');
+            document.getElementById('enh-because-you-watched')?.remove();
+        }
+    });
     // #########################################################################
     //
     //  LAYOUT FEATURES
@@ -19391,7 +19536,7 @@ ${scopedRules('.enh-zoom', {
         toolsPage.appendChild(makeEl('div', { className:'enh-settings-grid enh-settings-grid--three' },
             makeFeatureCard(t('settings_title_tools'), t('settings_actions_placed_near_a_movie_or_show'), t('settings_title_pages'), [
                 'searchButtons', 'externalLinks', 'trailerPopover', 'expandedLinkMenu', 'watchedMarking', 'markLinkTint', 'titleNotes',
-                'movieChatBoard', 'collectionPanel', 'parentsGuideSeverity',
+                'movieChatBoard', 'collectionPanel', 'parentsGuideSeverity', 'becauseYouWatched',
             ]),
             makeFeatureCard(t('settings_tv_episodes'), t('settings_focused_tools_for_series_and_episode_lists'), 'TV', [
                 'tvEpisodeTools', 'tvShowEnhancements', 'subtitleLinks', 'episodeSubtitles',

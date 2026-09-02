@@ -195,6 +195,8 @@ function loadScriptTestHooks({ withoutDeleteValue = false, withheldCredentials =
         DEFAULT_EXTERNAL_SITES,
         URL_TEMPLATE_KEYS,
         stremioTitleId,
+        countRatedSeenMarks,
+        rankLocalRecommendations,
         getWatchSearchTitle,
         getWatchLinkContext,
         applyLinkTemplate,
@@ -5402,6 +5404,36 @@ test('the non-English database links are hidden, categorized and carry the title
     const named = checker.collectDestinations({ includeCatalog:false }).map(site => site.name);
     ['Douban', 'Kinopoisk', 'Filmweb'].forEach(name =>
         assert(named.includes(name), `${name} must be in what the destination checker walks`));
+});
+
+/* IE-154: the threshold is the whole safety of this feature. Below it the extension says
+   nothing rather than presenting a conclusion drawn from one film, and what counts toward
+   it is deliberately narrow: seen, and rated by you. */
+test('a recommendation needs three titles you actually watched and rated', () => {
+    const hooks = loadScriptTestHooks();
+    const rated = (id, rating) => [id, { state:'watched', title:id, rating }];
+    assert.strictEqual(hooks.countRatedSeenMarks(Object.fromEntries([
+        rated('tt1', 9), rated('tt2', 8), rated('tt3', 7),
+    ])), 3);
+    assert.strictEqual(hooks.countRatedSeenMarks(Object.fromEntries([
+        rated('tt1', 9), rated('tt2', 8),
+    ])), 2, 'two is below the threshold this feature refuses to speak under');
+    /* None of these is somebody telling this device they liked something. */
+    assert.strictEqual(hooks.countRatedSeenMarks({
+        tt1: { state:'watched', title:'no rating' },
+        tt2: { state:'watched', title:'zero', rating:0 },
+        tt3: { state:'skip', title:'skipped but rated', rating:10 },
+        tt4: { title:'note only', rating:9 },
+    }), 0, 'an unrated Seen, a zero, a Skip and a bare note are none of them a rated viewing');
+    assert.strictEqual(hooks.countRatedSeenMarks({}), 0);
+    assert.strictEqual(hooks.countRatedSeenMarks(null), 0);
+
+    // And the ranking never invents a candidate: it can only return ids it was given.
+    const ranked = hooks.rankLocalRecommendations(
+        [{ id:'tt2' }],
+        { tt1:{ state:'watched', title:'Not offered', rating:10 }, tt2:{ state:'watched', title:'Offered', rating:5 } });
+    assert.deepStrictEqual(Array.from(ranked, entry => entry.id), ['tt2'],
+        'a title IMDb did not list as similar cannot become a recommendation');
 });
 
 test('settings preserve host scroll state and complete nested tab keyboard support', () => {
