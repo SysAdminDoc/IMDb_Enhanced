@@ -29,8 +29,8 @@
   "aria_collapse_named_section": {
     "message": "Collapse $1"
   },
-  "aria_confirm_clearing_saved_title_marks": {
-    "message": "Confirm clearing $1 saved title marks"
+  "aria_undo_the_last_mark_deletion": {
+    "message": "Undo the last title mark deletion"
   },
   "aria_copy_imdb_id": {
     "message": "Copy IMDb ID $1"
@@ -1451,6 +1451,9 @@
   "settings_column_purpose": {
     "message": "Purpose"
   },
+  "settings_undo_delete": {
+    "message": "Undo delete"
+  },
   "settings_column_remove": {
     "message": "Remove"
   },
@@ -1605,10 +1608,10 @@
     "message": "Local skip"
   },
   "settings_mark_and_note_removed": {
-    "message": "Mark and note removed"
+    "message": "Mark and note removed. Undo is in the marks panel."
   },
   "settings_mark_cleared": {
-    "message": "Mark cleared"
+    "message": "Mark cleared. Undo is in the marks panel."
   },
   "settings_media_server_indicator": {
     "message": "Media server indicator"
@@ -1918,9 +1921,6 @@
   },
   "text_collection_source_note": {
     "message": "From Wikidata. Order is the series own numbering where it has one, and release year otherwise."
-  },
-  "text_confirm_clear_marks": {
-    "message": "Confirm clear $1"
   },
   "text_copy_all_links": {
     "message": "Copy all links"
@@ -2483,8 +2483,11 @@
   "toast_cleared_cached_entries_reload_to_re": {
     "message": "Cleared $1 cached entries. Reload to re-fetch."
   },
-  "toast_cleared_saved_title_marks": {
-    "message": "Cleared $1 saved title marks"
+  "toast_cleared_saved_title_marks_one": {
+    "message": "Cleared $1 saved title mark. Undo is in the marks panel."
+  },
+  "toast_cleared_saved_title_marks_other": {
+    "message": "Cleared $1 saved title marks. Undo is in the marks panel."
   },
   "toast_copied_imdb_ids": {
     "message": "Copied $1 IMDb IDs"
@@ -2597,9 +2600,6 @@
   "toast_plot_synopsis_revealed": {
     "message": "Plot synopsis revealed"
   },
-  "toast_press_the_clear_button_again_within": {
-    "message": "Press the clear button again within 5 seconds to remove every mark"
-  },
   "toast_preview_the_csv_before_importing": {
     "message": "Preview the CSV before importing."
   },
@@ -2650,6 +2650,15 @@
   },
   "toast_the_two_passphrases_do_not_match": {
     "message": "The two passphrases do not match."
+  },
+  "toast_marks_put_back_one": {
+    "message": "Undone. $1 title mark was put back."
+  },
+  "toast_marks_put_back_other": {
+    "message": "Undone. $1 title marks were put back."
+  },
+  "toast_that_undo_is_no_longer_available": {
+    "message": "That undo is no longer available."
   },
   "toast_there_is_no_reset_to_undo": {
     "message": "There is no reset to undo."

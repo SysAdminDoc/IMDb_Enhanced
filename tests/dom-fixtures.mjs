@@ -1865,6 +1865,54 @@ await runFixture('title', async (window, hooks) => {
         'CSV preview must execute in the rendered Data page');
     assert.equal(requireSelector(window.document, '#enh-csv-apply').disabled, false,
         'a valid CSV preview must enable the transactional import action');
+
+    /* Deleting a mark is the one action here that destroys something the user typed, and
+       it used to be final. What has to come back is the whole record, not the identifier:
+       a note and a viewing history restored as an empty stub would still read as a
+       successful undo from the row count alone. */
+    const markRows = () => Array.from(window.document.querySelectorAll('.enh-mark-row'));
+    const undoButton = () => Array.from(window.document.querySelectorAll('.enh-settings-footer-btn'))
+        .find(node => node.textContent === 'Undo delete');
+    window.GM_setValue('imdb_enh_userMarks', {
+        tt0133093: { state:'watched', title:'The Matrix', ts:10, note:'rewatch with the commentary', viewings:[{ date:'2026-01-02' }] },
+        tt0903747: { state:'skip', title:'Breaking Bad', ts:20 },
+    });
+    window.document.dispatchEvent(new window.CustomEvent('imdb-enhanced:marks-updated'));
+    assert.equal(markRows().length, 2, 'both seeded marks must render as rows');
+    assert.equal(undoButton().hidden, true, 'nothing is offered back before anything is deleted');
+
+    requireSelector(markRows()[0], '.enh-mark-row__clear').click();
+    assert.equal(markRows().length, 1, 'removing a row must drop that record');
+    assert.equal(undoButton().hidden, false, 'and must offer it back');
+
+    requireSelector(markRows()[0], '.enh-mark-row__clear').click();
+    assert.equal(markRows().length, 0, 'removing the last row must empty the list');
+
+    undoButton().click();
+    const restored = hooks.getUserMarks();
+    assert.equal(Object.keys(restored).length, 2,
+        'the snapshot covers the run, so both removals come back together');
+    assert.equal(restored.tt0133093.note, 'rewatch with the commentary',
+        'a restored record must keep the note that was deleted with it');
+    // Compared field by field: the restored record crosses the sandbox realm boundary, so
+    // its prototype is not this realm's and a deep-equal on the array shape fails on that
+    // alone while the dates it carries are identical.
+    assert.equal(restored.tt0133093.viewings.length, 1,
+        'and the viewing history, which nothing else could rebuild');
+    assert.equal(restored.tt0133093.viewings[0].date, '2026-01-02',
+        'restored with the date it was logged under');
+    assert.equal(restored.tt0903747.state, 'skip', 'a Skip must not come back as a Seen');
+    assert.equal(undoButton().hidden, true, 'a consumed undo stops being offered');
+
+    /* Clear all is the same path without the second click that used to guard it. */
+    requireSelector(window.document, '.enh-settings-footer-btn--danger').click();
+    assert.equal(hooks.getUserMarks() && Object.keys(hooks.getUserMarks()).length, 0,
+        'Clear all must empty the store on one press now that the deletion is reversible');
+    undoButton().click();
+    assert.equal(Object.keys(hooks.getUserMarks()).length, 2, 'and put every record back');
+
+    window.GM_setValue('imdb_enh_userMarks', {});
+    window.document.dispatchEvent(new window.CustomEvent('imdb-enhanced:marks-updated'));
     hooks.destroySettingsChrome();
 
     ['watchedMarking', 'titleNotes', 'quickCopyID', 'collapsibleSections'].forEach(hooks.stopFeature);

@@ -2610,8 +2610,18 @@ test('settings reset is explicit, complete, and isolated from live defaults', ()
     assert(script.includes("id:'enh-reset-panel', hidden:'hidden', role:'alert'"), 'reset should use an explicit inline warning');
     assert(script.includes('Export a backup first if you may need them.'), 'reset warning should offer recovery guidance');
     assert(!/\bconfirm\s*\(/.test(script), 'reset must not reintroduce browser confirmation dialogs');
-    assert(script.includes('clearAllTimer = setTimeout(disarmClearAll, 5000)'), 'bulk mark deletion should require a bounded second action');
-    assert(script.includes('Press the clear button again within 5 seconds'), 'bulk mark deletion should explain its recovery window');
+    /* Bulk mark deletion used to be guarded by a second press five seconds apart. That
+       stopped nothing a slip could not repeat, and offered nothing at all to somebody who
+       hit it deliberately and meant a different row, so it was replaced by an undo that
+       restores the records themselves. The behaviour is exercised against the rendered
+       panel in tests/dom-fixtures.mjs; what belongs here is that the speed bump has not
+       come back in its place and that the offer is bounded rather than indefinite. */
+    assert(!/disarmClearAll|Press the clear button again/.test(script),
+        'bulk mark deletion must not reintroduce a second-press arm in place of an undo');
+    assert(script.includes('undoTimer = setTimeout(forgetUndo, MARK_UNDO_MS)'),
+        'the offer to undo a deletion has to lapse rather than sit there forever');
+    assert(/const MARK_UNDO_MS = (\d+)/.test(script) && Number(RegExp.$1) >= 10000,
+        'and it has to stand long enough to be read and acted on');
 });
 
 test('core features remain registered', () => {
@@ -6021,13 +6031,26 @@ test('a title can carry a private note that survives backup and never leaks', ()
     /* Remove used to clear the note and then the mark, as two separate writes. A failure
        between them destroyed the note and kept the mark, which is neither what was asked
        for nor something the user can undo. One write, or the record survives whole. */
+    /* The end marker here used to be "}, 'Remove')", which stopped matching when that
+       label moved into the message catalog. indexOf returned -1, slice(0, -1) took the
+       rest of the file, and the count below was really counting mark writes between this
+       handler and the end of the script — which happened to be 1, so nothing said so.
+       Both ends are catalog-shaped now, and the count is checked where the write lives. */
     const clearHandler = script.slice(script.indexOf("className:'enh-mark-row__clear'"));
-    const clearBody = clearHandler.slice(0, clearHandler.indexOf("}, 'Remove')"));
-    assert(!/setUserNote\([^)]*\)\s*\|\|\s*!setUserMark\(/.test(clearBody),
+    const clearEnd = clearHandler.indexOf("}, t('settings_column_remove'));");
+    assert(clearEnd > 0, 'the Remove control must still end where this test thinks it does');
+    const clearBody = clearHandler.slice(0, clearEnd);
+    assert(!/setUserNote\(/.test(clearBody),
         'removing a record must not be a note write followed by a mark write');
-    assert.strictEqual((clearBody.match(/setUserMarks\(|setUserMark\(|setUserNote\(/g) || []).length, 1,
-        'removing a record must be a single write');
     assert(/delete remaining\[id\];/.test(clearBody), 'and it must drop the whole record, note included');
+    assert.strictEqual((clearBody.match(/deleteMarks\(/g) || []).length, 1,
+        'the row hands the whole remaining store to one deletion path');
+
+    const deleteStart = script.indexOf('const deleteMarks = (next, describe) => {');
+    assert(deleteStart > 0, 'the deletion path must exist for the row to delegate to');
+    const deleteBody = script.slice(deleteStart, script.indexOf('const undo = makeEl(', deleteStart));
+    assert.strictEqual((deleteBody.match(/setUserMarks\(|setUserMark\(|setUserNote\(/g) || []).length, 1,
+        'removing a record must be a single write');
 });
 
 /* IE-74: the trailer modal's Escape and Tab handling are document-level, so both go dead
@@ -6888,9 +6911,9 @@ test('a message resolves through the catalog and falls back to English', () => {
     assert.strictEqual(hooks.t(grantKey),
         'Grant site access on the page that just opened, then reload this one.');
     // Positional substitutions, the shape chrome.i18n.getMessage takes.
-    const clearedKey = messageKeyFor('Cleared $1 saved title marks');
-    assert.strictEqual(hooks.t(clearedKey, [12]), 'Cleared 12 saved title marks');
-    assert.strictEqual(hooks.t(clearedKey, 12), 'Cleared 12 saved title marks',
+    const clearedKey = messageKeyFor('Cleared $1 saved title marks. Undo is in the marks panel.');
+    assert.strictEqual(hooks.t(clearedKey, [12]), 'Cleared 12 saved title marks. Undo is in the marks panel.');
+    assert.strictEqual(hooks.t(clearedKey, 12), 'Cleared 12 saved title marks. Undo is in the marks panel.',
         'a single substitution need not be wrapped in an array');
     // A key nothing carries reports itself rather than rendering an empty control.
     assert.strictEqual(hooks.t('no_such_message_key'), 'no_such_message_key');
@@ -6930,7 +6953,7 @@ test('a message resolves through the catalog and falls back to English', () => {
 test('an extension build reads the installed locale and falls back deterministically', () => {
     const asked = [];
     const translatedKey = messageKeyFor('Grant site access on the page that just opened, then reload this one.');
-    const untranslatedKey = messageKeyFor('Cleared $1 saved title marks');
+    const untranslatedKey = messageKeyFor('Cleared $1 saved title marks. Undo is in the marks panel.');
     const hooks = loadScriptTestHooks({
         extensionI18n: {
             getMessage(key, substitutions) {
@@ -6952,7 +6975,7 @@ test('an extension build reads the installed locale and falls back deterministic
     assert.strictEqual(hooks.t(translatedKey), 'ZUGRIFF GEWAEHREN',
         'an installed translation must win over the embedded English');
     assert.deepStrictEqual(callFor(translatedKey), [translatedKey, []]);
-    assert.strictEqual(hooks.t(untranslatedKey, [3]), 'Cleared 3 saved title marks',
+    assert.strictEqual(hooks.t(untranslatedKey, [3]), 'Cleared 3 saved title marks. Undo is in the marks panel.',
         'a key the locale does not carry falls back to English, substitutions and all');
     assert.deepStrictEqual(callFor(untranslatedKey), [untranslatedKey, ['3']],
         'substitutions reach getMessage as strings, which is what it accepts');

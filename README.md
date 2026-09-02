@@ -132,7 +132,7 @@ The redesigned visual reference set covers every menu page: [Experience](design/
 
 **Integrations**. Tabbed Radarr/Sonarr and Plex/Jellyfin/Emby local-service configuration with arrow/Home/End keyboard navigation.
 
-**Data.** Local viewing stats, private mark review, IMDb and Letterboxd CSV history import, validated JSON backup/restore up to 4 MB with optional passphrase-encrypted credential export, cache status/clearing, a persistent failure journal, and an explicit two-step reset with backup guidance.
+**Data.** Local viewing stats, private mark review, IMDb and Letterboxd CSV history import, validated JSON backup/restore up to 4 MB with optional passphrase-encrypted credential export, cache status/clearing, a persistent failure journal, and an explicit two-step reset with backup guidance. Removing a mark, or clearing the lot, can be undone from the panel for fifteen seconds afterwards, and the undo brings back the notes and viewing dates too.
 
 **Failure journal**. The last 20 feature failures, kept across reloads so intermittent breakage is visible. Entries record the time, the feature, the kind of page, and a failure category. HTTP responses are kept separate from connection failures, and only server errors qualify for a bounded stale score. Entries never record the error text, so a title, a lookup address, or a token echoed back by a local service cannot end up in one. Copy it into a bug report or clear it from the same card.
 

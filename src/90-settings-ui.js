@@ -816,15 +816,69 @@
         const panel = makeEl('div', { className:'enh-marks-panel' });
         const count = makeEl('div', { className:'enh-marks-panel__count' });
         const rows = makeEl('div', { className:'enh-marks-panel__rows' });
-        let clearAllArmed = false;
-        let clearAllTimer = null;
-        const disarmClearAll = () => {
-            clearTimeout(clearAllTimer);
-            clearAllTimer = null;
-            clearAllArmed = false;
-            clearAll.textContent = t('text_clear_all');
-            clearAll.setAttribute('aria-label', t('aria_clear_all_saved_title_marks'));
+        /* Removing a mark used to be final. The row's Remove dropped the record and its
+           note in one write, and Clear all dropped every one of them behind a second click
+           five seconds apart, which is a speed bump rather than consent — and no help at
+           all to somebody who meant the row above. Both offer the deletion back instead.
+
+           The snapshot is the store as it stood before the first deletion in the current
+           run, not before the last one, so removing three rows and then changing your mind
+           puts all three back. Undoing, or letting the offer lapse, starts the next one.
+
+           The control lives in the panel rather than on the toast because the settings
+           overlay traps Tab within itself: a button anywhere else is unreachable by
+           keyboard for exactly as long as this panel is the thing on screen. */
+        const MARK_UNDO_MS = 15000;
+        let pendingUndo = null;
+        let undoTimer = null;
+        const forgetUndo = () => {
+            clearTimeout(undoTimer);
+            undoTimer = null;
+            pendingUndo = null;
+            undo.hidden = true;
         };
+        const afterMarkWrite = () => {
+            refreshFeature('watchedMarking');
+            refreshFeature('titleNotes');
+            render();
+            document.dispatchEvent(new CustomEvent('imdb-enhanced:marks-updated'));
+        };
+        /* One write, and the snapshot is only kept once it has succeeded: offering to undo
+           something that never happened would restore the store to a state it is already
+           in and report it as a recovery. */
+        const deleteMarks = (next, describe) => {
+            const before = { ...getUserMarks(true) };
+            if (!setUserMarks(next)) return false;
+            if (!pendingUndo) pendingUndo = before;
+            clearTimeout(undoTimer);
+            undoTimer = setTimeout(forgetUndo, MARK_UNDO_MS);
+            afterMarkWrite();
+            undo.hidden = false;
+            showToast(describe, 6000);
+            return true;
+        };
+        const undo = makeEl('button', {
+            type:'button',
+            hidden:true,
+            className:'enh-settings-footer-btn',
+            'aria-label':t('aria_undo_the_last_mark_deletion'),
+            onClick: () => {
+                if (!pendingUndo) {
+                    showToast(t('toast_that_undo_is_no_longer_available'));
+                    undo.hidden = true;
+                    return;
+                }
+                const snapshot = pendingUndo;
+                const restored = Object.keys(snapshot).length;
+                /* A refused write reports itself and leaves both the store and the cache
+                   as they were, so the snapshot is kept for another try rather than
+                   consumed by the attempt. */
+                if (!setUserMarks(snapshot)) return;
+                forgetUndo();
+                afterMarkWrite();
+                showToast(tCount('toast_marks_put_back', restored));
+            },
+        }, t('settings_undo_delete'));
         const clearAll = makeEl('button', {
             type:'button',
             className:'enh-settings-footer-btn enh-settings-footer-btn--danger',
@@ -832,19 +886,7 @@
             onClick: () => {
                 const entries = getUserMarkEntries();
                 if (!entries.length) return;
-                if (!clearAllArmed) {
-                    clearAllArmed = true;
-                    clearAll.textContent = t('text_confirm_clear_marks', [entries.length]);
-                    clearAll.setAttribute('aria-label', t('aria_confirm_clearing_saved_title_marks', [entries.length]));
-                    clearAllTimer = setTimeout(disarmClearAll, 5000);
-                    showToast(t('toast_press_the_clear_button_again_within'));
-                    return;
-                }
-                if (!setUserMarks({})) return;
-                refreshFeature('watchedMarking');
-                render();
-                document.dispatchEvent(new CustomEvent('imdb-enhanced:marks-updated'));
-                showToast(t('toast_cleared_saved_title_marks', [entries.length]));
+                deleteMarks({}, tCount('toast_cleared_saved_title_marks', entries.length));
             },
         }, t('text_clear_all'));
 
@@ -884,7 +926,6 @@
         }, t('settings_import_from_page'));
 
         const render = () => {
-            disarmClearAll();
             const entries = getUserMarkEntries();
             count.textContent = t('text_saved_mark_count', [entries.length]);
             const summary = document.getElementById('enh-data-marks-count');
@@ -933,15 +974,12 @@
                            unset only the Seen/Skip half. One write, not two: as a note
                            removal followed by a mark removal, a failure between them
                            destroyed the note and kept the mark, which is the one outcome
-                           the user did not ask for and cannot undo. */
+                           the user did not ask for. */
                         const remaining = { ...getUserMarks(true) };
                         delete remaining[id];
-                        if (!setUserMarks(remaining)) return;
-                        refreshFeature('watchedMarking');
-                        refreshFeature('titleNotes');
-                        render();
-                        document.dispatchEvent(new CustomEvent('imdb-enhanced:marks-updated'));
-                        showToast(note ? t('settings_mark_and_note_removed') : t('settings_mark_cleared'));
+                        deleteMarks(remaining, note
+                            ? t('settings_mark_and_note_removed')
+                            : t('settings_mark_cleared'));
                     },
                 }, t('settings_column_remove'));
                 const row = makeEl('div', { className:'enh-mark-row' }, titleEl, stateEl, open, clear);
@@ -953,7 +991,7 @@
 
         panel.appendChild(makeEl('div', { className:'enh-marks-panel__header' },
             makeEl('div', { className:'enh-marks-panel__title' }, t('label_private_title_marks')),
-            makeEl('div', { className:'enh-site-editor__actions' }, count, importNative, clearAll)
+            makeEl('div', { className:'enh-site-editor__actions' }, count, importNative, undo, clearAll)
         ));
         panel.appendChild(makeEl('div', { className:'enh-servarr-note' },
             t('settings_these_marks_stay_on_this_device_and')
@@ -962,7 +1000,7 @@
         document.addEventListener('imdb-enhanced:marks-updated', render);
         registerCleanup(() => {
             document.removeEventListener('imdb-enhanced:marks-updated', render);
-            clearTimeout(clearAllTimer);
+            clearTimeout(undoTimer);
         });
         render();
         return panel;

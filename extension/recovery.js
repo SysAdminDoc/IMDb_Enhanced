@@ -350,7 +350,7 @@
         aria_close_settings: 'Close settings',
         aria_close_trailer: 'Close trailer',
         aria_collapse_named_section: 'Collapse $1',
-        aria_confirm_clearing_saved_title_marks: 'Confirm clearing $1 saved title marks',
+        aria_undo_the_last_mark_deletion: 'Undo the last title mark deletion',
         aria_copy_imdb_id: 'Copy IMDb ID $1',
         aria_correct_match: 'Correct $1 match',
         aria_correct_the_match_for_this_title: 'Correct the $1 match for this title',
@@ -824,6 +824,7 @@
         settings_column_move: 'Move',
         settings_column_name: 'Name',
         settings_column_purpose: 'Purpose',
+        settings_undo_delete: 'Undo delete',
         settings_column_remove: 'Remove',
         settings_column_url_template: 'URL template',
         settings_column_visible: 'Visible',
@@ -875,8 +876,8 @@
         settings_local_only: 'Local only',
         settings_local_seen: 'Local seen',
         settings_local_skip: 'Local skip',
-        settings_mark_and_note_removed: 'Mark and note removed',
-        settings_mark_cleared: 'Mark cleared',
+        settings_mark_and_note_removed: 'Mark and note removed. Undo is in the marks panel.',
+        settings_mark_cleared: 'Mark cleared. Undo is in the marks panel.',
         settings_media_server_indicator: 'Media server indicator',
         settings_media_servers: 'Media servers',
         settings_name_pages: 'Name pages',
@@ -980,7 +981,6 @@
         text_collapse_section: 'Collapse section',
         text_collection_entry: '$1 ($2)',
         text_collection_source_note: 'From Wikidata. Order is the series own numbering where it has one, and release year otherwise.',
-        text_confirm_clear_marks: 'Confirm clear $1',
         text_copy_all_links: 'Copy all links',
         text_copy_imdb_ids: 'Copy $1 IMDb IDs',
         text_copy_settings_to_the_clipboard_without_integration: 'Copy settings to the clipboard without integration credentials',
@@ -1168,7 +1168,8 @@
         toast_cache_is_already_empty: 'Cache is already empty',
         toast_cleared_cached_entries_could_not_be: 'Cleared $1 cached entries; $2 could not be removed.',
         toast_cleared_cached_entries_reload_to_re: 'Cleared $1 cached entries. Reload to re-fetch.',
-        toast_cleared_saved_title_marks: 'Cleared $1 saved title marks',
+        toast_cleared_saved_title_marks_one: 'Cleared $1 saved title mark. Undo is in the marks panel.',
+        toast_cleared_saved_title_marks_other: 'Cleared $1 saved title marks. Undo is in the marks panel.',
         toast_copied_imdb_ids: 'Copied $1 IMDb IDs',
         toast_copied_search_links: 'Copied $1 search links',
         toast_copy_failed_try_the_individual_links: 'Copy failed. Try the individual links instead.',
@@ -1206,7 +1207,6 @@
         toast_no_titles_found_on_this_page: 'No titles found on this page',
         toast_paste_settings_json_before_importing: 'Paste settings JSON before importing',
         toast_plot_synopsis_revealed: 'Plot synopsis revealed',
-        toast_press_the_clear_button_again_within: 'Press the clear button again within 5 seconds to remove every mark',
         toast_preview_the_csv_before_importing: 'Preview the CSV before importing.',
         toast_reset_settings_reloading: 'Reset $1 settings. Reloading...',
         toast_reset_settings_use_the_manager_menu: 'Reset $1 settings. Use the manager menu\'s Undo command to put them back.',
@@ -1224,6 +1224,9 @@
         toast_the_journal_could_not_be_cleared: 'The journal could not be cleared. Check $1.',
         toast_the_match_correction_was_not_saved: 'The match correction was not saved. The previous match has been restored.',
         toast_the_two_passphrases_do_not_match: 'The two passphrases do not match.',
+        toast_marks_put_back_one: 'Undone. $1 title mark was put back.',
+        toast_marks_put_back_other: 'Undone. $1 title marks were put back.',
+        toast_that_undo_is_no_longer_available: 'That undo is no longer available.',
         toast_there_is_no_reset_to_undo: 'There is no reset to undo.',
         toast_title_requested_through: '$1 requested through $2',
         toast_title_sent_to: '$1 sent to $2',
@@ -16583,15 +16586,69 @@ ${scopedRules('.enh-zoom', {
         const panel = makeEl('div', { className:'enh-marks-panel' });
         const count = makeEl('div', { className:'enh-marks-panel__count' });
         const rows = makeEl('div', { className:'enh-marks-panel__rows' });
-        let clearAllArmed = false;
-        let clearAllTimer = null;
-        const disarmClearAll = () => {
-            clearTimeout(clearAllTimer);
-            clearAllTimer = null;
-            clearAllArmed = false;
-            clearAll.textContent = t('text_clear_all');
-            clearAll.setAttribute('aria-label', t('aria_clear_all_saved_title_marks'));
+        /* Removing a mark used to be final. The row's Remove dropped the record and its
+           note in one write, and Clear all dropped every one of them behind a second click
+           five seconds apart, which is a speed bump rather than consent — and no help at
+           all to somebody who meant the row above. Both offer the deletion back instead.
+
+           The snapshot is the store as it stood before the first deletion in the current
+           run, not before the last one, so removing three rows and then changing your mind
+           puts all three back. Undoing, or letting the offer lapse, starts the next one.
+
+           The control lives in the panel rather than on the toast because the settings
+           overlay traps Tab within itself: a button anywhere else is unreachable by
+           keyboard for exactly as long as this panel is the thing on screen. */
+        const MARK_UNDO_MS = 15000;
+        let pendingUndo = null;
+        let undoTimer = null;
+        const forgetUndo = () => {
+            clearTimeout(undoTimer);
+            undoTimer = null;
+            pendingUndo = null;
+            undo.hidden = true;
         };
+        const afterMarkWrite = () => {
+            refreshFeature('watchedMarking');
+            refreshFeature('titleNotes');
+            render();
+            document.dispatchEvent(new CustomEvent('imdb-enhanced:marks-updated'));
+        };
+        /* One write, and the snapshot is only kept once it has succeeded: offering to undo
+           something that never happened would restore the store to a state it is already
+           in and report it as a recovery. */
+        const deleteMarks = (next, describe) => {
+            const before = { ...getUserMarks(true) };
+            if (!setUserMarks(next)) return false;
+            if (!pendingUndo) pendingUndo = before;
+            clearTimeout(undoTimer);
+            undoTimer = setTimeout(forgetUndo, MARK_UNDO_MS);
+            afterMarkWrite();
+            undo.hidden = false;
+            showToast(describe, 6000);
+            return true;
+        };
+        const undo = makeEl('button', {
+            type:'button',
+            hidden:true,
+            className:'enh-settings-footer-btn',
+            'aria-label':t('aria_undo_the_last_mark_deletion'),
+            onClick: () => {
+                if (!pendingUndo) {
+                    showToast(t('toast_that_undo_is_no_longer_available'));
+                    undo.hidden = true;
+                    return;
+                }
+                const snapshot = pendingUndo;
+                const restored = Object.keys(snapshot).length;
+                /* A refused write reports itself and leaves both the store and the cache
+                   as they were, so the snapshot is kept for another try rather than
+                   consumed by the attempt. */
+                if (!setUserMarks(snapshot)) return;
+                forgetUndo();
+                afterMarkWrite();
+                showToast(tCount('toast_marks_put_back', restored));
+            },
+        }, t('settings_undo_delete'));
         const clearAll = makeEl('button', {
             type:'button',
             className:'enh-settings-footer-btn enh-settings-footer-btn--danger',
@@ -16599,19 +16656,7 @@ ${scopedRules('.enh-zoom', {
             onClick: () => {
                 const entries = getUserMarkEntries();
                 if (!entries.length) return;
-                if (!clearAllArmed) {
-                    clearAllArmed = true;
-                    clearAll.textContent = t('text_confirm_clear_marks', [entries.length]);
-                    clearAll.setAttribute('aria-label', t('aria_confirm_clearing_saved_title_marks', [entries.length]));
-                    clearAllTimer = setTimeout(disarmClearAll, 5000);
-                    showToast(t('toast_press_the_clear_button_again_within'));
-                    return;
-                }
-                if (!setUserMarks({})) return;
-                refreshFeature('watchedMarking');
-                render();
-                document.dispatchEvent(new CustomEvent('imdb-enhanced:marks-updated'));
-                showToast(t('toast_cleared_saved_title_marks', [entries.length]));
+                deleteMarks({}, tCount('toast_cleared_saved_title_marks', entries.length));
             },
         }, t('text_clear_all'));
 
@@ -16651,7 +16696,6 @@ ${scopedRules('.enh-zoom', {
         }, t('settings_import_from_page'));
 
         const render = () => {
-            disarmClearAll();
             const entries = getUserMarkEntries();
             count.textContent = t('text_saved_mark_count', [entries.length]);
             const summary = document.getElementById('enh-data-marks-count');
@@ -16700,15 +16744,12 @@ ${scopedRules('.enh-zoom', {
                            unset only the Seen/Skip half. One write, not two: as a note
                            removal followed by a mark removal, a failure between them
                            destroyed the note and kept the mark, which is the one outcome
-                           the user did not ask for and cannot undo. */
+                           the user did not ask for. */
                         const remaining = { ...getUserMarks(true) };
                         delete remaining[id];
-                        if (!setUserMarks(remaining)) return;
-                        refreshFeature('watchedMarking');
-                        refreshFeature('titleNotes');
-                        render();
-                        document.dispatchEvent(new CustomEvent('imdb-enhanced:marks-updated'));
-                        showToast(note ? t('settings_mark_and_note_removed') : t('settings_mark_cleared'));
+                        deleteMarks(remaining, note
+                            ? t('settings_mark_and_note_removed')
+                            : t('settings_mark_cleared'));
                     },
                 }, t('settings_column_remove'));
                 const row = makeEl('div', { className:'enh-mark-row' }, titleEl, stateEl, open, clear);
@@ -16720,7 +16761,7 @@ ${scopedRules('.enh-zoom', {
 
         panel.appendChild(makeEl('div', { className:'enh-marks-panel__header' },
             makeEl('div', { className:'enh-marks-panel__title' }, t('label_private_title_marks')),
-            makeEl('div', { className:'enh-site-editor__actions' }, count, importNative, clearAll)
+            makeEl('div', { className:'enh-site-editor__actions' }, count, importNative, undo, clearAll)
         ));
         panel.appendChild(makeEl('div', { className:'enh-servarr-note' },
             t('settings_these_marks_stay_on_this_device_and')
@@ -16729,7 +16770,7 @@ ${scopedRules('.enh-zoom', {
         document.addEventListener('imdb-enhanced:marks-updated', render);
         registerCleanup(() => {
             document.removeEventListener('imdb-enhanced:marks-updated', render);
-            clearTimeout(clearAllTimer);
+            clearTimeout(undoTimer);
         });
         render();
         return panel;

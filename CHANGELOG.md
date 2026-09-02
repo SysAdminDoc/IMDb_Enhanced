@@ -2,6 +2,12 @@
 
 ## Unreleased
 
+### Changed
+
+- Deleting a title mark can be taken back. Remove on a row and Clear all both offer an Undo in the marks panel for fifteen seconds, and it restores the whole record, notes and viewing dates included. Undo after several removals puts all of them back, not just the last one.
+
+- Clear all no longer asks for a second press five seconds after the first. A second press stopped nothing that a slip could not repeat, and it was no help at all to anyone who pressed it deliberately and meant a different row. The deletion happens at once and can be reversed instead.
+
 ### Fixed
 
 - The Jellyfin library check works again on Jellyfin 12. That release stopped reading the `X-Emby-Token` header unless the server operator turns legacy authorization back on, so the check had quietly stopped finding anything. The token now travels in the `MediaBrowser` authorization scheme Jellyfin has always accepted, which older 10.x servers read as well. Emby is untouched, since it still uses the header Jellyfin retired.
