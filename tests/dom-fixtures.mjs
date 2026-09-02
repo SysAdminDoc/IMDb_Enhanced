@@ -52,6 +52,8 @@ const instrumented = userscript.replace(/\}\)\(\);\s*$/, `globalThis.__imdbEnhan
     getWatchlistServiceChoices,
     getWatchlistServices,
     boundedImageVariant,
+    parseParentsGuideSeverities,
+    getFeatureFailures,
     createSettingsPanel,
     toggleSettings,
     getStoredSetting: key => get(key),
@@ -2140,6 +2142,114 @@ await runFixture('title', async (window, hooks) => {
     hooks.destroySettingsChrome();
 
     ['watchedMarking', 'titleNotes', 'quickCopyID', 'collapsibleSections'].forEach(hooks.stopFeature);
+});
+
+/* IE-143: the title page links to /parentalguide and shows nothing from it. Exercised
+   against the markup IMDb actually served on 2026-09-02, through the link the extension
+   itself renders, because the two things worth getting wrong here are the selectors and
+   the promise that nothing is fetched until somebody asks. */
+await runFixture('title', async (window, hooks) => {
+    const guideHtml = fs.readFileSync(path.join(fixtureDir, 'parentalguide.html'), 'utf8');
+
+    // The parser, against the captured page and against a page that is no longer it.
+    /* Array.from, not .map: the parser's array belongs to the sandbox realm, and a strict
+       deep-equal against one built here fails on the prototype alone while every value in
+       it is identical. */
+    const parsed = hooks.parseParentsGuideSeverities(guideHtml);
+    assert.deepEqual(Array.from(parsed, row => `${row.label}|${row.value}|${row.anchor}|${row.rank}`), [
+        'Sex & Nudity|Mild|nudity|1',
+        'Violence & Gore|Moderate|violence|2',
+        'Profanity|Moderate|profanity|2',
+        'Alcohol, Drugs & Smoking|Mild|alcohol|1',
+        'Frightening & Intense Scenes|Moderate|frightening|2',
+    ], 'the five severities, their anchors and their ranks are read from the rows IMDb serves');
+    assert.equal(hooks.parseParentsGuideSeverities('<html><body><p>nope</p></body></html>'), null,
+        'a page with none of the landmarks is a changed page, not an empty guide');
+    assert.equal(hooks.parseParentsGuideSeverities(
+        '<html><body><section data-testid="content-rating"></section></body></html>').length, 0,
+        'and a page that still has the section but lists nothing is an empty guide');
+
+    assert.equal(hooks.getStoredSetting('parentsGuideSeverity'), false, 'the feature is off by default');
+
+    let fetches = [];
+    let answer = () => ({ ok:true, status:200, text: async () => guideHtml });
+    window.fetch = url => { fetches.push(String(url)); return Promise.resolve(answer()); };
+
+    window.GM_setValue('imdb_enh_parentsGuideSeverity', true);
+    await hooks.runFeature('editorialTitleSurface');
+    await hooks.runFeature('parentsGuideSeverity');
+    const link = await waitForSelector(window, 'a[href*="/parentalguide"]');
+    assert.equal(fetches.length, 0, 'nothing is fetched until the link is clicked');
+    assert.equal(window.document.getElementById('enh-parents-guide'), null, 'and nothing is drawn either');
+
+    const leftClick = () => link.dispatchEvent(new window.MouseEvent('click', { bubbles:true, cancelable:true, button:0 }));
+    const settleGuide = async () => {
+        for (let tick = 0; tick < 40; tick += 1) {
+            await new Promise(resolve => window.setTimeout(resolve, 2));
+            const panel = window.document.getElementById('enh-parents-guide');
+            if (panel && !panel.textContent.includes('Checking')) return panel;
+        }
+        return window.document.getElementById('enh-parents-guide');
+    };
+
+    leftClick();
+    assert.deepEqual(fetches, ['/title/tt0133093/parentalguide/'], 'the click reads the guide, same-origin');
+    const panel = await settleGuide();
+    const chips = [...panel.querySelectorAll('.enh-pg-chip')];
+    assert.equal(chips.length, 5, 'five severity chips');
+    assert.deepEqual(chips.map(chip => chip.getAttribute('href')), [
+        '/title/tt0133093/parentalguide/#nudity',
+        '/title/tt0133093/parentalguide/#violence',
+        '/title/tt0133093/parentalguide/#profanity',
+        '/title/tt0133093/parentalguide/#alcohol',
+        '/title/tt0133093/parentalguide/#frightening',
+    ], 'each chip links through to its own section');
+    assert.equal(chips[0].getAttribute('aria-label'), 'Mild for Sex & Nudity',
+        'and says what it is out loud');
+    assert.equal(link.getAttribute('aria-expanded'), 'true');
+
+    // A second click puts it away, so the link is never more than two clicks from the page.
+    leftClick();
+    assert.equal(window.document.getElementById('enh-parents-guide'), null, 'a second click collapses it');
+    assert.equal(link.getAttribute('aria-expanded'), 'false');
+
+    /* Anything but a plain left click is somebody opening the page for real. The guard
+       below stops the click short of an actual navigation, which would tear down the
+       document this test is still using; it registers after the feature's own capturing
+       handler, so it reads what that handler decided. */
+    let sawPrevented = null;
+    const stopNavigation = event => { sawPrevented = event.defaultPrevented; event.preventDefault(); };
+    window.document.addEventListener('click', stopNavigation, true);
+    link.dispatchEvent(new window.MouseEvent('click', { bubbles:true, cancelable:true, button:0, ctrlKey:true }));
+    window.document.removeEventListener('click', stopNavigation, true);
+    assert.equal(sawPrevented, false, 'a ctrl-click is left alone, so the page still opens');
+    assert.equal(window.document.getElementById('enh-parents-guide'), null, 'and draws nothing');
+
+    /* IMDb sits behind a WAF that answers a request it will not serve with a 202 challenge
+       page rather than an error status. Reported as a refusal, and journalled as one, so
+       it is distinguishable from IMDb being down and from IMDb changing its markup. */
+    const failuresBefore = hooks.getFeatureFailures().length;
+    fetches = [];
+    answer = () => ({ ok:false, status:202, text: async () => '<html><body>challenge</body></html>' });
+    leftClick();
+    const refused = await settleGuide();
+    assert.match(refused.textContent, /would not serve the guide/, 'a challenge is shown as a refusal');
+    const journalled = hooks.getFeatureFailures().slice(failuresBefore);
+    assert.equal(journalled.length, 1, 'and is journalled');
+    assert.equal(journalled[0].key, 'parentsGuideSeverity');
+    assert.equal(journalled[0].category, 'permission',
+        'a refusal, not an outage and not a changed page');
+    assert.ok(refused.querySelector('a[href="/title/tt0133093/parentalguide/"]'),
+        'with the way through to the page still offered');
+
+    hooks.stopFeature('parentsGuideSeverity');
+    assert.equal(window.document.getElementById('enh-parents-guide'), null, 'teardown removes the panel');
+    window.document.addEventListener('click', stopNavigation, true);
+    leftClick();
+    window.document.removeEventListener('click', stopNavigation, true);
+    assert.equal(fetches.length, 1, 'and the click handler goes with it');
+    window.GM_setValue('imdb_enh_parentsGuideSeverity', false);
+    hooks.stopFeature('editorialTitleSurface');
 });
 
 await runFixture('title-ratings', async (window, hooks) => {

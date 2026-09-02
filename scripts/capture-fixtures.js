@@ -33,6 +33,9 @@ const PAGES = [
     /* IMDb's reference view is a different page for the same title: its own layout, its
        own class names, and none of the testids the main title page is built from. */
     { name: 'reference', url: 'https://www.imdb.com/title/tt0133093/reference/' },
+    /* The severity list the title page links to and never shows. Its own route, its own
+       testids, and no structured data at all - the rendered list is the only source. */
+    { name: 'parentalguide', url: 'https://www.imdb.com/title/tt0133093/parentalguide/' },
 ];
 
 /* Capture one page rather than all of them. Re-capturing everything to add a surface

@@ -1885,7 +1885,7 @@
         toolsPage.appendChild(makeEl('div', { className:'enh-settings-grid enh-settings-grid--three' },
             makeFeatureCard(t('settings_title_tools'), t('settings_actions_placed_near_a_movie_or_show'), t('settings_title_pages'), [
                 'searchButtons', 'externalLinks', 'trailerPopover', 'expandedLinkMenu', 'watchedMarking', 'markLinkTint', 'titleNotes',
-                'movieChatBoard', 'collectionPanel',
+                'movieChatBoard', 'collectionPanel', 'parentsGuideSeverity',
             ]),
             makeFeatureCard(t('settings_tv_episodes'), t('settings_focused_tools_for_series_and_episode_lists'), 'TV', [
                 'tvEpisodeTools', 'tvShowEnhancements', 'subtitleLinks', 'episodeSubtitles',

@@ -38,6 +38,8 @@ Third-party lookups omit destination cookies. Responses are rendered as text, ou
 
 **Local Personal Stats.** The Data page turns private marks and imported viewing history into local counts, activity by year, top genres, release decades, personal rating comparisons, and known runtime. Fresh installs get a clear empty state. A year review appears after 10 dated viewings in one year, and missing metadata stays missing instead of being guessed. The calculations never leave the device.
 
+**Parents Guide Severities**. Optional. Clicking the Parents Guide link on a title page expands the five severity ratings in place instead of loading the page, each linking through to its own section. Nothing is requested until you click, and the guide is read from IMDb itself. A verification challenge is reported as a refusal, not an outage.
+
 **TV Tools**. Highest-rated episode highlighting and TV-specific lookup shortcuts. Synopsis blur is opt-in and off by default.
 
 **List Page Tools**. Batch IMDb ID copy plus a popup-safe search queue on watchlist, custom list, and chart pages, including IMDb's locale-prefixed desktop URLs. Prepare up to 20 real new-tab links, open them one gesture at a time, or copy the full link set. A runtime summary totals how long the listed titles would take to watch, recounts as more rows load, and names how many rows had no runtime listed rather than reporting a smaller total as if it were complete. A Copy as CSV button writes the loaded rows using IMDb's own column names, so the file reads back into IMDb and into other tools, and says how many rows carried no rating.

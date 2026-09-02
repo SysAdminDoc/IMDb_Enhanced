@@ -412,7 +412,9 @@
         aria_search_queue: '$1 search queue',
         aria_season_averages: 'Season averages',
         aria_season_progress: 'Season progress',
+        aria_parents_guide_severities: 'Parents guide severity ratings',
         aria_search_settings: 'Search settings',
+        aria_severity_for_category: '$1 for $2',
         aria_settings_sections: 'Settings sections',
         aria_show_destination_on_imdb_pages: 'Show destination on IMDb pages',
         aria_show_on_imdb_pages: 'Show $1 on IMDb pages',
@@ -467,6 +469,8 @@
         error_request_rate_limited: 'The service asked for fewer requests. It will be left alone for a moment.',
         error_request_network: 'The service could not be reached',
         error_request_timeout: 'The service did not answer in time',
+        error_parents_guide_challenged: 'IMDb answered with a verification challenge instead of the guide',
+        error_parents_guide_changed: 'The parents guide page no longer carries the ratings this reads',
         error_response_not_json: 'Response was not valid JSON',
         error_response_too_large: 'Response was too large',
         error_seerr_local_only: 'Only localhost and 127.0.0.1 Seerr URLs are allowed by this build.',
@@ -573,6 +577,9 @@
         feature_rowIntegrationState_detail: 'Shows whether each title in a list, chart, or filmography is already in your library, monitored, or requested. One lookup per title, made only once you scroll to the row, using whichever local service you have configured.',
         feature_rowIntegrationState_keywords: 'plex, jellyfin, radarr, Seerr, Overseerr, badge',
         feature_rowIntegrationState_name: 'Library status on list rows',
+        feature_parentsGuideSeverity_detail: 'Adds the five Parents Guide severity ratings to the title page. Nothing is read until you click the Parents Guide link, and the guide is fetched from IMDb itself, not from a third party.',
+        feature_parentsGuideSeverity_keywords: 'parental, age rating, content warning, sex, violence, profanity',
+        feature_parentsGuideSeverity_name: 'Parents guide severities',
         feature_removeAds_detail: 'Hides current IMDb ad placements, sponsored shells, and tracking pixels as early as the page allows.',
         feature_removeAds_keywords: 'advertising, banners, promotions, clutter',
         feature_removeAds_name: 'Hide ads and sponsored shells',
@@ -1173,6 +1180,10 @@
         text_open_on_moviechat: 'Open on MovieChat',
         text_trailer_could_not_be_loaded_here: 'The trailer could not be loaded here.',
         text_open_trailer_search_on_youtube: 'Open trailer search on YouTube',
+        text_open_the_full_guide: 'Open the full guide',
+        text_parents_guide_empty: 'IMDb lists no severity ratings for this title.',
+        text_parents_guide_refused: 'IMDb would not serve the guide to this request.',
+        text_parents_guide_unavailable: 'The parents guide could not be read.',
         text_parents_guide: 'Parents guide',
         text_partly_available: 'Partly available',
         text_paste_exported_settings_json: 'Paste exported settings JSON',
@@ -2145,6 +2156,7 @@
         trailerPopover: true,
         watchSites: DEFAULT_WATCH_SITES, externalSites: DEFAULT_EXTERNAL_SITES,
         watchedMarking: true, userMarks: {}, titleNotes: true, scoreCorrections: {},
+        parentsGuideSeverity: false,
         servarrIntegration: false,
         seerrUrl: 'http://localhost:5055', seerrApiKey: '',
         radarrUrl: 'http://localhost:7878', radarrApiKey: '',
@@ -2239,6 +2251,7 @@
         servarrIntegration: t('feature_servarrIntegration_keywords'),
         mediaServerIntegration: t('feature_mediaServerIntegration_keywords'),
         rowIntegrationState: t('feature_rowIntegrationState_keywords'),
+        parentsGuideSeverity: t('feature_parentsGuideSeverity_keywords'),
         tvEpisodeTools: t('feature_tvEpisodeTools_keywords'),
         ratingGap: t('feature_ratingGap_keywords'),
         episodeHeatmap: t('feature_episodeHeatmap_keywords'),
@@ -2294,6 +2307,7 @@
         watchedMarking: t('feature_watchedMarking_detail'),
         servarrIntegration: t('feature_servarrIntegration_detail'),
         mediaServerIntegration: t('feature_mediaServerIntegration_detail'),
+        parentsGuideSeverity: t('feature_parentsGuideSeverity_detail'),
         rowIntegrationState: t('feature_rowIntegrationState_detail'),
         tvEpisodeTools: t('feature_tvEpisodeTools_detail'),
         tvShowEnhancements: t('feature_tvShowEnhancements_detail'),
@@ -11464,6 +11478,205 @@ section[id*="quote" i] .ipc-list-card { padding: 4px 0 !important; margin: 2px 0
         },
         destroy() { document.getElementById('enh-jw-widget')?.remove(); }
     });
+
+    /* ---- Parents Guide severities --------------------------------------------------
+       IE-143: the title page links to /parentalguide and shows nothing from it, so the
+       five severity ratings behind that link cost a page load to read. This brings them
+       back inline, and only when the link is actually clicked: nothing is fetched on page
+       load, which is what keeps an opt-in feature from becoming a request on every title
+       somebody opens.
+
+       The read is same-origin, from the tab, with the tab's cookies. That matters: IMDb
+       sits behind a WAF that answers a cookieless client with a 202 challenge page rather
+       than a 4xx, so a request made the way third-party lookups are made here - anonymous,
+       no cookies - would come back as a success carrying no guide at all. The 202 is
+       treated as a refusal and said as one.
+
+       Markup read from the live page on 2026-09-02 (tt0133093): the summary list is five
+       li[data-testid="rating-item"], each an anchor whose text is the category and whose
+       href is the fragment for that section, beside an .ipc-html-content-inner-div holding
+       the severity word. The page carries no JSON-LD and no severity data in its
+       application-data blob, so the rendered list is the only source. */
+    const PARENTS_GUIDE_ROW_LIMIT = 8;
+    const PARENTS_GUIDE_TEXT_LIMIT = 48;
+    const PARENTS_GUIDE_HTML_LIMIT = 3_000_000;
+    /* IMDb's own vocabulary. Used to colour a chip and for nothing else: a locale that
+       translates these still gets the word IMDb gave it, uncoloured, rather than nothing. */
+    const PARENTS_GUIDE_SEVERITIES = { none:0, mild:1, moderate:2, severe:3 };
+
+    function parseParentsGuideSeverities(html) {
+        const source = typeof html === 'string' ? html : '';
+        if (!source || source.length > PARENTS_GUIDE_HTML_LIMIT) return null;
+        let doc = null;
+        try { doc = new DOMParser().parseFromString(source, 'text/html'); }
+        catch { return null; }
+        if (!doc) return null;
+        /* Landmark first, for the same reason the provider parsers have one: a page that
+           parsed to no rows is a different thing from a page that came back as something
+           else entirely, and only the second is worth calling a changed page. */
+        const intact = Boolean(doc.querySelector('[data-testid="content-rating"], [data-testid="rating-item"]'));
+        if (!intact) return null;
+        const rows = [...doc.querySelectorAll('[data-testid="rating-item"]')].slice(0, PARENTS_GUIDE_ROW_LIMIT);
+        const out = [];
+        for (const row of rows) {
+            const link = row.querySelector('a[href]');
+            const label = (link?.textContent || '').trim().replace(/\s+/g, ' ').replace(/:$/, '')
+                .slice(0, PARENTS_GUIDE_TEXT_LIMIT);
+            const value = (row.querySelector('.ipc-html-content-inner-div')?.textContent || '')
+                .trim().replace(/\s+/g, ' ').slice(0, PARENTS_GUIDE_TEXT_LIMIT);
+            if (!label || !value) continue;
+            /* Only the fragment is taken. The href is IMDb's own and same-origin, but
+               reading a whole URL out of a page and putting it on a link is how a parser
+               becomes an open redirect; a fragment cannot be one. */
+            const anchor = (String(link?.getAttribute('href') || '').match(/#([\w-]{1,40})$/) || [])[1] || '';
+            out.push({ label, value, anchor, rank: PARENTS_GUIDE_SEVERITIES[value.toLowerCase()] ?? null });
+        }
+        return out;
+    }
+
+    reg({
+        key: 'parentsGuideSeverity', name: t('feature_parentsGuideSeverity_name'), group: 'Features',
+        _handler: null,
+        _panel: null,
+        _state: 'idle',
+        init() {
+            if (!isIMDbHost()) return;
+            const isCurrent = createFeatureGuard(this);
+            const imdbId = getIMDbID();
+            if (!imdbId) return;
+
+            addThemedCSS(t => `
+                #enh-parents-guide {
+                    margin: 8px 0 0; display: flex; flex-wrap: wrap; gap: 6px; align-items: center;
+                }
+                #enh-parents-guide[hidden] { display: none; }
+                .enh-pg-chip {
+                    display: inline-flex; align-items: center; gap: 6px;
+                    padding: 4px 9px; border-radius: 7px;
+                    border: 1px solid ${t.bd1}; background: ${t.sf1}; color: ${t.tx1};
+                    font: 700 11px/1 -apple-system, BlinkMacSystemFont, 'Segoe UI', sans-serif;
+                    text-decoration: none !important;
+                }
+                .enh-pg-chip:hover { border-color: ${t.accentBorder}; color: ${t.accent} !important; }
+                .enh-pg-chip__value { color: ${t.tx3}; font-weight: 800; text-transform: uppercase; letter-spacing: .04em; }
+                .enh-pg-chip[data-rank="0"] .enh-pg-chip__value { color: ${t.green}; }
+                .enh-pg-chip[data-rank="1"] .enh-pg-chip__value { color: ${t.green}; }
+                .enh-pg-chip[data-rank="2"] .enh-pg-chip__value { color: ${t.accent}; }
+                .enh-pg-chip[data-rank="3"] .enh-pg-chip__value { color: ${t.red}; }
+                .enh-pg-note {
+                    color: ${t.tx3};
+                    font: 600 11px/1.4 -apple-system, BlinkMacSystemFont, 'Segoe UI', sans-serif;
+                }
+                .enh-pg-note--refused { color: ${t.red}; }
+            `, 'enh-parentsGuideSeverity');
+
+            /* Delegated and capturing, because the editorial surface rebuilds its subnav
+               whenever IMDb rehydrates the hero and a handler bound to the link itself
+               would go with it. */
+            this._handler = event => {
+                if (!isCurrent()) return;
+                // Anything but a plain left click is somebody opening the page for real.
+                if (event.button !== 0 || event.metaKey || event.ctrlKey || event.shiftKey || event.altKey) return;
+                const link = event.target.closest?.('a[href*="/parentalguide"]');
+                if (!link || link.closest('#enh-parents-guide')) return;
+                event.preventDefault();
+                event.stopPropagation();
+                this._toggle(link, imdbId, isCurrent);
+            };
+            document.addEventListener('click', this._handler, true);
+        },
+        _toggle(link, imdbId, isCurrent) {
+            const existing = document.getElementById('enh-parents-guide');
+            if (existing) {
+                /* A second click puts it away. The link goes back to being a link, so the
+                   page is never more than two clicks away either. */
+                existing.remove();
+                this._panel = null;
+                this._state = 'idle';
+                link.setAttribute('aria-expanded', 'false');
+                return;
+            }
+            const panel = makeEl('div', {
+                id:'enh-parents-guide',
+                role:'group',
+                'aria-label':t('aria_parents_guide_severities'),
+            }, makeEl('span', { className:'enh-pg-note' }, t('label_checking')));
+            this._panel = panel;
+            link.setAttribute('aria-expanded', 'true');
+            (link.closest('nav') || link.parentElement)?.insertAdjacentElement('afterend', panel);
+            this._load(imdbId, panel, isCurrent);
+        },
+        async _load(imdbId, panel, isCurrent) {
+            this._state = 'loading';
+            try {
+                const rows = await this._fetch(imdbId);
+                if (!isCurrent() || !panel.isConnected) return;
+                this._state = 'done';
+                this._render(panel, imdbId, rows);
+            } catch (error) {
+                if (!isCurrent() || !panel.isConnected) return;
+                this._state = 'failed';
+                recordFeatureFailure(this, 'parents-guide', error);
+                panel.replaceChildren(makeEl('span', { className:'enh-pg-note enh-pg-note--refused' },
+                    classifyFailure(error) === 'permission'
+                        ? t('text_parents_guide_refused')
+                        : t('text_parents_guide_unavailable')),
+                    makeEl('a', {
+                        className:'enh-pg-chip',
+                        href:`/title/${imdbId}/parentalguide/`,
+                    }, t('text_open_the_full_guide'))
+                );
+            }
+        },
+        async _fetch(imdbId) {
+            let response = null;
+            try {
+                /* same-origin, so the tab's cookies go with it. Without them IMDb's WAF
+                   answers a challenge instead of the page. */
+                response = await fetch(`/title/${imdbId}/parentalguide/`, {
+                    credentials:'same-origin',
+                    headers:{ Accept:'text/html' },
+                });
+            } catch (error) {
+                throw failure('network', getRequestErrorMessage(error));
+            }
+            /* 202 is the WAF's challenge interstitial, not a success and not a server
+               fault: the request was refused pending a check this cannot perform. Filed
+               as a refusal so the journal distinguishes it from IMDb being down and from
+               IMDb having changed its markup. */
+            if (response.status === 202) throw failure('permission', t('error_parents_guide_challenged'));
+            if (!response.ok) throw failure('http', `HTTP ${response.status}`);
+            const rows = parseParentsGuideSeverities(await response.text());
+            // Landmark gone means the page is no longer the page this reads.
+            if (rows === null) throw failure('schema', t('error_parents_guide_changed'));
+            return rows;
+        },
+        _render(panel, imdbId, rows) {
+            if (!rows.length) {
+                panel.replaceChildren(makeEl('span', { className:'enh-pg-note' }, t('text_parents_guide_empty')));
+                return;
+            }
+            panel.replaceChildren(...rows.map(row => makeEl('a', {
+                className:'enh-pg-chip',
+                href:`/title/${imdbId}/parentalguide/${row.anchor ? `#${row.anchor}` : ''}`,
+                ...(row.rank === null ? {} : { dataset:{ rank:String(row.rank) } }),
+                'aria-label':t('aria_severity_for_category', [row.value, row.label]),
+            },
+                makeEl('span', {}, row.label),
+                makeEl('span', { className:'enh-pg-chip__value' }, row.value)
+            )));
+        },
+        destroy() {
+            removeCSS('enh-parentsGuideSeverity');
+            if (this._handler) document.removeEventListener('click', this._handler, true);
+            this._handler = null;
+            document.getElementById('enh-parents-guide')?.remove();
+            document.querySelectorAll('a[href*="/parentalguide"][aria-expanded]')
+                .forEach(link => link.removeAttribute('aria-expanded'));
+            this._panel = null;
+            this._state = 'idle';
+        }
+    });
     // #########################################################################
     //
     //  LAYOUT FEATURES
@@ -18826,7 +19039,7 @@ ${scopedRules('.enh-zoom', {
         toolsPage.appendChild(makeEl('div', { className:'enh-settings-grid enh-settings-grid--three' },
             makeFeatureCard(t('settings_title_tools'), t('settings_actions_placed_near_a_movie_or_show'), t('settings_title_pages'), [
                 'searchButtons', 'externalLinks', 'trailerPopover', 'expandedLinkMenu', 'watchedMarking', 'markLinkTint', 'titleNotes',
-                'movieChatBoard', 'collectionPanel',
+                'movieChatBoard', 'collectionPanel', 'parentsGuideSeverity',
             ]),
             makeFeatureCard(t('settings_tv_episodes'), t('settings_focused_tools_for_series_and_episode_lists'), 'TV', [
                 'tvEpisodeTools', 'tvShowEnhancements', 'subtitleLinks', 'episodeSubtitles',

@@ -197,8 +197,14 @@
   "aria_season_progress": {
     "message": "Season progress"
   },
+  "aria_parents_guide_severities": {
+    "message": "Parents guide severity ratings"
+  },
   "aria_search_settings": {
     "message": "Search settings"
+  },
+  "aria_severity_for_category": {
+    "message": "$1 for $2"
   },
   "aria_settings_sections": {
     "message": "Settings sections"
@@ -361,6 +367,12 @@
   },
   "error_request_timeout": {
     "message": "The service did not answer in time"
+  },
+  "error_parents_guide_challenged": {
+    "message": "IMDb answered with a verification challenge instead of the guide"
+  },
+  "error_parents_guide_changed": {
+    "message": "The parents guide page no longer carries the ratings this reads"
   },
   "error_response_not_json": {
     "message": "Response was not valid JSON"
@@ -679,6 +691,15 @@
   },
   "feature_rowIntegrationState_name": {
     "message": "Library status on list rows"
+  },
+  "feature_parentsGuideSeverity_detail": {
+    "message": "Adds the five Parents Guide severity ratings to the title page. Nothing is read until you click the Parents Guide link, and the guide is fetched from IMDb itself, not from a third party."
+  },
+  "feature_parentsGuideSeverity_keywords": {
+    "message": "parental, age rating, content warning, sex, violence, profanity"
+  },
+  "feature_parentsGuideSeverity_name": {
+    "message": "Parents guide severities"
   },
   "feature_removeAds_detail": {
     "message": "Hides current IMDb ad placements, sponsored shells, and tracking pixels as early as the page allows."
@@ -2479,6 +2500,18 @@
   },
   "text_open_trailer_search_on_youtube": {
     "message": "Open trailer search on YouTube"
+  },
+  "text_open_the_full_guide": {
+    "message": "Open the full guide"
+  },
+  "text_parents_guide_empty": {
+    "message": "IMDb lists no severity ratings for this title."
+  },
+  "text_parents_guide_refused": {
+    "message": "IMDb would not serve the guide to this request."
+  },
+  "text_parents_guide_unavailable": {
+    "message": "The parents guide could not be read."
   },
   "text_parents_guide": {
     "message": "Parents guide"

@@ -1,5 +1,5 @@
 {
-  "capturedAt": "2026-08-31T14:00:00.000Z",
+  "capturedAt": "2026-09-02T10:50:00.000Z",
   "note": "Sanitized offline snapshots for selector and parser regression tests. The title shape is distilled from the saved Black Mirror MHTML capture; the remaining shapes retain the live selectors and payload contracts recorded during the fixture-capture pass. npm run capture:fixtures replaces these snapshots when IMDb allows the warmed browser profile through its verification wall.",
   "pages": [
     {
@@ -21,6 +21,10 @@
     {
       "name": "chart",
       "url": "https://www.imdb.com/chart/top/"
+    },
+    {
+      "name": "parentalguide",
+      "url": "https://www.imdb.com/title/tt0133093/parentalguide/"
     }
   ]
 }
