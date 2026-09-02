@@ -10,6 +10,10 @@
 
 ### Changed
 
+- The request integration is called Seerr now, which is what Overseerr and Jellyseerr were merged into in February 2026. Both older installs still work and the API calls are unchanged; only the wording moved, because naming two retired products reads as an integration nobody maintains.
+
+- The README names script-manager versions that exist. It asked for "Violentmonkey 2026.7", a numbering that project has never used, so there was nothing to compare an install against. It now names Tampermonkey 5.6, Violentmonkey 2.48.0 and ScriptCat 1.4, and says why the Violentmonkey floor matters: below it, installing a script on Chrome 146 and later can take minutes.
+
 - Deleting a title mark can be taken back. Remove on a row and Clear all both offer an Undo in the marks panel for fifteen seconds, and it restores the whole record, notes and viewing dates included. Undo after several removals puts all of them back, not just the last one.
 
 - Clear all no longer asks for a second press five seconds after the first. A second press stopped nothing that a slip could not repeat, and it was no help at all to anyone who pressed it deliberately and meant a different row. The deletion happens at once and can be reversed instead.
