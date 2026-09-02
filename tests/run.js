@@ -5195,6 +5195,17 @@ test('Greasy Fork distribution guardrails stay intact', () => {
     assert(!/\bnew\s+Function\s*\(/.test(script), 'new Function should not be used');
     assert(!/createElement\(['"]script['"]\)/.test(script), 'dynamic script tags should not be created');
     assert(!/\bconfirm\s*\(/.test(script), 'confirmation dialogs should not be used');
+    /* Greasy Fork refuses a script over 2 MB and refuses a minified one, so there is no way
+       to shrink a file that has grown past it: the fix would have to be removing features.
+       This has roughly doubled since May, so the guard is a margin rather than the ceiling,
+       and it names the rule so whoever trips it knows what it is about. */
+    const bytes = Buffer.byteLength(script, 'utf8');
+    const GREASY_FORK_LIMIT = 2 * 1024 * 1024;
+    const guard = Math.floor(GREASY_FORK_LIMIT * 0.75);
+    assert(bytes <= guard,
+        `the assembled userscript is ${bytes} bytes, past the ${guard}-byte guard. `
+        + `Greasy Fork's ceiling is ${GREASY_FORK_LIMIT} bytes and it refuses minified code, `
+        + 'so this cannot be solved by compressing the file.');
 });
 
 test('cross-origin requests omit destination cookies', () => {
