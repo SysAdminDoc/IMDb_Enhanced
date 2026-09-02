@@ -4013,6 +4013,41 @@ test('the calendar asks about series the store actually knows are series', () =>
         'past episodes, undated episodes and malformed rows are all left out');
 });
 
+/* IE-148: a fully expanded IMDb list is 250 rows, and decorating them in one pass put the
+   script's own blocking time consistently over 50ms - long enough that a click during it
+   feels dropped. The threshold and the yield are what stop that, and both are easy to
+   remove by accident, so both are pinned here. */
+test('long lists are decorated in chunks and short ones are not', () => {
+    const marking = script.slice(
+        script.indexOf("key: 'watchedMarking'"),
+        script.indexOf("key: 'markLinkTint'"));
+    assert(marking.length > 1000, 'the marking feature should be locatable');
+    assert(/anchors\.length <= DECORATE_CHUNK_SIZE/.test(marking),
+        'a short list must keep the single synchronous pass; chunking ten cards costs a frame and buys nothing');
+    assert(/_decorateInChunks\(anchors, seen\)/.test(marking),
+        'a long one must be broken up');
+    assert(/await yieldToBrowser\(\)/.test(marking),
+        'and must hand the thread back between chunks, or it is one pass with extra steps');
+
+    /* A token, not a boolean: this object outlives a route, and a loop still running when
+       the next one starts would decorate into a page on its way out. */
+    assert(/this\._chunkToken = token;/.test(marking) && /if \(this\._chunkToken !== token\) return;/.test(marking),
+        'the chunk loop must stop when a newer one takes over');
+    assert(/this\._chunkToken = null;/.test(script.slice(script.indexOf("key: 'watchedMarking'"))),
+        'and teardown must stop it too');
+
+    const helper = script.slice(script.indexOf('function yieldToBrowser'), script.indexOf('reg({\n        key: \'watchedMarking\''));
+    assert(/scheduler\?\.yield/.test(helper),
+        'scheduler.yield resumes at the front of the queue, which is the point of using it');
+    assert(/setTimeout\(resolve, 0\)/.test(helper),
+        'and there has to be a fallback where it does not exist');
+
+    const size = /const DECORATE_CHUNK_SIZE = (\d+);/.exec(script);
+    assert(size, 'the chunk size should be a named constant');
+    assert(Number(size[1]) >= 10 && Number(size[1]) <= 100,
+        `a chunk of ${size[1]} is either too small to be worth the overhead or too big to fit a frame`);
+});
+
 test('an exported CSV reads back into the same marks', () => {
     const hooks = loadScriptTestHooks();
     const entries = [

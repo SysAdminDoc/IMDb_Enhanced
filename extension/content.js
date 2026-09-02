@@ -13237,8 +13237,24 @@ section[id*="quote" i] .ipc-list-card { padding: 4px 0 !important; margin: 2px 0
         return null;
     }
 
+    /* Fifty at a time: enough that the per-chunk overhead is noise beside the work, small
+       enough that a chunk fits comfortably inside a frame on the machines this runs on. */
+    const DECORATE_CHUNK_SIZE = 50;
+    /* scheduler.yield hands the thread back and resumes at the front of the queue, so
+       chunked work does not lose its place behind everything else the page wants to do.
+       Where it does not exist, a zero timeout gives up the frame, which is the part that
+       matters. */
+    function yieldToBrowser() {
+        if (typeof scheduler === 'object' && typeof scheduler?.yield === 'function') {
+            try { return scheduler.yield(); }
+            catch { /* fall through to the timeout */ }
+        }
+        return new Promise(resolve => setTimeout(resolve, 0));
+    }
+
     reg({
         key: 'watchedMarking', name: t('feature_watchedMarking_name'), group: 'Features',
+        _chunkToken: null,
         _observer: null,
         _clickHandler: null,
         _raf: 0,
@@ -13387,14 +13403,39 @@ section[id*="quote" i] .ipc-list-card { padding: 4px 0 !important; margin: 2px 0
             const anchors = [];
             if (root?.matches?.('a[href*="/title/tt"]')) anchors.push(root);
             root?.querySelectorAll?.('a[href*="/title/tt"]').forEach(a => anchors.push(a));
-            anchors.forEach(anchor => {
-                const imdbId = getLinkedTitleId(anchor.href);
-                if (!imdbId) return;
-                const card = this._findCard(anchor);
-                if (!card || seen.has(card)) return;
-                seen.add(card);
-                this._decorate(card, imdbId, this._extractTitle(card, anchor));
-            });
+            /* IE-148: a fully expanded IMDb list is 250 rows, and decorating all of them
+               in one pass put a 92ms frame on the main thread - long enough that a click
+               during it feels dropped. Short lists, which is nearly every page, keep the
+               single synchronous pass: chunking ten cards buys nothing and costs a frame.
+               Past the threshold the work is broken up and yielded between chunks, so no
+               single frame owns all of it. */
+            if (anchors.length <= DECORATE_CHUNK_SIZE) {
+                anchors.forEach(anchor => this._decorateAnchor(anchor, seen));
+                return;
+            }
+            this._decorateInChunks(anchors, seen);
+        },
+        _decorateAnchor(anchor, seen) {
+            const imdbId = getLinkedTitleId(anchor.href);
+            if (!imdbId) return;
+            const card = this._findCard(anchor);
+            if (!card || seen.has(card)) return;
+            seen.add(card);
+            this._decorate(card, imdbId, this._extractTitle(card, anchor));
+        },
+        async _decorateInChunks(anchors, seen) {
+            /* A token rather than a flag, for the reason the row-badge drain uses one: this
+               object outlives a route, and a chunk loop still running when the next one
+               starts would decorate into a page that is on its way out. */
+            const token = {};
+            this._chunkToken = token;
+            for (let index = 0; index < anchors.length; index += DECORATE_CHUNK_SIZE) {
+                if (this._chunkToken !== token) return;
+                anchors.slice(index, index + DECORATE_CHUNK_SIZE)
+                    .forEach(anchor => this._decorateAnchor(anchor, seen));
+                if (index + DECORATE_CHUNK_SIZE >= anchors.length) break;
+                await yieldToBrowser();
+            }
         },
         /* IE-107: a series page knows nothing about the episodes of it somebody has
            watched, even though the marks are right there. This says how many, and how
@@ -13535,6 +13576,7 @@ section[id*="quote" i] .ipc-list-card { padding: 4px 0 !important; margin: 2px 0
             this._clickHandler = null;
             this._observer?.disconnect();
             this._observer = null;
+            this._chunkToken = null;
             cancelAnimationFrame(this._raf);
             this._pendingScanRoots?.clear();
             this._pendingScanRoots = null;
