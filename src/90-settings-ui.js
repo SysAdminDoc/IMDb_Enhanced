@@ -835,10 +835,49 @@
        still be reversible when it comes back. */
     const MARK_UNDO_MS = 15000;
     const pendingMarkUndo = { marks:null, timer:null };
+    /* IE-141: the store holds up to 5,000 records and the panel used to draw every one of
+       them on open. A hundred is a screenful several times over and keeps the DOM the same
+       size whether somebody has marked ten titles or the maximum. */
+    const MARKS_PAGE_SIZE = 100;
+    /* The date the row reports, and the one "last viewing" sorts on. Viewings are stored
+       in ascending date order, so the last is the most recent; a record with none falls
+       back to the day it was marked, which is the only date it has. */
+    function lastViewingDate(record) {
+        const viewings = normalizeViewingEvents(record?.viewings);
+        if (viewings.length) return viewings[viewings.length - 1].date;
+        return viewingDateFromTimestamp(Number(record?.ts)) || '';
+    }
+    const MARK_SORT_ORDER = { watched:0, skip:1, '':2 };
+    function sortMarkEntries(entries, key) {
+        const byTitle = (a, b) => String(a[1].title || a[0]).localeCompare(String(b[1].title || b[0]));
+        if (key === 'title') return entries.sort(byTitle);
+        if (key === 'state') {
+            return entries.sort((a, b) => {
+                const rank = (MARK_SORT_ORDER[a[1].state || ''] ?? 3) - (MARK_SORT_ORDER[b[1].state || ''] ?? 3);
+                return rank || byTitle(a, b);
+            });
+        }
+        /* Most recent first, and a tie broken by the title rather than by whatever order
+           the store happened to enumerate in — a list that reshuffles between two renders
+           of the same data is the kind of thing people report as data loss. */
+        return entries.sort((a, b) => {
+            const dates = lastViewingDate(b[1]).localeCompare(lastViewingDate(a[1]));
+            return dates || byTitle(a, b);
+        });
+    }
+    function filterMarkEntries(entries, { state = 'all', noteOnly = false } = {}) {
+        return entries.filter(([, record]) => {
+            if (noteOnly && !normalizeUserNote(record.note)) return false;
+            if (state === 'all') return true;
+            if (state === 'note') return !record.state;
+            return record.state === state;
+        });
+    }
     function createMarksPanel(registerCleanup = () => {}) {
         const panel = makeEl('div', { className:'enh-marks-panel' });
         const count = makeEl('div', { className:'enh-marks-panel__count' });
         const rows = makeEl('div', { className:'enh-marks-panel__rows' });
+        let page = 1;
         /* Removing a mark used to be final. The row's Remove dropped the record and its
            note in one write, and Clear all dropped every one of them behind a second click
            five seconds apart, which is a speed bump rather than consent — and no help at
@@ -975,19 +1014,79 @@
             },
         }, t('settings_import_from_page'));
 
+        /* Every control resets to the first page: leaving somebody on page 34 of a list
+           that a filter just cut to two pages shows them an empty panel and no reason. */
+        const onQueryChange = () => { page = 1; render(); };
+        const sortSelect = makeEl('select', {
+            className:'enh-servarr-input enh-marks-panel__control',
+            'aria-label':t('aria_sort_marks_by'),
+            onChange: onQueryChange,
+        },
+            makeEl('option', { value:'viewing' }, t('settings_sort_last_viewing')),
+            makeEl('option', { value:'title' }, t('settings_sort_title')),
+            makeEl('option', { value:'state' }, t('settings_sort_state'))
+        );
+        const stateSelect = makeEl('select', {
+            className:'enh-servarr-input enh-marks-panel__control',
+            'aria-label':t('aria_filter_marks_by_state'),
+            onChange: onQueryChange,
+        },
+            makeEl('option', { value:'all' }, t('settings_filter_all_states')),
+            makeEl('option', { value:'watched' }, t('settings_local_seen')),
+            makeEl('option', { value:'skip' }, t('settings_local_skip')),
+            makeEl('option', { value:'note' }, t('settings_note_only'))
+        );
+        const noteToggle = makeEl('input', {
+            type:'checkbox',
+            id:'enh-marks-note-filter',
+            onChange: onQueryChange,
+        });
+        const noteFilter = makeEl('label', { className:'enh-marks-panel__note-filter', htmlFor:'enh-marks-note-filter' },
+            noteToggle, makeEl('span', {}, t('settings_has_a_note'))
+        );
+        const pageLabel = makeEl('span', { className:'enh-marks-panel__page', role:'status', 'aria-live':'polite' });
+        const previous = makeEl('button', {
+            type:'button',
+            className:'enh-settings-footer-btn',
+            'aria-label':t('aria_previous_page_of_marks'),
+            onClick: () => { page = Math.max(1, page - 1); render(); },
+        }, t('label_previous'));
+        const next = makeEl('button', {
+            type:'button',
+            className:'enh-settings-footer-btn',
+            'aria-label':t('aria_next_page_of_marks'),
+            onClick: () => { page += 1; render(); },
+        }, t('label_next'));
+        const pager = makeEl('div', { className:'enh-marks-panel__pager' }, pageLabel, previous, next);
+
         const render = () => {
-            const entries = getUserMarkEntries();
-            count.textContent = t('text_saved_mark_count', [entries.length]);
+            const all = getUserMarkEntries();
+            count.textContent = t('text_saved_mark_count', [all.length]);
             const summary = document.getElementById('enh-data-marks-count');
-            if (summary) summary.textContent = tCount('text_title_count', entries.length);
-            clearAll.disabled = entries.length === 0;
+            if (summary) summary.textContent = tCount('text_title_count', all.length);
+            clearAll.disabled = all.length === 0;
             undo.hidden = !pendingMarkUndo.marks;
+            const entries = sortMarkEntries(
+                filterMarkEntries(all, { state:stateSelect.value, noteOnly:noteToggle.checked }),
+                sortSelect.value);
+            /* Removing the last row of the last page has to land somewhere real rather
+               than on a page that no longer exists. */
+            const pages = Math.max(1, Math.ceil(entries.length / MARKS_PAGE_SIZE));
+            page = Math.min(Math.max(1, page), pages);
+            const start = (page - 1) * MARKS_PAGE_SIZE;
+            const shown = entries.slice(start, start + MARKS_PAGE_SIZE);
+            pager.hidden = entries.length <= MARKS_PAGE_SIZE;
+            previous.disabled = page <= 1;
+            next.disabled = page >= pages;
+            pageLabel.textContent = t('text_showing_marks_range',
+                [start + 1, start + shown.length, entries.length]);
             rows.replaceChildren();
             if (!entries.length) {
-                rows.appendChild(makeEl('div', { className:'enh-marks-empty' }, t('text_no_local_title_marks_yet')));
+                rows.appendChild(makeEl('div', { className:'enh-marks-empty' },
+                    all.length ? t('text_no_marks_match_these_filters') : t('text_no_local_title_marks_yet')));
                 return;
             }
-            entries.forEach(([id, record]) => {
+            shown.forEach(([id, record]) => {
                 const title = record.title || id;
                 /* A record can now exist for a note alone, with no Seen or Skip, so the
                    badge has to describe that rather than mislabel it as one of the two. */
@@ -1033,7 +1132,17 @@
                             : t('settings_mark_cleared'));
                     },
                 }, t('settings_column_remove'));
-                const row = makeEl('div', { className:'enh-mark-row' }, titleEl, stateEl, open, clear);
+                /* The date the neighbourhood's open ask is about: when this was last
+                   watched, or failing that the day it was marked, said as such rather
+                   than presented as a viewing that was never logged. */
+                const viewed = lastViewingDate(record);
+                const dateEl = makeEl('div', {
+                    className:'enh-mark-row__date',
+                    title: countViewings(record)
+                        ? t('text_last_viewing_on', [viewed])
+                        : t('text_marked_on_date', [viewed]),
+                }, viewed);
+                const row = makeEl('div', { className:'enh-mark-row' }, titleEl, stateEl, dateEl, open, clear);
                 // Rendered as text, never markup: a note is arbitrary user input.
                 if (note) row.appendChild(makeEl('div', { className:'enh-mark-row__note' }, note));
                 rows.appendChild(row);
@@ -1047,7 +1156,11 @@
         panel.appendChild(makeEl('div', { className:'enh-servarr-note' },
             t('settings_these_marks_stay_on_this_device_and')
         ));
+        panel.appendChild(makeEl('div', { className:'enh-marks-panel__controls' },
+            sortSelect, stateSelect, noteFilter
+        ));
         panel.appendChild(rows);
+        panel.appendChild(pager);
         const onMarksUpdated = () => {
             if (!ownMarkWrite) forgetUndo();
             render();

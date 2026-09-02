@@ -1319,8 +1319,17 @@ ${scopedRules('.enh-zoom', {
 .enh-marks-panel__title { color: ${t.tx1}; font: 700 12px/1.3 -apple-system, BlinkMacSystemFont, 'Segoe UI', sans-serif; }
 .enh-marks-panel__count { color: ${t.tx3}; font: 600 11px/1.3 -apple-system, BlinkMacSystemFont, 'Segoe UI', sans-serif; }
 .enh-marks-panel__rows { display: flex; flex-direction: column; gap: 6px; max-height: 220px; overflow: auto; }
+.enh-marks-panel__controls { display: flex; flex-wrap: wrap; gap: 8px; align-items: center; margin: 8px 0; }
+.enh-marks-panel__control { min-width: 132px; }
+.enh-marks-panel__note-filter {
+    display: inline-flex; align-items: center; gap: 6px; cursor: pointer;
+    color: ${t.tx2}; font: 600 11px/1.3 -apple-system, BlinkMacSystemFont, 'Segoe UI', sans-serif;
+}
+.enh-marks-panel__pager { display: flex; flex-wrap: wrap; gap: 8px; align-items: center; margin-top: 8px; }
+.enh-marks-panel__pager[hidden] { display: none; }
+.enh-marks-panel__page { color: ${t.tx3}; font: 600 11px/1.3 -apple-system, BlinkMacSystemFont, 'Segoe UI', sans-serif; margin-right: auto; }
 .enh-mark-row {
-    display: grid; grid-template-columns: minmax(0, 1fr) auto auto auto;
+    display: grid; grid-template-columns: minmax(0, 1fr) auto auto auto auto;
     gap: 6px; align-items: center;
     padding: 7px; border: 1px solid ${t.bd0}; border-radius: 8px;
     background: ${t.sf0};
@@ -1334,6 +1343,10 @@ ${scopedRules('.enh-zoom', {
     text-transform: uppercase; letter-spacing: .04em;
 }
 .enh-mark-row__state--skip { background: ${t.redMuted}; color: ${t.red}; }
+.enh-mark-row__date {
+    color: ${t.tx3}; font: 600 10px/1 ui-monospace, SFMono-Regular, Menlo, Consolas, monospace;
+    white-space: nowrap;
+}
 .enh-mark-row__link {
     color: ${t.blue} !important; text-decoration: none !important;
     font: 700 11px/1 -apple-system, BlinkMacSystemFont, 'Segoe UI', sans-serif;

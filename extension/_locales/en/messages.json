@@ -35,6 +35,18 @@
   "aria_collapse_named_section": {
     "message": "Collapse $1"
   },
+  "aria_filter_marks_by_state": {
+    "message": "Filter marks by state"
+  },
+  "aria_next_page_of_marks": {
+    "message": "Next page of marks"
+  },
+  "aria_previous_page_of_marks": {
+    "message": "Previous page of marks"
+  },
+  "aria_sort_marks_by": {
+    "message": "Sort marks by"
+  },
   "aria_undo_the_last_mark_deletion": {
     "message": "Undo the last title mark deletion"
   },
@@ -878,8 +890,14 @@
   "label_oled": {
     "message": "OLED"
   },
+  "label_next": {
+    "message": "Next"
+  },
   "label_open": {
     "message": "Open"
+  },
+  "label_previous": {
+    "message": "Previous"
   },
   "label_or_paste_csv_data": {
     "message": "Or paste CSV data"
@@ -1685,6 +1703,21 @@
   "settings_no_local_viewing_history_yet_mark_a": {
     "message": "No local viewing history yet. Mark a title Seen or import an IMDb or Letterboxd CSV. Nothing leaves this device."
   },
+  "settings_filter_all_states": {
+    "message": "All states"
+  },
+  "settings_has_a_note": {
+    "message": "Has a note"
+  },
+  "settings_sort_last_viewing": {
+    "message": "Last viewing"
+  },
+  "settings_sort_state": {
+    "message": "State"
+  },
+  "settings_sort_title": {
+    "message": "Title"
+  },
   "settings_note_only": {
     "message": "Note only"
   },
@@ -2359,6 +2392,18 @@
   },
   "text_saved_locally": {
     "message": "Saved locally"
+  },
+  "text_last_viewing_on": {
+    "message": "Last viewing $1"
+  },
+  "text_marked_on_date": {
+    "message": "Marked on $1"
+  },
+  "text_no_marks_match_these_filters": {
+    "message": "No marks match these filters."
+  },
+  "text_showing_marks_range": {
+    "message": "Showing $1 to $2 of $3"
   },
   "text_saved_mark_count": {
     "message": "$1 saved"

@@ -1924,8 +1924,81 @@ await runFixture('title', async (window, hooks) => {
     assert.deepEqual(Object.keys(hooks.getUserMarks()), ['tt1375666'],
         'and pressing it anyway must not resurrect the store from before that write');
 
+    /* IE-141: the store holds up to 5,000 records and the panel drew every one on open.
+       The point of the change is that the DOM stops growing with the store, so the store
+       is filled to its limit and the row count is what gets asserted. */
+    const marksPanel = () => requireSelector(window.document, '.enh-marks-panel');
+    const controlNamed = label => Array.from(marksPanel().querySelectorAll('select'))
+        .find(node => node.getAttribute('aria-label') === label);
+    const pagerButton = label => Array.from(marksPanel().querySelectorAll('.enh-marks-panel__pager button'))
+        .find(node => node.getAttribute('aria-label') === label);
+    const bulk = {};
+    for (let index = 0; index < 5000; index += 1) {
+        const id = `tt7${String(index).padStart(6, '0')}`;
+        bulk[id] = index % 3 === 0
+            ? { state:'watched', title:`Title ${String(index).padStart(4, '0')}`, ts:index, viewings:[{ date:`2026-01-${String((index % 28) + 1).padStart(2, '0')}` }] }
+            : index % 3 === 1
+                ? { state:'skip', title:`Title ${String(index).padStart(4, '0')}`, ts:index }
+                : { title:`Title ${String(index).padStart(4, '0')}`, ts:index, note:`note ${index}` };
+    }
+    window.GM_setValue('imdb_enh_userMarks', bulk);
+    window.document.dispatchEvent(new window.CustomEvent('imdb-enhanced:marks-updated'));
+    assert.equal(Object.keys(hooks.getUserMarks()).length, 5000, 'the store should hold the full 5,000');
+    assert.equal(markRows().length, 100, 'a full store still renders one page of rows');
+    assert.match(requireSelector(window.document, '.enh-marks-panel__page').textContent,
+        /Showing 1 to 100 of 5000/, 'and says which hundred of how many is on screen');
+    assert.equal(pagerButton('Previous page of marks').disabled, true, 'there is no page before the first');
+    assert.equal(pagerButton('Next page of marks').disabled, false);
+
+    // Every row says when the title was last watched, which is the ask this came from.
+    assert.match(markRows()[0].querySelector('.enh-mark-row__date').textContent, /^\d{4}-\d{2}-\d{2}$/,
+        'each row carries a date');
+
+    pagerButton('Next page of marks').click();
+    assert.match(requireSelector(window.document, '.enh-marks-panel__page').textContent,
+        /Showing 101 to 200 of 5000/, 'paging forward moves a page, not the whole list');
+    assert.equal(markRows().length, 100);
+
+    const sort = controlNamed('Sort marks by');
+    sort.value = 'title';
+    sort.dispatchEvent(new window.Event('change', { bubbles:true }));
+    assert.match(requireSelector(window.document, '.enh-marks-panel__page').textContent, /Showing 1 to 100/,
+        'changing the sort returns to the first page rather than stranding you deep in a reordered list');
+    const titles = markRows().map(row => row.querySelector('.enh-mark-row__title').textContent);
+    assert.deepEqual([...titles].sort((a, b) => a.localeCompare(b)), titles,
+        'sorting by title actually orders the page by title');
+
+    const stateFilter = controlNamed('Filter marks by state');
+    stateFilter.value = 'skip';
+    stateFilter.dispatchEvent(new window.Event('change', { bubbles:true }));
+    assert.match(requireSelector(window.document, '.enh-marks-panel__page').textContent, /of 1667$/,
+        'filtering by state counts only the matching records');
+    assert.equal(markRows().every(row => row.querySelector('.enh-mark-row__state').textContent === 'Local skip'), true,
+        'and shows only those');
+
+    stateFilter.value = 'all';
+    stateFilter.dispatchEvent(new window.Event('change', { bubbles:true }));
+    const noteFilter = requireSelector(window.document, '#enh-marks-note-filter');
+    noteFilter.checked = true;
+    noteFilter.dispatchEvent(new window.Event('change', { bubbles:true }));
+    assert.match(requireSelector(window.document, '.enh-marks-panel__page').textContent, /of 1666$/,
+        'the note filter narrows to records that carry one');
+    assert.equal(markRows().every(row => row.querySelector('.enh-mark-row__note')), true,
+        'every row shown has a note');
+    noteFilter.checked = false;
+    noteFilter.dispatchEvent(new window.Event('change', { bubbles:true }));
+
+    sort.value = 'viewing';
+    sort.dispatchEvent(new window.Event('change', { bubbles:true }));
+    const dates = markRows().map(row => row.querySelector('.enh-mark-row__date').textContent);
+    assert.deepEqual([...dates].sort().reverse(), dates,
+        'the default sort puts the most recent viewing first');
+
     window.GM_setValue('imdb_enh_userMarks', {});
     window.document.dispatchEvent(new window.CustomEvent('imdb-enhanced:marks-updated'));
+    assert.equal(markRows().length, 0, 'emptying the store empties the panel');
+    assert.equal(requireSelector(window.document, '.enh-marks-panel__pager').hidden, true,
+        'and takes the pager away with it');
 
     /* The mobile-link redirect had a stored setting, a reader at document-start and the
        README's word that it could be switched off, and no control anywhere: the only way
