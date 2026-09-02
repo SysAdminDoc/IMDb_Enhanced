@@ -1001,8 +1001,22 @@ test('README states the trust posture the build actually has', () => {
     assert(/Verifying a build/.test(readme), 'readers need a way to check a build against its tag');
     // The shipped files stay dependency-free. happy-dom is pinned for offline tests only.
     assert(!packageJson.dependencies, 'README claims zero runtime dependencies');
-    assert.deepStrictEqual(packageJson.devDependencies, { 'happy-dom':'20.12.0' },
+    /* The guarantee is one development dependency, pinned to an exact version - not one
+       particular version number. Asserting the number made the gate a mirror of the
+       manifest that had to be edited to allow any upgrade, which is a gate that says
+       nothing about what it is guarding. */
+    assert.deepStrictEqual(Object.keys(packageJson.devDependencies), ['happy-dom'],
         'happy-dom must remain the only development dependency');
+    assert.match(packageJson.devDependencies['happy-dom'], /^\d+\.\d+\.\d+$/,
+        'and be pinned to an exact version, not a range');
+    /* npm 11 writes a lockfile earlier npm versions resolve differently, so the version
+       that wrote it is named rather than left to whatever the machine happens to run. */
+    assert.match(String(packageJson.packageManager || ''), /^npm@\d+\.\d+\.\d+$/,
+        'the package manager must be pinned for a reproducible npm ci');
+    /* AMO's source verification looks for this script by name. It has to exist and it has
+       to be the Firefox build, not a near neighbour of it. */
+    assert.strictEqual(packageJson.scripts['build-for-amo'], 'npm run build:firefox',
+        'AMO reviewers are told to run build-for-amo, so it must build the Firefox profile');
 });
 
 /* An unpacked extension can never update itself and Chrome only permits off-store
@@ -8247,7 +8261,8 @@ test('public documentation matches what the project actually ships', () => {
 
     // Every npm script the README names has to exist.
     const scripts = Object.keys(packageJson.scripts || {});
-    [...readme.matchAll(/`?npm run ([a-z:]+)`?/g)].map(match => match[1]).forEach(name => {
+    // Hyphens too: build-for-amo was read as "build" and reported as missing.
+    [...readme.matchAll(/`?npm run ([a-z:-]+)`?/g)].map(match => match[1]).forEach(name => {
         assert(scripts.includes(name), `README references a missing npm script: ${name}`);
     });
 

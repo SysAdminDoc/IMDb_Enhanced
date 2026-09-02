@@ -4,6 +4,7 @@
 
 ### Added
 
+- Packaging: an `npm run build-for-amo` script that builds the Firefox add-on and nothing else, which is the script AMO's source verification looks for; the npm version the lockfile was written with is now recorded, so `npm ci` resolves the same tree everywhere; happy-dom moved to 20.13.0.
 - List, cast and filmography thumbnails can be drawn at twice their usual size. It asks IMDb's image host for a larger rendering of the same picture rather than stretching the small one, and sizes the box before the file arrives so nothing on the page jumps. Off by default, under Experience.
 - A Stremio link is available under Sites, hidden until you switch it on. It hands the title straight to the Stremio app, using the app's own words for a film and a series. It is the only destination allowed to use a scheme other than HTTP or HTTPS, matched as one exact template, so a link you type yourself still cannot.
 - The title page can show the five Parents Guide severities: Sex & Nudity, Violence & Gore, Profanity, Alcohol, Drugs & Smoking, and Frightening & Intense Scenes. Click the Parents Guide link and they expand in place, each linking through to its own section; click again to put them away. Nothing is read until you click, and it is read from IMDb itself rather than a third party. If IMDb answers with a verification challenge instead of the guide, that is said plainly and recorded in the failure journal as a refusal rather than an outage. Off by default, under Tools.
