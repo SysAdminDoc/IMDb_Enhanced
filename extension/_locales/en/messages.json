@@ -752,6 +752,9 @@
   "journal_rate_limited": {
     "message": "A lookup service asked for fewer requests"
   },
+  "journal_schema": {
+    "message": "A lookup service changed the page this reads"
+  },
   "journal_network": {
     "message": "A lookup could not reach its service"
   },
@@ -2356,6 +2359,9 @@
   },
   "text_the_service_asked_for_a_pause": {
     "message": "That service asked for fewer requests, so it is being left alone for a moment."
+  },
+  "text_the_source_page_changed": {
+    "message": "That service changed its page, so this cannot be read until it is updated."
   },
   "text_score_unavailable": {
     "message": "Score unavailable"

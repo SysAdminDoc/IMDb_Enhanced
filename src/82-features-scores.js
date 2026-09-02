@@ -533,8 +533,12 @@
     /* Which of the three a widget should say. A rate limit is neither an outage nor an
        absent answer, and it was being reported as the second: "score unavailable" for a
        service that never got asked. */
-    function unavailableReasonFor(error, blocked) {
+    function unavailableReasonFor(error, blocked, schemaChanged = false) {
         if (error && classifyFailure(error) === 'rate_limited') return 'rate-limited';
+        /* A page that loaded and carried none of the structure its parser needs has not
+           said the title is absent. Saying "unavailable" for that is how a parser can stop
+           matching for months without anybody being able to tell. */
+        if (schemaChanged) return 'schema-changed';
         return blocked ? 'access' : 'unavailable';
     }
 
@@ -574,6 +578,11 @@
         if (reason === 'rate-limited') {
             widget.appendChild(makeEl('div', { className:'enh-score-widget__sub' },
                 t('text_the_service_asked_for_a_pause')));
+            return;
+        }
+        if (reason === 'schema-changed') {
+            widget.appendChild(makeEl('div', { className:'enh-score-widget__sub' },
+                t('text_the_source_page_changed')));
             return;
         }
         if (reason === 'excluded' || reason === 'region') {
@@ -837,11 +846,16 @@
             }
 
             let lookupError = null;
+            let schemaChanged = false;
             try {
                 const searchUrl = `https://www.rottentomatoes.com/search?search=${encodeURIComponent(title)}`;
                 const res2 = await httpGet(searchUrl, { cancelOnRouteChange:true });
                 if (!isCurrent()) return;
                 const result = parseRTSearchResult(res2.responseText, title, year, type);
+                /* Their search page answered and carried none of the structure this reads.
+                   That is their markup moving, not a title with no entry, and the two used
+                   to be the same silent state. */
+                if (!result) schemaChanged = !providerPageLooksIntact('rottenTomatoes', res2.responseText);
                 if (result) {
                     let data = result;
                     try {
@@ -870,7 +884,8 @@
                next visit retries instead of reading back a stale "unavailable". */
             const blocked = await cacheUnavailableUnlessBlocked(this.key, cacheKey, lookupError);
             if (!isCurrent()) return;
-            this._renderUnavailable(unavailableReasonFor(lookupError, blocked));
+            if (schemaChanged) appendFailureJournal(this.key, 'schema');
+            this._renderUnavailable(unavailableReasonFor(lookupError, blocked, schemaChanged));
         },
         _render(data) {
             document.getElementById('enh-rt-widget')?.remove();
@@ -1013,6 +1028,7 @@
 
             const lookupUrl = `https://letterboxd.com/imdb/${imdbId}/`;
             let lookupError = null;
+            let schemaChanged = false;
             try {
                 const res = await httpGet(lookupUrl, { cancelOnRouteChange:true });
                 if (!isCurrent()) return;
@@ -1023,6 +1039,11 @@
                     this._render(data);
                     return;
                 }
+                /* Their page answered and carries none of the structure this reads. A
+                   neighbouring extension showed "-/5" for every film for months on exactly
+                   this, because a parser that stops matching looks like a title with no
+                   entry. */
+                schemaChanged = !providerPageLooksIntact('letterboxd', res.responseText);
             } catch (error) { lookupError = error; }
 
             if (!isCurrent()) return;
@@ -1039,7 +1060,8 @@
             if (await renderMdbListScore(this, 'letterboxd', imdbId, isCurrent)) return;
             const blocked = await cacheUnavailableUnlessBlocked(this.key, cacheKey, lookupError);
             if (!isCurrent()) return;
-            this._renderUnavailable(unavailableReasonFor(lookupError, blocked));
+            if (schemaChanged) appendFailureJournal(this.key, 'schema');
+            this._renderUnavailable(unavailableReasonFor(lookupError, blocked, schemaChanged));
         },
         _render(data) {
             document.getElementById('enh-lb-widget')?.remove();

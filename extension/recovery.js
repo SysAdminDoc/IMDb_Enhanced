@@ -591,6 +591,7 @@
         journal_empty: 'No failures recorded.',
         journal_http: 'A lookup service returned an HTTP error',
         journal_rate_limited: 'A lookup service asked for fewer requests',
+        journal_schema: 'A lookup service changed the page this reads',
         journal_network: 'A lookup could not reach its service',
         journal_parse: 'A response could not be understood',
         journal_permission: 'Access was refused',
@@ -1126,6 +1127,7 @@
         text_saved_rotten_tomatoes_match_unavailable: 'Saved Rotten Tomatoes match unavailable',
         text_saving: 'Saving…',
         text_the_service_asked_for_a_pause: 'That service asked for fewer requests, so it is being left alone for a moment.',
+        text_the_source_page_changed: 'That service changed its page, so this cannot be read until it is updated.',
         text_score_unavailable: 'Score unavailable',
         text_scores_availability_and_reference: 'Scores, availability and reference',
         text_search_site_for_title: 'Search $1 for $2',
@@ -6123,7 +6125,7 @@
        went down. */
     const FAILURE_JOURNAL_ENTRY_VERSION = 1;
     const FAILURE_CATEGORIES = [
-        'selector', 'network', 'http', 'rate_limited', 'storage', 'parse', 'permission', 'timeout', 'aborted', 'unknown',
+        'selector', 'network', 'http', 'rate_limited', 'schema', 'storage', 'parse', 'permission', 'timeout', 'aborted', 'unknown',
     ];
     const FAILURE_CATEGORY_SET = new Set(FAILURE_CATEGORIES);
     const FAILURE_CATEGORY_LABELS = {
@@ -6131,6 +6133,7 @@
         network: t('journal_network'),
         http: t('journal_http'),
         rate_limited: t('journal_rate_limited'),
+        schema: t('journal_schema'),
         storage: t('journal_storage'),
         parse: t('journal_parse'),
         permission: t('journal_permission'),
@@ -8004,6 +8007,30 @@ section[id*="quote" i] .ipc-list-card { padding: 4px 0 !important; margin: 2px 0
         return boundedScore(pattern.exec(String(source || ''))?.[1], 100);
     }
 
+    /* A page that answered 200 and carries none of the structure its parser needs has not
+       told us the title is absent; it has told us the page changed. Those two were the same
+       state, and a parser that quietly stops matching is indistinguishable from a title with
+       no entry — which is how a neighbouring extension showed "-/5" for every film for
+       months, and how this build's own Rotten Tomatoes audience score read as unavailable
+       for a release cycle.
+
+       The landmark is the outermost thing the parser depends on, not the value it is
+       looking for: JSON-LD for the two sites parsed out of it, and the row container for
+       JustWatch. Present but empty means no entry. Absent means their markup moved. */
+    const PROVIDER_PAGE_LANDMARKS = {
+        rottenTomatoes: /<script[^>]+type=["']application\/ld\+json["']/i,
+        letterboxd: /<script[^>]+type=["']application\/ld\+json["']/i,
+        justWatch: /title-list-row__column-header|<title/i,
+    };
+    function providerPageLooksIntact(providerId, html) {
+        const landmark = PROVIDER_PAGE_LANDMARKS[providerId];
+        if (!landmark) return true;
+        const source = toBoundedText(html, EXTERNAL_RESPONSE_TEXT_LIMIT);
+        // An empty body is a transport problem, which already has its own category.
+        if (!source) return true;
+        return landmark.test(source);
+    }
+
     function parseRTDetailPage(html, title, year, type = 'movie', fallbackUrl = '', allowIdentityOverride = false) {
         const source = toBoundedText(html, EXTERNAL_RESPONSE_TEXT_LIMIT);
         if (!source) return null;
@@ -9290,8 +9317,12 @@ section[id*="quote" i] .ipc-list-card { padding: 4px 0 !important; margin: 2px 0
     /* Which of the three a widget should say. A rate limit is neither an outage nor an
        absent answer, and it was being reported as the second: "score unavailable" for a
        service that never got asked. */
-    function unavailableReasonFor(error, blocked) {
+    function unavailableReasonFor(error, blocked, schemaChanged = false) {
         if (error && classifyFailure(error) === 'rate_limited') return 'rate-limited';
+        /* A page that loaded and carried none of the structure its parser needs has not
+           said the title is absent. Saying "unavailable" for that is how a parser can stop
+           matching for months without anybody being able to tell. */
+        if (schemaChanged) return 'schema-changed';
         return blocked ? 'access' : 'unavailable';
     }
 
@@ -9331,6 +9362,11 @@ section[id*="quote" i] .ipc-list-card { padding: 4px 0 !important; margin: 2px 0
         if (reason === 'rate-limited') {
             widget.appendChild(makeEl('div', { className:'enh-score-widget__sub' },
                 t('text_the_service_asked_for_a_pause')));
+            return;
+        }
+        if (reason === 'schema-changed') {
+            widget.appendChild(makeEl('div', { className:'enh-score-widget__sub' },
+                t('text_the_source_page_changed')));
             return;
         }
         if (reason === 'excluded' || reason === 'region') {
@@ -9594,11 +9630,16 @@ section[id*="quote" i] .ipc-list-card { padding: 4px 0 !important; margin: 2px 0
             }
 
             let lookupError = null;
+            let schemaChanged = false;
             try {
                 const searchUrl = `https://www.rottentomatoes.com/search?search=${encodeURIComponent(title)}`;
                 const res2 = await httpGet(searchUrl, { cancelOnRouteChange:true });
                 if (!isCurrent()) return;
                 const result = parseRTSearchResult(res2.responseText, title, year, type);
+                /* Their search page answered and carried none of the structure this reads.
+                   That is their markup moving, not a title with no entry, and the two used
+                   to be the same silent state. */
+                if (!result) schemaChanged = !providerPageLooksIntact('rottenTomatoes', res2.responseText);
                 if (result) {
                     let data = result;
                     try {
@@ -9627,7 +9668,8 @@ section[id*="quote" i] .ipc-list-card { padding: 4px 0 !important; margin: 2px 0
                next visit retries instead of reading back a stale "unavailable". */
             const blocked = await cacheUnavailableUnlessBlocked(this.key, cacheKey, lookupError);
             if (!isCurrent()) return;
-            this._renderUnavailable(unavailableReasonFor(lookupError, blocked));
+            if (schemaChanged) appendFailureJournal(this.key, 'schema');
+            this._renderUnavailable(unavailableReasonFor(lookupError, blocked, schemaChanged));
         },
         _render(data) {
             document.getElementById('enh-rt-widget')?.remove();
@@ -9770,6 +9812,7 @@ section[id*="quote" i] .ipc-list-card { padding: 4px 0 !important; margin: 2px 0
 
             const lookupUrl = `https://letterboxd.com/imdb/${imdbId}/`;
             let lookupError = null;
+            let schemaChanged = false;
             try {
                 const res = await httpGet(lookupUrl, { cancelOnRouteChange:true });
                 if (!isCurrent()) return;
@@ -9780,6 +9823,11 @@ section[id*="quote" i] .ipc-list-card { padding: 4px 0 !important; margin: 2px 0
                     this._render(data);
                     return;
                 }
+                /* Their page answered and carries none of the structure this reads. A
+                   neighbouring extension showed "-/5" for every film for months on exactly
+                   this, because a parser that stops matching looks like a title with no
+                   entry. */
+                schemaChanged = !providerPageLooksIntact('letterboxd', res.responseText);
             } catch (error) { lookupError = error; }
 
             if (!isCurrent()) return;
@@ -9796,7 +9844,8 @@ section[id*="quote" i] .ipc-list-card { padding: 4px 0 !important; margin: 2px 0
             if (await renderMdbListScore(this, 'letterboxd', imdbId, isCurrent)) return;
             const blocked = await cacheUnavailableUnlessBlocked(this.key, cacheKey, lookupError);
             if (!isCurrent()) return;
-            this._renderUnavailable(unavailableReasonFor(lookupError, blocked));
+            if (schemaChanged) appendFailureJournal(this.key, 'schema');
+            this._renderUnavailable(unavailableReasonFor(lookupError, blocked, schemaChanged));
         },
         _render(data) {
             document.getElementById('enh-lb-widget')?.remove();

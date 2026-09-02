@@ -513,6 +513,30 @@
         return boundedScore(pattern.exec(String(source || ''))?.[1], 100);
     }
 
+    /* A page that answered 200 and carries none of the structure its parser needs has not
+       told us the title is absent; it has told us the page changed. Those two were the same
+       state, and a parser that quietly stops matching is indistinguishable from a title with
+       no entry — which is how a neighbouring extension showed "-/5" for every film for
+       months, and how this build's own Rotten Tomatoes audience score read as unavailable
+       for a release cycle.
+
+       The landmark is the outermost thing the parser depends on, not the value it is
+       looking for: JSON-LD for the two sites parsed out of it, and the row container for
+       JustWatch. Present but empty means no entry. Absent means their markup moved. */
+    const PROVIDER_PAGE_LANDMARKS = {
+        rottenTomatoes: /<script[^>]+type=["']application\/ld\+json["']/i,
+        letterboxd: /<script[^>]+type=["']application\/ld\+json["']/i,
+        justWatch: /title-list-row__column-header|<title/i,
+    };
+    function providerPageLooksIntact(providerId, html) {
+        const landmark = PROVIDER_PAGE_LANDMARKS[providerId];
+        if (!landmark) return true;
+        const source = toBoundedText(html, EXTERNAL_RESPONSE_TEXT_LIMIT);
+        // An empty body is a transport problem, which already has its own category.
+        if (!source) return true;
+        return landmark.test(source);
+    }
+
     function parseRTDetailPage(html, title, year, type = 'movie', fallbackUrl = '', allowIdentityOverride = false) {
         const source = toBoundedText(html, EXTERNAL_RESPONSE_TEXT_LIMIT);
         if (!source) return null;

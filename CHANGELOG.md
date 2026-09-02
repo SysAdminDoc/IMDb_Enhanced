@@ -10,6 +10,9 @@
 
 ### Changed
 
+- A score source whose page has changed now says so, instead of reporting that the title has no entry there. The two looked identical: a parser that quietly stops matching produces the same empty result as a film nobody has rated, which is how a similar extension came to show a blank rating for every film for months. When a page answers but carries none of the structure being read, the failure journal records it as a changed page and the widget says as much. An old cached score is not offered in that case, because the lookup worked and an old value would contradict it.
+
+
 - A service that answers 429 is now left alone for as long as it asked, instead of being asked again for every remaining title on the page. AniList currently serves thirty requests a minute against a published ninety, and Wikimedia introduced per-minute buckets in 2026 that a browser shares with everything else on its address. The wait comes from the service's own Retry-After header, or a minute when it does not send one, and the score widget says the service asked for a pause rather than calling the score unavailable.
 
 

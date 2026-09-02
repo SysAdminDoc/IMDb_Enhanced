@@ -301,6 +301,8 @@ function loadScriptTestHooks({ withoutDeleteValue = false, withheldCredentials =
         castAgeAtRelease,
         CAST_AGE_LIMIT,
         fetchTmdbAvailability,
+        providerPageLooksIntact,
+        FAILURE_CATEGORIES,
         parseRetryAfter,
         readRetryAfter,
         rateLimitHoldFor,
@@ -5921,10 +5923,14 @@ test('an unreachable provider falls back to a labelled cached value', () => {
        with the grant withheld against a live provider. */
     /* The three-way choice moved into a helper when a rate limit became its own answer, so
        what is counted is the call to it. Still exact, and still one per score source. */
-    assert.strictEqual((script.match(/this\._renderUnavailable\(unavailableReasonFor\(lookupError, blocked\)\)/g) || []).length, scoreSources,
+    /* Two of the six also pass whether the source's page still carries what they read, so
+       the shape is counted with that argument optional. */
+    assert.strictEqual((script.match(/this\._renderUnavailable\(unavailableReasonFor\(lookupError, blocked(?:, schemaChanged)?\)\)/g) || []).length, scoreSources,
         'every score lookup must distinguish a missing grant from an outage when it gives up');
-    assert(/function unavailableReasonFor\(error, blocked\) \{[\s\S]{0,200}?'rate-limited'[\s\S]{0,120}?blocked \? 'access' : 'unavailable'/.test(script),
-        'and that helper must still tell a missing grant from an outage, not only a rate limit');
+    assert.strictEqual((script.match(/unavailableReasonFor\(lookupError, blocked, schemaChanged\)/g) || []).length, 2,
+        'and the two that read a page say when that page changed under them');
+    assert(/function unavailableReasonFor\(error, blocked, schemaChanged = false\) \{[\s\S]{0,700}?'rate-limited'[\s\S]{0,700}?'schema-changed'[\s\S]{0,200}?blocked \? 'access' : 'unavailable'/.test(script),
+        'and that helper must still tell a missing grant from an outage, not only a rate limit or a changed page');
     assert(script.includes("if (reason !== 'access') {"),
         'the unavailable note must keep a branch for a missing grant');
     assert(script.includes("'Site access not granted'"), 'and say so in those words');
@@ -7523,6 +7529,40 @@ test('no route or selector logic matches a translated string', () => {
    sources, omits the ones it has nothing for, and carries two numbers per entry: `value` in
    the source's own scale and `score` normalised to 0-100. The widgets show each source in
    its own scale, so reading `score` would turn 4.2 stars into 84. */
+/* IE-140: a page that answered 200 and carried none of the structure its parser needs has
+   not said the title is absent. Those were one state, so a parser that silently stops
+   matching is indistinguishable from a title with no entry — the failure mode that showed
+   "-/5" for every film in a neighbouring extension for months. */
+test('a page that loaded but parsed to nothing is reported as a changed page', () => {
+    const hooks = loadScriptTestHooks();
+    const withLd = '<html><head><script type="application/ld+json">{"@type":"Movie"}</script></head><body></body></html>';
+    const withoutLd = '<html><head><title>Rotten Tomatoes</title></head><body><div>no structure here</div></body></html>';
+
+    assert.strictEqual(hooks.providerPageLooksIntact('rottenTomatoes', withLd), true,
+        'a page carrying the structure the parser reads is intact, whatever it says about this title');
+    assert.strictEqual(hooks.providerPageLooksIntact('rottenTomatoes', withoutLd), false,
+        'and one carrying none of it is their markup moving, not an absent entry');
+    assert.strictEqual(hooks.providerPageLooksIntact('letterboxd', withLd), true);
+    assert.strictEqual(hooks.providerPageLooksIntact('letterboxd', withoutLd), false);
+
+    // An empty body is a transport problem and already has a category of its own.
+    assert.strictEqual(hooks.providerPageLooksIntact('rottenTomatoes', ''), true,
+        'an empty response must not be reported as a schema change');
+    // A provider with no landmark declared is never accused of changing.
+    assert.strictEqual(hooks.providerPageLooksIntact('tmdb', withoutLd), true);
+
+    assert(hooks.FAILURE_CATEGORIES.includes('schema'),
+        'the journal needs a category for it, or it is filed as something it is not');
+    assert.strictEqual(hooks.unavailableReasonFor(null, false, true), 'schema-changed',
+        'and the widget says the page changed rather than that the score is unavailable');
+    assert.strictEqual(hooks.unavailableReasonFor(null, false, false), 'unavailable');
+    /* A changed page must not serve an old score: the lookup worked, so a stale value would
+       contradict what the source is now saying. It reaches renderStaleScore with no error
+       at all, which already declines. */
+    assert.strictEqual(hooks.isReachabilityFailure(null), false,
+        'a schema change must not qualify for the stale-score fallback');
+});
+
 /* IE-139: a 429 says the service is working and wants fewer requests. It was filed as an
    ordinary HTTP failure, so opening a filmography sent one request per row into a service
    that had already refused. AniList serves thirty a minute against a published ninety, and
