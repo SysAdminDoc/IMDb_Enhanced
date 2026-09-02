@@ -70,7 +70,38 @@ function readOriginLists() {
     const overlap = lists.OPTIONAL_ORIGINS.filter(origin => lists.REQUIRED_ORIGINS.includes(origin));
     if (overlap.length) throw new Error(`Origins cannot be both required and optional: ${overlap.join(', ')}`);
     validateProviders(lists);
+    validateWorkerHosts(lists);
     return lists;
+}
+
+/* The manifest's origins are checked against the provider list, but the background worker
+   reaches hosts the manifest never mentions: GitHub answers a service worker without a
+   host permission, so its daily update check requested nothing, appeared in no manifest,
+   and was therefore invisible to every gate here and absent from the privacy list in the
+   README. What a build contacts has to be readable in one place whether or not a browser
+   made it ask first, so the literal hosts in the worker are matched against the providers
+   too. A URL built from a variable is not caught by this and is not meant to be: the
+   request boundary in the worker already refuses a destination no provider declares. */
+function validateWorkerHosts({ PROVIDERS }) {
+    const background = fs.readFileSync(path.join(extensionDir, 'background.js'), 'utf8');
+    const declared = new Set(
+        Object.values(PROVIDERS)
+            .flatMap(provider => provider.origins)
+            .map(origin => {
+                try { return new URL(origin.replace('://*.', '://').replace(/\*$/, '')).hostname; }
+                catch { return ''; }
+            })
+            .filter(Boolean)
+    );
+    const reached = [...background.matchAll(/https:\/\/([a-z0-9.-]+)/gi)]
+        .map(match => match[1].toLowerCase())
+        .filter(host => host.includes('.'));
+    const undeclared = [...new Set(reached)].filter(host => ![...declared].some(
+        known => host === known || host.endsWith(`.${known}`)
+    ));
+    if (undeclared.length) {
+        throw new Error(`The background worker names hosts no provider declares: ${undeclared.join(', ')}`);
+    }
 }
 
 /* A provider that forgets a field, or a feature that names one that does not exist, is a

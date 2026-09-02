@@ -7199,7 +7199,7 @@ test('every sentence in the source comes from the catalog', () => {
     const BRANDS = new Set([
         'IMDb', 'IMDb Enhanced', 'Rotten Tomatoes', 'Metacritic', 'Letterboxd', 'JustWatch',
         'TMDB', 'OMDb', 'YouTube', 'Wikidata', 'Plex', 'Jellyfin', 'Emby', 'Radarr', 'Sonarr',
-        'Overseerr', 'AniList', 'ANILIST', 'TVmaze', 'RT', 'LB', 'MC', 'AL', 'TV',
+        'Overseerr', 'AniList', 'ANILIST', 'TVmaze', 'GitHub', 'RT', 'LB', 'MC', 'AL', 'TV',
         'TOMATOMETER', 'LETTERBOXD', 'METASCORE', 'SERVARR',
         'Box Office Mojo', 'Ep Calendar', 'Box Office',
     ]);

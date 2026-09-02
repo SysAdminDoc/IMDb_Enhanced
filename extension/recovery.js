@@ -686,6 +686,7 @@
         provider_anilist_consent: 'Sends the title and year read from the page to AniList to find an anime rating.',
         provider_justWatch_consent: 'Sends the title and year read from the page to JustWatch to find where it streams.',
         provider_letterboxd_consent: 'Sends the title and year read from the page to Letterboxd to find its rating.',
+        provider_githubUpdate_consent: 'Reads the published version number once a day so this build can say when a newer one exists. Nothing about what you are looking at is sent. Turn off the update notice to stop it.',
         provider_localServices_consent: 'Talks to services on your own machine. Nothing leaves it.',
         provider_localServices_label: 'your own computer',
         provider_metacritic_consent: 'Sends the title and year read from the page to Metacritic to find its score.',
@@ -1536,6 +1537,27 @@
             ttl: 0,
             attribution: '',
             profiles: ['default', 'store'],
+        },
+        /* The one host contacted by something other than a feature. An unpacked extension
+           cannot update itself, so once a day the worker reads the published userscript's
+           metadata block to find out whether a newer version exists, and the panel says so.
+           Nothing is sent: it is a GET of a public file, and only the @version line of the
+           answer is read.
+
+           It names no feature, so it contributes no host permission and none is needed —
+           GitHub answers a service worker's request without one. It is declared because
+           every host this extension reaches has to be readable in one place, and because
+           the check below refuses to build a worker that fetches a host nothing here
+           names. Turning off the update notice stops the request. */
+        githubUpdate: {
+            label: 'GitHub',
+            origins: ['https://raw.githubusercontent.com/*'],
+            transmits: 'none',
+            consent: t('provider_githubUpdate_consent'),
+            ttl: 0,
+            attribution: '',
+            profiles: ['default', 'store'],
+            auxiliary: true,
         },
     };
     const FEATURE_PROVIDERS = {

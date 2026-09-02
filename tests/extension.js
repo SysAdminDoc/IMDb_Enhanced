@@ -128,12 +128,38 @@ assert(/const FEATURE_ORIGIN_GROUPS = Object\.fromEntries\(/.test(source),
    feature asks for. */
 const originRegion = source.match(/const LOOPBACK_ORIGINS = \[[\s\S]*?const TRANSMITTED_DATA_CATEGORIES = [\s\S]*?\)\]\.sort\(\);/);
 assert(originRegion, 'the origin declarations must stay in one readable region');
+/* Origins reach the manifest through the feature groups, so a provider no feature names
+   contributes none — which is the whole point of the one that exists only so the worker's
+   update check has somewhere to be declared. Asking for a host permission nothing would
+   use is the opposite of what that provider is for. Each side is still checked: every
+   origin a feature asks for has to be in the manifest, and every origin in the manifest
+   has to be one some feature asked for. */
+const providerBodies = [...originRegion[0].matchAll(/\n        ([A-Za-z][A-Za-z0-9]*): \{([\s\S]*?)\n        \},/g)];
+assert(providerBodies.length >= 8, 'the provider entries must still be readable one at a time');
+const featureProviderBlock = (source.match(/const FEATURE_PROVIDERS = \{[\s\S]*?\n    \};/) || [''])[0];
+assert(featureProviderBlock, 'the feature-to-provider map must be readable');
+const namedByAFeature = new Set([...featureProviderBlock.matchAll(/'([A-Za-z][A-Za-z0-9]*)'/g)].map(m => m[1]));
+assert(namedByAFeature.size >= 8, 'features must still name their providers by id');
+/* Taken from the whole region rather than provider by provider, because some origins are
+   declared once as a shared constant and referenced by name. What is subtracted is the
+   origins belonging to a provider no feature names. */
+const unrequestedOrigins = new Set(providerBodies
+    .filter(([, id]) => !namedByAFeature.has(id))
+    .flatMap(([, , body]) => (body.match(/'(https?:\/\/[^']+)'/g) || []).map(s => s.slice(1, -1))));
+assert(unrequestedOrigins.size, 'a provider that names no feature is the case this is here to cover');
 const declaredOrigins = [...new Set((originRegion[0].match(/'(https?:\/\/[^']+)'/g) || []).map(s => s.slice(1, -1)))]
-    .filter(origin => !manifest.host_permissions.includes(origin));
+    .filter(origin => !manifest.host_permissions.includes(origin) && !unrequestedOrigins.has(origin));
 assert.deepStrictEqual(
     manifest.optional_host_permissions.slice().sort(),
     declaredOrigins.slice().sort(),
     'the manifest optional origins must be exactly the union of the feature groups');
+/* And a provider outside those groups must not have quietly become a permission request. */
+providerBodies.filter(([, id]) => !namedByAFeature.has(id)).forEach(([, id, body]) => {
+    (body.match(/'(https?:\/\/[^']+)'/g) || []).map(s => s.slice(1, -1)).forEach(origin => {
+        assert(!manifest.optional_host_permissions.includes(origin),
+            `${id} names no feature, so ${origin} must not be requested as a permission`);
+    });
+});
 assert(source.includes('const OPTIONAL_ORIGINS = [...new Set(Object.values(FEATURE_ORIGIN_GROUPS).flat())]'),
     'the optional origin list must be derived structurally, not enumerated by hand');
 

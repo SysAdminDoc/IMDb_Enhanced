@@ -1037,6 +1037,9 @@
   "provider_letterboxd_consent": {
     "message": "[!! Sends the title and year read from the page to Letterboxd to find its rating. !!]"
   },
+  "provider_githubUpdate_consent": {
+    "message": "[!! Reads the published version number once a day so this build can say when a newer one exists. Nothing about what you are looking at is sent. Turn off the update notice to stop it. !!]"
+  },
   "provider_localServices_consent": {
     "message": "[!! Talks to services on your own machine. Nothing leaves it. !!]"
   },
