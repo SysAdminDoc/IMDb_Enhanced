@@ -1623,7 +1623,15 @@
         { name:'Wikipedia', color:'#636466', url:'https://en.wikipedia.org/w/index.php?search={{TITLE}}+{{YEAR}}', category:'info' },
         { name:'JustWatch', color:'#fbc500', url:'https://www.justwatch.com/us/search?q={{TITLE}}', category:'availability' },
         { name:'Trakt', color:'#ed1c24', url:'https://app.trakt.tv/search?query={{TITLE}}', category:'reviews' },
-        /* Hidden until somebody turns it on: it only does anything on a machine with
+        /* IE-153: the most-installed IMDb userscript ever exists to bridge Douban and
+           IMDb, and the equivalent ask for Kinopoisk and Filmweb comes up in the same
+           places. A link needs no scraping and no key; these three are the non-English
+           databases people actually name. Hidden by default, because most people want
+           none of them and the ones who want one want it badly. */
+        { name:'Douban', color:'#2e963b', url:'https://search.douban.com/movie/subject_search?search_text={{TITLE}}+{{YEAR}}', category:'info', enabled:false },
+        { name:'Kinopoisk', color:'#ff6600', url:'https://www.kinopoisk.ru/index.php?kp_query={{TITLE}}+{{YEAR}}', category:'info', enabled:false },
+        { name:'Filmweb', color:'#f2b705', url:'https://www.filmweb.pl/search?q={{TITLE}}+{{YEAR}}', category:'info', enabled:false },
+        /* Hidden for a different reason: this one only does anything on a machine with
            Stremio installed, and a button that silently fails everywhere else is worse
            than no button. */
         { name:'Stremio', color:'#8a5aab', url:'stremio://detail/{{STREMIO_TYPE}}/{{IMDB_ID}}', category:'availability', enabled:false },

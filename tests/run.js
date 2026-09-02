@@ -5358,6 +5358,39 @@ test('the Stremio entry hands a title to the app and stays hidden until asked fo
         'no token may be left unresolved in an application link');
 });
 
+/* IE-153: the three non-English databases people name. A link needs no scraping and no
+   key, so the only things that can be wrong are the route, the visibility and whether the
+   title and year actually reach the query. */
+test('the non-English database links are hidden, categorized and carry the title and year', () => {
+    const hooks = loadScriptTestHooks();
+    const context = hooks.getLinkContext('The Matrix', 'tt0133093', '1999');
+    ['Douban', 'Kinopoisk', 'Filmweb'].forEach(name => {
+        const site = hooks.DEFAULT_EXTERNAL_SITES.find(entry => entry.name === name);
+        assert(site, `${name} should be among the default external links`);
+        assert.strictEqual(site.enabled, false, `${name} must be hidden until somebody asks for it`);
+        assert.strictEqual(site.category, 'info', `${name} belongs under Info and research`);
+
+        const normalized = hooks.normalizeSite(site);
+        assert(normalized, `${name} must survive normalization`);
+        assert.strictEqual(normalized.enabled, false, 'and stay hidden through it');
+        assert.strictEqual(hooks.normalizeSite({ ...site, enabled:true }).enabled, true,
+            'switching it on is all it takes to get the button');
+
+        const expanded = hooks.applyLinkTemplate(site.url, context);
+        assert(!expanded.includes('{{'), `${name} left a template token unresolved`);
+        assert(expanded.includes(context.TITLE), `${name} must carry the encoded title`);
+        assert(expanded.includes('1999'), `${name} must carry the year`);
+        assert.doesNotThrow(() => new URL(expanded), `${name} produced an invalid URL`);
+        assert.strictEqual(new URL(expanded).protocol, 'https:', `${name} must be HTTPS`);
+    });
+    /* The checker walks the same list, so a route that stops working shows up in its
+       report rather than only in somebody's browser. */
+    const checker = require('../scripts/check-destinations.js');
+    const named = checker.collectDestinations({ includeCatalog:false }).map(site => site.name);
+    ['Douban', 'Kinopoisk', 'Filmweb'].forEach(name =>
+        assert(named.includes(name), `${name} must be in what the destination checker walks`));
+});
+
 test('settings preserve host scroll state and complete nested tab keyboard support', () => {
     assert(script.includes("previousDocumentOverflow = document.documentElement.style.overflow"), 'settings should capture the host page overflow value');
     assert(script.includes('document.documentElement.style.overflow = previousDocumentOverflow'), 'settings should restore the host page overflow value');
