@@ -1714,7 +1714,7 @@
             'modernUI', 'editorialTitleSurface', 'compactHeader', 'enhancedRatingDisplay', 'widerLayout', 'ratingColorCoding',
             'collapsibleSections', 'expandSummaries', 'spoilerBlur', 'quickNav', 'dimLowRated', 'imageZoom',
             'restoreImageContextMenu',
-        ], true));
+         'largerThumbnails',], true));
         experiencePage.appendChild(experienceGrid);
         /* The threshold belongs with the toggle it qualifies. Changing it restarts the
            feature so the page repaints, rather than waiting for a reload. */

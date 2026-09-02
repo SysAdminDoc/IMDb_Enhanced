@@ -2323,9 +2323,52 @@ await runFixture('chart', async (window, hooks) => {
     }, 'a real collection-card mark click must retain the metadata already rendered in that row');
     hooks.stopFeature('watchedMarking');
 
-    /* IE-135: the same window, because a second 250-row fixture window is what the
-       happy-dom memory ceiling is about. */
+    /* IE-145: IMDb's list thumbnails are around 60 pixels wide. The fixture's images were
+       stripped of their sources when it was sanitized, so a real IMDb image URL shape goes
+       back on before the feature runs - the rows themselves are the captured ones. */
     const document = window.document;
+    const thumbSrc = 'https://m.media-amazon.com/images/M/MV5BABC._V1_QL75_UX67_CR0,0,67,98_.jpg';
+    const thumbs = Array.from(document.querySelectorAll('li.ipc-metadata-list-summary-item img'));
+    assert.equal(thumbs.length, 3, 'the chart fixture should carry three row thumbnails');
+    thumbs.forEach(img => {
+        img.setAttribute('src', thumbSrc);
+        img.setAttribute('srcset', `${thumbSrc} 1x, ${thumbSrc} 2x`);
+        img.setAttribute('width', '67');
+        img.setAttribute('height', '98');
+    });
+    window.GM_setValue('imdb_enh_largerThumbnails', true);
+    await hooks.runFeature('largerThumbnails');
+    const enlarged = thumbs[0];
+    assert.equal(enlarged.dataset.enhBigThumb, '1', 'a row thumbnail is enlarged');
+    const askedHeight = src => Number(/_UY(\d+)_/.exec(src)?.[1]) || 0;
+    assert.ok(askedHeight(enlarged.getAttribute('src')) >= 196,
+        'IMDb is asked for a rendering at least twice the declared height, not for the small one stretched');
+    /* A taller thumbnail proves the doubling rather than the helper's floor: 98 doubles to
+       196, which the variant helper raises to its 200 minimum, and a test that only ever
+       saw that number would pass with the scale removed. */
+    thumbs[1].setAttribute('height', '150');
+    thumbs[1].setAttribute('width', '102');
+    hooks.stopFeature('largerThumbnails');
+    thumbs.forEach(img => { img.setAttribute('src', thumbSrc); img.setAttribute('srcset', `${thumbSrc} 1x`); });
+    await hooks.runFeature('largerThumbnails');
+    assert.equal(askedHeight(thumbs[1].getAttribute('src')), 300,
+        'a 150-pixel thumbnail is asked for at 300');
+    assert.equal(thumbs[1].style.getPropertyValue('--enh-thumb-width'), '204px');
+    assert.ok(enlarged.getAttribute('src').endsWith('.jpg'),
+        'and the rewritten URL keeps the extension the original had');
+    assert.equal(enlarged.hasAttribute('srcset'), false,
+        'srcset is removed, or the browser keeps choosing the small file and nothing changes');
+    assert.equal(enlarged.style.getPropertyValue('--enh-thumb-width'), '134px',
+        'the box is sized up front, so nothing reflows when the larger file lands');
+
+    hooks.stopFeature('largerThumbnails');
+    assert.equal(enlarged.getAttribute('src'), thumbSrc, 'switching it off puts the original source back');
+    assert.equal(enlarged.getAttribute('srcset'), `${thumbSrc} 1x`, 'and the srcset with it');
+    assert.equal(enlarged.dataset.enhBigThumb, undefined, 'and leaves no marker behind');
+    assert.equal(enlarged.style.getPropertyValue('--enh-thumb-width'), '', 'nor a width');
+    window.GM_setValue('imdb_enh_largerThumbnails', false);
+    thumbs.forEach(img => { img.removeAttribute('src'); img.removeAttribute('srcset'); });
+
     const list = firstRow.parentElement;
     /* 250 rows, the size of a fully expanded IMDb list, with one id repeated so the
        per-id cache has something to prove. */

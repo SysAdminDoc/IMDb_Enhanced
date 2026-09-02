@@ -114,6 +114,9 @@
         /* A link to a title is a link to a title wherever IMDb draws it, and the point of
            this one is the surfaces no card ever reaches. */
         'markLinkTint',
+        /* Cards are everywhere IMDb draws them, and the thumbnails this enlarges are on
+           every one of those surfaces. */
+        'largerThumbnails',
     ]);
     /* Private marks belong anywhere IMDb renders title cards, not only on a title
        page: charts, lists, watchlists, person filmographies, episode lists, and

@@ -701,6 +701,15 @@
   "feature_parentsGuideSeverity_name": {
     "message": "Parents guide severities"
   },
+  "feature_largerThumbnails_detail": {
+    "message": "Draws list, cast and filmography thumbnails at twice their usual size, asking IMDb for a larger rendering of the same picture rather than stretching the small one."
+  },
+  "feature_largerThumbnails_keywords": {
+    "message": "bigger, posters, images, thumbnails, upscale, small"
+  },
+  "feature_largerThumbnails_name": {
+    "message": "Larger card thumbnails"
+  },
   "feature_removeAds_detail": {
     "message": "Hides current IMDb ad placements, sponsored shells, and tracking pixels as early as the page allows."
   },

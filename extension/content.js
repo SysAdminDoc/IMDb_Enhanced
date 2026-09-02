@@ -580,6 +580,9 @@
         feature_parentsGuideSeverity_detail: 'Adds the five Parents Guide severity ratings to the title page. Nothing is read until you click the Parents Guide link, and the guide is fetched from IMDb itself, not from a third party.',
         feature_parentsGuideSeverity_keywords: 'parental, age rating, content warning, sex, violence, profanity',
         feature_parentsGuideSeverity_name: 'Parents guide severities',
+        feature_largerThumbnails_detail: 'Draws list, cast and filmography thumbnails at twice their usual size, asking IMDb for a larger rendering of the same picture rather than stretching the small one.',
+        feature_largerThumbnails_keywords: 'bigger, posters, images, thumbnails, upscale, small',
+        feature_largerThumbnails_name: 'Larger card thumbnails',
         feature_removeAds_detail: 'Hides current IMDb ad placements, sponsored shells, and tracking pixels as early as the page allows.',
         feature_removeAds_keywords: 'advertising, banners, promotions, clutter',
         feature_removeAds_name: 'Hide ads and sponsored shells',
@@ -2173,6 +2176,7 @@
         watchSites: DEFAULT_WATCH_SITES, externalSites: DEFAULT_EXTERNAL_SITES,
         watchedMarking: true, userMarks: {}, titleNotes: true, scoreCorrections: {},
         parentsGuideSeverity: false,
+        largerThumbnails: false,
         servarrIntegration: false,
         seerrUrl: 'http://localhost:5055', seerrApiKey: '',
         radarrUrl: 'http://localhost:7878', radarrApiKey: '',
@@ -2268,6 +2272,7 @@
         mediaServerIntegration: t('feature_mediaServerIntegration_keywords'),
         rowIntegrationState: t('feature_rowIntegrationState_keywords'),
         parentsGuideSeverity: t('feature_parentsGuideSeverity_keywords'),
+        largerThumbnails: t('feature_largerThumbnails_keywords'),
         tvEpisodeTools: t('feature_tvEpisodeTools_keywords'),
         ratingGap: t('feature_ratingGap_keywords'),
         episodeHeatmap: t('feature_episodeHeatmap_keywords'),
@@ -2324,6 +2329,7 @@
         servarrIntegration: t('feature_servarrIntegration_detail'),
         mediaServerIntegration: t('feature_mediaServerIntegration_detail'),
         parentsGuideSeverity: t('feature_parentsGuideSeverity_detail'),
+        largerThumbnails: t('feature_largerThumbnails_detail'),
         rowIntegrationState: t('feature_rowIntegrationState_detail'),
         tvEpisodeTools: t('feature_tvEpisodeTools_detail'),
         tvShowEnhancements: t('feature_tvShowEnhancements_detail'),
@@ -7725,6 +7731,110 @@ section[id*="quote" i] .ipc-list-card { padding: 4px 0 !important; margin: 2px 0
 }
         `,
         init() { addCSS(this.css, 'enh-wider'); }, destroy() { removeCSS('enh-wider'); } });
+
+    /* IE-145: IMDb draws list, cast and filmography thumbnails at around 40 to 70 pixels
+       wide, which is small enough that two extensions exist for nothing but making them
+       bigger. The variant helper the zoom feature uses already knows how to ask IMDb's
+       image host for a larger rendering of the same picture, so this is a request for a
+       bigger file and a box to match, not an upscale of a small one. */
+    const LARGE_THUMB_SELECTOR = [
+        '.ipc-poster-card img',
+        '.ipc-metadata-list-summary-item img',
+        '[data-testid="title-cast-item__avatar"] img',
+        '[data-testid="shoveler-item-poster"] img',
+        '.ipc-sub-grid-item img',
+    ].join(', ');
+    const LARGE_THUMB_SCALE = 2;
+    /* The hero poster is already the big one on the page, and the settings panel draws
+       images of its own. Neither is a card thumbnail. */
+    const LARGE_THUMB_EXCLUDE = '[data-testid="hero-media__poster"], #enh-settings-overlay, .enh-zoom';
+    const LARGE_THUMB_MIN = 24;
+    const LARGE_THUMB_MAX = 320;
+
+    /* The measurement, kept separate so it can be tested without a layout engine: what
+       IMDb says the image is, preferring its own attributes over a measured box because
+       the attributes are there before the picture is. */
+    function readThumbnailWidth(img) {
+        const declared = Number(img?.getAttribute?.('width')) || 0;
+        if (declared >= LARGE_THUMB_MIN) return Math.min(declared, LARGE_THUMB_MAX);
+        const measured = Number(img?.getBoundingClientRect?.().width) || 0;
+        if (measured >= LARGE_THUMB_MIN) return Math.min(Math.round(measured), LARGE_THUMB_MAX);
+        const natural = Number(img?.naturalWidth) || 0;
+        if (natural >= LARGE_THUMB_MIN) return Math.min(natural, LARGE_THUMB_MAX);
+        return 0;
+    }
+
+    reg({
+        key: 'largerThumbnails', name: t('feature_largerThumbnails_name'), group: 'Appearance',
+        _observer: null,
+        _raf: 0,
+        init() {
+            if (!isIMDbHost()) return;
+            const isCurrent = createFeatureGuard(this);
+            /* The box is sized inline per image rather than by a stylesheet rule, because
+               each card is a different width and a single rule would have to guess. The
+               aspect ratio comes from the element so nothing reflows when the larger file
+               lands: the space is already the right shape. */
+            addCSS(`
+                img[data-enh-big-thumb] { width: var(--enh-thumb-width) !important; height: auto !important; max-width: none !important; }
+            `, 'enh-largerThumbnails');
+
+            const scan = () => {
+                if (!isCurrent()) return;
+                document.querySelectorAll(LARGE_THUMB_SELECTOR).forEach(img => this._enlarge(img));
+            };
+            this._observer = new MutationObserver(() => {
+                if (this._raf) return;
+                this._raf = requestAnimationFrame(() => { this._raf = 0; scan(); });
+            });
+            this._observer.observe(document.body, { childList:true, subtree:true });
+            scan();
+        },
+        _enlarge(img) {
+            if (!img || img.dataset.enhBigThumb || img.closest(LARGE_THUMB_EXCLUDE)) return;
+            const source = img.currentSrc || img.getAttribute('src') || '';
+            if (!source) return;
+            const width = readThumbnailWidth(img);
+            if (!width) return;
+            /* Height, because that is what the variant helper asks IMDb for. A poster is
+               taller than it is wide and an avatar is square, so the element's own ratio
+               decides rather than a constant. */
+            const height = Number(img.getAttribute('height')) || Math.round(width * 1.5);
+            const bigger = boundedImageVariant(source, height * LARGE_THUMB_SCALE);
+            if (!bigger) return;
+            img.dataset.enhBigThumb = '1';
+            img.dataset.enhThumbSrc = source;
+            /* srcset wins over src, so leaving it would mean the browser keeps choosing
+               the small file and the whole rewrite does nothing visible. */
+            if (img.hasAttribute('srcset')) {
+                img.dataset.enhThumbSrcset = img.getAttribute('srcset');
+                img.removeAttribute('srcset');
+            }
+            if (img.hasAttribute('sizes')) {
+                img.dataset.enhThumbSizes = img.getAttribute('sizes');
+                img.removeAttribute('sizes');
+            }
+            img.style.setProperty('--enh-thumb-width', `${width * LARGE_THUMB_SCALE}px`);
+            img.setAttribute('src', bigger);
+        },
+        destroy() {
+            removeCSS('enh-largerThumbnails');
+            this._observer?.disconnect();
+            this._observer = null;
+            cancelAnimationFrame(this._raf);
+            this._raf = 0;
+            document.querySelectorAll('img[data-enh-big-thumb]').forEach(img => {
+                if (img.dataset.enhThumbSrc) img.setAttribute('src', img.dataset.enhThumbSrc);
+                if (img.dataset.enhThumbSrcset) img.setAttribute('srcset', img.dataset.enhThumbSrcset);
+                if (img.dataset.enhThumbSizes) img.setAttribute('sizes', img.dataset.enhThumbSizes);
+                img.style.removeProperty('--enh-thumb-width');
+                delete img.dataset.enhBigThumb;
+                delete img.dataset.enhThumbSrc;
+                delete img.dataset.enhThumbSrcset;
+                delete img.dataset.enhThumbSizes;
+            });
+        }
+    });
     // ===================== RATING COLOR CODING =====================
     function getHexLuminance(value) {
         const match = String(value || '').trim().match(/^#([0-9a-f]{3}|[0-9a-f]{6})$/i);
@@ -18889,7 +18999,7 @@ ${scopedRules('.enh-zoom', {
             'modernUI', 'editorialTitleSurface', 'compactHeader', 'enhancedRatingDisplay', 'widerLayout', 'ratingColorCoding',
             'collapsibleSections', 'expandSummaries', 'spoilerBlur', 'quickNav', 'dimLowRated', 'imageZoom',
             'restoreImageContextMenu',
-        ], true));
+         'largerThumbnails',], true));
         experiencePage.appendChild(experienceGrid);
         /* The threshold belongs with the toggle it qualifies. Changing it restarts the
            feature so the page repaints, rather than waiting for a reload. */
@@ -19865,6 +19975,9 @@ ${scopedRules('.enh-zoom', {
         /* A link to a title is a link to a title wherever IMDb draws it, and the point of
            this one is the surfaces no card ever reaches. */
         'markLinkTint',
+        /* Cards are everywhere IMDb draws them, and the thumbnails this enlarges are on
+           every one of those surfaces. */
+        'largerThumbnails',
     ]);
     /* Private marks belong anywhere IMDb renders title cards, not only on a title
        page: charts, lists, watchlists, person filmographies, episode lists, and

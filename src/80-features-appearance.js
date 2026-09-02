@@ -315,3 +315,107 @@ section[id*="quote" i] .ipc-list-card { padding: 4px 0 !important; margin: 2px 0
 }
         `,
         init() { addCSS(this.css, 'enh-wider'); }, destroy() { removeCSS('enh-wider'); } });
+
+    /* IE-145: IMDb draws list, cast and filmography thumbnails at around 40 to 70 pixels
+       wide, which is small enough that two extensions exist for nothing but making them
+       bigger. The variant helper the zoom feature uses already knows how to ask IMDb's
+       image host for a larger rendering of the same picture, so this is a request for a
+       bigger file and a box to match, not an upscale of a small one. */
+    const LARGE_THUMB_SELECTOR = [
+        '.ipc-poster-card img',
+        '.ipc-metadata-list-summary-item img',
+        '[data-testid="title-cast-item__avatar"] img',
+        '[data-testid="shoveler-item-poster"] img',
+        '.ipc-sub-grid-item img',
+    ].join(', ');
+    const LARGE_THUMB_SCALE = 2;
+    /* The hero poster is already the big one on the page, and the settings panel draws
+       images of its own. Neither is a card thumbnail. */
+    const LARGE_THUMB_EXCLUDE = '[data-testid="hero-media__poster"], #enh-settings-overlay, .enh-zoom';
+    const LARGE_THUMB_MIN = 24;
+    const LARGE_THUMB_MAX = 320;
+
+    /* The measurement, kept separate so it can be tested without a layout engine: what
+       IMDb says the image is, preferring its own attributes over a measured box because
+       the attributes are there before the picture is. */
+    function readThumbnailWidth(img) {
+        const declared = Number(img?.getAttribute?.('width')) || 0;
+        if (declared >= LARGE_THUMB_MIN) return Math.min(declared, LARGE_THUMB_MAX);
+        const measured = Number(img?.getBoundingClientRect?.().width) || 0;
+        if (measured >= LARGE_THUMB_MIN) return Math.min(Math.round(measured), LARGE_THUMB_MAX);
+        const natural = Number(img?.naturalWidth) || 0;
+        if (natural >= LARGE_THUMB_MIN) return Math.min(natural, LARGE_THUMB_MAX);
+        return 0;
+    }
+
+    reg({
+        key: 'largerThumbnails', name: t('feature_largerThumbnails_name'), group: 'Appearance',
+        _observer: null,
+        _raf: 0,
+        init() {
+            if (!isIMDbHost()) return;
+            const isCurrent = createFeatureGuard(this);
+            /* The box is sized inline per image rather than by a stylesheet rule, because
+               each card is a different width and a single rule would have to guess. The
+               aspect ratio comes from the element so nothing reflows when the larger file
+               lands: the space is already the right shape. */
+            addCSS(`
+                img[data-enh-big-thumb] { width: var(--enh-thumb-width) !important; height: auto !important; max-width: none !important; }
+            `, 'enh-largerThumbnails');
+
+            const scan = () => {
+                if (!isCurrent()) return;
+                document.querySelectorAll(LARGE_THUMB_SELECTOR).forEach(img => this._enlarge(img));
+            };
+            this._observer = new MutationObserver(() => {
+                if (this._raf) return;
+                this._raf = requestAnimationFrame(() => { this._raf = 0; scan(); });
+            });
+            this._observer.observe(document.body, { childList:true, subtree:true });
+            scan();
+        },
+        _enlarge(img) {
+            if (!img || img.dataset.enhBigThumb || img.closest(LARGE_THUMB_EXCLUDE)) return;
+            const source = img.currentSrc || img.getAttribute('src') || '';
+            if (!source) return;
+            const width = readThumbnailWidth(img);
+            if (!width) return;
+            /* Height, because that is what the variant helper asks IMDb for. A poster is
+               taller than it is wide and an avatar is square, so the element's own ratio
+               decides rather than a constant. */
+            const height = Number(img.getAttribute('height')) || Math.round(width * 1.5);
+            const bigger = boundedImageVariant(source, height * LARGE_THUMB_SCALE);
+            if (!bigger) return;
+            img.dataset.enhBigThumb = '1';
+            img.dataset.enhThumbSrc = source;
+            /* srcset wins over src, so leaving it would mean the browser keeps choosing
+               the small file and the whole rewrite does nothing visible. */
+            if (img.hasAttribute('srcset')) {
+                img.dataset.enhThumbSrcset = img.getAttribute('srcset');
+                img.removeAttribute('srcset');
+            }
+            if (img.hasAttribute('sizes')) {
+                img.dataset.enhThumbSizes = img.getAttribute('sizes');
+                img.removeAttribute('sizes');
+            }
+            img.style.setProperty('--enh-thumb-width', `${width * LARGE_THUMB_SCALE}px`);
+            img.setAttribute('src', bigger);
+        },
+        destroy() {
+            removeCSS('enh-largerThumbnails');
+            this._observer?.disconnect();
+            this._observer = null;
+            cancelAnimationFrame(this._raf);
+            this._raf = 0;
+            document.querySelectorAll('img[data-enh-big-thumb]').forEach(img => {
+                if (img.dataset.enhThumbSrc) img.setAttribute('src', img.dataset.enhThumbSrc);
+                if (img.dataset.enhThumbSrcset) img.setAttribute('srcset', img.dataset.enhThumbSrcset);
+                if (img.dataset.enhThumbSizes) img.setAttribute('sizes', img.dataset.enhThumbSizes);
+                img.style.removeProperty('--enh-thumb-width');
+                delete img.dataset.enhBigThumb;
+                delete img.dataset.enhThumbSrc;
+                delete img.dataset.enhThumbSrcset;
+                delete img.dataset.enhThumbSizes;
+            });
+        }
+    });
