@@ -10,6 +10,7 @@
     "build:extension": "node scripts/build-userscript.js && node scripts/build-extension.js",
     "check:destinations": "node scripts/check-destinations.js",
     "check:mutants": "node scripts/mutate.js --all",
+    "check:toplayer": "node scripts/probe-top-layer.js",
     "capture:fixtures": "node scripts/capture-fixtures.js",
     "capture:screenshots": "node scripts/capture-settings-screenshots.js",
     "test:dom": "node scripts/run-bounded.js --mb=1536 --seconds=300 -- node tests/dom-fixtures.mjs",
