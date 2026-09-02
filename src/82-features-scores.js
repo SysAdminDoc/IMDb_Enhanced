@@ -905,16 +905,11 @@
             }
 
             let lookupError = null;
-            let schemaChanged = false;
             try {
                 const searchUrl = `https://www.rottentomatoes.com/search?search=${encodeURIComponent(title)}`;
                 const res2 = await httpGet(searchUrl, { cancelOnRouteChange:true });
                 if (!isCurrent()) return;
                 const result = parseRTSearchResult(res2.responseText, title, year, type);
-                /* Their search page answered and carried none of the structure this reads.
-                   That is their markup moving, not a title with no entry, and the two used
-                   to be the same silent state. */
-                if (!result) schemaChanged = !providerPageLooksIntact('rottenTomatoes', res2.responseText);
                 if (result) {
                     let data = result;
                     try {
@@ -943,8 +938,7 @@
                next visit retries instead of reading back a stale "unavailable". */
             const blocked = await cacheUnavailableUnlessBlocked(this.key, cacheKey, lookupError);
             if (!isCurrent()) return;
-            if (schemaChanged) appendFailureJournal(this.key, 'schema');
-            this._renderUnavailable(unavailableReasonFor(lookupError, blocked, schemaChanged));
+            this._renderUnavailable(unavailableReasonFor(lookupError, blocked));
         },
         _render(data) {
             document.getElementById('enh-rt-widget')?.remove();

@@ -5929,8 +5929,8 @@ test('an unreachable provider falls back to a labelled cached value', () => {
        the shape is counted with that argument optional. */
     assert.strictEqual((script.match(/this\._renderUnavailable\(unavailableReasonFor\(lookupError, blocked(?:, schemaChanged)?\)\)/g) || []).length, scoreSources,
         'every score lookup must distinguish a missing grant from an outage when it gives up');
-    assert.strictEqual((script.match(/unavailableReasonFor\(lookupError, blocked, schemaChanged\)/g) || []).length, 2,
-        'and the two that read a page say when that page changed under them');
+    assert.strictEqual((script.match(/unavailableReasonFor\(lookupError, blocked, schemaChanged\)/g) || []).length, 1,
+        'and the one whose parser has an unambiguous landmark says when that page changed under it');
     assert(/function unavailableReasonFor\(error, blocked, schemaChanged = false\) \{[\s\S]{0,700}?'rate-limited'[\s\S]{0,700}?'schema-changed'[\s\S]{0,200}?blocked \? 'access' : 'unavailable'/.test(script),
         'and that helper must still tell a missing grant from an outage, not only a rate limit or a changed page');
     assert(script.includes("if (reason !== 'access') {"),
@@ -7586,12 +7586,16 @@ test('a page that loaded but parsed to nothing is reported as a changed page', (
     const withLd = '<html><head><script type="application/ld+json">{"@type":"Movie"}</script></head><body></body></html>';
     const withoutLd = '<html><head><title>Rotten Tomatoes</title></head><body><div>no structure here</div></body></html>';
 
-    assert.strictEqual(hooks.providerPageLooksIntact('rottenTomatoes', withLd), true,
+    assert.strictEqual(hooks.providerPageLooksIntact('letterboxd', withLd), true,
         'a page carrying the structure the parser reads is intact, whatever it says about this title');
-    assert.strictEqual(hooks.providerPageLooksIntact('rottenTomatoes', withoutLd), false,
+    assert.strictEqual(hooks.providerPageLooksIntact('letterboxd', withoutLd), false,
         'and one carrying none of it is their markup moving, not an absent entry');
-    assert.strictEqual(hooks.providerPageLooksIntact('letterboxd', withLd), true);
-    assert.strictEqual(hooks.providerPageLooksIntact('letterboxd', withoutLd), false);
+    /* Rotten Tomatoes is deliberately not covered. Its search parser reads
+       <search-page-media-row> rather than structured data, and a search with no results
+       has none of those, so a landmark there cannot tell a changed page from a title
+       nobody reviewed — it would report a changed page for ordinary misses. */
+    assert.strictEqual(hooks.providerPageLooksIntact('rottenTomatoes', withoutLd), true,
+        'a provider whose parser has no unambiguous landmark is never accused of changing');
 
     // An empty body is a transport problem and already has a category of its own.
     assert.strictEqual(hooks.providerPageLooksIntact('rottenTomatoes', ''), true,

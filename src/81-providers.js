@@ -523,10 +523,19 @@
        The landmark is the outermost thing the parser depends on, not the value it is
        looking for: JSON-LD for the two sites parsed out of it, and the row container for
        JustWatch. Present but empty means no entry. Absent means their markup moved. */
+    /* One entry, and only where the dependency is verifiable. Letterboxd's detail page is
+       parsed out of its structured-data block, so a page without one cannot be read at all
+       and the parser's silence means their markup moved.
+
+       Rotten Tomatoes' search page is deliberately absent: that parser reads
+       <search-page-media-row> elements rather than structured data, and a search with no
+       results legitimately has none of them, so absence there cannot tell a changed page
+       from a title nobody has reviewed. A landmark that cannot separate those two would
+       report "their page changed" for ordinary misses. JustWatch is absent for the same
+       reason: every landmark available on that page either matches every HTML document or
+       is the row container itself. */
     const PROVIDER_PAGE_LANDMARKS = {
-        rottenTomatoes: /<script[^>]+type=["']application\/ld\+json["']/i,
         letterboxd: /<script[^>]+type=["']application\/ld\+json["']/i,
-        justWatch: /title-list-row__column-header|<title/i,
     };
     function providerPageLooksIntact(providerId, html) {
         const landmark = PROVIDER_PAGE_LANDMARKS[providerId];
