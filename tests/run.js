@@ -266,6 +266,7 @@ function loadScriptTestHooks({ withoutDeleteValue = false, withheldCredentials =
         cacheBytes,
         storedBytes,
         encodedByteLength,
+        settingsTextTooLarge,
         readCacheUsage,
         CACHE_TOTAL_BYTE_BUDGET,
         CACHE_MAX_ENTRIES,
@@ -2402,7 +2403,7 @@ test('settings use six accessible desktop destinations', () => {
     assert(/#enh-settings-overlay\s*\{[^}]*visibility:\s*hidden/s.test(script), 'closed settings must leave the tab order');
     assert(/#enh-settings-overlay\.enh-visible\s*\{[^}]*visibility:\s*visible/s.test(script), 'open settings must restore visibility');
     assert(script.includes('maxlength:String(SETTINGS_IMPORT_TEXT_LIMIT)'), 'import size guard missing');
-    assert(script.includes('encodedByteLength(raw) > SETTINGS_IMPORT_TEXT_LIMIT'), 'import parser must enforce the same size guard, in bytes');
+    assert(/settingsTextTooLarge\(raw\)/.test(script), 'the import parser must run the shared size gate');
     assert(script.includes('Settings could not be read for export. No backup was copied.'), 'export read failures should remain visible');
     assert(script.includes('Changes save automatically.'), 'automatic-save status missing');
     assert(script.includes('id="enh-settings-save-state" role="status" aria-live="polite" aria-atomic="true"'), 'automatic-save feedback should be announced');
@@ -3105,6 +3106,40 @@ test('a stored score correction fits the ceiling the backup limit is derived fro
             assert(stored.length <= hooks.SCORE_CORRECTION_URL_LIMIT,
                 `stored corrections must fit the ceiling; got ${stored.length}`);
         });
+});
+
+/* IE-176: the three backup size gates were covered by a substring match on the built
+   script and by nothing that runs, so reverting all three to .length would have been caught
+   by the string and by no behaviour. They share one predicate now, and this runs it. The
+   limit is passed in only because the real one is 108 MB and a payload over it cannot be
+   built inside the memory this suite is bounded to; the comparison under test is the same
+   one the gates use. */
+test('the shared backup size gate refuses by bytes and admits by bytes', () => {
+    const hooks = loadScriptTestHooks();
+    const tooLarge = hooks.settingsTextTooLarge;
+
+    /* Sixty three-byte characters is 180 bytes and 60 code units. A byte gate at 100
+       refuses it; the code-unit comparison this replaced would have admitted it. */
+    const wide = '\u65e5'.repeat(60);
+    assert.strictEqual(wide.length, 60, 'sixty code units');
+    assert.strictEqual(hooks.encodedByteLength(wide), 180, 'and a hundred and eighty bytes');
+    assert.strictEqual(tooLarge(wide, 100), true, 'refused, because it is measured in bytes');
+    assert.strictEqual(tooLarge(wide, 200), false, 'and admitted when the budget covers it');
+
+    // ASCII is where the two measures agree, so nothing that used to fit stops fitting.
+    const ascii = 'a'.repeat(100);
+    assert.strictEqual(tooLarge(ascii, 100), false, 'a payload exactly at the limit fits');
+    assert.strictEqual(tooLarge(ascii, 99), true, 'and one byte over does not');
+
+    // An astral character is two code units and four bytes, and is charged as four.
+    const astral = String.fromCodePoint(0x1f600);
+    assert.strictEqual(tooLarge(astral, 3), true, 'an emoji costs four bytes, not two');
+    assert.strictEqual(tooLarge(astral, 4), false, 'and fits a four-byte budget');
+
+    /* And the real gates call it, rather than each spelling the comparison out again,
+       which is how the export and the import came to disagree about units before. */
+    assert.strictEqual((script.match(/settingsTextTooLarge\(/g) || []).length, 4,
+        'one definition and the three gates that use it');
 });
 
 test('the settings size guard measures bytes, not UTF-16 code units', () => {

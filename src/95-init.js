@@ -331,6 +331,7 @@
                 buildDiagnosticsReport,
                 cacheCount,
                 cacheBytes,
+                settingsTextTooLarge,
                 SCORE_CORRECTION_URL_LIMIT,
                 SCORE_CORRECTION_PROVIDER_COUNT,
                 isListPage,

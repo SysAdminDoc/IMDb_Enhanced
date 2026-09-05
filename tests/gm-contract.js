@@ -40,14 +40,29 @@ function createManagerAdapter() {
     const store = new Map();
     let failWrite = null;
     let failClipboard = null;
+    /* The same size bound the bridge adapter models. A script manager backs GM_setValue
+       with the extension's own storage, so it has a ceiling too, and a write past it
+       throws here exactly as a rejected write does. */
+    let quotaBytes = Infinity;
+    const sizeWith = (key, value) => [...store.entries()]
+        .filter(([name]) => name !== key)
+        .concat([[key, value]])
+        .reduce((total, [name, held]) => total
+            + Buffer.byteLength(name, 'utf8')
+            + Buffer.byteLength(JSON.stringify(held) ?? '', 'utf8'), 0);
     const observed = { writeFailures: 0, clipboardFailures: 0, writeFailureKeys: [] };
 
     return {
         name: 'userscript manager',
+        setQuotaBytes: bytes => { quotaBytes = bytes; },
         gm: {
             getValue: (key, fallback) => (store.has(key) ? clone(store.get(key)) : clone(fallback)),
             setValue: (key, value) => {
                 if (failWrite) { const error = failWrite; failWrite = null; observed.writeFailures += 1; throw error; }
+                if (sizeWith(key, value) > quotaBytes) {
+                    observed.writeFailures += 1;
+                    throw new Error('QUOTA_BYTES quota exceeded');
+                }
                 store.set(key, clone(value));
             },
             deleteValue: key => {
@@ -101,6 +116,17 @@ async function createBridgeAdapter({ seed = {}, trusted = false } = {}) {
        one-shot flag could not express two failures in flight, which is the shape that
        exposed the rollback restoring an earlier unstored value. */
     const failWriteMessages = [];
+    /* Bytes the store may hold in total, the way chrome.storage.local bounds it. Off by
+       default so every existing case is unaffected; set it and a write large enough to
+       cross it is refused by the backend rather than by a flag somebody set. */
+    let quotaBytes = Infinity;
+    const storedSize = extra => {
+        const merged = { ...store, ...(extra || {}) };
+        return Object.entries(merged)
+            .reduce((total, [key, value]) => total
+                + Buffer.byteLength(key, 'utf8')
+                + Buffer.byteLength(JSON.stringify(value) ?? '', 'utf8'), 0);
+    };
     // Writes deferred by holdNextWrite, released together by releaseHeldWrites.
     const heldWrites = [];
     let holdCount = 0;
@@ -140,6 +166,10 @@ async function createBridgeAdapter({ seed = {}, trusted = false } = {}) {
                     const run = () => setImmediate(() => {
                         if (failWriteMessages.length) {
                             withLastError(failWriteMessages.shift(), () => callback());
+                            return;
+                        }
+                        if (storedSize(values) > quotaBytes) {
+                            withLastError('QUOTA_BYTES quota exceeded', () => callback());
                             return;
                         }
                         Object.assign(store, values);
@@ -223,6 +253,8 @@ async function createBridgeAdapter({ seed = {}, trusted = false } = {}) {
         },
         asyncWrites: true,
         failNextWrite: error => { failWriteMessages.push(error.message); },
+        setQuotaBytes: bytes => { quotaBytes = bytes; },
+        storedSize: () => storedSize(),
         failNextClipboard: error => { clipboardRejection = error; },
         holdNextWrite: () => { holdCount += 1; },
         releaseHeldWrites: () => { heldWrites.splice(0).forEach(run => run()); },
@@ -248,6 +280,52 @@ async function runContract(adapter) {
         gm.setValue('imdb_enh_theme', 'oled');
         assert.strictEqual(gm.getValue('imdb_enh_theme', 'dark'), 'oled');
         assert.strictEqual(gm.getValue('imdb_enh_missing', 'fallback'), 'fallback');
+    });
+
+    /* Every other rejection in this file is injected: something calls failNextWrite and the
+       backend obeys. A real store refuses because of size, and that path was never taken,
+       so "a large library writes and reads back" was asserted nowhere. The backend derives
+       the refusal from what it is being asked to hold. */
+    await check(label, 'a large library writes and reads back, and is refused when it will not fit', async () => {
+        const marks = {};
+        for (let index = 0; index < 2000; index += 1) {
+            marks[`tt${String(index).padStart(7, '0')}`] = {
+                state: index % 2 ? 'watched' : 'skip',
+                title: `Title ${index}`,
+                ts: index,
+                viewings: [{ date: '2025-01-01', rating: 8 }],
+            };
+        }
+        const size = JSON.stringify(marks).length;
+        assert.ok(size > 100000, `the sample should be a real library, got ${size} bytes`);
+
+        adapter.setQuotaBytes(Infinity);
+        gm.setValue('imdb_enh_userMarks', marks);
+        await adapter.settle();
+        assert.strictEqual(Object.keys(gm.getValue('imdb_enh_userMarks', {})).length, 2000,
+            'a store this size goes in and comes back whole');
+
+        /* And the same write against a backend too small for it is refused rather than
+           silently truncated, which is the failure a quota actually produces. The bridge
+           cannot throw on the call itself, because chrome.storage answers later; it
+           surfaces the rejection on the next write, which is the shape the injected-failure
+           case above already relies on. */
+        gm.setValue('imdb_enh_userMarks', {});
+        await adapter.settle();
+        adapter.setQuotaBytes(1024);
+        let refused = false;
+        try { gm.setValue('imdb_enh_userMarks', marks); } catch { refused = true; }
+        await adapter.settle();
+        try { gm.setValue('imdb_enh_probe', 'after'); } catch { refused = true; }
+        await adapter.settle();
+        assert.ok(refused, 'a store larger than the quota must reach the caller as a failure');
+        assert.notStrictEqual(Object.keys(gm.getValue('imdb_enh_userMarks', {})).length, 2000,
+            'and it must not be reported as stored');
+
+        adapter.setQuotaBytes(Infinity);
+        gm.setValue('imdb_enh_userMarks', {});
+        gm.deleteValue('imdb_enh_probe');
+        await adapter.settle();
     });
 
     await check(label, 'stored values are cloned, not aliased', () => {

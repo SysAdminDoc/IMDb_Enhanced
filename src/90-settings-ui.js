@@ -2419,7 +2419,7 @@
             try {
                 const payload = getExportSettings();
                 const serialized = JSON.stringify(payload, null, 2);
-                if (encodedByteLength(serialized) > SETTINGS_IMPORT_TEXT_LIMIT) {
+                if (settingsTextTooLarge(serialized)) {
                     showToast(t('toast_settings_exceed_the_4_mb_backup',
                         [formatCacheBytes(encodedByteLength(serialized)), formatCacheBytes(SETTINGS_IMPORT_TEXT_LIMIT)]), 5000);
                     return;
@@ -2456,7 +2456,7 @@
             apply.disabled = true;
             try {
                 const serialized = await createEncryptedBackup(passphrase);
-                if (encodedByteLength(serialized) > SETTINGS_IMPORT_TEXT_LIMIT) {
+                if (settingsTextTooLarge(serialized)) {
                     showToast(t('toast_settings_exceed_the_4_mb_backup_2',
                         [formatCacheBytes(encodedByteLength(serialized)), formatCacheBytes(SETTINGS_IMPORT_TEXT_LIMIT)]), 5000);
                     return;
@@ -2528,7 +2528,7 @@
             /* Naming both numbers matters: the ceiling used to be smaller than the file
                this build writes, and "too large" gave no way to tell a corrupt paste from
                a backup that was refused for being exactly what it should be. */
-            if (encodedByteLength(raw) > SETTINGS_IMPORT_TEXT_LIMIT) {
+            if (settingsTextTooLarge(raw)) {
                 showToast(t('toast_import_is_too_large_use_a',
                     [formatCacheBytes(encodedByteLength(raw)), formatCacheBytes(SETTINGS_IMPORT_TEXT_LIMIT)]), 5000);
                 return;

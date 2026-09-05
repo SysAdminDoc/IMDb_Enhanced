@@ -2960,6 +2960,15 @@
         }
         catch { return 0; }
     }
+    /* The one comparison behind all three backup size gates. It was written out at each of
+       them, which is how the export and the import came to disagree about their units
+       before, and it is the thing worth running in a test: the limit is a byte budget and
+       a JavaScript string measures itself in UTF-16 code units, so a text that fits by one
+       measure can be half again as large by the other. The limit is a parameter only so a
+       test can ask the same question at a size it can actually build; nothing passes one. */
+    function settingsTextTooLarge(text, limit = SETTINGS_IMPORT_TEXT_LIMIT) {
+        return encodedByteLength(text) > limit;
+    }
     function formatCacheBytes(bytes) {
         const value = Number(bytes) || 0;
         if (value < 1024) return `${value} B`;
@@ -20659,7 +20668,7 @@ ${scopedRules('.enh-zoom', {
             try {
                 const payload = getExportSettings();
                 const serialized = JSON.stringify(payload, null, 2);
-                if (encodedByteLength(serialized) > SETTINGS_IMPORT_TEXT_LIMIT) {
+                if (settingsTextTooLarge(serialized)) {
                     showToast(t('toast_settings_exceed_the_4_mb_backup',
                         [formatCacheBytes(encodedByteLength(serialized)), formatCacheBytes(SETTINGS_IMPORT_TEXT_LIMIT)]), 5000);
                     return;
@@ -20696,7 +20705,7 @@ ${scopedRules('.enh-zoom', {
             apply.disabled = true;
             try {
                 const serialized = await createEncryptedBackup(passphrase);
-                if (encodedByteLength(serialized) > SETTINGS_IMPORT_TEXT_LIMIT) {
+                if (settingsTextTooLarge(serialized)) {
                     showToast(t('toast_settings_exceed_the_4_mb_backup_2',
                         [formatCacheBytes(encodedByteLength(serialized)), formatCacheBytes(SETTINGS_IMPORT_TEXT_LIMIT)]), 5000);
                     return;
@@ -20768,7 +20777,7 @@ ${scopedRules('.enh-zoom', {
             /* Naming both numbers matters: the ceiling used to be smaller than the file
                this build writes, and "too large" gave no way to tell a corrupt paste from
                a backup that was refused for being exactly what it should be. */
-            if (encodedByteLength(raw) > SETTINGS_IMPORT_TEXT_LIMIT) {
+            if (settingsTextTooLarge(raw)) {
                 showToast(t('toast_import_is_too_large_use_a',
                     [formatCacheBytes(encodedByteLength(raw)), formatCacheBytes(SETTINGS_IMPORT_TEXT_LIMIT)]), 5000);
                 return;
@@ -21254,6 +21263,7 @@ ${scopedRules('.enh-zoom', {
                 buildDiagnosticsReport,
                 cacheCount,
                 cacheBytes,
+                settingsTextTooLarge,
                 SCORE_CORRECTION_URL_LIMIT,
                 SCORE_CORRECTION_PROVIDER_COUNT,
                 isListPage,
