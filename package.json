@@ -32,7 +32,7 @@
     "url": "https://github.com/SysAdminDoc/IMDb_Enhanced.git"
   },
   "devDependencies": {
-    "happy-dom": "20.13.0"
+    "happy-dom": "20.14.0"
   },
   "packageManager": "npm@11.17.0"
 }
