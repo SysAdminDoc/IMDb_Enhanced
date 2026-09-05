@@ -765,6 +765,8 @@
         settings_sample_source_values_not_live_title_data: 'Sample values, not live title data.',
         settings_saved_type_to_replace: 'Saved. Type to replace it.',
         settings_scores_and_availability_lookups_are_cached: 'Scores and availability lookups are cached locally for up to seven days.',
+        settings_storage_total: 'Everything this build keeps on this device, marks and cache together, uses $1.',
+        settings_storage_uncapped: 'Everything this build keeps on this device, marks and cache together, uses $1. The browser puts no ceiling on it, so the only limits are the ones this page enforces.',
         settings_seen_titles: 'Seen titles',
         settings_seen_without_viewing_date_one: '$1 Seen title has no viewing date.',
         settings_seen_without_viewing_date_other: '$1 Seen titles have no viewing date.',
@@ -2613,6 +2615,26 @@
        approaching its ceiling rather than only learning about it when a write fails. */
     function cacheBytes() {
         try { return readCacheUsage().bytes; }
+        catch { return 0; }
+    }
+    /* The whole store, not only the cache. Marks and their viewing histories are most of
+       it once a library grows, and a Data page that reported the cache alone made a store
+       near its own bounds look nearly empty. Counted in UTF-8 bytes, because that is what
+       the backend charges for. */
+    function storedBytes() {
+        try {
+            let bytes = 0;
+            GM_listValues().forEach(storageKey => {
+                if (!String(storageKey).startsWith(PREFIX)) return;
+                let raw = null;
+                try { raw = GM_getValue(storageKey, null); }
+                catch { return; }
+                if (raw === null || raw === undefined) return;
+                const text = typeof raw === 'string' ? raw : JSON.stringify(raw);
+                bytes += encodedByteLength(storageKey) + encodedByteLength(text);
+            });
+            return bytes;
+        }
         catch { return 0; }
     }
     function formatCacheBytes(bytes) {
@@ -20054,7 +20076,16 @@ ${scopedRules('.enh-zoom', {
         cacheCard.append(
             makeEl('button', { type:'button', className:'enh-settings-footer-btn', id:'enh-clearcache-btn', title:t('text_clear_cached_third_party_lookups') }, t('label_clear_cache')),
             makeEl('div', { className:'enh-settings-card-description', id:'enh-cache-status', style:{ marginTop:'8px' } },
-                `${cacheCount()} entries currently cached, using ${formatCacheBytes(cacheBytes())} of ${formatCacheBytes(CACHE_TOTAL_BYTE_BUDGET)}. The oldest are dropped automatically as that fills.`)
+                `${cacheCount()} entries currently cached, using ${formatCacheBytes(cacheBytes())} of ${formatCacheBytes(CACHE_TOTAL_BYTE_BUDGET)}. The oldest are dropped automatically as that fills.`),
+            /* The cache line alone reported a fraction of the store: marks and their
+               viewing histories outgrow it on any real library, so a page that showed
+               only the cache made a nearly full store look nearly empty. The extension
+               builds declare unlimitedStorage, so there is no browser ceiling to measure
+               against and saying so is more use than inventing one. */
+            makeEl('div', { className:'enh-settings-card-description', id:'enh-storage-status', style:{ marginTop:'8px' } },
+                IS_EXTENSION_BUILD
+                    ? t('settings_storage_uncapped', [formatCacheBytes(storedBytes())])
+                    : t('settings_storage_total', [formatCacheBytes(storedBytes())]))
         );
         /* Only the extension builds can be stale — the userscript updates through its
            manager — so the control exists only where it means something. */

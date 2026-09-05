@@ -1,5 +1,16 @@
 # Changelog
 
+## Unreleased
+
+### Fixed
+
+- The extension builds now ask for `unlimitedStorage`. Chrome caps `chrome.storage.local` at 10 MB without it, and the cache budget alone is 6 MB of that, so the 5,000 marks this build says it will hold could never fit: only about 573 of them, at the worst-case size the bounds allow, and the rest were refused. The permission raises no prompt, sends nothing anywhere and only stops the browser refusing writes. A test used to assert the opposite, on the reasoning that the byte budget made the permission unnecessary; that budget is a cache budget, and it is most of what the quota allowed rather than a substitute for it.
+- Settings, Data now reports what the whole store is using rather than the cache alone. On any real library the marks and their viewing histories are most of it, so a page that showed only the cache made a nearly full store look nearly empty.
+
+### Changed
+
+- Testing: the row-integration scenarios wait for a row to actually be watched before revealing it. Registration arrives through a frame callback, so on a loaded machine the reveal could go out first, and the lookup count afterwards then read exactly like the feature deciding not to ask. That made a real failure and a timing accident indistinguishable, and cost one full run in three on a busy machine.
+
 ## 2.21.0 (2026-09-02)
 
 ### Added

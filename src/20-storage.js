@@ -488,6 +488,26 @@
         try { return readCacheUsage().bytes; }
         catch { return 0; }
     }
+    /* The whole store, not only the cache. Marks and their viewing histories are most of
+       it once a library grows, and a Data page that reported the cache alone made a store
+       near its own bounds look nearly empty. Counted in UTF-8 bytes, because that is what
+       the backend charges for. */
+    function storedBytes() {
+        try {
+            let bytes = 0;
+            GM_listValues().forEach(storageKey => {
+                if (!String(storageKey).startsWith(PREFIX)) return;
+                let raw = null;
+                try { raw = GM_getValue(storageKey, null); }
+                catch { return; }
+                if (raw === null || raw === undefined) return;
+                const text = typeof raw === 'string' ? raw : JSON.stringify(raw);
+                bytes += encodedByteLength(storageKey) + encodedByteLength(text);
+            });
+            return bytes;
+        }
+        catch { return 0; }
+    }
     function formatCacheBytes(bytes) {
         const value = Number(bytes) || 0;
         if (value < 1024) return `${value} B`;

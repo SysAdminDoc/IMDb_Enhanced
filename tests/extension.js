@@ -593,6 +593,12 @@ assert.deepStrictEqual(Object.keys(emittedLocales).sort(), ['en', PSEUDO_LOCALE]
     ['extension-firefox', firefoxDir],
     ['extension-store', storeDir],
 ].forEach(([name, dir]) => {
+    /* Every profile, not only the Chromium one. chrome.storage.local stops at 10 MB
+       without this, and the declared mark bounds are several times that, so a profile
+       that omits it refuses writes long before the library it advertises is full. */
+    const profileManifest = JSON.parse(fs.readFileSync(path.join(dir, 'manifest.json'), 'utf8'));
+    assert((profileManifest.permissions || []).includes('unlimitedStorage'),
+        `${name} must declare unlimitedStorage, or its store is capped below the bounds the build enforces`);
     Object.entries(emittedLocales).forEach(([locale, expected]) => {
         const file = path.join(dir, '_locales', locale, 'messages.json');
         assert(fs.existsSync(file), `${name} is missing _locales/${locale}/messages.json`);

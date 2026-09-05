@@ -712,6 +712,8 @@
         settings_sample_source_values_not_live_title_data: 'Sample values, not live title data.',
         settings_saved_type_to_replace: 'Saved. Type to replace it.',
         settings_scores_and_availability_lookups_are_cached: 'Scores and availability lookups are cached locally for up to seven days.',
+        settings_storage_total: 'Everything this build keeps on this device, marks and cache together, uses $1.',
+        settings_storage_uncapped: 'Everything this build keeps on this device, marks and cache together, uses $1. The browser puts no ceiling on it, so the only limits are the ones this page enforces.',
         settings_seen_titles: 'Seen titles',
         settings_seen_without_viewing_date_one: '$1 Seen title has no viewing date.',
         settings_seen_without_viewing_date_other: '$1 Seen titles have no viewing date.',

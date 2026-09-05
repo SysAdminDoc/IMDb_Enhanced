@@ -2266,8 +2266,16 @@ test('a persistently full quota reports a scrubbed failure and a recovery action
     assert(script.includes("id:'enh-clearcache-btn'"), 'the recovery control named by the quota toast must exist');
     assert(/Settings → Data → Clear cache frees it/.test(script), 'the quota toast should name the recovery path');
     const manifest = JSON.parse(fs.readFileSync(path.join(root, 'extension', 'manifest.json'), 'utf8'));
-    assert(!(manifest.permissions || []).includes('unlimitedStorage'),
-        'the byte budget exists so the build never needs unlimitedStorage');
+    /* This assertion used to read the other way round, on the reasoning that "the byte
+       budget exists so the build never needs unlimitedStorage". The byte budget is a
+       CACHE budget, and it is 6 MB of a 10 MB chrome.storage.local quota. Marks are not
+       in it: the declared bounds allow USER_MARKS_MAX marks at up to
+       256 + title + note + viewings * 64 bytes each, which is 34.9 MB before the cache
+       is counted. Only 573 worst-case marks fit in what the cache budget leaves, against
+       the 5,000 the product documents, so the old reasoning had the two budgets confused
+       and the permission is required rather than avoidable. */
+    assert((manifest.permissions || []).includes('unlimitedStorage'),
+        'marks are bounded well past the 10 MB chrome.storage.local quota, so the build needs unlimitedStorage');
 });
 
 test('settings use six accessible desktop destinations', () => {

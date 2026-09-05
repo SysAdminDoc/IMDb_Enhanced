@@ -2286,7 +2286,16 @@
         cacheCard.append(
             makeEl('button', { type:'button', className:'enh-settings-footer-btn', id:'enh-clearcache-btn', title:t('text_clear_cached_third_party_lookups') }, t('label_clear_cache')),
             makeEl('div', { className:'enh-settings-card-description', id:'enh-cache-status', style:{ marginTop:'8px' } },
-                `${cacheCount()} entries currently cached, using ${formatCacheBytes(cacheBytes())} of ${formatCacheBytes(CACHE_TOTAL_BYTE_BUDGET)}. The oldest are dropped automatically as that fills.`)
+                `${cacheCount()} entries currently cached, using ${formatCacheBytes(cacheBytes())} of ${formatCacheBytes(CACHE_TOTAL_BYTE_BUDGET)}. The oldest are dropped automatically as that fills.`),
+            /* The cache line alone reported a fraction of the store: marks and their
+               viewing histories outgrow it on any real library, so a page that showed
+               only the cache made a nearly full store look nearly empty. The extension
+               builds declare unlimitedStorage, so there is no browser ceiling to measure
+               against and saying so is more use than inventing one. */
+            makeEl('div', { className:'enh-settings-card-description', id:'enh-storage-status', style:{ marginTop:'8px' } },
+                IS_EXTENSION_BUILD
+                    ? t('settings_storage_uncapped', [formatCacheBytes(storedBytes())])
+                    : t('settings_storage_total', [formatCacheBytes(storedBytes())]))
         );
         /* Only the extension builds can be stale — the userscript updates through its
            manager — so the control exists only where it means something. */
