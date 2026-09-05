@@ -158,6 +158,64 @@
         const match = raw.match(/\d+/);
         return normalizeUserMarkRuntime(match ? Number(match[0]) : raw);
     }
+    /* IE-169: what two people could both watch, worked out here rather than anywhere else.
+       Both files go through the same reader the import uses, so the size ceiling, the row
+       limit, the header mapping and the refusal message are the ones already in place and
+       there is no second idea of what a watchlist file is. Nothing is written and nothing
+       leaves the device: this returns a list and the caller decides what to do with it. */
+    function compareCsvWatchlists(left, right) {
+        const read = value => {
+            const rows = parseCsvTable(value);
+            const columns = describeCsvColumns(rows[0]);
+            if (columns.imdbId < 0 && columns.title < 0 && columns.originalTitle < 0) {
+                throw failure('unknown', t('error_csv_no_usable_column'));
+            }
+            const entries = [];
+            const seen = new Set();
+            rows.slice(1, CSV_IMPORT_ROW_LIMIT + 1).forEach(row => {
+                const rawId = readCsvCell(row, columns.imdbId);
+                const id = /^tt\d+$/.test(rawId) ? rawId : '';
+                const title = (readCsvCell(row, columns.title)
+                    || readCsvCell(row, columns.originalTitle) || '').trim();
+                const year = normalizeUserMarkYear(readCsvCell(row, columns.year));
+                if (!id && !title) return;
+                /* Both identities are kept, not one or the other. An IMDb export is keyed
+                   by id and a list somebody typed is keyed by title, and a comparison that
+                   picked one key per file could never match the two against each other,
+                   which is the pairing this feature exists for. */
+                const titleKey = title ? `${title.toLocaleLowerCase()}|${year ?? ''}` : '';
+                const dedupe = id || titleKey;
+                if (seen.has(dedupe)) return;
+                seen.add(dedupe);
+                entries.push({ id, title, year, titleKey });
+            });
+            return entries;
+        };
+        const first = read(left);
+        const second = read(right);
+        const byId = new Map();
+        const byTitle = new Map();
+        second.forEach(entry => {
+            if (entry.id) byId.set(entry.id, entry);
+            if (entry.titleKey) byTitle.set(entry.titleKey, entry);
+        });
+        const shared = [];
+        const taken = new Set();
+        first.forEach(entry => {
+            const match = (entry.id && byId.get(entry.id)) || (entry.titleKey && byTitle.get(entry.titleKey));
+            if (!match || taken.has(match)) return;
+            taken.add(match);
+            // Whichever side knew the id or the title, so a match is named either way.
+            shared.push({
+                id: entry.id || match.id,
+                title: entry.title || match.title,
+                year: entry.year ?? match.year,
+            });
+        });
+        shared.sort((a, b) => a.title.localeCompare(b.title));
+        return { shared, left:first.length, right:second.length };
+    }
+
     function prepareCsvMarkImport(value, currentMarks = getUserMarks(true)) {
         const rows = parseCsvTable(value);
         const columns = describeCsvColumns(rows[0]);

@@ -314,6 +314,7 @@ function loadScriptTestHooks({ withoutDeleteValue = false, withheldCredentials =
         normalizeUserMarkEntries,
         USER_MARKS_SCAN_LIMIT,
         parseCsvTable,
+        compareCsvWatchlists,
         prepareCsvMarkImport,
         describeCsvMarkImport,
         CSV_IMPORT_ROW_LIMIT,
@@ -3140,6 +3141,68 @@ test('the shared backup size gate refuses by bytes and admits by bytes', () => {
        which is how the export and the import came to disagree about units before. */
     assert.strictEqual((script.match(/settingsTextTooLarge\(/g) || []).length, 4,
         'one definition and the three gates that use it');
+});
+
+/* IE-169: what two people could both watch, from two exported files and nothing else.
+   The point of building it on the import reader is that the ceilings and the refusals are
+   the ones already in place rather than a second idea of what a watchlist file is. */
+test('two exported watchlists produce what they have in common', () => {
+    const hooks = loadScriptTestHooks();
+
+    const imdb = 'Const,Title,Year\n'
+        + 'tt0133093,The Matrix,1999\n'
+        + 'tt0111161,The Shawshank Redemption,1994\n'
+        + 'tt0068646,The Godfather,1972\n';
+    const letterboxd = 'Name,Year,imdbID\n'
+        + 'The Matrix,1999,tt0133093\n'
+        + 'Heat,1995,tt0113277\n'
+        + 'The Godfather,1972,tt0068646\n';
+
+    const result = hooks.compareCsvWatchlists(imdb, letterboxd);
+    /* Array.from, because the hooks evaluate the userscript in their own realm and an
+       array that came back from it has a different Array prototype: deepStrictEqual
+       compares prototypes and refuses two lists that print identically. */
+    assert.deepStrictEqual(Array.from(result.shared, entry => entry.id), ['tt0068646', 'tt0133093'],
+        'the two both lists carry, and only those');
+    assert.deepStrictEqual(Array.from(result.shared, entry => entry.title),
+        ['The Godfather', 'The Matrix'], 'named, and in a stable order');
+    assert.strictEqual(result.left, 3, 'and it says how big each side was');
+    assert.strictEqual(result.right, 3);
+
+    /* A file with no id column is matched on title and year, which is the same fallback
+       the importer uses rather than a looser one invented for this. */
+    const noIds = 'Title,Year\nthe matrix,1999\nCasablanca,1942\n';
+    const byTitle = hooks.compareCsvWatchlists(imdb, noIds);
+    assert.deepStrictEqual(Array.from(byTitle.shared, entry => entry.title), ['The Matrix'],
+        'a title match is case-insensitive and still carries the id from the side that had one');
+    assert.strictEqual(byTitle.shared[0].id, 'tt0133093', 'and keeps the id the other file had');
+
+    // The same title in a different year is a different film, and must not match.
+    const wrongYear = 'Title,Year\nThe Matrix,2003\n';
+    assert.strictEqual(hooks.compareCsvWatchlists(imdb, wrongYear).shared.length, 0,
+        'a remake is not the film');
+
+    /* And the refusals are the import path's, not a new failure mode. */
+    /* Compared against the catalog's own wording rather than a guess at it, so the
+       refusals stay the import path's messages instead of drifting into new ones. */
+    const refusal = second => {
+        try { hooks.compareCsvWatchlists(imdb, second); }
+        catch (error) { return String(error && error.message || error); }
+        return '';
+    };
+    assert.strictEqual(refusal('Nothing,Useful\n1,2\n'), hooks.MESSAGES.error_csv_no_usable_column,
+        'a file with no usable column is refused with the message an import would give');
+    assert.strictEqual(refusal(''), hooks.MESSAGES.error_csv_empty,
+        'and an empty one with the message an import would give');
+
+    /* The row limit is the import path's too, so a file past it contributes nothing beyond
+       it rather than being read in full here. */
+    const many = ['Const,Title,Year']
+        .concat(Array.from({ length: 5 }, (_, index) => `tt${String(index).padStart(7, '0')},T${index},2000`))
+        .join('\n');
+    assert.strictEqual(hooks.compareCsvWatchlists(many, many).left, 5,
+        'a small file is read whole');
+    assert.ok(hooks.CSV_IMPORT_ROW_LIMIT > 0, 'and the limit it would be cut at is the shared one');
 });
 
 test('the settings size guard measures bytes, not UTF-16 code units', () => {

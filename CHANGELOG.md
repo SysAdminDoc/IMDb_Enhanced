@@ -19,6 +19,7 @@
 
 ### Added
 
+- Settings, Data can compare two exported watchlist CSVs and list what appears on both, so two people can find something they would each watch. Both files are read on your device, neither is stored, and a file it cannot read is refused with the same message importing it would give. Titles match on IMDb id where a file carries one and on title and year where it does not.
 - Settings, Data now draws a calendar of the days you watched something, a year at a time, from the dates already on your own marks. It uses the same rating colour scale you picked rather than a new one, places each day against the busiest day of that year, and states the count on every day. Nothing is fetched. A year with no dated viewings shows an empty calendar and says why.
 - A media server or Servarr instance reachable over IPv6 loopback can be configured. A service bound to IPv6 only answers on `[::1]`, which was the one address the settings field refused, so the address the service itself prints was the one that would not work. Every other host is still refused, and all four places that decide whether a local request can leave now carry it, which a test enforces rather than assumes.
 - The awards summary can sit beside the rating instead of most of a screen below it. IMDb already writes "Won 16 Primetime Emmys" and "58 wins & 247 nominations total" into the page; this moves them up and links to the awards tab IMDb itself pointed at. Nothing is fetched, and a title that has won nothing shows nothing rather than a badge reading zero. Off by default, under Tools.

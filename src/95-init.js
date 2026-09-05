@@ -331,6 +331,7 @@
                 buildDiagnosticsReport,
                 cacheCount,
                 cacheBytes,
+                compareCsvWatchlists,
                 getRatingRamp,
                 settingsTextTooLarge,
                 SCORE_CORRECTION_URL_LIMIT,

@@ -903,6 +903,12 @@
         settings_a_readable_summary_for_bug_reports_credentials: 'A readable summary for bug reports. Credentials, marked titles, and the page query string are never included.',
         settings_a_year_review_appears_after_10_dated: 'A year review appears after 10 dated viewings in one year.',
         settings_actions_placed_near_a_movie_or_show: 'Actions placed near a movie or show title.',
+        settings_compare_watchlists: 'Compare two watchlists',
+        settings_compare_watchlists_hint: 'Choose two exported CSV files to see which titles appear in both. Both are read on this device and neither is stored.',
+        settings_compare_pick_two: 'Choose two CSV files first.',
+        toast_compare_result_one: '$1 title is on both lists',
+        toast_compare_result_other: '$1 titles are on both lists',
+        toast_compare_none: 'Nothing is on both lists',
         settings_activity_calendar: 'Watching calendar',
         settings_activity_calendar_empty: 'No dated viewings in this year. A viewing gets a date when you mark a title Seen, or when you import a history that carries one.',
         settings_activity_by_year: 'Activity by year',
@@ -3751,6 +3757,64 @@
         const match = raw.match(/\d+/);
         return normalizeUserMarkRuntime(match ? Number(match[0]) : raw);
     }
+    /* IE-169: what two people could both watch, worked out here rather than anywhere else.
+       Both files go through the same reader the import uses, so the size ceiling, the row
+       limit, the header mapping and the refusal message are the ones already in place and
+       there is no second idea of what a watchlist file is. Nothing is written and nothing
+       leaves the device: this returns a list and the caller decides what to do with it. */
+    function compareCsvWatchlists(left, right) {
+        const read = value => {
+            const rows = parseCsvTable(value);
+            const columns = describeCsvColumns(rows[0]);
+            if (columns.imdbId < 0 && columns.title < 0 && columns.originalTitle < 0) {
+                throw failure('unknown', t('error_csv_no_usable_column'));
+            }
+            const entries = [];
+            const seen = new Set();
+            rows.slice(1, CSV_IMPORT_ROW_LIMIT + 1).forEach(row => {
+                const rawId = readCsvCell(row, columns.imdbId);
+                const id = /^tt\d+$/.test(rawId) ? rawId : '';
+                const title = (readCsvCell(row, columns.title)
+                    || readCsvCell(row, columns.originalTitle) || '').trim();
+                const year = normalizeUserMarkYear(readCsvCell(row, columns.year));
+                if (!id && !title) return;
+                /* Both identities are kept, not one or the other. An IMDb export is keyed
+                   by id and a list somebody typed is keyed by title, and a comparison that
+                   picked one key per file could never match the two against each other,
+                   which is the pairing this feature exists for. */
+                const titleKey = title ? `${title.toLocaleLowerCase()}|${year ?? ''}` : '';
+                const dedupe = id || titleKey;
+                if (seen.has(dedupe)) return;
+                seen.add(dedupe);
+                entries.push({ id, title, year, titleKey });
+            });
+            return entries;
+        };
+        const first = read(left);
+        const second = read(right);
+        const byId = new Map();
+        const byTitle = new Map();
+        second.forEach(entry => {
+            if (entry.id) byId.set(entry.id, entry);
+            if (entry.titleKey) byTitle.set(entry.titleKey, entry);
+        });
+        const shared = [];
+        const taken = new Set();
+        first.forEach(entry => {
+            const match = (entry.id && byId.get(entry.id)) || (entry.titleKey && byTitle.get(entry.titleKey));
+            if (!match || taken.has(match)) return;
+            taken.add(match);
+            // Whichever side knew the id or the title, so a match is named either way.
+            shared.push({
+                id: entry.id || match.id,
+                title: entry.title || match.title,
+                year: entry.year ?? match.year,
+            });
+        });
+        shared.sort((a, b) => a.title.localeCompare(b.title));
+        return { shared, left:first.length, right:second.length };
+    }
+
     function prepareCsvMarkImport(value, currentMarks = getUserMarks(true)) {
         const rows = parseCsvTable(value);
         const columns = describeCsvColumns(rows[0]);
@@ -20431,6 +20495,43 @@ ${scopedRules('.enh-zoom', {
         const csvPreview = makeEl('div', {
             className:'enh-csv-preview', id:'enh-csv-preview', role:'status', 'aria-live':'polite',
         }, t('settings_paste_csv_data_or_choose_a_file'));
+        /* IE-169: two exported lists, read here and compared here. It reuses the import
+           reader, so the size ceiling, the row limit and the refusal messages are the ones
+           already in place; nothing is uploaded, and the result is shown rather than
+           stored, because a comparison is a question somebody asked once. */
+        const compareLeft = makeEl('input', { type:'file', accept:'.csv,text/csv', id:'enh-compare-a' });
+        const compareRight = makeEl('input', { type:'file', accept:'.csv,text/csv', id:'enh-compare-b' });
+        const compareResult = makeEl('div', {
+            className:'enh-settings-card-description', id:'enh-compare-result',
+            role:'status', 'aria-live':'polite',
+        });
+        const compareRun = makeEl('button', {
+            type:'button', className:'enh-settings-footer-btn', id:'enh-compare-run',
+            onClick: async () => {
+                const [a, b] = [compareLeft.files?.[0], compareRight.files?.[0]];
+                if (!a || !b) { showToast(t('settings_compare_pick_two'), 3500); return; }
+                if (a.size > CSV_IMPORT_TEXT_LIMIT || b.size > CSV_IMPORT_TEXT_LIMIT) {
+                    showToast(t('error_csv_too_large', [CSV_IMPORT_TEXT_MB]), 4500);
+                    return;
+                }
+                compareRun.disabled = true;
+                try {
+                    const [left, right] = await Promise.all([a.text(), b.text()]);
+                    const { shared } = compareCsvWatchlists(left, right);
+                    setTextIfChanged(compareResult, shared.length
+                        ? shared.map(entry => (entry.year ? `${entry.title} (${entry.year})` : entry.title)).join(', ')
+                        : t('toast_compare_none'));
+                    showToast(shared.length
+                        ? tCount('toast_compare_result', shared.length)
+                        : t('toast_compare_none'), 4000);
+                } catch (error) {
+                    showToast(getRequestErrorMessage(error) || String(error?.message || error), 5000);
+                } finally {
+                    compareRun.disabled = false;
+                }
+            },
+        }, t('settings_compare_watchlists'));
+
         const csvApply = makeEl('button', {
             type:'button', className:'enh-settings-footer-btn', id:'enh-csv-apply', disabled:'disabled',
         }, t('settings_import_preview'));
@@ -20498,7 +20599,11 @@ ${scopedRules('.enh-zoom', {
             makeEl('label', { className:'enh-import-label', for:'enh-csv-textarea', style:{ marginTop:'10px' } }, t('label_or_paste_csv_data')),
             csvTextarea,
             csvPreview,
-            makeEl('div', { className:'enh-import-actions' }, csvPreviewButton, csvApply)
+            makeEl('div', { className:'enh-import-actions' }, csvPreviewButton, csvApply),
+            makeEl('div', { className:'enh-import-label' }, t('settings_compare_watchlists')),
+            makeEl('div', { className:'enh-settings-card-description' }, t('settings_compare_watchlists_hint')),
+            makeEl('div', { className:'enh-import-actions' }, compareLeft, compareRight, compareRun),
+            compareResult
         );
         /* The marks as a spreadsheet, and as the two columns Letterboxd's importer
            reads. A backup is for coming back here; this is for leaving, which is a
@@ -21358,6 +21463,7 @@ ${scopedRules('.enh-zoom', {
                 buildDiagnosticsReport,
                 cacheCount,
                 cacheBytes,
+                compareCsvWatchlists,
                 getRatingRamp,
                 settingsTextTooLarge,
                 SCORE_CORRECTION_URL_LIMIT,

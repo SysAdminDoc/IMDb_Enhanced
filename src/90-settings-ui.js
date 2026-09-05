@@ -2158,6 +2158,43 @@
         const csvPreview = makeEl('div', {
             className:'enh-csv-preview', id:'enh-csv-preview', role:'status', 'aria-live':'polite',
         }, t('settings_paste_csv_data_or_choose_a_file'));
+        /* IE-169: two exported lists, read here and compared here. It reuses the import
+           reader, so the size ceiling, the row limit and the refusal messages are the ones
+           already in place; nothing is uploaded, and the result is shown rather than
+           stored, because a comparison is a question somebody asked once. */
+        const compareLeft = makeEl('input', { type:'file', accept:'.csv,text/csv', id:'enh-compare-a' });
+        const compareRight = makeEl('input', { type:'file', accept:'.csv,text/csv', id:'enh-compare-b' });
+        const compareResult = makeEl('div', {
+            className:'enh-settings-card-description', id:'enh-compare-result',
+            role:'status', 'aria-live':'polite',
+        });
+        const compareRun = makeEl('button', {
+            type:'button', className:'enh-settings-footer-btn', id:'enh-compare-run',
+            onClick: async () => {
+                const [a, b] = [compareLeft.files?.[0], compareRight.files?.[0]];
+                if (!a || !b) { showToast(t('settings_compare_pick_two'), 3500); return; }
+                if (a.size > CSV_IMPORT_TEXT_LIMIT || b.size > CSV_IMPORT_TEXT_LIMIT) {
+                    showToast(t('error_csv_too_large', [CSV_IMPORT_TEXT_MB]), 4500);
+                    return;
+                }
+                compareRun.disabled = true;
+                try {
+                    const [left, right] = await Promise.all([a.text(), b.text()]);
+                    const { shared } = compareCsvWatchlists(left, right);
+                    setTextIfChanged(compareResult, shared.length
+                        ? shared.map(entry => (entry.year ? `${entry.title} (${entry.year})` : entry.title)).join(', ')
+                        : t('toast_compare_none'));
+                    showToast(shared.length
+                        ? tCount('toast_compare_result', shared.length)
+                        : t('toast_compare_none'), 4000);
+                } catch (error) {
+                    showToast(getRequestErrorMessage(error) || String(error?.message || error), 5000);
+                } finally {
+                    compareRun.disabled = false;
+                }
+            },
+        }, t('settings_compare_watchlists'));
+
         const csvApply = makeEl('button', {
             type:'button', className:'enh-settings-footer-btn', id:'enh-csv-apply', disabled:'disabled',
         }, t('settings_import_preview'));
@@ -2225,7 +2262,11 @@
             makeEl('label', { className:'enh-import-label', for:'enh-csv-textarea', style:{ marginTop:'10px' } }, t('label_or_paste_csv_data')),
             csvTextarea,
             csvPreview,
-            makeEl('div', { className:'enh-import-actions' }, csvPreviewButton, csvApply)
+            makeEl('div', { className:'enh-import-actions' }, csvPreviewButton, csvApply),
+            makeEl('div', { className:'enh-import-label' }, t('settings_compare_watchlists')),
+            makeEl('div', { className:'enh-settings-card-description' }, t('settings_compare_watchlists_hint')),
+            makeEl('div', { className:'enh-import-actions' }, compareLeft, compareRight, compareRun),
+            compareResult
         );
         /* The marks as a spreadsheet, and as the two columns Letterboxd's importer
            reads. A backup is for coming back here; this is for leaving, which is a

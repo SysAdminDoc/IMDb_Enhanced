@@ -1670,6 +1670,24 @@
   "settings_actions_placed_near_a_movie_or_show": {
     "message": "[!! Actions placed near a movie or show title. !!]"
   },
+  "settings_compare_watchlists": {
+    "message": "[!! Compare two watchlists !!]"
+  },
+  "settings_compare_watchlists_hint": {
+    "message": "[!! Choose two exported CSV files to see which titles appear in both. Both are read on this device and neither is stored. !!]"
+  },
+  "settings_compare_pick_two": {
+    "message": "[!! Choose two CSV files first. !!]"
+  },
+  "toast_compare_result_one": {
+    "message": "[!! $1 title is on both lists !!]"
+  },
+  "toast_compare_result_other": {
+    "message": "[!! $1 titles are on both lists !!]"
+  },
+  "toast_compare_none": {
+    "message": "[!! Nothing is on both lists !!]"
+  },
   "settings_activity_calendar": {
     "message": "[!! Watching calendar !!]"
   },
