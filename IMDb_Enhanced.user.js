@@ -1288,9 +1288,25 @@
        roughly forty bytes a date. Per destination: a name and a URL template at theirs.
        These are ceilings rather than estimates, and the export is pretty-printed, hence
        the indentation allowance. */
-    const USER_MARK_JSON_BYTES_MAX = 256
-        + USER_MARK_TITLE_LIMIT + USER_MARK_NOTE_LIMIT + (USER_MARK_VIEWINGS_MAX * 64);
-    const SITE_JSON_BYTES_MAX = 256 + SETTING_TEXT_LIMIT + URL_TEMPLATE_TEXT_LIMIT;
+    /* Every text ceiling above is a slice(), so it counts UTF-16 code units, while the
+       thing being bounded here is bytes of JSON. Two expansions sit between them: UTF-8
+       spends up to three bytes on a code unit, and JSON escaping spends up to six on one
+       (\u001f). Six covers both, and erring high is the safe direction for a guard - too
+       high admits a file the storage layer then refuses with a message about storage,
+       while too low refuses a backup the build's own bounds allowed somebody to make. */
+    const JSON_BYTES_PER_CHAR_MAX = 6;
+    /* Worst case per mark, and it has to name every field normalizeUserMark keeps, not
+       only the two big ones: the earlier version counted the title, the note and the
+       viewings and silently omitted rating, year, genres, imdbRating, runtime, series and
+       kind, which put the real ceiling well above the limit derived from it. Viewings get
+       96 rather than 64 because a viewing carries its own rating as well as its date. */
+    const USER_MARK_JSON_BYTES_MAX = 512
+        + (USER_MARK_TITLE_LIMIT * JSON_BYTES_PER_CHAR_MAX)
+        + (USER_MARK_NOTE_LIMIT * JSON_BYTES_PER_CHAR_MAX)
+        + (USER_MARK_GENRES_MAX * USER_MARK_GENRE_TEXT_LIMIT * JSON_BYTES_PER_CHAR_MAX)
+        + (USER_MARK_VIEWINGS_MAX * 96);
+    const SITE_JSON_BYTES_MAX = 256
+        + ((SETTING_TEXT_LIMIT + URL_TEMPLATE_TEXT_LIMIT) * JSON_BYTES_PER_CHAR_MAX);
     /* Two site lists, watch and external, plus room for every other preference, the
        credential fields an export with credentials carries, and the envelope itself. */
     const SETTINGS_IMPORT_TEXT_LIMIT = (USER_MARKS_MAX * USER_MARK_JSON_BYTES_MAX)
@@ -3269,7 +3285,11 @@
     function parseCsvTable(value) {
         const text = String(value || '').replace(/^\uFEFF/, '');
         if (!text.trim()) throw failure('unknown', t('error_csv_empty'));
-        if (text.length > CSV_IMPORT_TEXT_LIMIT) throw failure('unknown', t('error_csv_too_large', [CSV_IMPORT_TEXT_MB]));
+        /* Bytes, because CSV_IMPORT_TEXT_LIMIT is a byte budget and the settings panel's
+           file picker already compares it against File.size. Measuring the parsed text in
+           UTF-16 code units meant one limit meant two different sizes depending on whether
+           the CSV arrived as a file or as pasted text. */
+        if (encodedByteLength(text) > CSV_IMPORT_TEXT_LIMIT) throw failure('unknown', t('error_csv_too_large', [CSV_IMPORT_TEXT_MB]));
         const rows = [];
         let row = [];
         let field = '';

@@ -4,7 +4,11 @@
     function parseCsvTable(value) {
         const text = String(value || '').replace(/^\uFEFF/, '');
         if (!text.trim()) throw failure('unknown', t('error_csv_empty'));
-        if (text.length > CSV_IMPORT_TEXT_LIMIT) throw failure('unknown', t('error_csv_too_large', [CSV_IMPORT_TEXT_MB]));
+        /* Bytes, because CSV_IMPORT_TEXT_LIMIT is a byte budget and the settings panel's
+           file picker already compares it against File.size. Measuring the parsed text in
+           UTF-16 code units meant one limit meant two different sizes depending on whether
+           the CSV arrived as a file or as pasted text. */
+        if (encodedByteLength(text) > CSV_IMPORT_TEXT_LIMIT) throw failure('unknown', t('error_csv_too_large', [CSV_IMPORT_TEXT_MB]));
         const rows = [];
         let row = [];
         let field = '';

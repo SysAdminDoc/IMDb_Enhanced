@@ -2852,14 +2852,29 @@ test('settings exports are canonical and fully re-importable', () => {
         { length: maximumHooks.USER_MARK_VIEWINGS_MAX },
         // Distinct and in the past: a repeated date is deduplicated and a future one is
         // rejected, so either would quietly make this a smaller store than it claims.
-        (_, day) => ({ date:`2025-${String(1 + Math.floor(day / 28)).padStart(2, '0')}-${String(1 + (day % 28)).padStart(2, '0')}` })
+        (_, day) => ({ date:`2025-${String(1 + Math.floor(day / 28)).padStart(2, '0')}-${String(1 + (day % 28)).padStart(2, '0')}`, rating:10 })
     );
     for (let index = 0; index < maximumHooks.USER_MARKS_MAX; index++) {
         maximumMarks[`tt${String(index).padStart(7, '0')}`] = {
             state:index % 2 ? 'watched' : 'skip',
-            title:'T'.repeat(maximumHooks.USER_MARK_TITLE_LIMIT),
-            note:'N'.repeat(maximumHooks.USER_MARK_NOTE_LIMIT),
+            /* Three UTF-8 bytes a character. The limit is enforced in bytes while the
+               field ceilings count UTF-16 code units, so an ASCII store measures this
+               guarantee in the one case where the two agree and proves nothing about
+               the rest. A title in Japanese is an ordinary title. */
+            title:'\u65e5'.repeat(maximumHooks.USER_MARK_TITLE_LIMIT),
+            note:'\u65e5'.repeat(maximumHooks.USER_MARK_NOTE_LIMIT),
             viewings:maximumViewings.map(entry => ({ ...entry })),
+            /* The rest of what normalizeUserMark keeps. Seeding only state, title, note
+               and viewings left seven bounded fields out of the "maximum", which is how
+               a store the bounds allow could still exceed the limit derived from them. */
+            rating:10,
+            year:2024,
+            genres:Array.from({ length: maximumHooks.USER_MARK_GENRES_MAX },
+                (_, slot) => `${slot}${'\u65e5'.repeat(maximumHooks.USER_MARK_GENRE_TEXT_LIMIT - 1)}`),
+            imdbRating:9.9,
+            runtime:600,
+            series:'tt9999999',
+            kind:'series',
             ts:index,
         };
     }
@@ -9046,7 +9061,7 @@ asyncTest('a store at every bound survives the encrypted backup path', async () 
         { length: hooks.USER_MARK_VIEWINGS_MAX },
         // Distinct and in the past: a repeated date is deduplicated and a future one is
         // rejected, so either would quietly make this a smaller store than it claims.
-        (_, day) => ({ date:`2025-${String(1 + Math.floor(day / 28)).padStart(2, '0')}-${String(1 + (day % 28)).padStart(2, '0')}` })
+        (_, day) => ({ date:`2025-${String(1 + Math.floor(day / 28)).padStart(2, '0')}-${String(1 + (day % 28)).padStart(2, '0')}`, rating:10 })
     );
     const marks = {};
     for (let index = 0; index < hooks.USER_MARKS_MAX; index++) {
@@ -9062,7 +9077,7 @@ asyncTest('a store at every bound survives the encrypted backup path', async () 
     hooks.seedStoredSetting('radarrApiKey', 'radarr-secret-value');
 
     const envelope = await hooks.createEncryptedBackup('correct horse battery staple');
-    assert(envelope.length <= hooks.SETTINGS_IMPORT_TEXT_LIMIT,
+    assert(hooks.encodedByteLength(envelope) <= hooks.SETTINGS_IMPORT_TEXT_LIMIT,
         `a maximal encrypted backup (${envelope.length}) must fit the limit (${hooks.SETTINGS_IMPORT_TEXT_LIMIT})`);
     const opened = await hooks.readEncryptedBackup(JSON.parse(envelope), 'correct horse battery staple');
     assert.strictEqual(opened.radarrApiKey, 'radarr-secret-value',
