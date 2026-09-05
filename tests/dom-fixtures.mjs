@@ -334,6 +334,76 @@ await runFixture('title', async (window, hooks) => {
     }
 });
 
+/* IE-166: IMDb writes the awards summary into the page and then puts it most of a screen
+   below the rating. This moves it up beside the rating and fetches nothing to do it, so the
+   cases that matter are a title with awards, a title without, and a section that is there
+   but has been renamed underneath. */
+await runFixture('title', async (window, hooks) => {
+    try {
+        window.GM_setValue('imdb_enh_awardsBadge', true);
+        await hooks.runFeature('awardsBadge');
+
+        const badge = window.document.querySelector('.enh-awards-badge');
+        assert.ok(badge, 'a title with awards should carry the badge');
+        assert.match(badge.textContent, /Won 16 Primetime Emmys/, "IMDb's own headline is kept");
+        assert.match(badge.textContent, /58 wins & 247 nominations total/, 'and its own totals line');
+        assert.equal(badge.getAttribute('href'),
+            'https://www.imdb.com/title/tt0903747/awards/?ref_=tt_awd',
+            'the badge links to the awards tab IMDb itself pointed at');
+        assert.match(badge.getAttribute('aria-label') || '', /Awards for this title/,
+            'and says what it is out loud');
+        assert.ok(badge.closest('[data-testid="hero-rating-bar__aggregate-rating"], .enh-native-score-rail')
+            || badge.parentElement?.querySelector('[data-testid="hero-rating-bar__aggregate-rating"]'),
+            'the badge belongs beside the rating, which is the whole point of moving it');
+
+        // A second init must not stack a second badge on the same page.
+        await hooks.runFeature('awardsBadge');
+        assert.equal(window.document.querySelectorAll('.enh-awards-badge').length, 1,
+            'running twice must not leave two badges');
+    } finally {
+        hooks.stopFeature('awardsBadge');
+        window.GM_setValue('imdb_enh_awardsBadge', false);
+    }
+    assert.equal(window.document.querySelector('.enh-awards-badge'), null,
+        'stopping the feature takes the badge away again');
+});
+
+/* A title with no awards section at all, which is most of them, and a section that is
+   present but whose inner markup has been renamed. The first is silence; the second is a
+   journal entry, because it is the shape a page change takes. */
+await runFixture('title', async (window, hooks) => {
+    try {
+        window.document.querySelector('[data-testid="awards"]')?.closest('section')?.remove();
+        window.GM_setValue('imdb_enh_awardsBadge', true);
+        await hooks.runFeature('awardsBadge');
+        assert.equal(window.document.querySelector('.enh-awards-badge'), null,
+            'a title with no awards gets no badge rather than a badge reading zero');
+        assert.equal(hooks.getFeatureFailures().filter(entry => entry.key === 'awardsBadge').length, 0,
+            'and having no awards is not a failure worth journaling');
+    } finally {
+        hooks.stopFeature('awardsBadge');
+        window.GM_setValue('imdb_enh_awardsBadge', false);
+    }
+});
+
+await runFixture('title', async (window, hooks) => {
+    try {
+        const row = window.document.querySelector('[data-testid="award_information"]');
+        row.setAttribute('data-testid', 'award_information_renamed');
+        window.GM_setValue('imdb_enh_awardsBadge', true);
+        await hooks.runFeature('awardsBadge');
+        assert.equal(window.document.querySelector('.enh-awards-badge'), null,
+            'a renamed row produces no badge');
+        const failures = hooks.getFeatureFailures().filter(entry => entry.key === 'awardsBadge');
+        assert.ok(failures.length, 'but it is journaled, because that is a page change');
+        assert.equal(failures[failures.length - 1].category, 'selector',
+            'and it is journaled as a selector failure, not as an outage');
+    } finally {
+        hooks.stopFeature('awardsBadge');
+        window.GM_setValue('imdb_enh_awardsBadge', false);
+    }
+});
+
 /* IE-26: a film that belongs to a series lists the rest of it in order. A film that
    belongs to nothing, or whose "series" is only itself, has no watch order to show — and
    that is the answer that has to produce no section at all. */

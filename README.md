@@ -42,6 +42,8 @@ Third-party lookups omit destination cookies. Responses are rendered as text, ou
 
 **Local Personal Stats.** The Data page turns private marks and imported viewing history into local counts, activity by year, top genres, release decades, personal rating comparisons, and known runtime. Fresh installs get a clear empty state. A year review appears after 10 dated viewings in one year, and missing metadata stays missing instead of being guessed. The calculations never leave the device.
 
+**Awards beside the rating**. Optional. IMDb already writes the awards summary into the title page and then puts it most of a screen below the rating. This moves it up next to the rating, keeping IMDb's own words and its own link to the awards tab. Nothing is fetched, and a title that has won nothing shows nothing rather than a badge reading zero.
+
 **Parents Guide Severities**. Optional. Clicking the Parents Guide link on a title page expands the five severity ratings in place instead of loading the page, each linking through to its own section. Nothing is requested until you click, and the guide is read from IMDb itself. A verification challenge is reported as a refusal, not an outage.
 
 **TV Tools**. Highest-rated episode highlighting and TV-specific lookup shortcuts. Synopsis blur is opt-in and off by default.

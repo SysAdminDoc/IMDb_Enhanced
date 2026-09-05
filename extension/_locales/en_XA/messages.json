@@ -17,6 +17,9 @@
   "aria_library_status_checking": {
     "message": "[!! Checking library status !!]"
   },
+  "aria_awards_for_this_title": {
+    "message": "[!! Awards for this title: $1 !!]"
+  },
   "aria_library_status_is": {
     "message": "[!! Library status: $1 !!]"
   },
@@ -703,6 +706,15 @@
   },
   "feature_parentsGuideSeverity_keywords": {
     "message": "[!! parental, age rating, content warning, sex, violence, profanity !!]"
+  },
+  "feature_awardsBadge_detail": {
+    "message": "[!! Pulls the wins and nominations line up beside the rating, linking to the awards page. !!]"
+  },
+  "feature_awardsBadge_keywords": {
+    "message": "[!! awards, oscars, emmys, wins, nominations, prizes, trophies !!]"
+  },
+  "feature_awardsBadge_name": {
+    "message": "[!! Awards beside the rating !!]"
   },
   "feature_parentsGuideSeverity_name": {
     "message": "[!! Parents guide severities !!]"

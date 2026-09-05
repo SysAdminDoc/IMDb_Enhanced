@@ -2649,6 +2649,78 @@
         return out;
     }
 
+    /* IMDb already writes the awards summary into the title page and then puts it most of a
+       screen below the rating, so this moves it rather than fetching it: nothing is
+       requested, nothing is derived, and a title with no awards section gets no badge at
+       all rather than a badge reading zero. The numbers stay IMDb's own words, because
+       "48 wins & 186 nominations total" is already the sentence somebody wants. */
+    reg({
+        key: 'awardsBadge', name: t('feature_awardsBadge_name'), group: 'Features',
+        async init() {
+            if (!isIMDbHost()) return;
+            const isCurrent = createFeatureGuard(this);
+            addThemedCSS(theme => `
+                .enh-awards-badge {
+                    display: inline-flex; align-items: center; gap: 6px; margin-left: 8px;
+                    padding: 4px 10px; border-radius: 999px; text-decoration: none;
+                    border: 1px solid ${theme.bd1}; background: ${theme.sf1}; color: ${theme.tx2};
+                    font: 600 12px/1.3 -apple-system, BlinkMacSystemFont, 'Segoe UI', sans-serif;
+                }
+                .enh-awards-badge:hover { border-color: ${theme.accentBorder}; color: ${theme.tx}; }
+                .enh-awards-badge:focus-visible { outline: 2px solid ${theme.accent}; outline-offset: 2px; }
+                .enh-awards-badge__headline { font-weight: 700; }
+            `, 'enh-awardsBadge');
+
+            const bar = await waitForRatingBar(isCurrent);
+            if (!bar || !isCurrent()) return;
+            this._render(bar, isCurrent);
+        },
+        /* Read out of the section IMDb renders. The headline is the anchor's own text
+           ("Won 6 Primetime Emmys") and the totals are the list item beside it ("48 wins &
+           186 nominations total"). Either can be absent on its own; a title with neither
+           gets nothing. */
+        _read() {
+            const row = document.querySelector('[data-testid="award_information"]');
+            if (!row) return null;
+            const link = row.querySelector('a[href*="/awards"]');
+            const clean = node => (node?.textContent || '').trim().replace(/\s+/g, ' ');
+            const headline = clean(link);
+            const totals = clean(row.querySelector('.ipc-metadata-list-item__list-content-item'));
+            if (!headline && !totals) return null;
+            return { headline, totals, href: link?.getAttribute('href') || '' };
+        },
+        _render(bar, isCurrent) {
+            if (!isCurrent() || document.querySelector('.enh-awards-badge')) return;
+            const awards = this._read();
+            /* No awards section is not a failure: most titles have none. A section that is
+               there but carries neither line is, because that is the shape a renamed class
+               takes, and it is journaled so it reads as a page change rather than as a
+               title that never won anything. */
+            if (!awards) {
+                if (document.querySelector('[data-testid="awards"]')) {
+                    recordFeatureFailure(this, 'awards',
+                        new Error('awards selector matched the section but neither the headline nor the totals'));
+                }
+                return;
+            }
+            const label = [awards.headline, awards.totals].filter(Boolean).join(', ');
+            const badge = makeEl('a', {
+                className: 'enh-awards-badge',
+                href: awards.href || `/title/${getIMDbID() || ''}/awards/`,
+                'aria-label': t('aria_awards_for_this_title', [label]),
+            });
+            if (awards.headline) {
+                badge.appendChild(makeEl('span', { className: 'enh-awards-badge__headline' }, awards.headline));
+            }
+            if (awards.totals) badge.appendChild(makeEl('span', {}, awards.totals));
+            bar.appendChild(badge);
+        },
+        destroy() {
+            removeCSS('enh-awardsBadge');
+            document.querySelectorAll('.enh-awards-badge').forEach(node => node.remove());
+        },
+    });
+
     reg({
         key: 'parentsGuideSeverity', name: t('feature_parentsGuideSeverity_name'), group: 'Features',
         _handler: null,

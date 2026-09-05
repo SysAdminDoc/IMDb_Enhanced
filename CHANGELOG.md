@@ -15,6 +15,7 @@
 
 ### Added
 
+- The awards summary can sit beside the rating instead of most of a screen below it. IMDb already writes "Won 16 Primetime Emmys" and "58 wins & 247 nominations total" into the page; this moves them up and links to the awards tab IMDb itself pointed at. Nothing is fetched, and a title that has won nothing shows nothing rather than a badge reading zero. Off by default, under Tools.
 - A media server or Servarr instance reachable over IPv6 loopback can be configured now. A service bound to IPv6 only answers on `[::1]`, and that was the one address the settings field refused, so the address the service itself prints was the one that would not work. Every other host is still refused, and the background worker and the page agree on the list, which a test now enforces rather than assumes.
 - Your own ratings page and your own lists index now get the same treatment as any other list: private Seen and Skip marks, the filters that narrow by them, and dimming for low-rated titles. They were outside the extension's page list entirely, which meant the longest card list an IMDb account has was the one place none of it worked.
 
