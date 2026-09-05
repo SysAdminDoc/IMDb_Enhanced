@@ -19,7 +19,7 @@
     "build:firefox": "node scripts/build-userscript.js && node scripts/build-extension.js --firefox",
     "build-for-amo": "npm run build:firefox",
     "test:extension": "node scripts/build-userscript.js --check && node scripts/build-extension.js --check && node scripts/build-extension.js --firefox --store && node tests/extension.js && node tests/background.js && node tests/gm-contract.js",
-    "test": "node scripts/build-userscript.js --check && node scripts/build-extension.js --firefox --store && node tests/run.js && node scripts/run-bounded.js --mb=1536 --seconds=300 -- node tests/dom-fixtures.mjs && node tests/extension.js && node tests/background.js && node tests/gm-contract.js",
+    "test": "node scripts/build-userscript.js --check && node scripts/build-extension.js --check && node scripts/build-extension.js --firefox --store && node tests/run.js && node scripts/run-bounded.js --mb=1536 --seconds=300 -- node tests/dom-fixtures.mjs && node tests/extension.js && node tests/background.js && node tests/gm-contract.js",
     "version": "node scripts/sync-version.js && node scripts/build-userscript.js && node scripts/build-extension.js && git add src IMDb_Enhanced.user.js extension/content.js extension/recovery.js extension/manifest.json extension/boot.css README.md",
     "build:store": "node scripts/build-userscript.js && node scripts/build-extension.js --store",
     "pack": "node scripts/build-userscript.js && node scripts/build-extension.js --firefox --store && node scripts/pack.js",

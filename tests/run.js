@@ -2153,8 +2153,14 @@ test('lookup caches remain bounded and storage failures do not hide fetched resu
    entry count never binds before the quota does. */
 test('the cache is bounded in bytes and evicts least-recently-accessed entries', () => {
     const hooks = loadScriptTestHooks();
+    /* This used to say the budget had to stay under the 10 MiB default extension quota.
+       The build declares unlimitedStorage, so that ceiling is not what bounds it any more,
+       and an assertion whose reason has stopped being true is one nobody can act on when it
+       fails. What the budget is actually for is eviction: the cache is a convenience that
+       must never grow into the thing that fills somebody's profile, and it is what the GC
+       prunes against. */
     assert(hooks.CACHE_TOTAL_BYTE_BUDGET <= 6 * 1024 * 1024,
-        'the aggregate budget must stay under the 10 MiB default extension quota');
+        'the cache is a convenience and must stay small enough that eviction, not the disk, is what bounds it');
 
     // Accounting is in encoded UTF-8 bytes, not UTF-16 code units.
     assert.strictEqual(hooks.encodedByteLength('abc'), 3);

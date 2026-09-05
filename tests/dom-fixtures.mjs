@@ -510,6 +510,11 @@ await runFixture('chart', async (window, hooks) => {
     });
     rows.forEach(row => show(row, true));
 
+    /* This scenario marks rows to exercise the skip box, and the fixtures share a store, so
+       it puts back exactly what it found. Without that, the marks it leaves are still there
+       when a later fixture asserts that scanning an unchanged page writes nothing at all. */
+    const storedMarks = window.GM_getValue('imdb_enh_userMarks', {});
+
     try {
         window.GM_setValue('imdb_enh_listRoulette', true);
         await hooks.runFeature('listRoulette');
@@ -551,6 +556,7 @@ await runFixture('chart', async (window, hooks) => {
     } finally {
         hooks.stopFeature('listRoulette');
         window.GM_setValue('imdb_enh_listRoulette', false);
+        window.GM_setValue('imdb_enh_userMarks', storedMarks);
     }
     assert.equal(document.getElementById('enh-roulette'), null, 'and it leaves nothing behind');
     assert.equal(document.querySelectorAll('.enh-roulette-pick').length, 0,
