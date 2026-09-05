@@ -978,6 +978,7 @@
         label_added: 'Added',
         label_add: 'Add',
         text_cache_entries_remain: '$1 entries remain, using $2 of $3.',
+        toast_csv_too_large_to_reimport: 'Saved, but at $1 this file is past the $2 this build can read back. Importing it here will be refused.',
         text_cache_summary: '$1 entries currently cached, using $2 of $3. The oldest are dropped automatically as that fills.',
         text_site_access_granted_for: 'Site access granted for $1',
         text_not_working_yet_needs_access_to: 'Not working yet: needs access to $1.',

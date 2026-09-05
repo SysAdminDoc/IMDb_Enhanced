@@ -10,6 +10,7 @@
 
 ### Fixed
 
+- Exporting your marks as CSV now tells you when the file is too large for this build to read back in. A library at the very top of what the storage bounds allow, five thousand titles each with a hundred logged viewings and a full note, writes about 339 MB against a 48 MB import ceiling, because each title's own fields repeat on every viewing row. An ordinary library with notes is under a megabyte and is unaffected. The export still happens; it just says what will happen if you try to import it here.
 - The recovery and permissions pages had control borders that were all but invisible. A button's own boundary is what tells you where the button is, and WCAG asks 3:1 of it against the surface behind: the recovery page's buttons measured 1.17:1 in dark and 1.22:1 in light, the permissions page's 1.03:1 in dark, the Reset everything button's danger border 1.29:1, and the password and backup fields 1.36:1. All of them now clear 3:1 in both schemes. The panel and status borders are unchanged, because those are decoration rather than controls.
 - Three regular expressions were written with a literal backspace byte where `` was meant, so they matched nothing and the checks built on them had been passing for free. One guarded the README against naming a fixed backup size, one guarded the message catalog against the same, and the third decided which selectors the contrast gate treats as controls, which is why the border defects above went unseen.
 

@@ -2929,6 +2929,51 @@ test('the reported storage size counts the whole store, marks included', () => {
         'and the function it calls has to exist');
 });
 
+/* IE-179: the marks writer repeats each title's own fields on every viewing row, so a
+   library at the bounds this build allows writes a file its own importer refuses. Measured
+   through the real writer: 5,000 marks each carrying a hundred dated viewings with a full
+   note and genre list comes to about 339 MB against a 48 MB ceiling. An ordinary library is
+   nowhere near it, so the export is not blocked; it says so on the way out. */
+test('a marks CSV too large to read back says so when it is written', () => {
+    const hooks = loadScriptTestHooks();
+    const marksFor = (title, note, genres, viewings) => {
+        const marks = {};
+        for (let index = 0; index < 200; index += 1) {
+            marks[`tt${String(index).padStart(7, '0')}`] = {
+                state:'watched', title, note, genres, ts:index,
+                viewings: Array.from({ length: viewings }, (_, day) => ({
+                    date:`2025-${String(1 + Math.floor(day / 28)).padStart(2, '0')}-${String(1 + (day % 28)).padStart(2, '0')}`,
+                    rating:10,
+                })),
+            };
+        }
+        return Object.entries(marks);
+    };
+    const bytesOf = entries => hooks.encodedByteLength(hooks.buildMarksCsv(entries));
+    const scale = hooks.USER_MARKS_MAX / 200;
+
+    // An ordinary library, with notes, is not the problem and must not be warned about.
+    const ordinary = bytesOf(marksFor('The Thing', 'n'.repeat(120), [], 1)) * scale;
+    assert(ordinary < hooks.CSV_IMPORT_TEXT_LIMIT,
+        `an ordinary library with notes must round-trip; ${Math.round(ordinary)} against ${hooks.CSV_IMPORT_TEXT_LIMIT}`);
+
+    // A library at the declared bounds is, and that is what the warning exists for.
+    const maximal = bytesOf(marksFor(
+        'T'.repeat(hooks.USER_MARK_TITLE_LIMIT),
+        'N'.repeat(hooks.USER_MARK_NOTE_LIMIT),
+        Array.from({ length: hooks.USER_MARK_GENRES_MAX },
+            (_, slot) => `${slot}${'G'.repeat(hooks.USER_MARK_GENRE_TEXT_LIMIT - 1)}`),
+        hooks.USER_MARK_VIEWINGS_MAX)) * scale;
+    assert(maximal > hooks.CSV_IMPORT_TEXT_LIMIT,
+        `a store at every bound should exceed the import ceiling, or this warning is dead code; `
+        + `${Math.round(maximal)} against ${hooks.CSV_IMPORT_TEXT_LIMIT}`);
+
+    // And both export paths have to check before they claim success.
+    assert(script.includes('const warnIfUnreadable = csv => {'), 'the check has to exist');
+    assert((script.match(/if \(warnIfUnreadable\(csv\)\) return;/g) || []).length === 2,
+        'both the copy and the download paths must run it');
+});
+
 test('the settings size guard measures bytes, not UTF-16 code units', () => {
     const sizeHooks = loadScriptTestHooks();
     const limit = sizeHooks.SETTINGS_IMPORT_TEXT_LIMIT;

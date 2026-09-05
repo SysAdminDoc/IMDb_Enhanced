@@ -2160,12 +2160,27 @@
            reads. A backup is for coming back here; this is for leaving, which is a
            different thing and the one people actually asked for. */
         const marksCsvCard = makeCard(t('settings_heading_export_marks'), t('settings_export_marks_note'));
+        /* The writer repeats each title's own fields on every viewing row, so a library at
+           the bounds this build allows can produce a file its own importer refuses: measured
+           at 339 MB against a 48 MB ceiling for 5,000 marks each carrying a hundred dated
+           viewings with a full note and genre list. An ordinary library is nowhere near that,
+           under a megabyte with notes and one viewing a title, so the answer is to say so on
+           the way out rather than to stop the export or inflate a limit no browser could hold
+           in a string anyway. */
+        const warnIfUnreadable = csv => {
+            const bytes = encodedByteLength(csv);
+            if (bytes <= CSV_IMPORT_TEXT_LIMIT) return false;
+            showToast(t('toast_csv_too_large_to_reimport',
+                [formatCacheBytes(bytes), formatCacheBytes(CSV_IMPORT_TEXT_LIMIT)]), 7000);
+            return true;
+        };
         const copyCsv = (build, label) => async () => {
             const csv = build(getUserMarkEntries());
             // The header is always there; what matters is whether anything followed it.
             const rows = csv.split('\r\n').length - 1;
             if (!rows) { showToast(t('toast_no_marks_to_export'), 3000); return; }
             if (!copyTextToClipboard(csv)) { showToast(COPY_FAILURE_MESSAGE, 4500); return; }
+            if (warnIfUnreadable(csv)) return;
             showToast(t('toast_marks_copied', [label, rows]), 3000);
         };
         const downloadCsv = (build, filename) => () => {
@@ -2183,6 +2198,7 @@
             link.remove();
             // Released on the next turn so the download has taken the reference.
             setTimeout(() => URL.revokeObjectURL(href), 0);
+            if (warnIfUnreadable(csv)) return;
         };
         marksCsvCard.appendChild(makeEl('div', { className:'enh-data-actions' },
             makeEl('button', {
