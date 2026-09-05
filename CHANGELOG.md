@@ -8,8 +8,14 @@
 - The settings backup and restore size limits are measured in UTF-8 bytes rather than UTF-16 code units. The limit was derived in bytes all along, but compared against a string's length, which under-counts every non-ASCII character: a note written in Japanese, Chinese, Greek, Cyrillic or Hebrew counted as a third of its real size, and an emoji as half. Backups that the browser could not store were admitted as a result. The difference only runs one way, so nothing that used to fit stops fitting.
 - Settings, Data now reports what the whole store is using rather than the cache alone. On any real library the marks and their viewing histories are most of it, so a page that showed only the cache made a nearly full store look nearly empty.
 
+### Fixed
+
+- The recovery and permissions pages had control borders that were all but invisible. A button's own boundary is what tells you where the button is, and WCAG asks 3:1 of it against the surface behind: the recovery page's buttons measured 1.17:1 in dark and 1.22:1 in light, the permissions page's 1.03:1 in dark, the Reset everything button's danger border 1.29:1, and the password and backup fields 1.36:1. All of them now clear 3:1 in both schemes. The panel and status borders are unchanged, because those are decoration rather than controls.
+- Three regular expressions were written with a literal backspace byte where `` was meant, so they matched nothing and the checks built on them had been passing for free. One guarded the README against naming a fixed backup size, one guarded the message catalog against the same, and the third decided which selectors the contrast gate treats as controls, which is why the border defects above went unseen.
+
 ### Changed
 
+- Source files no longer contain raw control bytes, and the build refuses any that appear. A NUL parses and runs fine, so nothing noticed one sitting in a character class, but grep and ripgrep treat a file holding one as binary and skip it, which had quietly made six tracked files unsearchable, the shipped userscript among them.
 - Testing: the row-integration scenarios wait for a row to actually be watched before revealing it. Registration arrives through a frame callback, so on a loaded machine the reveal could go out first, and the lookup count afterwards then read exactly like the feature deciding not to ask. That made a real failure and a timing accident indistinguishable, and cost one full run in three on a busy machine.
 
 ## 2.21.0 (2026-09-02)

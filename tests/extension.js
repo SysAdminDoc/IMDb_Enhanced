@@ -854,7 +854,7 @@ test('the source archive carries what a rebuild needs and no build output', () =
            focus. The line around a panel is decoration and is deliberately not held to
            it - holding it there would mean drawing 3:1 dividers everywhere, which is a
            worse-looking page and no more usable. */
-        const INTERACTIVE = /(?:^|[\s,>])(?:button|input|textarea|select|a)|:focus/i;
+        const INTERACTIVE = /(?:^|[\s,>])(?:button|input|textarea|select|a)\b|:focus/i;
         const pairs = [];
         blocks.forEach(({ selector, block }) => {
             const own = (/background(?:-color)?:[^;]*var\(--([\w-]+)\)/.exec(block) || [])[1];
@@ -866,7 +866,15 @@ test('the source archive carries what a rebuild needs and no build output', () =
                around it. */
             if (INTERACTIVE.test(selector)) {
                 [...block.matchAll(/(?:outline|border(?:-color)?):[^;]*var\(--([\w-]+)\)/g)]
-                    .forEach(match => surfaces.forEach(surface => pairs.push([match[1], surface, 3, 'indicator'])));
+                    .forEach(match => surfaces.forEach(surface => {
+                        /* A border painted in the same token as the fill it sits on is not a
+                           boundary and cannot be measured as one: it is 1:1 against itself by
+                           construction, so the pair says nothing about whether the control can
+                           be found. What identifies a filled control is its fill against the
+                           page, and whether this gate should measure that instead is IE-175. */
+                        if (match[1] === surface) return;
+                        pairs.push([match[1], surface, 3, 'indicator']);
+                    }));
             }
         });
         assert(pairs.length >= 12, `${file}: the gate found only ${pairs.length} pairs to measure`);

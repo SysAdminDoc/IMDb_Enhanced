@@ -1002,7 +1002,7 @@
            range is stripped, because RFC 5545 forbids it in a TEXT value and an episode
            name comes from a third party. */
         return String(value ?? '')
-            .replace(/[ --]/g, '')
+            .replace(/[\x00-\x08\x0B\x0C\x0E-\x1F\x7F]/g, '')
             .slice(0, ICS_TEXT_LIMIT)
             .replace(/\\/g, '\\\\')
             .replace(/;/g, '\\;')

@@ -11,19 +11,19 @@
        override; every pair below was measured against WCAG AA rather than eyeballed. */
     :root {
         color-scheme: light dark;
-        --bg:#14161a; --sf:#1b1e24; --sf2:#20242b; --bd:#2b3038;
+        --bg:#14161a; --sf:#1b1e24; --sf2:#20242b; --bd:#2b3038; --btn-bd:#767b83;
         --tx:#f2f4f7; --tx2:#c2c8d2; --tx3:#99a1ae;
         --accent:#f5c518; --on-accent:#14161a; --focus:#f5c518;
         --ok:#4ac07a; --warn:#e0a33a; --err:#e06a5a;
-        --hover:#272c34; --danger-bd:#4a2f2f; --danger-tx:#ffb4a8; --dot:#7a8395;
+        --hover:#272c34; --danger-bd:#bd6055; --danger-tx:#ffb4a8; --dot:#7a8395;
     }
     @media (prefers-color-scheme: light) {
         :root {
-            --bg:#ffffff; --sf:#f5f6f8; --sf2:#eceef2; --bd:#d5d9e0;
+            --bg:#ffffff; --sf:#f5f6f8; --sf2:#eceef2; --bd:#d5d9e0; --btn-bd:#797e85;
             --tx:#14161a; --tx2:#3d4450; --tx3:#525a68;
             --accent:#f5c518; --on-accent:#14161a; --focus:#6f5500;
             --ok:#116b3c; --warn:#7a4b00; --err:#b3261e;
-            --hover:#e2e5ea; --danger-bd:#e0b4b0; --danger-tx:#8c1d18; --dot:#6b7382;
+            --hover:#e2e5ea; --danger-bd:#c2726a; --danger-tx:#8c1d18; --dot:#6b7382;
         }
     }
     * { box-sizing: border-box; }
@@ -41,8 +41,12 @@
     dd { margin: 0; }
     ul { margin: 8px 0 0; padding-left: 20px; color: var(--tx2); }
     li { overflow-wrap: anywhere; }
+    /* A control's own boundary is what tells a sighted user where the button is, so
+       WCAG 1.4.11 asks 3:1 of it against the surface behind. The panel and status
+       borders stay on --bd: those are decoration, and holding them to the same figure
+       would mean drawing hard dividers over the whole page. */
     button { padding: 8px 14px; margin: 0 8px 8px 0; border-radius: 8px; cursor: pointer;
-        border: 1px solid var(--bd); background: var(--sf2); color: var(--tx);
+        border: 1px solid var(--btn-bd); background: var(--sf2); color: var(--tx);
         font: 600 13px/1 -apple-system, BlinkMacSystemFont, 'Segoe UI', Roboto, sans-serif; }
     button:hover:not(:disabled) { background: var(--hover); }
     button:disabled { opacity: .5; cursor: default; }
@@ -50,7 +54,7 @@
     button.primary { background: var(--accent); color: var(--on-accent); border-color: var(--accent); }
     button.danger { border-color: var(--danger-bd); color: var(--danger-tx); }
     textarea, input[type="password"] { width: 100%; background: var(--bg); color: var(--tx);
-        border: 1px solid var(--bd); border-radius: 8px; padding: 8px 10px; font: 12px/1.45 ui-monospace, SFMono-Regular, Menlo, monospace; }
+        border: 1px solid var(--btn-bd); border-radius: 8px; padding: 8px 10px; font: 12px/1.45 ui-monospace, SFMono-Regular, Menlo, monospace; }
     textarea { min-height: 108px; resize: vertical; }
     textarea:focus, input:focus { outline: none; border-color: var(--focus); box-shadow: 0 0 0 2px var(--focus); }
     label { display: block; margin: 10px 0 4px; color: var(--tx2); font-size: 13px; }

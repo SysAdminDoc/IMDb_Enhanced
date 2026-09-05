@@ -49,6 +49,25 @@ function readModules() {
     return names.map(name => ({ name, text: fs.readFileSync(path.join(srcDir, name), 'utf8') }));
 }
 
+/* A control byte survives JSON, parses fine and runs fine, so nothing else here
+   notices one. What it does is make grep and ripgrep treat the whole file as binary
+   and skip it, which turns every later search over that file into a silent false
+   negative, and a NUL is a hazard in anything that ships the source onward: Greasy
+   Fork stores it, and the store reviewers read it. Written as an escape it is the
+   same program and the same bytes at runtime. TAB, LF, VT, FF and CR are the ones a
+   source file legitimately contains. */
+function assertNoControlBytes(modules) {
+    modules.forEach(module => {
+        const bytes = Buffer.from(module.text, 'utf8');
+        const index = bytes.findIndex(byte => byte < 9 || (byte > 13 && byte < 32) || byte === 127);
+        if (index === -1) return;
+        const line = bytes.subarray(0, index).toString('utf8').split('\n').length;
+        const code = bytes[index].toString(16).padStart(2, '0');
+        throw new Error(`src/${module.name}:${line} holds the raw control byte 0x${code}. `
+            + 'Write it as an escape (\\x00, \\b, and so on) so the file stays searchable text.');
+    });
+}
+
 function assemble() {
     return readModules().map(module => module.text).join('');
 }
@@ -79,6 +98,7 @@ function firstDifference(a, b) {
 function main() {
     const check = process.argv.includes('--check');
     const modules = readModules();
+    assertNoControlBytes(modules);
     const assembled = modules.map(module => module.text).join('');
 
     if (!check) {

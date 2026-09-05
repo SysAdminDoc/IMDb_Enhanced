@@ -3837,7 +3837,7 @@ test('a written CSV reads back as what was written, for values nobody would thin
        a NUL that truncates a field in more than one importer, the formula leads a
        spreadsheet executes, an astral pair, and ordinary text to dilute them. */
     const ATOMS = [
-        '"', ',', '\r', '\n', '\r\n', ' ', ' ', ' ', '\t',
+        '"', ',', '\r', '\n', '\r\n', ' ', ' ', '\x00', '\t',
         '=', '+', '-', '@', ' ', 'é', '日本', '👍', 'The Matrix', 'a', 'Z', '9',
         '""', 'x,y', '"quoted"', ' leading', 'trailing ',
     ];
@@ -6739,7 +6739,7 @@ test('a title can carry a private note that survives backup and never leaks', ()
     const long = 'x'.repeat(hooks.USER_MARK_NOTE_LIMIT + 200);
     hooks.setUserNote('tt0111161', long, 'Shawshank');
     assert.strictEqual(hooks.getUserNote('tt0111161').length, hooks.USER_MARK_NOTE_LIMIT, 'notes must be bounded');
-    hooks.setUserNote('tt0111161', 'line one\r\nline two\n\n\n\nline three  ');
+    hooks.setUserNote('tt0111161', 'line\x00one\x07\r\nline two\n\n\n\nline three  ');
     assert.strictEqual(hooks.getUserNote('tt0111161'), 'lineone\nline two\n\nline three',
         'control characters are stripped, newlines normalized, runs collapsed');
     assert.strictEqual(hooks.normalizeUserNote(12345), '', 'a non-string note is not a note');
@@ -8720,9 +8720,9 @@ test('public documentation matches what the project actually ships', () => {
     /* The backup limit is derived from the storage bounds now, so any prose naming a fixed
        megabyte figure is a claim that stops being true the moment a bound moves. It said
        4 MB against a limit ten times that. */
-    assert(!/4 ?MB/.test(readme), 'the README must not name a fixed backup size the code derives');
+    assert(!/\b4 ?MB\b/.test(readme), 'the README must not name a fixed backup size the code derives');
     Object.entries(messageCatalog).forEach(([key, text]) => {
-        assert(!/4 ?MB backup limit/.test(text), `${key} still names a fixed backup size`);
+        assert(!/\b4 ?MB backup limit\b/.test(text), `${key} still names a fixed backup size`);
     });
 
     // The vote-distribution widget was retired in v2.14.0; only the ratings-route
