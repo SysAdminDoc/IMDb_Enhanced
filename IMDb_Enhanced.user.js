@@ -838,6 +838,7 @@
         text_broadcast_details_unavailable: 'Broadcast details unavailable',
         text_board_could_not_be_shown: 'The board could not be shown here. Open it on MovieChat instead.',
         text_cache_remaining: '$1 cached entries · $2',
+        text_one_tab_per_click: 'Browsers allow one new tab per click.$1',
         text_cached_on: 'Cached $1',
         text_candidate_matches_could_not_be_loaded: 'Candidate matches could not be loaded. Paste a title URL or mark no entry.',
         text_candidate_response_was_too_large_or_empty: 'Candidate response was too large or empty',
@@ -16244,7 +16245,7 @@ section[id*="quote" i] .ipc-list-card { padding: 4px 0 !important; margin: 2px 0
                     makeEl('div', {},
                         makeEl('h3', { className:'enh-multi-search-queue__title' }, t('text_site_search_queue', [site.name])),
                         makeEl('p', { className:'enh-multi-search-queue__description' },
-                            `Browsers allow one new tab per click.${limited}`
+                            t('text_one_tab_per_click', [limited])
                         ),
                         status
                     ),
@@ -19939,7 +19940,7 @@ ${scopedRules('.enh-zoom', {
             makeEl('div', { className:'enh-data-summary-item' },
                 makeEl('div', { className:'enh-data-summary-label' }, t('label_score_cache')),
                 makeEl('div', { className:'enh-data-summary-value', id:'enh-data-cache-count' },
-                    `${cacheCount()} cached entries · ${formatCacheBytes(cacheBytes())}`)
+                    t('text_cache_remaining', [String(cacheCount()), formatCacheBytes(cacheBytes())]))
             )
         );
         dataPage.appendChild(dataSummary);

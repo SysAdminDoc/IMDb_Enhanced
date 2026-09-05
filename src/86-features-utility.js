@@ -828,7 +828,7 @@
                     makeEl('div', {},
                         makeEl('h3', { className:'enh-multi-search-queue__title' }, t('text_site_search_queue', [site.name])),
                         makeEl('p', { className:'enh-multi-search-queue__description' },
-                            `Browsers allow one new tab per click.${limited}`
+                            t('text_one_tab_per_click', [limited])
                         ),
                         status
                     ),

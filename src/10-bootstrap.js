@@ -781,6 +781,7 @@
         text_broadcast_details_unavailable: 'Broadcast details unavailable',
         text_board_could_not_be_shown: 'The board could not be shown here. Open it on MovieChat instead.',
         text_cache_remaining: '$1 cached entries · $2',
+        text_one_tab_per_click: 'Browsers allow one new tab per click.$1',
         text_cached_on: 'Cached $1',
         text_candidate_matches_could_not_be_loaded: 'Candidate matches could not be loaded. Paste a title URL or mark no entry.',
         text_candidate_response_was_too_large_or_empty: 'Candidate response was too large or empty',

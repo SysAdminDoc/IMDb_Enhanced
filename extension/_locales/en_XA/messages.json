@@ -2240,6 +2240,9 @@
   "text_cache_remaining": {
     "message": "[!! $1 cached entries · $2 !!]"
   },
+  "text_one_tab_per_click": {
+    "message": "[!! Browsers allow one new tab per click.$1 !!]"
+  },
   "text_cached_on": {
     "message": "[!! Cached $1 !!]"
   },

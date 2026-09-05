@@ -8366,7 +8366,12 @@ test('every sentence in the source comes from the catalog', () => {
     /* What position a string is in decides whether anyone reads it. These are the ones
        that reach a person: an element's text, a label, a title, an accessible name, a
        toast, a status line. A selector, a key, a class name and a URL are none of them. */
-    const SHOWN = /(?:\b(?:label|title|placeholder|alt)\s*:\s*|textContent\s*=\s*|setTextIfChanged\([^,]+,\s*|showToast\(\s*|say\(\s*|setAttribute\('aria-label',\s*|'aria-label'\s*:\s*|make(?:Card|FeatureCard|FeatureSummaryCard)\(\s*|register\(\s*|\}, )$/;
+    /* The last alternative used to require a literal space after the closing brace, so it
+       recognised makeEl('div', { ... }, 'text') and not the same call with its content on
+       the next line, which is how every multi-line one is written. That is how a full
+       English sentence sat on the Data page's cache card, in a template literal, through a
+       gate whose whole job is to find exactly that. \s* rather than a space. */
+    const SHOWN = /(?:\b(?:label|title|placeholder|alt)\s*:\s*|textContent\s*=\s*|setTextIfChanged\([^,]+,\s*|showToast\(\s*|say\(\s*|setAttribute\('aria-label',\s*|'aria-label'\s*:\s*|make(?:Card|FeatureCard|FeatureSummaryCard)\(\s*|register\(\s*|\},\s*)$/;
 
     /* The call stack answers "which function is this an argument to". It cannot answer
        "which property is this being assigned to", and `node.textContent = ok ? `a` : `b``
@@ -8395,7 +8400,7 @@ test('every sentence in the source comes from the catalog', () => {
         if (!/[A-Za-z]{2}/.test(text)) return false;
         if (/^https?:|^\/|^#|^\.|^--|^[a-z-]+\/[a-z-]+$/.test(text)) return false;
         // A selector, a class, a data attribute, a CSS value, a storage key.
-        if (/[[\]{}<>=~^]|\bpx\b|\brem\b|^[a-z]+(-[a-z0-9]+)+$|^[a-z]+([A-Z][a-z0-9]*)+$/.test(text)) return false;
+        if (/[[\]{}<>=~^]|\bpx\b|\brem\b|^[a-z]+(-[a-z0-9]+)+-?$|^[a-z]+([A-Z][a-z0-9]*)+$/.test(text)) return false;
         if (/^[a-z]+$/.test(text) && !/\s/.test(text)) return false;
         return true;
     };

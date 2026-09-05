@@ -2009,7 +2009,7 @@
             makeEl('div', { className:'enh-data-summary-item' },
                 makeEl('div', { className:'enh-data-summary-label' }, t('label_score_cache')),
                 makeEl('div', { className:'enh-data-summary-value', id:'enh-data-cache-count' },
-                    `${cacheCount()} cached entries · ${formatCacheBytes(cacheBytes())}`)
+                    t('text_cache_remaining', [String(cacheCount()), formatCacheBytes(cacheBytes())]))
             )
         );
         dataPage.appendChild(dataSummary);
