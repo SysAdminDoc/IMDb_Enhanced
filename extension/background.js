@@ -25,7 +25,7 @@ function getAllowedRequestHosts() {
 /* Kept identical to the page-side set in src/60-network.js; a test asserts they agree,
    because a host one context allows and the other refuses is a feature that works until
    somebody changes builds. */
-const LOOPBACK_HOSTS = new Set(['localhost', '127.0.0.1', '[::1]']);
+const LOOPBACK_HOSTS = new Set(['localhost', '127.0.0.1']);
 /* Each credential is bound to the destination it may be attached to and, where the
    protocol needs one, the scheme it is sent under. Binding it here rather than trusting
    the request is the point: a caller naming a key it is not entitled to, or naming a

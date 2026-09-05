@@ -247,11 +247,14 @@
             return url.href.replace(/\/+$/, '');
         } catch { return ''; }
     }
-    /* The same three the background worker allows, and no more. A service bound to IPv6
-       only answers on [::1] and nothing else, so leaving it out meant the settings field
-       silently refused the address the service itself prints. URL normalises every longer
-       spelling of the loopback address to this one, so the single entry covers them all. */
-    const LOOPBACK_HOSTS = new Set(['localhost', '127.0.0.1', '[::1]']);
+    /* The same two the background worker allows, and no more. [::1] belongs here on the
+       merits and cannot be shipped yet: an extension only fetches origins its manifest
+       declares, browser match patterns cannot express an IPv6 literal host, and the
+       userscript build needs an @connect for it as well. Accepting it here without either
+       gave a field that validated the address a service prints and then failed every
+       request against it forever, which is worse than refusing it. A test below pins the
+       accepted hosts to the origins that can actually carry them. See IE-178. */
+    const LOOPBACK_HOSTS = new Set(['localhost', '127.0.0.1']);
     function isLocalServiceUrl(baseUrl) {
         try {
             const url = new URL(baseUrl);

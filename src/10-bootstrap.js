@@ -978,6 +978,7 @@
         label_added: 'Added',
         label_add: 'Add',
         text_cache_entries_remain: '$1 entries remain, using $2 of $3.',
+        text_cache_summary: '$1 entries currently cached, using $2 of $3. The oldest are dropped automatically as that fills.',
         text_site_access_granted_for: 'Site access granted for $1',
         text_not_working_yet_needs_access_to: 'Not working yet: needs access to $1.',
         text_title_is_already_in_service: '$1 is already in $2',

@@ -49,8 +49,13 @@
         }
     });
 
+    /* One answer, not a second opinion. This carried its own copy of the collection route
+       pattern, so when getPageSurface learned about a person's own ratings and lists pages
+       the features gated on this one kept returning immediately: the page was scoped in and
+       four of its tools were dead on it. Asking the classifier means one place decides what
+       a collection is. */
     function isListPage() {
-        return /\/(watchlist|list\/|chart\/)/i.test(location.pathname);
+        return getPageSurface() === 'collection';
     }
 
     /* IMDb renders each collection row's metadata as a short inline list — year, runtime,

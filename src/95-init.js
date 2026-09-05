@@ -331,6 +331,7 @@
                 buildDiagnosticsReport,
                 cacheCount,
                 cacheBytes,
+                isListPage,
                 storedBytes,
                 formatCacheBytes,
                 getUserMarks,

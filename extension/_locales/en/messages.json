@@ -2828,6 +2828,9 @@
   "text_cache_entries_remain": {
     "message": "$1 entries remain, using $2 of $3."
   },
+  "text_cache_summary": {
+    "message": "$1 entries currently cached, using $2 of $3. The oldest are dropped automatically as that fills."
+  },
   "text_site_access_granted_for": {
     "message": "Site access granted for $1"
   },

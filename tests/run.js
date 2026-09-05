@@ -185,6 +185,7 @@ function loadScriptTestHooks({ withoutDeleteValue = false, withheldCredentials =
         normalizeLocalServiceUrl,
         normalizeCredentialValue,
         isLocalServiceUrl,
+        isListPage,
         normalizeTrustedUrl,
         normalizeSite,
         normalizeSiteCategory,
@@ -832,6 +833,22 @@ test("a person's own ratings and lists pages are collection surfaces", () => {
     // A profile page is not a card list, and nothing here should claim it.
     hooks.setTestPath('/user/ur12345678/');
     assert.strictEqual(hooks.getPageSurface(), 'other', 'a bare profile is not a collection');
+
+    /* Being scoped in is not the same as running. Four of the collection tools gate
+       themselves on isListPage() rather than on the surface, and that function used to
+       carry its own copy of the route pattern, so these pages were admitted by the
+       classifier and then turned away one layer down: marks and filters appeared, and
+       Copy as CSV, the runtime total, the roulette and the multi-search did not. The
+       classifier is now the only thing that decides, and this is what says so. */
+    ['/user/ur12345678/ratings/', '/user/ur12345678/lists/', '/chart/top/'].forEach(path => {
+        hooks.setTestPath(path);
+        assert.strictEqual(hooks.isListPage(), true,
+            `${path} is a collection surface, so the tools gated on isListPage belong there too`);
+    });
+    ['/title/tt0903747/', '/name/nm0000123/', '/user/ur12345678/'].forEach(path => {
+        hooks.setTestPath(path);
+        assert.strictEqual(hooks.isListPage(), false, `${path} is not a collection`);
+    });
 });
 
 test('the episode heatmap reads ratings from link text and scopes to the ratings route', () => {
@@ -2788,40 +2805,57 @@ test('remembered section state participates in backup and migrates legacy keys',
 /* IE-161: a media server bound to IPv6 only answers on [::1], and the settings field
    refused it, so the address the service itself prints was the one address that would not
    work. */
-test('a local service may be reached over IPv6 loopback, and nothing else new', () => {
+/* IE-161 was reverted: see IE-178. What survives is the invariant that would have caught
+   it, which is that a host the field accepts has to be a host a request can actually reach.
+   Four lists decide that between them, and only two of them were ever compared. */
+test('every loopback host the field accepts is one a request can reach', () => {
     const hooks = loadScriptTestHooks();
 
-    ['http://[::1]:8096', 'http://[0:0:0:0:0:0:0:1]:8096', 'https://[::1]:8920/']
-        .forEach(url => assert(hooks.isLocalServiceUrl(url), `${url} is loopback and should be allowed`));
-    ['http://localhost:7878', 'http://127.0.0.1:8989']
-        .forEach(url => assert(hooks.isLocalServiceUrl(url), `${url} must keep working`));
+    ['http://localhost:7878', 'http://127.0.0.1:8989', 'https://localhost:8920/']
+        .forEach(url => assert(hooks.isLocalServiceUrl(url), `${url} must be allowed`));
 
-    /* The refusals matter more than the acceptance: this predicate is what stands between
-       a stored credential and an arbitrary host. */
+    /* The refusals are the part that stands between a stored credential and an arbitrary
+       host, so they are executed rather than assumed. */
     [
         'http://[2001:db8::1]:8096',        // a routable IPv6 address is not loopback
         'http://[::ffff:8.8.8.8]/',         // nor is a v4-mapped public address
         'http://192.168.1.50:8096',         // a LAN address is a separate decision (IE-167)
         'http://evil.example/',
-        'http://user:pass@[::1]:8096',      // credentials in the address
-        'http://[::1]:8096/?token=abc',     // or in the query
-        'http://[::1]:8096/#token',
-        'ftp://[::1]:8096',
+        'http://user:pass@localhost:8096',  // credentials in the address
+        'http://localhost:8096/?token=abc', // or in the query
+        'http://localhost:8096/#token',
+        'ftp://localhost:8096',
+        /* Loopback on the merits, and refused because nothing can carry it: no manifest
+           origin, no @connect, and browser match patterns cannot express an IPv6 literal
+           host at all. Accepting it produced a field that validated the address a service
+           prints and then failed every request against it. IE-178. */
+        'http://[::1]:8096',
     ].forEach(url => assert(!hooks.isLocalServiceUrl(url), `${url} must be refused`));
 
-    /* The worker keeps its own copy of this list, in a file the userscript build never
-       touches, and it is the one that actually attaches the credential. A host the page
-       allows and the worker refuses is a feature that works in one build and not the
-       other, so the two sets are compared rather than trusted. */
+    /* Four lists decide whether a local request leaves: this predicate, the worker's own
+       copy, LOOPBACK_ORIGINS (which generates the manifest) and the userscript's @connect.
+       Comparing the first two to each other is what let a host be accepted that the last
+       two could not carry, so all four are compared here. */
+    const readSet = (source, label) => {
+        const literal = /const LOOPBACK_HOSTS = new Set\(\[([\s\S]*?)\]\)/.exec(source)?.[1];
+        assert(literal, `${label} should declare its loopback hosts as a literal set`);
+        return literal.split(',').map(entry => entry.trim().replace(/^'|'$/g, '')).filter(Boolean).sort();
+    };
     const workerSource = fs.readFileSync(path.join(root, 'extension', 'background.js'), 'utf8');
-    const workerHosts = /const LOOPBACK_HOSTS = new Set\(\[([\s\S]*?)\]\)/.exec(workerSource)?.[1];
-    assert(workerHosts, 'the worker should declare its loopback hosts as a literal set');
-    const pageHosts = /const LOOPBACK_HOSTS = new Set\(\[([\s\S]*?)\]\)/.exec(script)?.[1];
-    assert(pageHosts, 'and so should the page side');
-    const normalize = text => text.split(',').map(entry => entry.trim().replace(/^'|'$/g, ''))
-        .filter(Boolean).sort().join('|');
-    assert.strictEqual(normalize(pageHosts), normalize(workerHosts),
+    const pageHosts = readSet(script, 'the page side');
+    const workerHosts = readSet(workerSource, 'the worker');
+    assert.deepStrictEqual(pageHosts, workerHosts,
         'the page and the worker must allow exactly the same hosts');
+
+    const originHosts = [...script.matchAll(/'https?:\/\/([^/']+)\/\*'/g)]
+        .map(match => match[1]);
+    pageHosts.forEach(host => assert(originHosts.includes(host),
+        `${host} is accepted but no declared origin can carry it; the request would be refused`));
+
+    const metadata = fs.readFileSync(path.join(root, 'src', '00-metadata.js'), 'utf8');
+    const connected = [...metadata.matchAll(/^\/\/ @connect\s+(\S+)$/gm)].map(match => match[1]);
+    pageHosts.forEach(host => assert(connected.includes(host),
+        `${host} is accepted but the userscript declares no @connect for it`));
 });
 
 test('the reported storage size counts the whole store, marks included', () => {

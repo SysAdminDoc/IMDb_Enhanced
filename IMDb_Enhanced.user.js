@@ -1035,6 +1035,7 @@
         label_added: 'Added',
         label_add: 'Add',
         text_cache_entries_remain: '$1 entries remain, using $2 of $3.',
+        text_cache_summary: '$1 entries currently cached, using $2 of $3. The oldest are dropped automatically as that fills.',
         text_site_access_granted_for: 'Site access granted for $1',
         text_not_working_yet_needs_access_to: 'Not working yet: needs access to $1.',
         text_title_is_already_in_service: '$1 is already in $2',
@@ -5980,11 +5981,14 @@
             return url.href.replace(/\/+$/, '');
         } catch { return ''; }
     }
-    /* The same three the background worker allows, and no more. A service bound to IPv6
-       only answers on [::1] and nothing else, so leaving it out meant the settings field
-       silently refused the address the service itself prints. URL normalises every longer
-       spelling of the loopback address to this one, so the single entry covers them all. */
-    const LOOPBACK_HOSTS = new Set(['localhost', '127.0.0.1', '[::1]']);
+    /* The same two the background worker allows, and no more. [::1] belongs here on the
+       merits and cannot be shipped yet: an extension only fetches origins its manifest
+       declares, browser match patterns cannot express an IPv6 literal host, and the
+       userscript build needs an @connect for it as well. Accepting it here without either
+       gave a field that validated the address a service prints and then failed every
+       request against it forever, which is worse than refusing it. A test below pins the
+       accepted hosts to the origins that can actually carry them. See IE-178. */
+    const LOOPBACK_HOSTS = new Set(['localhost', '127.0.0.1']);
     function isLocalServiceUrl(baseUrl) {
         try {
             const url = new URL(baseUrl);
@@ -15450,8 +15454,13 @@ section[id*="quote" i] .ipc-list-card { padding: 4px 0 !important; margin: 2px 0
         }
     });
 
+    /* One answer, not a second opinion. This carried its own copy of the collection route
+       pattern, so when getPageSurface learned about a person's own ratings and lists pages
+       the features gated on this one kept returning immediately: the page was scoped in and
+       four of its tools were dead on it. Asking the classifier means one place decides what
+       a collection is. */
     function isListPage() {
-        return /\/(watchlist|list\/|chart\/)/i.test(location.pathname);
+        return getPageSurface() === 'collection';
     }
 
     /* IMDb renders each collection row's metadata as a short inline list — year, runtime,
@@ -20196,7 +20205,7 @@ ${scopedRules('.enh-zoom', {
         cacheCard.append(
             makeEl('button', { type:'button', className:'enh-settings-footer-btn', id:'enh-clearcache-btn', title:t('text_clear_cached_third_party_lookups') }, t('label_clear_cache')),
             makeEl('div', { className:'enh-settings-card-description', id:'enh-cache-status', style:{ marginTop:'8px' } },
-                `${cacheCount()} entries currently cached, using ${formatCacheBytes(cacheBytes())} of ${formatCacheBytes(CACHE_TOTAL_BYTE_BUDGET)}. The oldest are dropped automatically as that fills.`),
+                t('text_cache_summary', [String(cacheCount()), formatCacheBytes(cacheBytes()), formatCacheBytes(CACHE_TOTAL_BYTE_BUDGET)])),
             /* The cache line alone reported a fraction of the store: marks and their
                viewing histories outgrow it on any real library, so a page that showed
                only the cache made a nearly full store look nearly empty. The extension
@@ -20908,6 +20917,7 @@ ${scopedRules('.enh-zoom', {
                 buildDiagnosticsReport,
                 cacheCount,
                 cacheBytes,
+                isListPage,
                 storedBytes,
                 formatCacheBytes,
                 getUserMarks,
