@@ -1509,6 +1509,9 @@
     const SCORE_CORRECTION_SCAN_LIMIT = SCORE_CORRECTION_TITLE_LIMIT * 2;
     const SCORE_CORRECTION_CANDIDATE_LIMIT = 5;
     const SCORE_CORRECTION_URL_LIMIT = 512;
+    /* SCORE_CORRECTION_PROVIDERS is declared in a later module, so the count it would give
+       is not available here. It is pinned to that map by a test rather than trusted. */
+    const SCORE_CORRECTION_PROVIDER_COUNT = 5;
     /* Bounded like every other stored string, and counted against the same 5,000-record
        ceiling as the marks themselves — a note lives inside its title's mark record. */
     const USER_MARK_NOTE_LIMIT = 500;
@@ -1569,10 +1572,19 @@
         + (USER_MARK_VIEWINGS_MAX * 96);
     const SITE_JSON_BYTES_MAX = 256
         + ((SETTING_TEXT_LIMIT + URL_TEMPLATE_TEXT_LIMIT) * JSON_BYTES_PER_CHAR_MAX);
-    /* Two site lists, watch and external, plus room for every other preference, the
-       credential fields an export with credentials carries, and the envelope itself. */
+    /* Score corrections are a bounded, exported setting and the derivation used to leave
+       them out entirely, so a store at their own ceiling was covered only by the slop
+       below and by the marks term being generous. Per corrected title: the IMDb id, the
+       JSON punctuation, and a URL per provider at the ceiling the normaliser now enforces
+       on the stored form. */
+    const SCORE_CORRECTION_JSON_BYTES_MAX = 128
+        + (SCORE_CORRECTION_PROVIDER_COUNT * (32 + SCORE_CORRECTION_URL_LIMIT));
+    /* Two site lists, watch and external, the corrections, plus room for every other
+       preference, the credential fields an export with credentials carries, and the
+       envelope itself. */
     const SETTINGS_IMPORT_TEXT_LIMIT = (USER_MARKS_MAX * USER_MARK_JSON_BYTES_MAX)
         + (2 * SITE_LIST_LIMIT * SITE_JSON_BYTES_MAX)
+        + (SCORE_CORRECTION_TITLE_LIMIT * SCORE_CORRECTION_JSON_BYTES_MAX)
         + (1024 * 1024);
     /* Big enough that a file this extension wrote always reads back. The export is a row
        per viewing, so the worst case is every one of the 5,000 marks carrying its full
@@ -4889,6 +4901,13 @@
             if (!config.path.test(parsed.pathname)) return '';
             parsed.search = '';
             parsed.hash = '';
+            /* The slice above bounds what was typed; this bounds what is kept. URL.href
+               percent-encodes, so a path in Japanese or Cyrillic leaves here several times
+               longer than it arrived, and the ceiling the storage bounds are derived from
+               would be a number nothing enforced. A URL that cannot be stored inside its
+               own limit is refused rather than truncated, because half a URL is not a
+               correction, it is a link to the wrong page. */
+            if (parsed.href.length > SCORE_CORRECTION_URL_LIMIT) return '';
             return parsed.href;
         } catch { return ''; }
     }
@@ -21200,6 +21219,8 @@ ${scopedRules('.enh-zoom', {
                 buildDiagnosticsReport,
                 cacheCount,
                 cacheBytes,
+                SCORE_CORRECTION_URL_LIMIT,
+                SCORE_CORRECTION_PROVIDER_COUNT,
                 isListPage,
                 storedBytes,
                 formatCacheBytes,

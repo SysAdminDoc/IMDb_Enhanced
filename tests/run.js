@@ -274,6 +274,8 @@ function loadScriptTestHooks({ withoutDeleteValue = false, withheldCredentials =
         CACHE_MAX_TTL,
         WIKIDATA_ID_TTL,
         normalizeScoreCorrectionUrl,
+        SCORE_CORRECTION_URL_LIMIT,
+        SCORE_CORRECTION_PROVIDER_COUNT,
         resolveScoreCorrectionResponseUrl,
         getJustWatchCorrectionRequestUrl,
         resolveJustWatchCorrectionResponseUrl,
@@ -2999,6 +3001,45 @@ test('a marks CSV too large to read back says so when it is written', () => {
     assert(script.includes('const warnIfUnreadable = csv => {'), 'the check has to exist');
     assert((script.match(/if \(warnIfUnreadable\(csv\)\) return;/g) || []).length === 2,
         'both the copy and the download paths must run it');
+});
+
+/* IE-180: score corrections are a bounded, exported setting that the size derivation did
+   not count, and the ceiling it would have counted them against was not enforced on the
+   stored form: the input is sliced at 512 characters and then percent-encoded, which a
+   non-ASCII path expands severalfold. */
+test('a stored score correction fits the ceiling the backup limit is derived from', () => {
+    const hooks = loadScriptTestHooks();
+
+    /* The count in the derivation lives in an earlier module than the provider map, so it
+       is pinned here rather than trusted. */
+    const providers = [...script.matchAll(/^\s{8}(\w+): \{ label:'[^']+', domain:'/gm)].length;
+    assert.strictEqual(providers, hooks.SCORE_CORRECTION_PROVIDER_COUNT,
+        `the derivation counts ${hooks.SCORE_CORRECTION_PROVIDER_COUNT} correction providers and the map has ${providers}`);
+
+    /* An ordinary correction is untouched. */
+    const plain = hooks.normalizeScoreCorrectionUrl('letterboxd', 'https://letterboxd.com/film/the-thing/');
+    assert.strictEqual(plain, 'https://letterboxd.com/film/the-thing/', 'a normal URL is kept as it is');
+    assert(plain.length <= hooks.SCORE_CORRECTION_URL_LIMIT, 'and is inside the ceiling');
+
+    /* A path in three-byte text is inside the ceiling as typed and several times over it
+       once encoded. Before this it was stored anyway, so the number the backup limit is
+       derived from described nothing. */
+    const wide = `https://letterboxd.com/film/${'\u65e5'.repeat(200)}/`;
+    assert(wide.length < hooks.SCORE_CORRECTION_URL_LIMIT,
+        'the sample has to be inside the ceiling as typed, or it proves nothing');
+    assert(encodeURI(wide).length > hooks.SCORE_CORRECTION_URL_LIMIT,
+        'and outside it once encoded');
+    assert.strictEqual(hooks.normalizeScoreCorrectionUrl('letterboxd', wide), '',
+        'a URL that cannot be stored inside its own limit is refused, not truncated');
+
+    /* And whatever the normaliser does keep is inside the ceiling, which is the property
+       the derivation rests on. */
+    ['https://letterboxd.com/film/a/', `https://letterboxd.com/film/${'a'.repeat(400)}/`, wide]
+        .forEach(candidate => {
+            const stored = hooks.normalizeScoreCorrectionUrl('letterboxd', candidate);
+            assert(stored.length <= hooks.SCORE_CORRECTION_URL_LIMIT,
+                `stored corrections must fit the ceiling; got ${stored.length}`);
+        });
 });
 
 test('the settings size guard measures bytes, not UTF-16 code units', () => {

@@ -873,6 +873,13 @@
             if (!config.path.test(parsed.pathname)) return '';
             parsed.search = '';
             parsed.hash = '';
+            /* The slice above bounds what was typed; this bounds what is kept. URL.href
+               percent-encodes, so a path in Japanese or Cyrillic leaves here several times
+               longer than it arrived, and the ceiling the storage bounds are derived from
+               would be a number nothing enforced. A URL that cannot be stored inside its
+               own limit is refused rather than truncated, because half a URL is not a
+               correction, it is a link to the wrong page. */
+            if (parsed.href.length > SCORE_CORRECTION_URL_LIMIT) return '';
             return parsed.href;
         } catch { return ''; }
     }
