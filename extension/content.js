@@ -1587,13 +1587,16 @@
        below and by the marks term being generous. Per corrected title: the IMDb id, the
        JSON punctuation, and a URL per provider at the ceiling the normaliser now enforces
        on the stored form. */
+    /* Per provider, not per title. normalizeScoreCorrectionRecord returns a record for
+       each provider and each one carries its own url, title and year, so counting the title
+       once left the budget at roughly half again what a maximal store measures. The title
+       is counted at the same bytes-per-character as the rest of this derivation, because it
+       is text somebody typed. */
     const SCORE_CORRECTION_JSON_BYTES_MAX = 128
-        /* The record keeps a title and a year beside the URLs, and leaving them out put the
-           budget at roughly half what a maximal store actually measures. Counted at the
-           same bytes-per-character the rest of this derivation uses, because a title is
-           text somebody typed. */
-        + (USER_MARK_TITLE_LIMIT * JSON_BYTES_PER_CHAR_MAX) + 32
-        + (SCORE_CORRECTION_PROVIDER_COUNT * (32 + SCORE_CORRECTION_URL_LIMIT));
+        + (SCORE_CORRECTION_PROVIDER_COUNT * (
+            64
+            + SCORE_CORRECTION_URL_LIMIT
+            + (USER_MARK_TITLE_LIMIT * JSON_BYTES_PER_CHAR_MAX)));
     /* Two site lists, watch and external, the corrections, plus room for every other
        preference, the credential fields an export with credentials carries, and the
        envelope itself. */
@@ -21467,6 +21470,7 @@ ${scopedRules('.enh-zoom', {
                 getRatingRamp,
                 settingsTextTooLarge,
                 SCORE_CORRECTION_URL_LIMIT,
+                SCORE_CORRECTION_JSON_BYTES_MAX,
                 SCORE_CORRECTION_PROVIDER_COUNT,
                 isListPage,
                 storedBytes,

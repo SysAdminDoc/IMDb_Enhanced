@@ -276,6 +276,7 @@ function loadScriptTestHooks({ withoutDeleteValue = false, withheldCredentials =
         WIKIDATA_ID_TTL,
         normalizeScoreCorrectionUrl,
         SCORE_CORRECTION_URL_LIMIT,
+        SCORE_CORRECTION_JSON_BYTES_MAX,
         SCORE_CORRECTION_PROVIDER_COUNT,
         resolveScoreCorrectionResponseUrl,
         getJustWatchCorrectionRequestUrl,
@@ -3098,6 +3099,26 @@ test('a stored score correction fits the ceiling the backup limit is derived fro
     const stored = `https://letterboxd.com/film/${'b'.repeat(1800)}/`;
     assert.strictEqual(hooks.normalizeScoreCorrectionUrl('letterboxd', stored), '',
         'an over-long correction from an older build is dropped, not truncated');
+
+    /* The budget against what a record actually serialises to, which nothing measured: the
+       term was derived from the field limits and never compared to a real record, so
+       counting the title once per title rather than once per provider went unnoticed.
+       Three-byte text, because the limits are character counts and the budget is bytes. */
+    const maximalRecord = {};
+    ['rottenTomatoes', 'letterboxd', 'metacritic', 'justWatch', 'anilist'].forEach(provider => {
+        maximalRecord[provider] = {
+            v:1,
+            mode:'manual',
+            url:`https://letterboxd.com/film/${'a'.repeat(400)}/`,
+            title:'\u65e5'.repeat(hooks.USER_MARK_TITLE_LIMIT),
+            year:2024,
+            ts:Date.now(),
+        };
+    });
+    const recordBytes = hooks.encodedByteLength(JSON.stringify(maximalRecord));
+    assert(recordBytes <= hooks.SCORE_CORRECTION_JSON_BYTES_MAX,
+        `a maximal correction record is ${recordBytes} bytes against a `
+        + `${hooks.SCORE_CORRECTION_JSON_BYTES_MAX}-byte budget`);
 
     /* And whatever the normaliser does keep is inside the ceiling, which is the property
        the derivation rests on. */
@@ -8678,6 +8699,15 @@ test('every sentence in the source comes from the catalog', () => {
             if (entry.before !== '`markup`'
                 && !SHOWN.test(entry.before)
                 && !SHOWN_CHILD.test(entry.before)
+                /* And the same child position reached through a ternary, which the raw
+                   context alone cannot see: makeEl('p', {…}, ok ? 'A sentence.' : '') has
+                   the condition between the brace and the string. The stripper peels that
+                   away, but it peels a trailing call away too, which is what turned the
+                   first argument of a nested call into the same shape and made the gate
+                   demand a catalog key for 'en-US'. What was removed tells them apart: a
+                   call carries a parenthesis and a condition does not. */
+                && !(SHOWN_CHILD.test(withoutConditionalBranches(entry.before))
+                    && !entry.before.slice(withoutConditionalBranches(entry.before).length).includes('('))
                 && !SHOWN.test(withoutConditionalBranches(entry.before))
                 && !SHOWN_CALLS.has(entry.call)) return;
             stranded.push(`${name}:${entry.line}: ${entry.text}`);

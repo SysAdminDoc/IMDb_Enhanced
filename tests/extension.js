@@ -848,8 +848,16 @@ test('the source archive carries what a rebuild needs and no build output', () =
            and a foreground that only ever appears on one surface is not checked against
            surfaces it never touches. A rule that names no background of its own is checked
            against every page surface, because that is where it could land. */
+        /* The capture runs from the previous brace, so it picks up any comment written
+           above the rule. That is not cosmetic: both the interactive test and the state
+           test read this string, so a comment containing a colon used to exempt a control
+           from the boundary check, and a comment containing the word "button" could
+           promote a decorative rule into one. */
         const blocks = [...rules.matchAll(/([^{}]*)\{([^{}]*)\}/g)]
-            .map(match => ({ selector: match[1].trim(), block: match[2] }));
+            .map(match => ({
+                selector: match[1].replace(/\/\*[\s\S]*?\*\//g, ' ').trim(),
+                block: match[2],
+            }));
         /* WCAG 1.4.11 is about boundaries that identify a control and rings that show
            focus. The line around a panel is decoration and is deliberately not held to
            it - holding it there would mean drawing 3:1 dividers everywhere, which is a
@@ -885,11 +893,18 @@ test('the source archive carries what a rebuild needs and no build output', () =
                    dark page and 1.7:1 on the light one, so a rule that only measured the
                    fill would condemn a button that is perfectly findable in dark and a rule
                    that only measured the border would miss one that is invisible in light. */
-                /* The control, not each of its states. A :hover or :disabled rule that only
-                   repaints the background inherits its border from the base rule and is not a
-                   separate thing to find on the page; measuring it as one asks a state to carry
-                   a boundary the control already has. */
-                if (own) {
+                /* The control, not each of its states, with two conditions the first
+                   version of this got wrong. Every comma-separated selector has to be a
+                   state, because one grouped state used to exempt the base control beside
+                   it. And the rule must not draw a border of its own: the exemption exists
+                   because a state that only repaints the background inherits the base
+                   rule's boundary, which stops being true the moment it paints one, and a
+                   state painting fill and border in the same token was measured by nothing
+                   at all. */
+                const parts = selector.split(',').map(part => part.trim()).filter(Boolean);
+                const everyPartIsState = parts.length > 0 && parts.every(part => /:[a-z-]+/.test(part));
+                const inherits = everyPartIsState && !edges.length;
+                if (own && !inherits) {
                     filled.push({ selector, fill: own, edges: edges.filter(edge => edge !== own) });
                 }
             }
@@ -912,9 +927,7 @@ test('the source archive carries what a rebuild needs and no build output', () =
                repaints the background inherits its border from the base rule and is not a
                separate thing to find on the page, so asking it to carry a boundary asks a
                state for something the control already has. */
-            filled
-                .filter(entry => !/:[a-z-]+/.test(entry.selector))
-                .forEach(({ selector, fill, edges }) => {
+            filled.forEach(({ selector, fill, edges }) => {
                 if (!tokens[fill]) return;
                 const against = backgroundNames.filter(name => name !== fill && tokens[name]);
                 against.forEach(page => {
