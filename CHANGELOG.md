@@ -13,6 +13,10 @@
 - The recovery and permissions pages had control borders that were all but invisible. A button's own boundary is what tells you where the button is, and WCAG asks 3:1 of it against the surface behind: the recovery page's buttons measured 1.17:1 in dark and 1.22:1 in light, the permissions page's 1.03:1 in dark, the Reset everything button's danger border 1.29:1, and the password and backup fields 1.36:1. All of them now clear 3:1 in both schemes. The panel and status borders are unchanged, because those are decoration rather than controls.
 - Three regular expressions were written with a literal backspace byte where `` was meant, so they matched nothing and the checks built on them had been passing for free. One guarded the README against naming a fixed backup size, one guarded the message catalog against the same, and the third decided which selectors the contrast gate treats as controls, which is why the border defects above went unseen.
 
+### Added
+
+- Your own ratings page and your own lists index now get the same treatment as any other list: private Seen and Skip marks, the filters that narrow by them, and dimming for low-rated titles. They were outside the extension's page list entirely, which meant the longest card list an IMDb account has was the one place none of it worked.
+
 ### Changed
 
 - Source files no longer contain raw control bytes, and the build refuses any that appear. A NUL parses and runs fine, so nothing noticed one sitting in a character class, but grep and ripgrep treat a file holding one as binary and skip it, which had quietly made six tracked files unsearchable, the shipped userscript among them.

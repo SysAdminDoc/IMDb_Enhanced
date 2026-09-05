@@ -806,6 +806,33 @@ test('feature failures are retained and reportable without leaking secrets', () 
 /* IMDb renders the whole-series grid itself on /ratings/ but leaves every cell the
    same colour. Ratings are read from the link text because IMDb translates the
    aria-label — the same trap that broke the watchlist lookup. */
+/* IE-160: the account holder's own ratings and lists index are the longest card lists an
+   IMDb account has, and they were outside every match pattern, so marks and filters that
+   work on /chart/ and /list/ were simply absent there. */
+test("a person's own ratings and lists pages are collection surfaces", () => {
+    const hooks = loadScriptTestHooks();
+
+    ['/user/ur12345678/ratings', '/user/ur12345678/ratings/', '/user/ur12345678/lists',
+        '/user/ur12345678/lists/', '/de/user/ur12345678/ratings/'].forEach(path => {
+        hooks.setTestPath(path);
+        assert.strictEqual(hooks.getPageSurface(), 'collection', `${path} should be a collection surface`);
+        assert(hooks.shouldInitFeature({ key:'watchedMarking', group:'Features' }),
+            `marks belong on ${path}`);
+        assert(hooks.shouldInitFeature({ key:'markFilters', group:'Features' }),
+            `and so do the filters that narrow them on ${path}`);
+    });
+
+    /* The title tabs are classified above this line and must stay that way: a series'
+       own ratings grid is not somebody's rating history. */
+    hooks.setTestPath('/title/tt0903747/ratings/');
+    assert.strictEqual(hooks.getPageSurface(), 'ratings',
+        "a title's ratings tab must not be swallowed by the user-ratings route");
+
+    // A profile page is not a card list, and nothing here should claim it.
+    hooks.setTestPath('/user/ur12345678/');
+    assert.strictEqual(hooks.getPageSurface(), 'other', 'a bare profile is not a collection');
+});
+
 test('the episode heatmap reads ratings from link text and scopes to the ratings route', () => {
     const hooks = loadScriptTestHooks();
 

@@ -11,9 +11,13 @@
 // @match        https://www.imdb.com/*/title/*
 // @match        https://www.imdb.com/*/name/*
 // @match        https://www.imdb.com/user/*/watchlist*
+// @match        https://www.imdb.com/user/*/ratings*
+// @match        https://www.imdb.com/user/*/lists*
 // @match        https://www.imdb.com/list/*
 // @match        https://www.imdb.com/chart/*
 // @match        https://www.imdb.com/*/user/*/watchlist*
+// @match        https://www.imdb.com/*/user/*/ratings*
+// @match        https://www.imdb.com/*/user/*/lists*
 // @match        https://www.imdb.com/*/list/*
 // @match        https://www.imdb.com/*/chart/*
 // @match        https://www.imdb.com/find*
@@ -20612,7 +20616,13 @@ ${scopedRules('.enh-zoom', {
         if (new RegExp(`^/${locale}title/tt\\d+/?$`, 'i').test(path)) return 'title';
         if (new RegExp(`^/${locale}title/tt\\d+/`, 'i').test(path)) return 'title-subpage';
         if (new RegExp(`^/${locale}name/nm\\d+`, 'i').test(path)) return 'name';
+        /* A person's own ratings and their own lists index are card lists like any other,
+           and they are the longest ones an account holder has. Reading a page somebody
+           already opened is what every other collection surface does here; nothing walks
+           pagination and nothing is stored beyond what a visible row shows. The title
+           tabs are matched above, so /title/tt.../ratings never reaches this line. */
         if (/\/(watchlist|list\/|chart\/)/i.test(path)) return 'collection';
+        if (new RegExp(`^/${locale}user/ur\\d+/(?:ratings|lists)(?:/|$)`, 'i').test(path)) return 'collection';
         if (new RegExp(`^/${locale}(?:find|search)(?:/|$)`, 'i').test(path)) return 'search';
         if (new RegExp(`^/${locale}$`, 'i').test(path)) return 'home';
         return 'other';

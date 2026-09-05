@@ -11,9 +11,13 @@
 // @match        https://www.imdb.com/*/title/*
 // @match        https://www.imdb.com/*/name/*
 // @match        https://www.imdb.com/user/*/watchlist*
+// @match        https://www.imdb.com/user/*/ratings*
+// @match        https://www.imdb.com/user/*/lists*
 // @match        https://www.imdb.com/list/*
 // @match        https://www.imdb.com/chart/*
 // @match        https://www.imdb.com/*/user/*/watchlist*
+// @match        https://www.imdb.com/*/user/*/ratings*
+// @match        https://www.imdb.com/*/user/*/lists*
 // @match        https://www.imdb.com/*/list/*
 // @match        https://www.imdb.com/*/chart/*
 // @match        https://www.imdb.com/find*
