@@ -966,6 +966,42 @@ test('schema 5 replaces shipped dead searches and removes catalog homepages', ()
 /* Forced colours drop box-shadow outright, so a ring drawn as a shadow vanishes; the
    product also ships a high-contrast theme, which made the absence of any forced-colors
    handling the larger gap. */
+/* IE-172: forced colours replace every author colour with one system pair, so anything
+   this build says with colour alone stops saying it. Three surfaces carry meaning that way
+   and each needs its own answer, which is what this checks. */
+test('nothing this build says with colour alone is lost in forced colours', () => {
+    /* A window after each marker rather than brace matching: these blocks nest, and a
+       non-greedy match to the first closing brace stops inside the first rule. */
+    const starts = [...script.matchAll(/@media \(forced-colors: active\)/g)].map(match => match.index);
+    assert(starts.length >= 2, `expected forced-colors rules, found ${starts.length}`);
+    const all = starts.map(at => script.slice(at, at + 1400)).join('\n');
+
+    /* A rating and a heatmap cell mean a number. Flattening them to the system pair makes a
+       grid of identical squares, so they opt out, which is only safe because each also
+       carries its rating as text. */
+    assert(/forced-color-adjust:\s*none/.test(all),
+        'the rating swatches must opt out of the substitution, or the heatmap says nothing');
+
+    /* A focus ring drawn as a box-shadow disappears entirely, so it is restated as an
+       outline in a system colour. */
+    assert(/outline:[^;]*\b(?:Highlight|CanvasText|ButtonText|LinkText)\b/.test(all),
+        'focus has to be drawn in a system colour, since box-shadow is dropped');
+
+    /* Seen and Skip are told apart by the colour of an underline, which forced colours
+       overrides, so the line itself has to carry the difference. */
+    const tint = script.slice(script.indexOf("'enh-markLinkTint'") - 3000, script.indexOf("'enh-markLinkTint'"));
+    const forcedAt = tint.indexOf('@media (forced-colors: active)');
+    const forced = forcedAt < 0 ? '' : tint.slice(forcedAt);
+    const styles = [...forced.matchAll(/text-decoration-style:\s*([a-z]+)/g)].map(match => match[1]);
+    assert.strictEqual(new Set(styles).size, 2,
+        `Seen and Skip need two different underline styles under forced colours; found ${JSON.stringify(styles)}`);
+
+    /* And the dimming, which is an opacity that means "you rated this low": under forced
+       colours it is removed rather than left as a washed-out image nobody asked for. */
+    assert(/\.enh-dim-low img \{[^}]*opacity:\s*1/.test(script),
+        'dimming has to be released in forced colours');
+});
+
 test('themes honour forced colours and a request for more contrast', () => {
     const globalStyles = script.slice(script.indexOf('FOCUS STATES (accessibility)'));
     const forced = globalStyles.slice(globalStyles.indexOf('@media (forced-colors: active)'));

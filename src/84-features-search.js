@@ -1075,6 +1075,16 @@
                 }
                 a[${LINK_MARK_ATTRIBUTE}="watched"] { text-decoration-color: ${theme.accent}; }
                 a[${LINK_MARK_ATTRIBUTE}="skip"] { text-decoration-color: ${theme.red}; }
+                /* Seen and Skip are told apart by the colour of the underline and by nothing
+                   else, and Windows High Contrast replaces every author colour with one pair,
+                   which makes the two marks identical: the feature would still be drawing a
+                   distinction the reader can no longer see. The line itself carries it there,
+                   dotted against wavy, so the mark survives a palette this build does not
+                   choose. */
+                @media (forced-colors: active) {
+                    a[${LINK_MARK_ATTRIBUTE}="watched"] { text-decoration-style: dotted; }
+                    a[${LINK_MARK_ATTRIBUTE}="skip"] { text-decoration-style: wavy; }
+                }
             `, 'enh-markLinkTint');
 
             this._scan(document);
