@@ -2292,10 +2292,11 @@
                only the cache made a nearly full store look nearly empty. The extension
                builds declare unlimitedStorage, so there is no browser ceiling to measure
                against and saying so is more use than inventing one. */
+            /* Filled when the dialog is opened, not when it is built. The panel is
+               rebuilt on every IMDb route change, and walking the whole store to size it
+               is not something a page navigation should pay for. */
             makeEl('div', { className:'enh-settings-card-description', id:'enh-storage-status', style:{ marginTop:'8px' } },
-                IS_EXTENSION_BUILD
-                    ? t('settings_storage_uncapped', [formatCacheBytes(storedBytes())])
-                    : t('settings_storage_total', [formatCacheBytes(storedBytes())]))
+                t('label_checking'))
         );
         /* Only the extension builds can be stale — the userscript updates through its
            manager — so the control exists only where it means something. */
@@ -2598,6 +2599,17 @@
         document.body.appendChild(fab);
     }
 
+    /* Reported when somebody asks to see it. Reading it again on each open also means the
+       figure reflects what the store holds now rather than what it held at page load. */
+    function refreshStorageStatus(overlay) {
+        const status = overlay?.querySelector('#enh-storage-status');
+        if (!status) return;
+        const size = formatCacheBytes(storedBytes());
+        setTextIfChanged(status, IS_EXTENSION_BUILD
+            ? t('settings_storage_uncapped', [size])
+            : t('settings_storage_total', [size]));
+    }
+
     function toggleSettings() {
         settingsOpen = !settingsOpen;
         const overlay = document.getElementById('enh-settings-overlay');
@@ -2610,6 +2622,7 @@
             document.querySelectorAll('.enh-score-correction__close').forEach(button => button.click());
             document.querySelector('.enh-zoom')?.remove();
             if (overlay) showInTopLayer(overlay);
+            refreshStorageStatus(overlay);
         } else if (overlay) {
             hideFromTopLayer(overlay);
         }

@@ -331,6 +331,7 @@
                 buildDiagnosticsReport,
                 cacheCount,
                 cacheBytes,
+                storedBytes,
                 formatCacheBytes,
                 getUserMarks,
                 EXPORT_REDACTED_KEY,

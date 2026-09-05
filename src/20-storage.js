@@ -498,10 +498,22 @@
             GM_listValues().forEach(storageKey => {
                 if (!String(storageKey).startsWith(PREFIX)) return;
                 let raw = null;
-                try { raw = GM_getValue(storageKey, null); }
-                catch { return; }
+                /* The marks blob is read from the cache the store already keeps rather than
+                   through GM_getValue, which in the extension build structuredClones it. At
+                   the bounds this build allows that is five thousand records carrying a
+                   hundred viewings each, and cloning half a million objects to measure them
+                   and then throw the clone away cost about a third of a second. */
+                if (settingKeyFromFailure(storageKey) === 'userMarks') raw = getUserMarks();
+                else {
+                    try { raw = GM_getValue(storageKey, null); }
+                    catch { return; }
+                }
                 if (raw === null || raw === undefined) return;
-                const text = typeof raw === 'string' ? raw : JSON.stringify(raw);
+                /* JSON, including a string's own quotes and escapes, because that is the
+                   form the backend stores and charges for. */
+                let text = '';
+                try { text = JSON.stringify(raw) || ''; }
+                catch { return; }
                 bytes += encodedByteLength(storageKey) + encodedByteLength(text);
             });
             return bytes;

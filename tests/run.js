@@ -263,6 +263,7 @@ function loadScriptTestHooks({ withoutDeleteValue = false, withheldCredentials =
         cacheGC,
         cacheCount,
         cacheBytes,
+        storedBytes,
         encodedByteLength,
         readCacheUsage,
         CACHE_TOTAL_BYTE_BUDGET,
@@ -2779,6 +2780,51 @@ test('remembered section state participates in backup and migrates legacy keys',
     failingControlHooks.failSettingWriteAt(1);
     assert.strictEqual(failingControlHooks.setSectionCollapsed('Details', true, false), false, 'collapse state should report normal-write failure');
     assert.strictEqual(failingControlHooks.getStoredSetting('sectionCollapseState'), undefined, 'failed collapse writes must leave storage unchanged');
+});
+
+/* The Data page's storage figure. It had no coverage at all, and the first version of it
+   referred to a helper that does not exist - which a full suite run did not notice, because
+   nothing ever called the function. */
+test('the reported storage size counts the whole store, marks included', () => {
+    const hooks = loadScriptTestHooks();
+
+    const empty = hooks.storedBytes();
+    assert.strictEqual(typeof empty, 'number', 'the figure must be a number');
+    assert(Number.isFinite(empty) && empty >= 0, 'and a real one');
+
+    hooks.seedStoredSetting('themeVariant', 'oled');
+    const withSetting = hooks.storedBytes();
+    assert(withSetting > empty, 'a stored setting has to show up in the total');
+
+    /* The marks blob is the half the cache reading never saw, and it is read through a
+       different path from every other key, so it needs its own case. */
+    const marks = {};
+    for (let index = 0; index < 40; index += 1) {
+        marks[`tt${String(index).padStart(7, '0')}`] = {
+            state:'watched', title:'T'.repeat(hooks.USER_MARK_TITLE_LIMIT), ts:index,
+        };
+    }
+    hooks.seedStoredSetting('userMarks', marks);
+    const withMarks = hooks.storedBytes();
+    assert(withMarks > withSetting + 40 * hooks.USER_MARK_TITLE_LIMIT,
+        `marks must be counted; ${withSetting} -> ${withMarks}`);
+
+    /* Bytes, not code units, and JSON's own quoting: the same store written in three-byte
+       text has to measure larger than the ASCII one, or the figure is not in the units the
+       page says it is. A separate store rather than a second write into this one, because
+       the reading takes marks from the cache the module keeps, exactly as every other
+       reader of them does. */
+    const wideHooks = loadScriptTestHooks();
+    const wide = {};
+    for (const [id, record] of Object.entries(marks)) {
+        wide[id] = { ...record, title:'\u65e5'.repeat(wideHooks.USER_MARK_TITLE_LIMIT) };
+    }
+    wideHooks.seedStoredSetting('userMarks', wide);
+    wideHooks.seedStoredSetting('themeVariant', 'oled');
+    const wideBytes = wideHooks.storedBytes();
+    assert(wideBytes > withMarks,
+        `a store of three-byte characters must measure larger than the same store in ASCII; `
+        + `${withMarks} -> ${wideBytes}`);
 });
 
 test('the settings size guard measures bytes, not UTF-16 code units', () => {

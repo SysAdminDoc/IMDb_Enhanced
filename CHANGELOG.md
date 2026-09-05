@@ -6,7 +6,7 @@
 
 - The extension builds now ask for `unlimitedStorage`. Chrome caps `chrome.storage.local` at 10 MB without it, and the cache budget alone is 6 MB of that, so the 5,000 marks this build says it will hold could never fit: only about 573 of them, at the worst-case size the bounds allow, and the rest were refused. The permission raises no prompt, sends nothing anywhere and only stops the browser refusing writes. A test used to assert the opposite, on the reasoning that the byte budget made the permission unnecessary; that budget is a cache budget, and it is most of what the quota allowed rather than a substitute for it.
 - The settings backup and restore size limits are measured in UTF-8 bytes rather than UTF-16 code units, and the limit itself is now derived in bytes too. It was built by adding character ceilings together as though they were byte ceilings, and it left out seven of the fields a mark actually carries, so a library the build's own limits permit could be refused on backup and a backup an earlier build wrote could be refused on restore.
-- Settings, Data now reports what the whole store is using rather than the cache alone. On any real library the marks and their viewing histories are most of it, so a page that showed only the cache made a nearly full store look nearly empty.
+- Settings, Data now reports what the whole store is using rather than the cache alone. The figure is read when you open the dialog, so it describes the store as it is rather than as it was when the page loaded.
 
 ### Fixed
 
