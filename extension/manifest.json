@@ -23,9 +23,11 @@
   ],
   "optional_host_permissions": [
     "http://127.0.0.1/*",
+    "http://[::1]/*",
     "http://localhost/*",
     "https://*.amazon-adsystem.com/*",
     "https://127.0.0.1/*",
+    "https://[::1]/*",
     "https://advertising.amazon.dev/*",
     "https://api.mdblist.com/*",
     "https://api.themoviedb.org/*",

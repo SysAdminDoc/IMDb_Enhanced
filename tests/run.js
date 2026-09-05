@@ -2860,12 +2860,19 @@ test('every loopback host the field accepts is one a request can reach', () => {
         'http://localhost:8096/?token=abc', // or in the query
         'http://localhost:8096/#token',
         'ftp://localhost:8096',
-        /* Loopback on the merits, and refused because nothing can carry it: no manifest
-           origin, no @connect, and browser match patterns cannot express an IPv6 literal
-           host at all. Accepting it produced a field that validated the address a service
-           prints and then failed every request against it. IE-178. */
-        'http://[::1]:8096',
     ].forEach(url => assert(!hooks.isLocalServiceUrl(url), `${url} must be refused`));
+
+    /* IE-178. This was withdrawn once for shipping on the predicates alone, with nothing
+       able to carry a request to it. The assumption behind the withdrawal was that browser
+       match patterns cannot express an IPv6 literal host, and that turned out to be wrong:
+       probed on 2026-09-05 against Chromium, chrome.permissions.contains returns false for
+       'http://[::1]/*' and throws "Invalid host" for the malformed 'http://[::1/*', so the
+       parser accepts the bracketed form; the AMO validator reports no error for it either.
+       Every longer spelling normalises to this one. */
+    ['http://[::1]:8096', 'http://[0:0:0:0:0:0:0:1]:8096', 'https://[::1]:8920/']
+        .forEach(url => assert(hooks.isLocalServiceUrl(url), `${url} is loopback and should be allowed`));
+    ['http://user:pass@[::1]:8096', 'http://[::1]:8096/?token=abc', 'http://[2001:db8::1]:8096']
+        .forEach(url => assert(!hooks.isLocalServiceUrl(url), `${url} must still be refused`));
 
     /* Four lists decide whether a local request leaves: this predicate, the worker's own
        copy, LOOPBACK_ORIGINS (which generates the manifest) and the userscript's @connect.
@@ -7987,7 +7994,7 @@ test('the userscript declares exactly the hosts its providers contact', () => {
     /* The loopback origins are four patterns for two hosts, and the ad hosts are blocked
        rather than called, so neither set maps one-to-one. Both are declared through the
        providers that do call them. */
-    const localServiceHosts = ['localhost', '127.0.0.1'];
+    const localServiceHosts = ['localhost', '127.0.0.1', '[::1]'];
     const expected = [...new Set([...fromProviders, ...localServiceHosts])].sort();
     assert.deepStrictEqual(declared, expected,
         'every host a provider contacts must be declared, and nothing else may be');

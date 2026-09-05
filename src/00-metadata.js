@@ -50,6 +50,7 @@
 // @connect      api.tvmaze.com
 // @connect      localhost
 // @connect      127.0.0.1
+// @connect      [::1]
 // @run-at       document-start
 // @noframes
 // @license      MIT

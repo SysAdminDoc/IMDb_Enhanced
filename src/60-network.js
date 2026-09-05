@@ -247,14 +247,13 @@
             return url.href.replace(/\/+$/, '');
         } catch { return ''; }
     }
-    /* The same two the background worker allows, and no more. [::1] belongs here on the
-       merits and cannot be shipped yet: an extension only fetches origins its manifest
-       declares, browser match patterns cannot express an IPv6 literal host, and the
-       userscript build needs an @connect for it as well. Accepting it here without either
-       gave a field that validated the address a service prints and then failed every
-       request against it forever, which is worse than refusing it. A test below pins the
-       accepted hosts to the origins that can actually carry them. See IE-178. */
-    const LOOPBACK_HOSTS = new Set(['localhost', '127.0.0.1']);
+    /* The same three the background worker allows, and no more. Every one of them is
+       carried by a declared origin and an @connect, which a test pins: a host accepted
+       here with nothing behind it is a field that validates the address a service prints
+       and then fails every request against it forever, which is what shipping [::1] on the
+       predicates alone did. URL normalises every longer spelling of the loopback address
+       to this one, so the single entry covers them all. */
+    const LOOPBACK_HOSTS = new Set(['localhost', '127.0.0.1', '[::1]']);
     function isLocalServiceUrl(baseUrl) {
         try {
             const url = new URL(baseUrl);

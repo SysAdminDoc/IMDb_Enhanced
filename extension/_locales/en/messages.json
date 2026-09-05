@@ -3237,7 +3237,7 @@
     "message": "Undone. $1 settings were put back. Reloading..."
   },
   "toast_use_a_localhost_or_127_0": {
-    "message": "Use a localhost or 127.0.0.1 HTTP(S) URL without embedded credentials"
+    "message": "Use a localhost, 127.0.0.1 or [::1] HTTP(S) URL without embedded credentials"
   },
   "toast_use_a_positive_whole_number_profile": {
     "message": "Use a positive whole-number profile ID"

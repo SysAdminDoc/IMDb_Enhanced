@@ -1114,7 +1114,7 @@
         toast_title_requested_through: '$1 requested through $2',
         toast_title_sent_to: '$1 sent to $2',
         toast_undone_settings_were_put_back_reloading: 'Undone. $1 settings were put back. Reloading...',
-        toast_use_a_localhost_or_127_0: 'Use a localhost or 127.0.0.1 HTTP(S) URL without embedded credentials',
+        toast_use_a_localhost_or_127_0: 'Use a localhost, 127.0.0.1 or [::1] HTTP(S) URL without embedded credentials',
         toast_use_a_positive_whole_number_profile: 'Use a positive whole-number profile ID',
         toast_your_integration_keys_are_not_readable: 'Your integration keys are not readable from an IMDb page, so this backup would be empty. Make it from the extension\'s own page instead.',
         toast_your_seen_and_skip_marks_were: 'Your Seen and Skip marks were not saved. $1 may be full. Settings, then Data, then Clear cache frees space.',
@@ -1327,6 +1327,12 @@
     const LOOPBACK_ORIGINS = [
         'http://localhost/*', 'https://localhost/*',
         'http://127.0.0.1/*', 'https://127.0.0.1/*',
+        /* Chromium's match-pattern parser accepts a bracketed IPv6 literal: probed on
+           2026-09-05 against Chromium via chrome.permissions.contains, which returns false
+           for this pattern and throws "Invalid host" for a malformed one, and the AMO
+           validator reports no error for it either. A service bound to IPv6 only answers
+           here and nowhere else. */
+        'http://[::1]/*', 'https://[::1]/*',
     ];
     const WIKIDATA_ORIGIN = 'https://query.wikidata.org/*';
     /* One declaration per provider, and everything about that provider is derived from
