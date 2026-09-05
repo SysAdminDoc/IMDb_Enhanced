@@ -334,6 +334,72 @@ await runFixture('title', async (window, hooks) => {
     }
 });
 
+/* IE-165: quickNav and spoilerBlur, neither of which had ever been run in a test. */
+await runFixture('title', async (window, hooks) => {
+    const { document } = window;
+    try {
+        window.GM_setValue('imdb_enh_quickNav', true);
+        await hooks.runFeature('quickNav');
+        const nav = document.getElementById('enh-quicknav');
+        assert.ok(nav, 'the rail should mount on a title page');
+        assert.equal(nav.getAttribute('aria-label')?.length > 0, true, 'and name itself');
+
+        const dots = [...nav.querySelectorAll('.enh-qn-dot')];
+        assert.ok(dots.length >= 2, 'with an entry per section the page actually has');
+        /* Derived from the fixture rather than counted: the rail must offer a jump for every
+           section that is there and none for a section that is not, and a magic number would
+           stop meaning that the moment the fixture gains a section. */
+        const present = new Set([...document.querySelectorAll('section[data-testid]')]
+            .map(section => section.getAttribute('data-testid')));
+        assert.ok(present.has('title-cast') && !present.has('BoxOffice'),
+            'the fixture should carry some of these sections and not others, or this proves nothing');
+        const labels = dots.map(dot => dot.textContent.trim());
+        assert.equal(new Set(labels).size, labels.length, 'no section is offered twice');
+        assert.equal(labels.length, [...present].filter(id => id !== 'awards').length - 0,
+            `the rail should offer one jump per section present; sections ${[...present].join(', ')} vs dots ${labels.join(', ')}`);
+
+        /* A roving tabindex: the rail is one stop in the page's tab order, not one stop per
+           section. */
+        assert.equal(dots.filter(dot => dot.tabIndex === 0).length, 1,
+            'exactly one dot is in the tab order at a time');
+        const first = dots.find(dot => dot.tabIndex === 0) || dots[0];
+        first.dispatchEvent(new window.KeyboardEvent('keydown', { key:'ArrowDown', bubbles:true }));
+        assert.equal(dots.filter(dot => dot.tabIndex === 0).length, 1,
+            'and still exactly one after an arrow key');
+        assert.notEqual(dots.find(dot => dot.tabIndex === 0), first,
+            'but a different one, or the arrow key moved nothing');
+    } finally {
+        hooks.stopFeature('quickNav');
+        window.GM_setValue('imdb_enh_quickNav', false);
+    }
+    assert.equal(document.getElementById('enh-quicknav'), null, 'and it leaves nothing behind');
+});
+
+await runFixture('title', async (window, hooks) => {
+    const { document } = window;
+    try {
+        window.GM_setValue('imdb_enh_spoilerBlur', true);
+        await hooks.runFeature('spoilerBlur');
+        const plot = document.querySelector('[data-testid="plot-l"]');
+        assert.ok(plot, 'the fixture should carry a plot to hide');
+        assert.ok(plot.classList.contains('enh-blur'), 'a long plot is hidden');
+        assert.equal(plot.getAttribute('role'), 'button', 'and is operable rather than only styled');
+        assert.equal(plot.getAttribute('tabindex'), '0', 'reachable by keyboard');
+        assert.equal(plot.getAttribute('aria-pressed'), 'false', 'and says it is not yet revealed');
+
+        plot.dispatchEvent(new window.MouseEvent('click', { bubbles:true }));
+        assert.equal(plot.classList.contains('enh-blur'), false, 'a click reveals it');
+        assert.ok(plot.classList.contains('enh-revealed'), 'and it stays revealed');
+        /* The attributes it borrowed are given back, so a revealed plot is a paragraph
+           again rather than a button that does nothing. */
+        assert.equal(plot.getAttribute('role'), null, 'the borrowed role is handed back');
+        assert.equal(plot.getAttribute('tabindex'), null, 'and so is the tab stop');
+    } finally {
+        hooks.stopFeature('spoilerBlur');
+        window.GM_setValue('imdb_enh_spoilerBlur', false);
+    }
+});
+
 /* IE-165: listRoulette and listMultiSearch had no executable coverage at all, only
    source-text asserts that pass whether or not the feature mounts. Both are list-page
    features, so the chart fixture is where they belong.
