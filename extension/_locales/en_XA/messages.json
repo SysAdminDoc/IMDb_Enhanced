@@ -567,7 +567,7 @@
     "message": "[!! Optional keyboard shortcuts !!]"
   },
   "feature_listMultiSearch_detail": {
-    "message": "[!! Builds a popup-safe queue of up to 20 title links on watchlist, list, and chart pages. !!]"
+    "message": "[!! Builds a popup-safe queue of up to 20 title links on any collection page: a watchlist, a list, a chart, or your own ratings and lists. !!]"
   },
   "feature_listMultiSearch_keywords": {
     "message": "[!! bulk, open many, tabs, batch search !!]"
@@ -576,7 +576,7 @@
     "message": "[!! List multi-search !!]"
   },
   "feature_listRoulette_detail": {
-    "message": "[!! Adds a button to watchlists, lists, and charts that picks one title at random and scrolls to it. It never opens anything. !!]"
+    "message": "[!! Adds a button to any collection page, your own ratings included, that picks one title at random and scrolls to it. It never opens anything. !!]"
   },
   "feature_listRoulette_keywords": {
     "message": "[!! random, pick for me, shuffle, surprise !!]"
@@ -585,10 +585,10 @@
     "message": "[!! Pick something to watch !!]"
   },
   "feature_collectionExport_detail": {
-    "message": "[!! Copies the rows loaded on a watchlist, list or chart as a CSV using IMDb column names, so it reads back into IMDb and into this extension. Only the rows on screen are included, and it says how many had no rating. !!]"
+    "message": "[!! Copies the rows loaded on any collection page, your own ratings included, as a CSV using IMDb column names, so it reads back into IMDb and into this extension. Only the rows on screen are included, and it says how many had no rating. !!]"
   },
   "feature_listRuntimeSummary_detail": {
-    "message": "[!! Totals how long the titles on a watchlist, list, or chart would take to watch, and says how many had no runtime listed. !!]"
+    "message": "[!! Totals how long the titles on any collection page would take to watch, your own ratings included, and says how many had no runtime listed. !!]"
   },
   "feature_collectionExport_keywords": {
     "message": "[!! csv, spreadsheet, download list, backup !!]"
