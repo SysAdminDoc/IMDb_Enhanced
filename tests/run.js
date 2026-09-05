@@ -2022,12 +2022,39 @@ test('CSV import reports every storage bound instead of silently dropping histor
        by the browser and then reported as a successful partial import. */
     const csvPanel = script.slice(script.indexOf('const csvTextarea = makeEl('),
         script.indexOf('csvApply.addEventListener'));
+    /* maxlength counts UTF-16 code units and the limit is a byte budget, so the two are not
+       the same measure and cannot be made so: there is no attribute that caps a textarea in
+       bytes. What matters is the direction. UTF-8 is never narrower than UTF-16 code units,
+       so anything small enough for the parser to accept is also small enough for the box to
+       hold, and the truncation this attribute exists to prevent cannot reach a paste the
+       parser would have taken. A larger multibyte paste is admitted by the box and then
+       refused by the parser, which names the real ceiling. The property is asserted below
+       rather than described here. */
     assert(csvPanel.includes('maxlength:String(CSV_IMPORT_TEXT_LIMIT)'),
-        'the box people paste into must hold what the exporter can write');
+        'the box must be capped, or the browser truncates a long paste silently');
     assert(csvPanel.includes('file.size > CSV_IMPORT_TEXT_LIMIT'),
         'and a chosen file must be measured against the same ceiling');
     assert(!csvPanel.includes('SETTINGS_IMPORT_TEXT_LIMIT'),
         'neither of them belongs to the settings backup any more');
+
+    /* The direction, stated as the property the safety rests on rather than assumed. If a
+       payload the parser accepts could ever be longer in code units than the cap, the box
+       would cut it and the import would report success over a truncated file, which is the
+       failure the comment above records. */
+    const limit = hooks.CSV_IMPORT_TEXT_LIMIT;
+    [['ascii', 'a'], ['three-byte', '\u65e5'], ['astral', String.fromCodePoint(0x1f600)]]
+        .forEach(([label, character]) => {
+            const sample = character.repeat(2000);
+            const bytes = hooks.encodedByteLength(sample);
+            assert(sample.length <= bytes,
+                `${label}: UTF-8 must never be narrower than UTF-16 code units`);
+            /* Scaled to the ceiling: the largest payload the parser takes, written entirely
+               in this character, still fits the box measured the way the box measures. */
+            const atCeiling = Math.floor(limit / (bytes / sample.length));
+            assert(atCeiling <= limit,
+                `${label}: a payload at the byte ceiling is ${atCeiling} code units against a `
+                + `${limit} cap, so the box would truncate it`);
+        });
     assert(!/under 4 MB/.test(messageCatalog.text_csv_import_is_too_large_choose || ''),
         'and the refusal must not name a number the code no longer uses');
 
