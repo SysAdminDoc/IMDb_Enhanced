@@ -2502,6 +2502,18 @@ await runFixture('person', async (window, hooks) => {
 
         const rows = Array.from(document.querySelectorAll('[data-enh-row-integration]'));
         assert.equal(rows.length, 5, 'the Known for card is claimed too, which is the point');
+        /* Claiming a row and watching it are two steps, and the second one arrives through
+           a requestAnimationFrame. Revealing rows nothing is watching yet hands the feature
+           an empty entry list, and the summary then stays hidden for the same reason it
+           would if the count were broken. Wait for the watch before revealing it. */
+        const unwatchedRows = () => rows.filter(row =>
+            !watchers.some(watcher => watcher.watched.has(row)));
+        for (let tick = 0; tick < 60 && unwatchedRows().length; tick += 1) {
+            await new Promise(resolve => window.setTimeout(resolve, 1));
+        }
+        assert.equal(unwatchedRows().length, 0,
+            `every claimed row should be watched before it is revealed; `
+            + `${unwatchedRows().length} of ${rows.length} were never registered`);
         watchers.forEach(watcher => watcher.callback(
             rows.filter(row => watcher.watched.has(row)).map(row => ({ isIntersecting:true, target:row }))));
         for (let tick = 0; tick < 40 && line.hidden; tick += 1) {
@@ -2650,6 +2662,24 @@ await runFixture('chart', async (window, hooks) => {
             .map(element => ({ isIntersecting:true, target:element }));
         if (entries.length) watcher.callback(entries);
     });
+    /* A row the feature is not watching is handed nothing by reveal, so the lookup count
+       afterwards reads exactly like "the feature decided not to ask" - which is what this
+       scenario also asserts elsewhere, and the two must not be able to look the same.
+       Registration reaches the observer through the feature's own MutationObserver
+       coalesced into a requestAnimationFrame, so on a loaded machine that frame can still
+       be pending when the reveal goes out. Waiting for the rows to actually be watched is
+       the positive control the count assertions were missing. */
+    const unwatched = elements => elements.filter(element =>
+        !watchers.some(watcher => watcher.watched.has(element)));
+    const awaitWatched = async elements => {
+        for (let tick = 0; tick < 60 && unwatched(elements).length; tick += 1) {
+            await new Promise(resolve => window.setTimeout(resolve, 1));
+        }
+        assert.equal(unwatched(elements).length, 0,
+            `the feature should be watching every row before it is revealed; `
+            + `${unwatched(elements).length} of ${elements.length} were never registered `
+            + `(watched sets: ${watchers.map(watcher => watcher.watched.size).join(', ')})`);
+    };
 
     const asked = [];
     const seerrState = id => {
@@ -2706,6 +2736,7 @@ await runFixture('chart', async (window, hooks) => {
             'a row nobody has scrolled to yet carries no badge');
 
         // Twenty rows come into view. One of them repeats an id already in the batch.
+        await awaitWatched(allRows.slice(0, 20));
         reveal(allRows.slice(0, 20));
         await settle();
         assert.equal(document.querySelectorAll('.enh-row-integration').length, 20,
@@ -2744,6 +2775,7 @@ await runFixture('chart', async (window, hooks) => {
         assert.equal(document.querySelectorAll('.enh-row-integration').length, 20,
             'and does not gain a second badge');
 
+        await awaitWatched(allRows.slice(20, 40));
         reveal(allRows.slice(20, 40));
         await settle();
         assert.equal(asked.length, beforeSecondScroll + 20,
@@ -2758,6 +2790,7 @@ await runFixture('chart', async (window, hooks) => {
            does not reach that line - the next slice's guard returns first. */
         const beforeTeardown = asked.length;
         holdAnswers = true;
+        await awaitWatched(allRows.slice(40, 43));
         reveal(allRows.slice(40, 43));
         for (let tick = 0; tick < 5 && !held.length; tick += 1) {
             await new Promise(resolve => window.setTimeout(resolve, 1));
