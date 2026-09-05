@@ -350,6 +350,10 @@
     function summarizeLocalStats(source) {
         const entries = normalizeUserMarkEntries(source || {});
         const years = new Map();
+        /* One entry per day somebody watched something. The per-year counts are built from
+           the same walk and answer "how much"; this answers "when", which is the shape a
+           year of watching has and the only thing in this summary the lists cannot show. */
+        const days = new Map();
         const genres = new Map();
         const genreLabels = new Map();
         const decades = new Map();
@@ -370,7 +374,10 @@
             const viewingEvents = normalizeViewingEvents(mark.viewings);
             viewings += viewingEvents.length;
             if (mark.state === 'watched' && !viewingEvents.length) undatedSeen += 1;
-            viewingEvents.forEach(event => incrementLocalStat(years, event.date.slice(0, 4)));
+            viewingEvents.forEach(event => {
+                incrementLocalStat(years, event.date.slice(0, 4));
+                incrementLocalStat(days, event.date);
+            });
 
             const belongsToHistory = mark.state === 'watched' || viewingEvents.length > 0;
             if (!belongsToHistory) return;
@@ -414,6 +421,10 @@
             historyTitles,
             metadataTitles,
             years:activity,
+            /* A plain object rather than the Map, because everything else this returns is
+               already serialisable and a caller that stringifies the summary should not get
+               an empty one back. */
+            days:Object.fromEntries(days),
             topGenres:rankLocalStats(genres).map(item => ({ ...item, label:genreLabels.get(item.label) || item.label })),
             decades:rankLocalStats(decades, true),
             reviewYear,

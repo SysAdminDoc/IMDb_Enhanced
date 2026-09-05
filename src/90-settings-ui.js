@@ -1204,6 +1204,71 @@
         return panel;
     }
 
+    /* A year of days, seven rows deep, in the order a calendar runs. The colour is the
+       rating ramp somebody already chose, so the page has one ordered scale rather than a
+       second palette to learn, and every cell states its own count in a label because a
+       swatch on its own is not a reading anyone can take. */
+    function createActivityCalendar(days) {
+        const counts = days && typeof days === 'object' ? days : {};
+        const dates = Object.keys(counts).filter(date => /^\d{4}-\d{2}-\d{2}$/.test(date));
+        const years = [...new Set(dates.map(date => date.slice(0, 4)))].sort((a, b) => Number(b) - Number(a));
+        const wrap = makeEl('div', { className:'enh-cal' });
+        const grid = makeEl('div', {
+            className:'enh-cal__grid', role:'img',
+            'aria-label':t('settings_activity_calendar'),
+        });
+        const head = makeEl('div', { className:'enh-cal__head' },
+            makeEl('span', { className:'enh-cal__title' }, t('settings_activity_calendar')));
+
+        /* No dated viewing at all is still a calendar, with a line saying why it is empty:
+           a card that simply stops has nothing to tell somebody who expected a year. */
+        if (!years.length) {
+            wrap.append(head, makeEl('p', { className:'enh-cal__empty' },
+                t('settings_activity_calendar_empty')));
+            return wrap;
+        }
+
+        const ramp = getRatingRamp();
+        const select = makeEl('select', { className:'enh-cal__year', 'aria-label':t('settings_activity_calendar') });
+        years.forEach(year => select.appendChild(makeEl('option', { value:year }, year)));
+        select.value = years[0];
+        head.appendChild(select);
+
+        const paint = year => {
+            const inYear = dates.filter(date => date.startsWith(`${year}-`));
+            const busiest = inYear.reduce((most, date) => Math.max(most, counts[date] || 0), 0);
+            const first = new Date(Date.UTC(Number(year), 0, 1));
+            const last = new Date(Date.UTC(Number(year), 11, 31));
+            /* Padded to the week boundary so a column is always a week and a row is always
+               the same weekday, which is what makes the shape readable at a glance. */
+            const start = new Date(first);
+            start.setUTCDate(start.getUTCDate() - start.getUTCDay());
+            const cells = [];
+            for (let day = new Date(start); day <= last; day.setUTCDate(day.getUTCDate() + 1)) {
+                const iso = day.toISOString().slice(0, 10);
+                const inside = day >= first;
+                const count = inside ? (counts[iso] || 0) : 0;
+                const cell = makeEl('div', { className:'enh-cal__cell' });
+                if (!inside) { cell.style.visibility = 'hidden'; cells.push(cell); continue; }
+                if (count > 0) {
+                    /* Five steps, so the busiest day is the top of the ramp and everything
+                       else is placed against it rather than against a fixed number nobody
+                       watches to. */
+                    const step = busiest <= 1 ? ramp.length - 1
+                        : Math.min(ramp.length - 1, Math.ceil((count / busiest) * (ramp.length - 1)));
+                    cell.style.background = ramp[step];
+                }
+                cell.setAttribute('title', t('aria_viewings_on_date', [String(count), iso]));
+                cells.push(cell);
+            }
+            grid.replaceChildren(...cells);
+        };
+        paint(select.value);
+        select.addEventListener('change', () => paint(select.value));
+        wrap.append(head, grid);
+        return wrap;
+    }
+
     function createLocalStatsList(title, items, emptyText) {
         const group = makeEl('div', { className:'enh-stats-group' }, makeEl('h4', {}, title));
         if (!items.length) {
@@ -1263,6 +1328,12 @@
                 createLocalStatsList(t('settings_top_genres'), stats.topGenres, t('settings_genres_appear_as_titles_are_marked_or')),
                 createLocalStatsList(t('settings_release_decades'), stats.decades, t('settings_release_years_appear_as_titles_are_marked'))
             ));
+            /* IE-168: the lists above say how much and the calendar says when, which is the
+               only thing in this summary a list cannot show. Built from the dated viewings
+               already in the store, so it costs one pass over data the card has read
+               anyway and never touches the network. */
+            card.appendChild(createActivityCalendar(stats.days));
+
             const insights = [];
             if (stats.ratingDelta !== null) {
                 const delta = Math.abs(stats.ratingDelta).toFixed(2);

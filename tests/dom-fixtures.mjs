@@ -57,6 +57,7 @@ const instrumented = userscript.replace(/\}\)\(\);\s*$/, `globalThis.__imdbEnhan
     readThumbnailWidth,
     getFeatureFailures,
     createSettingsPanel,
+    getRatingRamp,
     toggleSettings,
     getStoredSetting: key => get(key),
     /* What init() does to the structured-data memo on a route change. happy-dom cannot
@@ -538,6 +539,87 @@ await runFixture('chart', async (window, hooks) => {
         window.GM_setValue('imdb_enh_rowIntegrationState', false);
         window.GM_setValue('imdb_enh_userMarks', storedMarks);
         window.IntersectionObserver = nativeObserver;
+    }
+});
+
+/* IE-168: the stats card said how much and never when, though the store has carried a
+   date per viewing all along. Three things matter: the grid is built from those dates and
+   nothing else, it reuses the ordered rating ramp rather than inventing a palette, and a
+   year with no dated viewing is an empty grid with a reason rather than a blank card. */
+await runFixture('title', async (window, hooks) => {
+    const { document } = window;
+    const storedMarks = window.GM_getValue('imdb_enh_userMarks', {});
+    try {
+        window.GM_setValue('imdb_enh_userMarks', {
+            /* Three different titles on one day, which is what a busy day actually is:
+               viewings are deduplicated per title, so the same date three times on one mark
+               is one viewing. */
+            tt0000001: { state:'watched', title:'One', ts:1, viewings:[{ date:'2025-03-04' }] },
+            tt0000004: { state:'watched', title:'Four', ts:4, viewings:[{ date:'2025-03-04' }] },
+            tt0000005: { state:'watched', title:'Five', ts:5, viewings:[{ date:'2025-03-04' }] },
+            tt0000002: { state:'watched', title:'Two', ts:2, viewings:[{ date:'2025-07-19' }] },
+            tt0000003: { state:'watched', title:'Three', ts:3, viewings:[{ date:'2024-01-02' }] },
+        });
+        hooks.createSettingsPanel();
+
+        const calendar = document.querySelector('.enh-cal');
+        assert.ok(calendar, 'the stats card should carry a calendar');
+        const cells = [...calendar.querySelectorAll('.enh-cal__cell')];
+        assert.ok(cells.length >= 365, `a year of days, got ${cells.length}`);
+
+        /* Both years the store knows about are offered, newest first, and no year it does
+           not know about is. */
+        const years = [...calendar.querySelectorAll('option')].map(option => option.value);
+        assert.deepEqual(years, ['2025', '2024'], 'the years come from the data, newest first');
+
+        // The busiest day takes the top of the ramp; a day with one viewing does not.
+        const ramp = hooks.getRatingRamp();
+        const labelled = cells.filter(cell => /on 2025-/.test(cell.getAttribute('title') || ''));
+        const busiest = labelled.find(cell => /^3 on/.test(cell.getAttribute('title')));
+        const single = labelled.find(cell => /^1 on/.test(cell.getAttribute('title')));
+        assert.ok(busiest && single, 'the seeded days should be findable by their labels');
+        assert.notStrictEqual(busiest.style.background, '', 'a day with viewings is painted');
+        assert.notStrictEqual(busiest.style.background, single.style.background,
+            'three viewings and one must not land on the same step');
+
+        /* The palette is the one the rating scale already establishes, so the page has one
+           ordered scale rather than a second to learn. */
+        const painted = labelled.map(cell => cell.style.background).filter(Boolean);
+        const asHex = value => `#${value.replace(/[^0-9a-f]/gi, '')}`.toLowerCase();
+        assert.ok(painted.length >= 2, 'at least two days should be painted');
+        painted.forEach(value => assert.ok(
+            ramp.some(step => step.toLowerCase() === value.toLowerCase() || step.toLowerCase() === asHex(value)),
+            `every painted cell uses the rating ramp; ${value} is not in ${ramp.join(', ')}`));
+
+        // And a day nobody watched anything is left unpainted rather than given a colour.
+        const quiet = labelled.find(cell => /^0 on/.test(cell.getAttribute('title')));
+        assert.ok(quiet, 'a quiet day should exist in a year with three viewings');
+        assert.strictEqual(quiet.style.background, '', 'a quiet day carries no ramp colour');
+    } finally {
+        hooks.destroySettingsChrome();
+        window.GM_setValue('imdb_enh_userMarks', storedMarks);
+    }
+});
+
+/* A store with marks but no dates at all: the card still shows the calendar, and says why
+   it is empty rather than leaving somebody looking at nothing. */
+await runFixture('title', async (window, hooks) => {
+    const { document } = window;
+    const storedMarks = window.GM_getValue('imdb_enh_userMarks', {});
+    try {
+        window.GM_setValue('imdb_enh_userMarks', {
+            tt0000009: { state:'skip', title:'Undated', ts:9 },
+        });
+        hooks.createSettingsPanel();
+        const calendar = document.querySelector('.enh-cal');
+        assert.ok(calendar, 'the calendar is still drawn');
+        assert.strictEqual(calendar.querySelectorAll('.enh-cal__cell').length, 0,
+            'with no cells, because there is nothing to place');
+        assert.ok(calendar.querySelector('.enh-cal__empty')?.textContent.trim(),
+            'and a line saying why, rather than a blank panel');
+    } finally {
+        hooks.destroySettingsChrome();
+        window.GM_setValue('imdb_enh_userMarks', storedMarks);
     }
 });
 

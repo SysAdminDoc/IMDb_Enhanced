@@ -50,6 +50,9 @@
   "aria_sort_marks_by": {
     "message": "[!! Sort marks by !!]"
   },
+  "aria_viewings_on_date": {
+    "message": "[!! $1 on $2 !!]"
+  },
   "aria_undo_the_last_mark_deletion": {
     "message": "[!! Undo the last title mark deletion !!]"
   },
@@ -1666,6 +1669,12 @@
   },
   "settings_actions_placed_near_a_movie_or_show": {
     "message": "[!! Actions placed near a movie or show title. !!]"
+  },
+  "settings_activity_calendar": {
+    "message": "[!! Watching calendar !!]"
+  },
+  "settings_activity_calendar_empty": {
+    "message": "[!! No dated viewings in this year. A viewing gets a date when you mark a title Seen, or when you import a history that carries one. !!]"
   },
   "settings_activity_by_year": {
     "message": "[!! Activity by year !!]"

@@ -109,6 +109,7 @@
         aria_next_page_of_marks: 'Next page of marks',
         aria_previous_page_of_marks: 'Previous page of marks',
         aria_sort_marks_by: 'Sort marks by',
+        aria_viewings_on_date: '$1 on $2',
         aria_undo_the_last_mark_deletion: 'Undo the last title mark deletion',
         aria_copy_imdb_id: 'Copy IMDb ID $1',
         aria_correct_match: 'Correct $1 match',
@@ -648,6 +649,8 @@
         settings_a_readable_summary_for_bug_reports_credentials: 'A readable summary for bug reports. Credentials, marked titles, and the page query string are never included.',
         settings_a_year_review_appears_after_10_dated: 'A year review appears after 10 dated viewings in one year.',
         settings_actions_placed_near_a_movie_or_show: 'Actions placed near a movie or show title.',
+        settings_activity_calendar: 'Watching calendar',
+        settings_activity_calendar_empty: 'No dated viewings in this year. A viewing gets a date when you mark a title Seen, or when you import a history that carries one.',
         settings_activity_by_year: 'Activity by year',
         settings_add_destination: 'Add destination',
         settings_add_movies_to_radarr_and_shows_to: 'Add movies to Radarr and shows to Sonarr.',
@@ -3686,6 +3689,10 @@
     function summarizeLocalStats(source) {
         const entries = normalizeUserMarkEntries(source || {});
         const years = new Map();
+        /* One entry per day somebody watched something. The per-year counts are built from
+           the same walk and answer "how much"; this answers "when", which is the shape a
+           year of watching has and the only thing in this summary the lists cannot show. */
+        const days = new Map();
         const genres = new Map();
         const genreLabels = new Map();
         const decades = new Map();
@@ -3706,7 +3713,10 @@
             const viewingEvents = normalizeViewingEvents(mark.viewings);
             viewings += viewingEvents.length;
             if (mark.state === 'watched' && !viewingEvents.length) undatedSeen += 1;
-            viewingEvents.forEach(event => incrementLocalStat(years, event.date.slice(0, 4)));
+            viewingEvents.forEach(event => {
+                incrementLocalStat(years, event.date.slice(0, 4));
+                incrementLocalStat(days, event.date);
+            });
 
             const belongsToHistory = mark.state === 'watched' || viewingEvents.length > 0;
             if (!belongsToHistory) return;
@@ -3750,6 +3760,10 @@
             historyTitles,
             metadataTitles,
             years:activity,
+            /* A plain object rather than the Map, because everything else this returns is
+               already serialisable and a caller that stringifies the summary should not get
+               an empty one back. */
+            days:Object.fromEntries(days),
             topGenres:rankLocalStats(genres).map(item => ({ ...item, label:genreLabels.get(item.label) || item.label })),
             decades:rankLocalStats(decades, true),
             reviewYear,
@@ -17563,6 +17577,19 @@ ${scopedRules('.enh-zoom', {
 .enh-stats-row__count { color: ${t.tx1}; font-variant-numeric: tabular-nums; }
 .enh-stats-empty,
 .enh-marks-empty { padding: 18px; border: 1px dashed ${t.bd1}; border-radius: 9px; color: ${t.tx2}; font: 500 12px/1.5 -apple-system, BlinkMacSystemFont, 'Segoe UI', sans-serif; background: ${t.sf0}; }
+.enh-cal { margin-top: 16px; }
+.enh-cal__head { display: flex; align-items: center; gap: 10px; margin-bottom: 8px; }
+.enh-cal__title { color: ${t.tx1}; font: 700 11px/1.2 -apple-system, sans-serif; }
+.enh-cal__year { height: 24px; border-radius: 6px; border: 1px solid ${t.bd1}; background: ${t.sf1}; color: ${t.tx1}; font: 600 11px/1 -apple-system, sans-serif; }
+.enh-cal__grid { display: grid; grid-auto-flow: column; grid-template-rows: repeat(7, 11px); gap: 3px; overflow-x: auto; padding-bottom: 4px; }
+.enh-cal__cell { width: 11px; height: 11px; border-radius: 2px; background: ${t.bd1}; }
+.enh-cal__empty { margin: 10px 0 0; padding: 14px; border: 1px dashed ${t.bd1}; border-radius: 9px; color: ${t.tx2}; font: 500 11px/1.45 -apple-system, sans-serif; }
+/* A cell's colour is a second reading of a count that its label also states, so it keeps
+   its ramp where forced colours would otherwise flatten the scale to one pair and turn a
+   year of watching into a grid of identical squares. */
+@media (forced-colors: active) {
+    .enh-cal__cell { forced-color-adjust: none; border: 1px solid ButtonText; }
+}
 .enh-stats-insights { margin-top: 10px; color: ${t.tx2}; font: 500 11px/1.45 -apple-system, sans-serif; }
 .enh-stats-insights strong { color: ${t.tx1}; }
 @media (max-width: 1000px) {
@@ -19196,6 +19223,71 @@ ${scopedRules('.enh-zoom', {
         return panel;
     }
 
+    /* A year of days, seven rows deep, in the order a calendar runs. The colour is the
+       rating ramp somebody already chose, so the page has one ordered scale rather than a
+       second palette to learn, and every cell states its own count in a label because a
+       swatch on its own is not a reading anyone can take. */
+    function createActivityCalendar(days) {
+        const counts = days && typeof days === 'object' ? days : {};
+        const dates = Object.keys(counts).filter(date => /^\d{4}-\d{2}-\d{2}$/.test(date));
+        const years = [...new Set(dates.map(date => date.slice(0, 4)))].sort((a, b) => Number(b) - Number(a));
+        const wrap = makeEl('div', { className:'enh-cal' });
+        const grid = makeEl('div', {
+            className:'enh-cal__grid', role:'img',
+            'aria-label':t('settings_activity_calendar'),
+        });
+        const head = makeEl('div', { className:'enh-cal__head' },
+            makeEl('span', { className:'enh-cal__title' }, t('settings_activity_calendar')));
+
+        /* No dated viewing at all is still a calendar, with a line saying why it is empty:
+           a card that simply stops has nothing to tell somebody who expected a year. */
+        if (!years.length) {
+            wrap.append(head, makeEl('p', { className:'enh-cal__empty' },
+                t('settings_activity_calendar_empty')));
+            return wrap;
+        }
+
+        const ramp = getRatingRamp();
+        const select = makeEl('select', { className:'enh-cal__year', 'aria-label':t('settings_activity_calendar') });
+        years.forEach(year => select.appendChild(makeEl('option', { value:year }, year)));
+        select.value = years[0];
+        head.appendChild(select);
+
+        const paint = year => {
+            const inYear = dates.filter(date => date.startsWith(`${year}-`));
+            const busiest = inYear.reduce((most, date) => Math.max(most, counts[date] || 0), 0);
+            const first = new Date(Date.UTC(Number(year), 0, 1));
+            const last = new Date(Date.UTC(Number(year), 11, 31));
+            /* Padded to the week boundary so a column is always a week and a row is always
+               the same weekday, which is what makes the shape readable at a glance. */
+            const start = new Date(first);
+            start.setUTCDate(start.getUTCDate() - start.getUTCDay());
+            const cells = [];
+            for (let day = new Date(start); day <= last; day.setUTCDate(day.getUTCDate() + 1)) {
+                const iso = day.toISOString().slice(0, 10);
+                const inside = day >= first;
+                const count = inside ? (counts[iso] || 0) : 0;
+                const cell = makeEl('div', { className:'enh-cal__cell' });
+                if (!inside) { cell.style.visibility = 'hidden'; cells.push(cell); continue; }
+                if (count > 0) {
+                    /* Five steps, so the busiest day is the top of the ramp and everything
+                       else is placed against it rather than against a fixed number nobody
+                       watches to. */
+                    const step = busiest <= 1 ? ramp.length - 1
+                        : Math.min(ramp.length - 1, Math.ceil((count / busiest) * (ramp.length - 1)));
+                    cell.style.background = ramp[step];
+                }
+                cell.setAttribute('title', t('aria_viewings_on_date', [String(count), iso]));
+                cells.push(cell);
+            }
+            grid.replaceChildren(...cells);
+        };
+        paint(select.value);
+        select.addEventListener('change', () => paint(select.value));
+        wrap.append(head, grid);
+        return wrap;
+    }
+
     function createLocalStatsList(title, items, emptyText) {
         const group = makeEl('div', { className:'enh-stats-group' }, makeEl('h4', {}, title));
         if (!items.length) {
@@ -19255,6 +19347,12 @@ ${scopedRules('.enh-zoom', {
                 createLocalStatsList(t('settings_top_genres'), stats.topGenres, t('settings_genres_appear_as_titles_are_marked_or')),
                 createLocalStatsList(t('settings_release_decades'), stats.decades, t('settings_release_years_appear_as_titles_are_marked'))
             ));
+            /* IE-168: the lists above say how much and the calendar says when, which is the
+               only thing in this summary a list cannot show. Built from the dated viewings
+               already in the store, so it costs one pass over data the card has read
+               anyway and never touches the network. */
+            card.appendChild(createActivityCalendar(stats.days));
+
             const insights = [];
             if (stats.ratingDelta !== null) {
                 const delta = Math.abs(stats.ratingDelta).toFixed(2);
@@ -21006,6 +21104,7 @@ ${scopedRules('.enh-zoom', {
                 buildDiagnosticsReport,
                 cacheCount,
                 cacheBytes,
+                getRatingRamp,
                 settingsTextTooLarge,
                 SCORE_CORRECTION_URL_LIMIT,
                 SCORE_CORRECTION_PROVIDER_COUNT,

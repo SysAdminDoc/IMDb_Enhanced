@@ -1064,6 +1064,19 @@ ${scopedRules('.enh-zoom', {
 .enh-stats-row__count { color: ${t.tx1}; font-variant-numeric: tabular-nums; }
 .enh-stats-empty,
 .enh-marks-empty { padding: 18px; border: 1px dashed ${t.bd1}; border-radius: 9px; color: ${t.tx2}; font: 500 12px/1.5 -apple-system, BlinkMacSystemFont, 'Segoe UI', sans-serif; background: ${t.sf0}; }
+.enh-cal { margin-top: 16px; }
+.enh-cal__head { display: flex; align-items: center; gap: 10px; margin-bottom: 8px; }
+.enh-cal__title { color: ${t.tx1}; font: 700 11px/1.2 -apple-system, sans-serif; }
+.enh-cal__year { height: 24px; border-radius: 6px; border: 1px solid ${t.bd1}; background: ${t.sf1}; color: ${t.tx1}; font: 600 11px/1 -apple-system, sans-serif; }
+.enh-cal__grid { display: grid; grid-auto-flow: column; grid-template-rows: repeat(7, 11px); gap: 3px; overflow-x: auto; padding-bottom: 4px; }
+.enh-cal__cell { width: 11px; height: 11px; border-radius: 2px; background: ${t.bd1}; }
+.enh-cal__empty { margin: 10px 0 0; padding: 14px; border: 1px dashed ${t.bd1}; border-radius: 9px; color: ${t.tx2}; font: 500 11px/1.45 -apple-system, sans-serif; }
+/* A cell's colour is a second reading of a count that its label also states, so it keeps
+   its ramp where forced colours would otherwise flatten the scale to one pair and turn a
+   year of watching into a grid of identical squares. */
+@media (forced-colors: active) {
+    .enh-cal__cell { forced-color-adjust: none; border: 1px solid ButtonText; }
+}
 .enh-stats-insights { margin-top: 10px; color: ${t.tx2}; font: 500 11px/1.45 -apple-system, sans-serif; }
 .enh-stats-insights strong { color: ${t.tx1}; }
 @media (max-width: 1000px) {
