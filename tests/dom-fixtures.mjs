@@ -493,6 +493,54 @@ await runFixture('title', async (window, hooks) => {
     }
 });
 
+/* IE-173: a second init without a teardown. Production always destroys on a route change
+   before re-initialising (src/95-init.js), so this state is not reachable there, but the
+   harness reaches it and so would any future caller, and what it produced was a page where
+   every row was claimed, nothing was watched, and the feature looked like it had decided
+   not to ask. That is indistinguishable from the answer this scenario's neighbours assert,
+   which is what made a flake here unreadable for a full session. */
+await runFixture('chart', async (window, hooks) => {
+    const { document } = window;
+    const watchers = [];
+    const nativeObserver = window.IntersectionObserver;
+    window.IntersectionObserver = class {
+        constructor(callback) { this.callback = callback; this.watched = new Set(); watchers.push(this); }
+        observe(element) { this.watched.add(element); }
+        unobserve(element) { this.watched.delete(element); }
+        disconnect() { this.watched.clear(); }
+    };
+    const storedMarks = window.GM_getValue('imdb_enh_userMarks', {});
+    try {
+        window.GM_setValue('imdb_enh_rowIntegrationState', true);
+        window.GM_setValue('imdb_enh_seerrUrl', 'http://localhost:5055');
+        window.GM_setValue('imdb_enh_seerrApiKey', 'fixture-key');
+        window.GM_xmlhttpRequest = options => {
+            window.queueMicrotask(() => options.onload?.({
+                status:200, finalUrl:options.url, responseText:JSON.stringify({ results:[] }),
+            }));
+            return { abort() {} };
+        };
+
+        await hooks.runFeature('rowIntegrationState');
+        const claimed = document.querySelectorAll('[data-enh-row-integration]').length;
+        assert.ok(claimed > 0, 'the first init should claim the rows');
+
+        // Again, with no teardown in between.
+        await hooks.runFeature('rowIntegrationState');
+        const live = watchers[watchers.length - 1];
+        assert.equal(document.querySelectorAll('[data-enh-row-integration]').length, claimed,
+            're-initialising claims the same rows');
+        assert.equal(live.watched.size, claimed,
+            'and the observer that owns them now is watching every one; a row claimed by a '
+            + 'generation that no longer exists can never be answered');
+    } finally {
+        hooks.stopFeature('rowIntegrationState');
+        window.GM_setValue('imdb_enh_rowIntegrationState', false);
+        window.GM_setValue('imdb_enh_userMarks', storedMarks);
+        window.IntersectionObserver = nativeObserver;
+    }
+});
+
 /* IE-165: listRoulette and listMultiSearch had no executable coverage at all, only
    source-text asserts that pass whether or not the feature mounts. Both are list-page
    features, so the chart fixture is where they belong.

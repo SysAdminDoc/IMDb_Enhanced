@@ -14867,6 +14867,17 @@ section[id*="quote" i] .ipc-list-card { padding: 4px 0 !important; margin: 2px 0
                     this._reveal(entry.target, isCurrent);
                 });
             }, { rootMargin:'200px' });
+            /* A claim belongs to the observer that made it. destroy() drops these, and the
+               route change that ends a page always destroys before it re-initialises, so
+               production never sees a stale one. A second init without a teardown does:
+               _scan skips any card already carrying the flag, so the new observer would
+               watch nothing, every row would sit claimed and unwatchable, and the feature
+               would look like it had simply decided not to ask about them. Releasing them
+               first costs one pass and makes a re-init mean the same thing either way. */
+            document.querySelectorAll('[data-enh-row-integration]').forEach(card => {
+                card.classList.remove('enh-row-integration-host');
+                delete card.dataset.enhRowIntegration;
+            });
             this._observer.observe(document.body, { childList:true, subtree:true });
             /* IE-146: on a person page the interesting number is not per row, it is how
                much of this filmography you already hold. The rows are answered anyway, so
