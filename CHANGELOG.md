@@ -16,6 +16,7 @@
 ### Changed
 
 - Source files no longer contain raw control bytes, and the build refuses any that appear. A NUL parses and runs fine, so nothing noticed one sitting in a character class, but grep and ripgrep treat a file holding one as binary and skip it, which had quietly made six tracked files unsearchable, the shipped userscript among them.
+- Testing: the calendar's episode parser is now checked against the two rows its UID depends on, an episode with no number and one with no season. `Number(null)` is 0 and passes an integer test, so without the explicit null check those arrive as zero and two of them on one show write the same UID twice, which an importer keyed on UID collapses into one event. The check was already there; nothing proved it.
 - Testing: the row-integration scenarios wait for a row to actually be watched before revealing it. Registration arrives through a frame callback, so on a loaded machine the reveal could go out first, and the lookup count afterwards then read exactly like the feature deciding not to ask. That made a real failure and a timing accident indistinguishable, and cost one full run in three on a busy machine.
 
 ## 2.21.0 (2026-09-02)

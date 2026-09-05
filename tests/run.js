@@ -4051,9 +4051,33 @@ test('the calendar asks about series the store actually knows are series', () =>
         { season:9, number:2, name:'Soon', airdate:'2026-12-01' },
         { season:9, number:3, name:'Unannounced', airdate:null },
         { season:'x', number:4, name:'Malformed', airdate:'2026-12-02' },
+        /* The two the UID depends on. Number(null) is 0 and Number.isSafeInteger accepts
+           it, so without the explicit null test these arrive as season or number zero, and
+           two of them on one show write the same UID twice. An importer keyed on UID then
+           keeps one and silently drops the other, which is the worst shape this bug could
+           take: a calendar that looks like it worked. */
+        { season:9, number:null, name:'Unnumbered special', airdate:'2026-12-03' },
+        { season:9, number:null, name:'Another unnumbered special', airdate:'2026-12-04' },
+        { season:null, number:7, name:'Seasonless', airdate:'2026-12-05' },
     ], '2026-09-02');
     assert.deepStrictEqual(Array.from(episodes, entry => entry.name), ['Soon'],
-        'past episodes, undated episodes and malformed rows are all left out');
+        'past episodes, undated episodes, malformed rows and anything the UID cannot name are all left out');
+
+    /* And the guarantee that rests on it, stated over the file rather than over the
+       parser, so it still holds if the two ever stop agreeing. */
+    const calendar = hooks.buildEpisodeCalendar([
+        { id:'tt0903747', title:'Breaking Bad', episodes:[
+            { season:9, number:2, name:'Soon', airdate:'2026-12-01' },
+            { season:9, number:3, name:'Later', airdate:'2026-12-08' },
+        ] },
+        { id:'tt0944947', title:'Game of Thrones', episodes:[
+            { season:1, number:1, name:'Winter', airdate:'2026-12-02' },
+        ] },
+    ], Date.parse('2026-09-02T00:00:00Z'));
+    const uids = [...calendar.text.matchAll(/^UID:(.+)$/gm)].map(match => match[1].trim());
+    assert.strictEqual(uids.length, calendar.events, 'every event carries a UID');
+    assert.strictEqual(new Set(uids).size, uids.length,
+        `a calendar must not repeat a UID; got ${uids.join(', ')}`);
 });
 
 /* IE-148: a fully expanded IMDb list is 250 rows, and decorating them in one pass put the
