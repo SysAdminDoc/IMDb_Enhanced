@@ -15,6 +15,7 @@
 
 ### Added
 
+- A media server or Servarr instance reachable over IPv6 loopback can be configured now. A service bound to IPv6 only answers on `[::1]`, and that was the one address the settings field refused, so the address the service itself prints was the one that would not work. Every other host is still refused, and the background worker and the page agree on the list, which a test now enforces rather than assumes.
 - Your own ratings page and your own lists index now get the same treatment as any other list: private Seen and Skip marks, the filters that narrow by them, and dimming for low-rated titles. They were outside the extension's page list entirely, which meant the longest card list an IMDb account has was the one place none of it worked.
 
 ### Changed

@@ -2785,6 +2785,45 @@ test('remembered section state participates in backup and migrates legacy keys',
 /* The Data page's storage figure. It had no coverage at all, and the first version of it
    referred to a helper that does not exist - which a full suite run did not notice, because
    nothing ever called the function. */
+/* IE-161: a media server bound to IPv6 only answers on [::1], and the settings field
+   refused it, so the address the service itself prints was the one address that would not
+   work. */
+test('a local service may be reached over IPv6 loopback, and nothing else new', () => {
+    const hooks = loadScriptTestHooks();
+
+    ['http://[::1]:8096', 'http://[0:0:0:0:0:0:0:1]:8096', 'https://[::1]:8920/']
+        .forEach(url => assert(hooks.isLocalServiceUrl(url), `${url} is loopback and should be allowed`));
+    ['http://localhost:7878', 'http://127.0.0.1:8989']
+        .forEach(url => assert(hooks.isLocalServiceUrl(url), `${url} must keep working`));
+
+    /* The refusals matter more than the acceptance: this predicate is what stands between
+       a stored credential and an arbitrary host. */
+    [
+        'http://[2001:db8::1]:8096',        // a routable IPv6 address is not loopback
+        'http://[::ffff:8.8.8.8]/',         // nor is a v4-mapped public address
+        'http://192.168.1.50:8096',         // a LAN address is a separate decision (IE-167)
+        'http://evil.example/',
+        'http://user:pass@[::1]:8096',      // credentials in the address
+        'http://[::1]:8096/?token=abc',     // or in the query
+        'http://[::1]:8096/#token',
+        'ftp://[::1]:8096',
+    ].forEach(url => assert(!hooks.isLocalServiceUrl(url), `${url} must be refused`));
+
+    /* The worker keeps its own copy of this list, in a file the userscript build never
+       touches, and it is the one that actually attaches the credential. A host the page
+       allows and the worker refuses is a feature that works in one build and not the
+       other, so the two sets are compared rather than trusted. */
+    const workerSource = fs.readFileSync(path.join(root, 'extension', 'background.js'), 'utf8');
+    const workerHosts = /const LOOPBACK_HOSTS = new Set\(\[([\s\S]*?)\]\)/.exec(workerSource)?.[1];
+    assert(workerHosts, 'the worker should declare its loopback hosts as a literal set');
+    const pageHosts = /const LOOPBACK_HOSTS = new Set\(\[([\s\S]*?)\]\)/.exec(script)?.[1];
+    assert(pageHosts, 'and so should the page side');
+    const normalize = text => text.split(',').map(entry => entry.trim().replace(/^'|'$/g, ''))
+        .filter(Boolean).sort().join('|');
+    assert.strictEqual(normalize(pageHosts), normalize(workerHosts),
+        'the page and the worker must allow exactly the same hosts');
+});
+
 test('the reported storage size counts the whole store, marks included', () => {
     const hooks = loadScriptTestHooks();
 
