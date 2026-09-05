@@ -334,6 +334,55 @@ await runFixture('title', async (window, hooks) => {
     }
 });
 
+/* IE-165: seasonProgress, which had never been run either. It is the one feature here
+   that writes to the store, so the batch and its undo are what matter: marking a whole
+   season is a single transaction and taking it back has to put every episode back exactly
+   as it was, including the ones that were already marked before. */
+await runFixture('episodes', async (window, hooks) => {
+    const { document } = window;
+    /* This is the one scenario here that writes marks, and the fixtures share a store, so
+       it puts back exactly what it found. Without that, the marks a season batch leaves
+       behind are still there when a later fixture asserts that scanning an unchanged page
+       writes nothing. */
+    const storedMarks = window.GM_getValue('imdb_enh_userMarks', {});
+    try {
+        window.GM_setValue('imdb_enh_watchedMarking', true);
+        window.GM_setValue('imdb_enh_seasonProgress', true);
+        await hooks.runFeature('seasonProgress');
+
+        const bar = document.getElementById('enh-season-progress');
+        assert.ok(bar, 'the season bar should mount on an episodes page');
+        const count = bar.querySelector('.enh-season__count');
+        assert.equal(count.getAttribute('aria-live'), 'polite', 'and announce the count as it changes');
+
+        const buttons = [...bar.querySelectorAll('.enh-season__btn')];
+        const markAll = buttons.find(button => /seen/i.test(button.textContent));
+        const clearAll = buttons.find(button => /clear/i.test(button.textContent));
+        const undo = buttons.find(button => /undo/i.test(button.textContent));
+        assert.ok(markAll && clearAll && undo, 'with mark, clear and undo controls');
+        assert.ok(undo.hidden, 'and nothing to undo before anything has been done');
+
+        const before = Object.keys(hooks.getUserMarks()).length;
+        markAll.click();
+        const marked = Object.keys(hooks.getUserMarks()).length;
+        assert.ok(marked > before,
+            `marking the season should write marks; ${before} -> ${marked}`);
+        assert.equal(undo.hidden, false, 'and offer to take it back');
+
+        undo.click();
+        assert.equal(Object.keys(hooks.getUserMarks()).length, before,
+            'undo returns the store to exactly what it held before the batch');
+        assert.ok(undo.hidden, 'and the offer is spent rather than left standing');
+    } finally {
+        hooks.stopFeature('seasonProgress');
+        window.GM_setValue('imdb_enh_seasonProgress', false);
+        window.GM_setValue('imdb_enh_watchedMarking', false);
+        window.GM_setValue('imdb_enh_userMarks', storedMarks);
+    }
+    assert.equal(document.getElementById('enh-season-progress'), null,
+        'stopping it takes the bar away');
+});
+
 /* IE-165: quickNav and spoilerBlur, neither of which had ever been run in a test. */
 await runFixture('title', async (window, hooks) => {
     const { document } = window;
