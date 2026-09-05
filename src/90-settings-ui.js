@@ -2402,9 +2402,9 @@
             try {
                 const payload = getExportSettings();
                 const serialized = JSON.stringify(payload, null, 2);
-                if (serialized.length > SETTINGS_IMPORT_TEXT_LIMIT) {
+                if (encodedByteLength(serialized) > SETTINGS_IMPORT_TEXT_LIMIT) {
                     showToast(t('toast_settings_exceed_the_4_mb_backup',
-                        [formatCacheBytes(serialized.length), formatCacheBytes(SETTINGS_IMPORT_TEXT_LIMIT)]), 5000);
+                        [formatCacheBytes(encodedByteLength(serialized)), formatCacheBytes(SETTINGS_IMPORT_TEXT_LIMIT)]), 5000);
                     return;
                 }
                 const copied = copyTextToClipboard(serialized);
@@ -2439,9 +2439,9 @@
             apply.disabled = true;
             try {
                 const serialized = await createEncryptedBackup(passphrase);
-                if (serialized.length > SETTINGS_IMPORT_TEXT_LIMIT) {
+                if (encodedByteLength(serialized) > SETTINGS_IMPORT_TEXT_LIMIT) {
                     showToast(t('toast_settings_exceed_the_4_mb_backup_2',
-                        [formatCacheBytes(serialized.length), formatCacheBytes(SETTINGS_IMPORT_TEXT_LIMIT)]), 5000);
+                        [formatCacheBytes(encodedByteLength(serialized)), formatCacheBytes(SETTINGS_IMPORT_TEXT_LIMIT)]), 5000);
                     return;
                 }
                 const copied = copyTextToClipboard(serialized);
@@ -2511,9 +2511,9 @@
             /* Naming both numbers matters: the ceiling used to be smaller than the file
                this build writes, and "too large" gave no way to tell a corrupt paste from
                a backup that was refused for being exactly what it should be. */
-            if (raw.length > SETTINGS_IMPORT_TEXT_LIMIT) {
+            if (encodedByteLength(raw) > SETTINGS_IMPORT_TEXT_LIMIT) {
                 showToast(t('toast_import_is_too_large_use_a',
-                    [formatCacheBytes(raw.length), formatCacheBytes(SETTINGS_IMPORT_TEXT_LIMIT)]), 5000);
+                    [formatCacheBytes(encodedByteLength(raw)), formatCacheBytes(SETTINGS_IMPORT_TEXT_LIMIT)]), 5000);
                 return;
             }
             apply.disabled = true;

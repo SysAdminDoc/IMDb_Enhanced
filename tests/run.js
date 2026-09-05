@@ -2287,7 +2287,7 @@ test('settings use six accessible desktop destinations', () => {
     assert(/#enh-settings-overlay\s*\{[^}]*visibility:\s*hidden/s.test(script), 'closed settings must leave the tab order');
     assert(/#enh-settings-overlay\.enh-visible\s*\{[^}]*visibility:\s*visible/s.test(script), 'open settings must restore visibility');
     assert(script.includes('maxlength:String(SETTINGS_IMPORT_TEXT_LIMIT)'), 'import size guard missing');
-    assert(script.includes('raw.length > SETTINGS_IMPORT_TEXT_LIMIT'), 'import parser must enforce the same size guard');
+    assert(script.includes('encodedByteLength(raw) > SETTINGS_IMPORT_TEXT_LIMIT'), 'import parser must enforce the same size guard, in bytes');
     assert(script.includes('Settings could not be read for export. No backup was copied.'), 'export read failures should remain visible');
     assert(script.includes('Changes save automatically.'), 'automatic-save status missing');
     assert(script.includes('id="enh-settings-save-state" role="status" aria-live="polite" aria-atomic="true"'), 'automatic-save feedback should be announced');
@@ -2754,6 +2754,37 @@ test('remembered section state participates in backup and migrates legacy keys',
     assert.strictEqual(failingControlHooks.getStoredSetting('sectionCollapseState'), undefined, 'failed collapse writes must leave storage unchanged');
 });
 
+test('the settings size guard measures bytes, not UTF-16 code units', () => {
+    const sizeHooks = loadScriptTestHooks();
+    const limit = sizeHooks.SETTINGS_IMPORT_TEXT_LIMIT;
+    const bytes = text => sizeHooks.encodedByteLength(text);
+
+    /* Three UTF-8 bytes per code unit. Anything written in Japanese, Chinese, Greek,
+       Cyrillic or Hebrew is this shape, so this is an ordinary note rather than a
+       contrived payload. */
+    const wide = '日'.repeat(limit - 1);
+    assert(wide.length <= limit,
+        'the payload has to pass the old code-unit test, or it proves nothing about the difference');
+    assert(bytes(wide) > limit,
+        'and it has to break the byte limit, which is the one the store actually charges');
+    /* Stated as the property rather than as a second copy of the comparison, so the test
+       still means something if the guard is ever rewritten. */
+    assert(bytes(wide) > wide.length,
+        'UTF-8 is never narrower than UTF-16 code units for non-ASCII text');
+
+    /* The difference runs one way only: encodedByteLength is never below .length, so
+       moving the guard to bytes can only be stricter and nothing that used to fit stops
+       fitting. ASCII is where the two agree exactly. */
+    const ascii = 'a'.repeat(limit);
+    assert.strictEqual(bytes(ascii), ascii.length, 'on ASCII the two measures agree');
+    assert(bytes(ascii) <= limit, 'and a full-size ASCII payload is still admitted');
+
+    // An astral character is two code units and four bytes, so it is under-counted too.
+    const astral = String.fromCodePoint(0x1f600);
+    assert.strictEqual(astral.length, 2, 'an emoji is two UTF-16 code units');
+    assert.strictEqual(bytes(astral), 4, 'and four UTF-8 bytes');
+});
+
 test('settings exports are canonical and fully re-importable', () => {
     const hooks = loadScriptTestHooks();
     hooks.seedStoredSetting('userMarks', { tt0133093:'watched' });
@@ -2820,9 +2851,13 @@ test('settings exports are canonical and fully re-importable', () => {
         maximumHooks.seedStoredSetting(key, 'k'.repeat(4096));
     });
     const maximumExportText = JSON.stringify(maximumHooks.getExportSettings(), null, 2);
+    /* Bytes, because the limit is derived in bytes and that is what the store charges.
+       Measuring this guarantee in UTF-16 code units passed it for free on ASCII seed data
+       and would have kept passing on a store this size in any language that is not. */
+    const maximumExportBytes = maximumHooks.encodedByteLength(maximumExportText);
     assert(
-        maximumExportText.length <= maximumHooks.SETTINGS_IMPORT_TEXT_LIMIT,
-        `maximum supported export (${maximumExportText.length}) exceeded import limit (${maximumHooks.SETTINGS_IMPORT_TEXT_LIMIT})`
+        maximumExportBytes <= maximumHooks.SETTINGS_IMPORT_TEXT_LIMIT,
+        `maximum supported export (${maximumExportBytes} bytes) exceeded import limit (${maximumHooks.SETTINGS_IMPORT_TEXT_LIMIT})`
     );
     assert.strictEqual(
         maximumHooks.prepareSettingsImport(JSON.parse(maximumExportText)).ignored,
