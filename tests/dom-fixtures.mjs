@@ -334,6 +334,50 @@ await runFixture('title', async (window, hooks) => {
     }
 });
 
+/* IE-165: trailerPopover. Its existing coverage is a column of script.includes asserts
+   that read the source for the right strings, which pass whether or not the dialog ever
+   opens. What matters here is the lifecycle: the opener says what it controls, opening
+   takes the page's scrolling away and gives the dialog a name, and closing gives both back
+   and returns focus to the button that opened it. */
+await runFixture('title', async (window, hooks) => {
+    const { document } = window;
+    try {
+        window.GM_setValue('imdb_enh_trailerPopover', true);
+        await hooks.runFeature('trailerPopover');
+
+        const button = document.getElementById('enh-trailer-btn');
+        assert.ok(button, 'the opener should mount on a title page');
+        assert.equal(button.getAttribute('aria-haspopup'), 'dialog', 'and say it opens a dialog');
+        assert.equal(button.getAttribute('aria-expanded'), 'false', 'which is not open yet');
+        assert.equal(button.getAttribute('aria-controls'), 'enh-trailer-dialog',
+            'and name the thing it controls');
+
+        const overflowBefore = document.documentElement.style.overflow;
+        button.click();
+
+        const dialog = document.getElementById('enh-trailer-dialog');
+        assert.ok(dialog, 'clicking opens the dialog');
+        assert.equal(button.getAttribute('aria-expanded'), 'true', 'and the opener says so');
+        assert.equal(dialog.getAttribute('role'), 'dialog', 'the dialog is a dialog');
+        assert.ok(dialog.getAttribute('aria-labelledby'), 'and takes its name from its own title');
+        assert.equal(document.documentElement.style.overflow, 'hidden',
+            'the page behind stops scrolling while it is open');
+
+        /* Escape is the way out of a dialog, and the page has to be handed back exactly as
+           it was rather than left unscrollable. */
+        document.dispatchEvent(new window.KeyboardEvent('keydown', { key:'Escape', bubbles:true }));
+        assert.equal(document.getElementById('enh-trailer-dialog'), null, 'Escape closes it');
+        assert.equal(button.getAttribute('aria-expanded'), 'false', 'the opener says it is closed');
+        assert.equal(document.documentElement.style.overflow, overflowBefore,
+            'and the page scrolls again');
+    } finally {
+        hooks.stopFeature('trailerPopover');
+        window.GM_setValue('imdb_enh_trailerPopover', false);
+    }
+    assert.equal(document.getElementById('enh-trailer-btn'), null,
+        'stopping the feature takes the opener away');
+});
+
 /* IE-165: seasonProgress, which had never been run either. It is the one feature here
    that writes to the store, so the batch and its undo are what matter: marking a whole
    season is a single transaction and taking it back has to put every episode back exactly
