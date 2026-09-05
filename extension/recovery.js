@@ -2913,16 +2913,15 @@
             GM_listValues().forEach(storageKey => {
                 if (!String(storageKey).startsWith(PREFIX)) return;
                 let raw = null;
-                /* The marks blob is read from the cache the store already keeps rather than
-                   through GM_getValue, which in the extension build structuredClones it. At
-                   the bounds this build allows that is five thousand records carrying a
-                   hundred viewings each, and cloning half a million objects to measure them
-                   and then throw the clone away cost about a third of a second. */
-                if (settingKeyFromFailure(storageKey) === 'userMarks') raw = getUserMarks();
-                else {
-                    try { raw = GM_getValue(storageKey, null); }
-                    catch { return; }
-                }
+                /* Every key through the store, marks included. Reading marks from the cache
+                   instead was cheaper and wrong twice over: the cache is only invalidated by
+                   this tab's own writes, so a second tab or the options page made the figure
+                   stale, and it holds the normalised records rather than what is on disk, so
+                   a legacy store of bare string marks reported two and a half times its real
+                   size. This walk only runs when somebody opens the dialog, which is what
+                   makes paying for it acceptable. */
+                try { raw = GM_getValue(storageKey, null); }
+                catch { return; }
                 if (raw === null || raw === undefined) return;
                 /* JSON, including a string's own quotes and escapes, because that is the
                    form the backend stores and charges for. */

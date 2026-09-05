@@ -2898,6 +2898,29 @@ test('the reported storage size counts the whole store, marks included', () => {
     assert(wideBytes > withMarks,
         `a store of three-byte characters must measure larger than the same store in ASCII; `
         + `${withMarks} -> ${wideBytes}`);
+
+    /* It reads what is stored, not the normalised copy the marks cache holds. A legacy
+       store of bare string marks is the case where the two differ most: normalising it
+       expands every record, and reporting that number tells somebody their store is
+       several times its real size. */
+    const legacyHooks = loadScriptTestHooks();
+    const legacy = {};
+    for (let index = 0; index < 200; index += 1) legacy[`tt${String(index).padStart(7, '0')}`] = 'watched';
+    legacyHooks.seedStoredSetting('userMarks', legacy);
+    const reported = legacyHooks.storedBytes();
+    const actual = legacyHooks.encodedByteLength(JSON.stringify(legacy))
+        + legacyHooks.encodedByteLength('imdb_enh_userMarks');
+    assert(reported <= actual * 1.1,
+        `the figure must describe what is stored, not what normalising it would produce; `
+        + `reported ${reported} against ${actual} on disk`);
+
+    /* And the panel has to ask for it. Deleting the call that fills the line left the Data
+       page reading "Checking" forever with a green suite, because the only coverage was of
+       the helper rather than of the wiring. */
+    assert(script.includes('refreshStorageStatus(overlay);'),
+        'opening the settings dialog must fill the storage line');
+    assert(/function refreshStorageStatus\(/.test(script),
+        'and the function it calls has to exist');
 });
 
 test('the settings size guard measures bytes, not UTF-16 code units', () => {
