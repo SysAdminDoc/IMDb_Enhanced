@@ -51,7 +51,10 @@
     button:hover:not(:disabled) { background: var(--hover); }
     button:disabled { opacity: .5; cursor: default; }
     button:focus-visible { outline: 2px solid var(--focus); outline-offset: 2px; }
-    button.primary { background: var(--accent); color: var(--on-accent); border-color: var(--accent); }
+    /* The edge of a filled control has to read against the page behind it, and the accent
+       is 1.6:1 on a white one. Its own foreground carries the boundary instead, which is
+       what the permissions page already does. */
+    button.primary { background: var(--accent); color: var(--on-accent); border-color: var(--on-accent); }
     button.danger { border-color: var(--danger-bd); color: var(--danger-tx); }
     textarea, input[type="password"] { width: 100%; background: var(--bg); color: var(--tx);
         border: 1px solid var(--btn-bd); border-radius: 8px; padding: 8px 10px; font: 12px/1.45 ui-monospace, SFMono-Regular, Menlo, monospace; }

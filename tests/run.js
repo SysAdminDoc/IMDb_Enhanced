@@ -9513,6 +9513,36 @@ asyncTest('the Data page exposes both export paths and clears passphrases on clo
 
 /* IE-88: the userscript is generated from src/ now, so the thing every other test in
    this file reads is an artifact. These cover the join itself. */
+/* The build refuses a raw control byte in src/, and every byte it has caught so far
+   arrived the same way: a \b written into an inline shell command, where the backslash is
+   eaten before node ever sees it, leaving a literal backspace inside a regex that then
+   matches nothing. That happened again on 2026-09-05, in tests/extension.js, which the
+   build gate does not read: the broken guard silently disabled a contrast rule and the
+   suite stayed green. Everything the repo ships or tests with is covered here. */
+test('no tracked source or test file carries a raw control byte', () => {
+    const files = [
+        'IMDb_Enhanced.user.js',
+        'extension/content.js', 'extension/recovery.js', 'extension/background.js',
+        'extension/recovery.html', 'extension/permissions.html', 'extension/manifest.json',
+        ...fs.readdirSync(path.join(root, 'src')).map(name => `src/${name}`),
+        ...fs.readdirSync(path.join(root, 'tests'))
+            .filter(name => /\.(?:js|mjs)$/.test(name)).map(name => `tests/${name}`),
+        ...fs.readdirSync(path.join(root, 'scripts'))
+            .filter(name => /\.(?:js|mjs)$/.test(name)).map(name => `scripts/${name}`),
+    ];
+    assert(files.length > 20, 'the sweep should cover the whole tree, not a handful of files');
+    files.forEach(relative => {
+        const full = path.join(root, relative);
+        if (!fs.existsSync(full)) return;
+        const bytes = fs.readFileSync(full);
+        const at = bytes.findIndex(byte => byte < 9 || (byte > 13 && byte < 32) || byte === 127);
+        if (at === -1) return;
+        const line = bytes.subarray(0, at).toString('utf8').split('\n').length;
+        assert.fail(`${relative}:${line} holds the raw control byte 0x${bytes[at].toString(16).padStart(2, '0')}. `
+            + 'Write it as an escape so the file stays searchable text and a regex means what it reads as.');
+    });
+});
+
 test('the shipped userscript is exactly what the modules assemble to', () => {
     const builder = require(path.join(root, 'scripts', 'build-userscript.js'));
     const modules = builder.readModules();

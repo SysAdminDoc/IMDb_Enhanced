@@ -856,6 +856,7 @@ test('the source archive carries what a rebuild needs and no build output', () =
            worse-looking page and no more usable. */
         const INTERACTIVE = /(?:^|[\s,>])(?:button|input|textarea|select|a)\b|:focus/i;
         const pairs = [];
+        const filled = [];
         blocks.forEach(({ selector, block }) => {
             const own = (/background(?:-color)?:[^;]*var\(--([\w-]+)\)/.exec(block) || [])[1];
             const surfaces = own ? [own] : backgroundNames;
@@ -865,19 +866,36 @@ test('the source archive carries what a rebuild needs and no build output', () =
                boundary, and the accent that fills a button is not usable as the ring
                around it. */
             if (INTERACTIVE.test(selector)) {
-                [...block.matchAll(/(?:outline|border(?:-color)?):[^;]*var\(--([\w-]+)\)/g)]
-                    .forEach(match => surfaces.forEach(surface => {
-                        /* A border painted in the same token as the fill it sits on is not a
-                           boundary and cannot be measured as one: it is 1:1 against itself by
-                           construction, so the pair says nothing about whether the control can
-                           be found. What identifies a filled control is its fill against the
-                           page, and whether this gate should measure that instead is IE-175. */
-                        if (match[1] === surface) return;
-                        pairs.push([match[1], surface, 3, 'indicator']);
-                    }));
+                const edges = [...block.matchAll(/(?:outline|border(?:-color)?):[^;]*var\(--([\w-]+)\)/g)]
+                    .map(match => match[1]);
+                edges.forEach(edge => surfaces.forEach(surface => {
+                    /* A border painted in the same token as the fill it sits on is not a
+                       boundary and cannot be measured as one: it is 1:1 against itself by
+                       construction, so the pair says nothing about whether the control can be
+                       found. The filled case is covered below instead. */
+                    if (edge === surface) return;
+                    pairs.push([edge, surface, 3, 'indicator']);
+                }));
+                /* IE-175. A control that paints its own background is found by its edge
+                   against the page, and that edge is whichever of two things has the
+                   contrast: the fill itself where it differs enough from the page, or a
+                   border drawn in some other token. WCAG 1.4.11 asks 3:1 of the boundary,
+                   not of both, so this is an either/or rather than another pair. Written as
+                   a group because a pair cannot express it: the accent fill is 11:1 on the
+                   dark page and 1.7:1 on the light one, so a rule that only measured the
+                   fill would condemn a button that is perfectly findable in dark and a rule
+                   that only measured the border would miss one that is invisible in light. */
+                /* The control, not each of its states. A :hover or :disabled rule that only
+                   repaints the background inherits its border from the base rule and is not a
+                   separate thing to find on the page; measuring it as one asks a state to carry
+                   a boundary the control already has. */
+                if (own) {
+                    filled.push({ selector, fill: own, edges: edges.filter(edge => edge !== own) });
+                }
             }
         });
         assert(pairs.length >= 12, `${file}: the gate found only ${pairs.length} pairs to measure`);
+        assert(filled.length, `${file}: no filled control was found, so the boundary rule measured nothing`);
         assert(pairs.some(([, , , kind]) => kind === 'indicator'),
             `${file}: no focus ring or control boundary was measured`);
 
@@ -889,6 +907,24 @@ test('the source archive carries what a rebuild needs and no build output', () =
                 const ratio = contrast(tokens[foreground], tokens[background]);
                 assert(ratio >= minimum,
                     `${file} ${scheme}: --${foreground} as ${kind} on --${background} is ${ratio.toFixed(2)}:1, needs ${minimum}`);
+            });
+            /* The control, not each of its states. A :hover or :disabled rule that only
+               repaints the background inherits its border from the base rule and is not a
+               separate thing to find on the page, so asking it to carry a boundary asks a
+               state for something the control already has. */
+            filled
+                .filter(entry => !/:[a-z-]+/.test(entry.selector))
+                .forEach(({ selector, fill, edges }) => {
+                if (!tokens[fill]) return;
+                const against = backgroundNames.filter(name => name !== fill && tokens[name]);
+                against.forEach(page => {
+                    const candidates = [fill, ...edges].filter(token => tokens[token]);
+                    const best = Math.max(...candidates.map(token => contrast(tokens[token], tokens[page])));
+                    assert(best >= 3,
+                        `${file} ${scheme}: ${selector.trim()} fills with --${fill} and nothing about it `
+                        + `reaches 3:1 against --${page} (best ${best.toFixed(2)}:1 of `
+                        + `${candidates.map(token => '--' + token).join(', ')}), so the control has no findable edge`);
+                });
             });
         });
     });
