@@ -334,6 +334,89 @@ await runFixture('title', async (window, hooks) => {
     }
 });
 
+/* IE-165: listRoulette and listMultiSearch had no executable coverage at all, only
+   source-text asserts that pass whether or not the feature mounts. Both are list-page
+   features, so the chart fixture is where they belong.
+
+   offsetParent is defined by hand on the rows: happy-dom does no layout, so every card
+   reports offsetParent null and the roulette would find nothing to pick for a reason that
+   has nothing to do with its own logic. Visibility is the browser's job and is simulated
+   here; what is under test is which of the visible rows the pick is drawn from. */
+await runFixture('chart', async (window, hooks) => {
+    const { document } = window;
+    const rows = [...document.querySelectorAll('li.ipc-metadata-list-summary-item')].slice(0, 6);
+    assert.ok(rows.length >= 3, 'the chart fixture should carry rows to pick from');
+    const show = (element, visible) => Object.defineProperty(element, 'offsetParent', {
+        configurable: true, get: () => (visible ? document.body : null),
+    });
+    rows.forEach(row => show(row, true));
+
+    try {
+        window.GM_setValue('imdb_enh_listRoulette', true);
+        await hooks.runFeature('listRoulette');
+        const bar = document.getElementById('enh-roulette');
+        assert.ok(bar, 'the roulette should mount on a list page');
+        const button = bar.querySelector('.enh-roulette__btn');
+        const result = bar.querySelector('.enh-roulette__result');
+        assert.ok(button && result, 'with a control and somewhere to report');
+        assert.equal(result.getAttribute('aria-live'), 'polite', 'and it announces the pick');
+
+        button.click();
+        assert.equal(document.querySelectorAll('.enh-roulette-pick').length, 1,
+            'exactly one row is picked');
+        assert.ok(result.textContent.trim(), 'and the pick is named rather than only outlined');
+
+        // A second pick replaces the first rather than accumulating outlines.
+        button.click();
+        assert.equal(document.querySelectorAll('.enh-roulette-pick').length, 1,
+            'picking again moves the outline rather than adding one');
+
+        /* Marked titles are skipped while the box is ticked, which is the whole point of
+           the box. Mark every visible row and the honest answer is that there is nothing
+           left, not a pick drawn from the marked ones. */
+        rows.forEach(row => {
+            const id = /\/(tt\d+)/.exec(row.querySelector('a[href*="/title/tt"]')?.getAttribute('href') || '')?.[1];
+            if (id) hooks.setUserMark(id, 'watched', 'Seen already');
+        });
+        button.click();
+        assert.equal(document.querySelectorAll('.enh-roulette-pick').length, 0,
+            'nothing is picked when every visible row is already marked');
+        assert.match(result.textContent, /not already|nothing/i,
+            'and it says so rather than going quiet');
+
+        // Unticking the box brings them back, so the filter is the box and not an accident.
+        bar.querySelector('#enh-roulette-skip-marked').checked = false;
+        button.click();
+        assert.equal(document.querySelectorAll('.enh-roulette-pick').length, 1,
+            'unticking skip-marked makes marked rows candidates again');
+    } finally {
+        hooks.stopFeature('listRoulette');
+        window.GM_setValue('imdb_enh_listRoulette', false);
+    }
+    assert.equal(document.getElementById('enh-roulette'), null, 'and it leaves nothing behind');
+    assert.equal(document.querySelectorAll('.enh-roulette-pick').length, 0,
+        'including the outline it drew on the page');
+});
+
+await runFixture('chart', async (window, hooks) => {
+    const { document } = window;
+    try {
+        window.GM_setValue('imdb_enh_listMultiSearch', true);
+        await hooks.runFeature('listMultiSearch');
+        const bar = document.getElementById('enh-multi-search');
+        assert.ok(bar, 'the multi-search bar should mount on a list page');
+        const buttons = [...bar.querySelectorAll('.enh-multi-search-btn')];
+        assert.ok(buttons.length, 'with a button per enabled destination');
+        assert.ok(buttons.every(button => button.textContent.trim()),
+            'and every button says which destination it is');
+    } finally {
+        hooks.stopFeature('listMultiSearch');
+        window.GM_setValue('imdb_enh_listMultiSearch', false);
+    }
+    assert.equal(document.getElementById('enh-multi-search'), null,
+        'stopping it takes the bar away');
+});
+
 /* IE-166: IMDb writes the awards summary into the page and then puts it most of a screen
    below the rating. This moves it up beside the rating and fetches nothing to do it, so the
    cases that matter are a title with awards, a title without, and a section that is there
