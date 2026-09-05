@@ -2241,7 +2241,10 @@
     "message": "[!! $1 cached entries · $2 !!]"
   },
   "text_one_tab_per_click": {
-    "message": "[!! Browsers allow one new tab per click.$1 !!]"
+    "message": "[!! Browsers allow one new tab per click. !!]"
+  },
+  "text_first_of_visible_titles": {
+    "message": "[!! The first $1 of $2 visible titles are shown. !!]"
   },
   "text_cached_on": {
     "message": "[!! Cached $1 !!]"

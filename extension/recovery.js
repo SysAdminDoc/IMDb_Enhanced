@@ -1096,7 +1096,8 @@
         text_broadcast_details_unavailable: 'Broadcast details unavailable',
         text_board_could_not_be_shown: 'The board could not be shown here. Open it on MovieChat instead.',
         text_cache_remaining: '$1 cached entries · $2',
-        text_one_tab_per_click: 'Browsers allow one new tab per click.$1',
+        text_one_tab_per_click: 'Browsers allow one new tab per click.',
+        text_first_of_visible_titles: 'The first $1 of $2 visible titles are shown.',
         text_cached_on: 'Cached $1',
         text_candidate_matches_could_not_be_loaded: 'Candidate matches could not be loaded. Paste a title URL or mark no entry.',
         text_candidate_response_was_too_large_or_empty: 'Candidate response was too large or empty',
@@ -1581,6 +1582,11 @@
        JSON punctuation, and a URL per provider at the ceiling the normaliser now enforces
        on the stored form. */
     const SCORE_CORRECTION_JSON_BYTES_MAX = 128
+        /* The record keeps a title and a year beside the URLs, and leaving them out put the
+           budget at roughly half what a maximal store actually measures. Counted at the
+           same bytes-per-character the rest of this derivation uses, because a title is
+           text somebody typed. */
+        + (USER_MARK_TITLE_LIMIT * JSON_BYTES_PER_CHAR_MAX) + 32
         + (SCORE_CORRECTION_PROVIDER_COUNT * (32 + SCORE_CORRECTION_URL_LIMIT));
     /* Two site lists, watch and external, the corrections, plus room for every other
        preference, the credential fields an export with credentials carries, and the
@@ -4901,8 +4907,14 @@
 
     function normalizeScoreCorrectionUrl(provider, value) {
         const config = SCORE_CORRECTION_PROVIDERS[provider];
-        const raw = String(value || '').trim().slice(0, SCORE_CORRECTION_URL_LIMIT);
-        if (!config || !raw) return '';
+        /* Not sliced. Cutting the input to the ceiling and keeping the result is how a
+           correction becomes a link to a page that does not exist, and it did that for any
+           ASCII URL over the limit while the encoded check below caught only the
+           multi-byte ones. Anything too long to store is refused whole. The outer bound is
+           generous because clearing the query below can make a long address short, and
+           exists only so a pathological string is not parsed. */
+        const raw = String(value || '').trim();
+        if (!config || !raw || raw.length > SETTING_TEXT_LIMIT) return '';
         const trusted = normalizeTrustedUrl(raw, config.domain, '');
         if (!trusted) return '';
         try {
@@ -16521,13 +16533,18 @@ section[id*="quote" i] .ipc-list-card { padding: 4px 0 !important; margin: 2px 0
                 onClick: () => { queue.remove(); trigger.focus(); },
             }, t('label_close'));
 
-            const limited = titles.length > entries.length ? ` First ${entries.length} of ${titles.length} visible titles are shown.` : '';
+            /* Its own sentence rather than an English tail glued onto a translated one: as
+               a "$1" it was concatenated into text_one_tab_per_click, so a reader in any
+               other language got the translated half followed by raw English. */
+            const limited = titles.length > entries.length
+                ? t('text_first_of_visible_titles', [String(entries.length), String(titles.length)])
+                : '';
             queue.append(
                 makeEl('div', { className:'enh-multi-search-queue__header' },
                     makeEl('div', {},
                         makeEl('h3', { className:'enh-multi-search-queue__title' }, t('text_site_search_queue', [site.name])),
                         makeEl('p', { className:'enh-multi-search-queue__description' },
-                            t('text_one_tab_per_click', [limited])
+                            `${t('text_one_tab_per_click')}${limited ? ' ' : ''}${limited}`
                         ),
                         status
                     ),

@@ -864,8 +864,14 @@
 
     function normalizeScoreCorrectionUrl(provider, value) {
         const config = SCORE_CORRECTION_PROVIDERS[provider];
-        const raw = String(value || '').trim().slice(0, SCORE_CORRECTION_URL_LIMIT);
-        if (!config || !raw) return '';
+        /* Not sliced. Cutting the input to the ceiling and keeping the result is how a
+           correction becomes a link to a page that does not exist, and it did that for any
+           ASCII URL over the limit while the encoded check below caught only the
+           multi-byte ones. Anything too long to store is refused whole. The outer bound is
+           generous because clearing the query below can make a long address short, and
+           exists only so a pathological string is not parsed. */
+        const raw = String(value || '').trim();
+        if (!config || !raw || raw.length > SETTING_TEXT_LIMIT) return '';
         const trusted = normalizeTrustedUrl(raw, config.domain, '');
         if (!trusted) return '';
         try {

@@ -781,7 +781,8 @@
         text_broadcast_details_unavailable: 'Broadcast details unavailable',
         text_board_could_not_be_shown: 'The board could not be shown here. Open it on MovieChat instead.',
         text_cache_remaining: '$1 cached entries · $2',
-        text_one_tab_per_click: 'Browsers allow one new tab per click.$1',
+        text_one_tab_per_click: 'Browsers allow one new tab per click.',
+        text_first_of_visible_titles: 'The first $1 of $2 visible titles are shown.',
         text_cached_on: 'Cached $1',
         text_candidate_matches_could_not_be_loaded: 'Candidate matches could not be loaded. Paste a title URL or mark no entry.',
         text_candidate_response_was_too_large_or_empty: 'Candidate response was too large or empty',
@@ -1266,6 +1267,11 @@
        JSON punctuation, and a URL per provider at the ceiling the normaliser now enforces
        on the stored form. */
     const SCORE_CORRECTION_JSON_BYTES_MAX = 128
+        /* The record keeps a title and a year beside the URLs, and leaving them out put the
+           budget at roughly half what a maximal store actually measures. Counted at the
+           same bytes-per-character the rest of this derivation uses, because a title is
+           text somebody typed. */
+        + (USER_MARK_TITLE_LIMIT * JSON_BYTES_PER_CHAR_MAX) + 32
         + (SCORE_CORRECTION_PROVIDER_COUNT * (32 + SCORE_CORRECTION_URL_LIMIT));
     /* Two site lists, watch and external, the corrections, plus room for every other
        preference, the credential fields an export with credentials carries, and the

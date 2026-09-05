@@ -2050,12 +2050,11 @@ test('CSV import reports every storage bound instead of silently dropping histor
             const bytes = hooks.encodedByteLength(sample);
             assert(sample.length <= bytes,
                 `${label}: UTF-8 must never be narrower than UTF-16 code units`);
-            /* Scaled to the ceiling: the largest payload the parser takes, written entirely
-               in this character, still fits the box measured the way the box measures. */
-            const atCeiling = Math.floor(limit / (bytes / sample.length));
-            assert(atCeiling <= limit,
-                `${label}: a payload at the byte ceiling is ${atCeiling} code units against a `
-                + `${limit} cap, so the box would truncate it`);
+            /* No second assertion here. One that scaled the ceiling by the byte-per-unit
+               ratio was tautological: the ratio is never below 1, so it restated the line
+               above and could not fail for any input in Unicode. The property this rests on
+               is the one already asserted, that UTF-8 is never narrower than UTF-16 code
+               units, and it is asserted per character class rather than in the abstract. */
         });
     assert(!/under 4 MB/.test(messageCatalog.text_csv_import_is_too_large_choose || ''),
         'and the refusal must not name a number the code no longer uses');
@@ -3019,7 +3018,14 @@ test('a stored score correction fits the ceiling the backup limit is derived fro
 
     /* The count in the derivation lives in an earlier module than the provider map, so it
        is pinned here rather than trusted. */
-    const providers = [...script.matchAll(/^\s{8}(\w+): \{ label:'[^']+', domain:'/gm)].length;
+    /* Sliced out of the map rather than pattern-matched across the whole script: the
+       previous form counted any 8-space-indented object with the same shape, so a sixth
+       provider written across two lines left the count at five and the assertion passed
+       while the derivation silently undercounted a whole provider. */
+    const mapAt = script.indexOf('const SCORE_CORRECTION_PROVIDERS = Object.freeze({');
+    assert(mapAt > 0, 'the provider map should be locatable');
+    const mapBody = script.slice(mapAt, script.indexOf('});', mapAt));
+    const providers = [...mapBody.matchAll(/(?:^|\n)\s*(\w+)\s*:\s*\{/g)].length;
     assert.strictEqual(providers, hooks.SCORE_CORRECTION_PROVIDER_COUNT,
         `the derivation counts ${hooks.SCORE_CORRECTION_PROVIDER_COUNT} correction providers and the map has ${providers}`);
 
@@ -3038,6 +3044,22 @@ test('a stored score correction fits the ceiling the backup limit is derived fro
         'and outside it once encoded');
     assert.strictEqual(hooks.normalizeScoreCorrectionUrl('letterboxd', wide), '',
         'a URL that cannot be stored inside its own limit is refused, not truncated');
+
+    /* The ASCII path, which is the one the first version of this missed entirely: the
+       input used to be sliced to the ceiling before parsing, so a long plain URL was cut
+       and the truncated result stored as if it were the correction. Percent-encoding only
+       expands non-ASCII, so the encoded check never saw it. */
+    const longAscii = `https://letterboxd.com/film/${'a'.repeat(700)}/`;
+    assert(longAscii.length > hooks.SCORE_CORRECTION_URL_LIMIT, 'the sample must exceed the ceiling');
+    assert.strictEqual(hooks.normalizeScoreCorrectionUrl('letterboxd', longAscii), '',
+        'a long plain URL is refused, not stored as a shorter different one');
+
+    /* And a correction an older build already stored, which is the data this bound exists
+       for: re-reading it must refuse it rather than quietly rewrite it into a link to a
+       page that does not exist. */
+    const stored = `https://letterboxd.com/film/${'b'.repeat(1800)}/`;
+    assert.strictEqual(hooks.normalizeScoreCorrectionUrl('letterboxd', stored), '',
+        'an over-long correction from an older build is dropped, not truncated');
 
     /* And whatever the normaliser does keep is inside the ceiling, which is the property
        the derivation rests on. */
@@ -8446,7 +8468,14 @@ test('every sentence in the source comes from the catalog', () => {
        the next line, which is how every multi-line one is written. That is how a full
        English sentence sat on the Data page's cache card, in a template literal, through a
        gate whose whole job is to find exactly that. \s* rather than a space. */
-    const SHOWN = /(?:\b(?:label|title|placeholder|alt)\s*:\s*|textContent\s*=\s*|setTextIfChanged\([^,]+,\s*|showToast\(\s*|say\(\s*|setAttribute\('aria-label',\s*|'aria-label'\s*:\s*|make(?:Card|FeatureCard|FeatureSummaryCard)\(\s*|register\(\s*|\},\s*)$/;
+    const SHOWN = /(?:\b(?:label|title|placeholder|alt)\s*:\s*|textContent\s*=\s*|setTextIfChanged\([^,]+,\s*|showToast\(\s*|say\(\s*|setAttribute\('aria-label',\s*|'aria-label'\s*:\s*|make(?:Card|FeatureCard|FeatureSummaryCard)\(\s*|register\(\s*)$/;
+    /* A text child of makeEl, which is a closing brace and a comma and then the string.
+       Kept apart from SHOWN because it is only meaningful against the raw context: the
+       branch stripper peels a trailing `identifier(` off, which turns the first argument
+       of any call nested inside a child list into something ending `},` too. That made
+       the gate demand a catalog key for 'en-US' in a toLocaleDateString call, and for
+       'POST', 'UTF-8' and 'SHA-256' wherever they sit in the same position. */
+    const SHOWN_CHILD = /\},\s*$/;
 
     /* The call stack answers "which function is this an argument to". It cannot answer
        "which property is this being assigned to", and `node.textContent = ok ? `a` : `b``
@@ -8514,6 +8543,7 @@ test('every sentence in the source comes from the catalog', () => {
             if (CATALOG_CALLS.has(entry.call)) return;
             if (entry.before !== '`markup`'
                 && !SHOWN.test(entry.before)
+                && !SHOWN_CHILD.test(entry.before)
                 && !SHOWN.test(withoutConditionalBranches(entry.before))
                 && !SHOWN_CALLS.has(entry.call)) return;
             stranded.push(`${name}:${entry.line}: ${entry.text}`);

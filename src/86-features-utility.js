@@ -822,13 +822,18 @@
                 onClick: () => { queue.remove(); trigger.focus(); },
             }, t('label_close'));
 
-            const limited = titles.length > entries.length ? ` First ${entries.length} of ${titles.length} visible titles are shown.` : '';
+            /* Its own sentence rather than an English tail glued onto a translated one: as
+               a "$1" it was concatenated into text_one_tab_per_click, so a reader in any
+               other language got the translated half followed by raw English. */
+            const limited = titles.length > entries.length
+                ? t('text_first_of_visible_titles', [String(entries.length), String(titles.length)])
+                : '';
             queue.append(
                 makeEl('div', { className:'enh-multi-search-queue__header' },
                     makeEl('div', {},
                         makeEl('h3', { className:'enh-multi-search-queue__title' }, t('text_site_search_queue', [site.name])),
                         makeEl('p', { className:'enh-multi-search-queue__description' },
-                            t('text_one_tab_per_click', [limited])
+                            `${t('text_one_tab_per_click')}${limited ? ' ' : ''}${limited}`
                         ),
                         status
                     ),
