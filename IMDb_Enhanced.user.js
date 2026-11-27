@@ -4013,8 +4013,12 @@
     }
 
     function getEditorialSynopsis() {
-        const plot = document.querySelector('[data-testid="plot-l"], [data-testid="plot-xl"], [data-testid="plot"]');
-        const visible = plot?.textContent?.replace(/\s+/g, ' ').trim();
+        /* Query each variant separately: a combined selector list returns the parent
+           [data-testid="plot"] first in tree order, whose textContent concatenates
+           every responsive breakpoint span together. */
+        const visible = ['[data-testid="plot-xl"]', '[data-testid="plot-l"]', '[data-testid="plot-xs_to_m"]', '[data-testid="plot"]']
+           .map(selector => document.querySelector(selector)?.textContent?.replace(/\s+/g, ' ').trim())
+           .find(Boolean);
         if (visible) return truncateAtWord(visible, 900);
         try {
             const description = String(getLDData()?.description || '').replace(/\s+/g, ' ').trim();
